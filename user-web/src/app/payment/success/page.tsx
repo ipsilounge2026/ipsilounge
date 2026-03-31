@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { confirmTossPayment } from "@/lib/api";
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
@@ -47,7 +47,6 @@ export default function PaymentSuccessPage() {
               <p style={{ fontSize: 14, color: "var(--gray-500)" }}>잠시만 기다려주세요</p>
             </>
           )}
-
           {status === "success" && (
             <>
               <div style={{
@@ -60,22 +59,15 @@ export default function PaymentSuccessPage() {
                 분석 완료 시 앱 알림과 이메일로 안내드립니다.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => router.push("/analysis")}
-                >
+                <button className="btn btn-primary" onClick={() => router.push("/analysis")}>
                   내 분석 목록 보기
                 </button>
-                <button
-                  className="btn btn-outline"
-                  onClick={() => router.push("/")}
-                >
+                <button className="btn btn-outline" onClick={() => router.push("/")}>
                   홈으로
                 </button>
               </div>
             </>
           )}
-
           {status === "error" && (
             <>
               <div style={{
@@ -84,9 +76,7 @@ export default function PaymentSuccessPage() {
                 justifyContent: "center", margin: "0 auto 20px", fontSize: 32,
               }}>✗</div>
               <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>결제 확인 실패</h1>
-              <p style={{ fontSize: 14, color: "var(--gray-600)", marginBottom: 8 }}>
-                {errorMessage}
-              </p>
+              <p style={{ fontSize: 14, color: "var(--gray-600)", marginBottom: 8 }}>{errorMessage}</p>
               <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 32 }}>
                 문제가 지속되면 support@ipsilounge.com으로 문의해주세요.
               </p>
@@ -99,5 +89,13 @@ export default function PaymentSuccessPage() {
       </div>
       <Footer />
     </>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }

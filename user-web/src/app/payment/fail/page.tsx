@@ -1,10 +1,11 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
-export default function PaymentFailPage() {
+function PaymentFailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const errorCode = searchParams.get("code");
@@ -50,5 +51,13 @@ export default function PaymentFailPage() {
       </div>
       <Footer />
     </>
+  );
+}
+
+export default function PaymentFailPage() {
+  return (
+    <Suspense>
+      <PaymentFailContent />
+    </Suspense>
   );
 }
