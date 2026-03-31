@@ -166,7 +166,7 @@ export default function AdmissionCasesAdminPage() {
                 </label>
                 <select
                   className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value={(form as Record<string, string>)[key]}
+                  value={(form as unknown as Record<string, string>)[key]}
                   onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                 >
                   <option value="">-</option>
