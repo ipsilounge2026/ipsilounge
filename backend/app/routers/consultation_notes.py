@@ -1,0 +1,42 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models.consultation_note import ConsultationNote
+from app.models.user import User
+from app.utils.dependencies import get_current_user
+
+router = APIRouter(prefix="/api/consultation-notes", tags=["상담 기록 (사용자)"])
+
+
+@router.get("")
+async def get_my_notes(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """내 상담 기록 조회 (관리자가 공개 설정한 항목만)"""
+    result = await db.execute(
+        select(ConsultationNote)
+        .where(
+            ConsultationNote.user_id == current_user.id,
+            ConsultationNote.is_visible_to_user == True,  # noqa: E712
+        )
+        .order_by(ConsultationNote.consultation_date.desc())
+    )
+    notes = result.scalars().all()
+    return [
+        {
+            "id": str(n.id),
+            "category": n.category,
+            "consultation_date": n.consultation_date.isoformat(),
+            "student_grade": n.student_grade,
+            "goals": n.goals,
+            "main_content": n.main_content,
+            "advice_given": n.advice_given,
+            "next_steps": n.next_steps,
+            "next_topic": n.next_topic,
+            # admin_private_notes 는 미노출
+        }
+        for n in notes
+    ]

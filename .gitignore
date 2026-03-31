@@ -1,0 +1,48 @@
+# 환경변수 / 비밀키 (절대 커밋 금지)
+.env
+.env.local
+.env.production
+*.env
+firebase-credentials.json
+google-service-account.json
+*.keystore
+*.jks
+key.properties
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Node.js
+node_modules/
+.next/
+.vercel/
+*.tsbuildinfo
+
+# Flutter / Android
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+android/.gradle/
+android/local.properties
+*.apk
+*.aab
+
+# SSL 인증서 (서버에서만 존재)
+nginx/ssl/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  # PostgreSQL 데이터베이스
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ipsilounge
+      POSTGRES_USER: ${POSTGRES_USER:-ipsilounge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ipsilounge}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI 백엔드
+  backend:
+    build: ./backend
+    restart: always
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ipsilounge}:${POSTGRES_PASSWORD:-changeme}@db:5432/ipsilounge
+    volumes:
+      - ./backend/firebase-credentials.json:/app/firebase-credentials.json:ro
+      - ./backend/google-service-account.json:/app/google-service-account.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  # Nginx 리버스 프록시 (SSL 포함)
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - backend
+
+  # Certbot (Let's Encrypt SSL 자동 갱신)
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./nginx/ssl:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "trap exit TERM;
+      while :; do certbot renew --webroot -w /var/www/certbot --quiet;
+      sleep 12h & wait $${!}; done"
+
+volumes:
+  postgres_data:
+  certbot_www:
