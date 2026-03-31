@@ -4,7 +4,7 @@
   "outputDirectory": ".next",
   "env": {
     "NEXT_PUBLIC_API_URL": "https://api.ipsilounge.co.kr",
-    "NEXT_PUBLIC_TOSS_CLIENT_KEY": "@toss_client_key"
+    "NEXT_PUBLIC_TOSS_CLIENT_KEY": "test_ck_placeholder"
   },
   "headers": [
     {
