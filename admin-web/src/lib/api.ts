@@ -160,3 +160,45 @@ export async function getPaymentStats() {
 export async function refundPayment(id: string) {
   return request(`/api/admin/payments/${id}/refund`, { method: "PUT" });
 }
+
+// --- 관리자 계정 ---
+export async function getAdminMe() {
+  return request("/api/admin/admins/me");
+}
+
+export async function getAdmins() {
+  return request("/api/admin/admins");
+}
+
+export async function createAdmin(data: { email: string; password: string; name: string; role: string; allowed_menus: string[] }) {
+  return request("/api/admin/admins", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateAdmin(id: string, data: { name?: string; role?: string; is_active?: boolean; allowed_menus?: string[] }) {
+  return request(`/api/admin/admins/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function resetAdminPassword(id: string, newPassword: string) {
+  return request(`/api/admin/admins/${id}/reset-password`, { method: "PUT", body: JSON.stringify({ new_password: newPassword }) });
+}
+
+export async function getAllMenus() {
+  return request("/api/admin/admins/menus");
+}
+
+// --- 학생-담당자 매칭 ---
+export async function getAssignments() {
+  return request("/api/admin/admins/assignments");
+}
+
+export async function createAssignment(adminId: string, userId: string) {
+  return request("/api/admin/admins/assignments", { method: "POST", body: JSON.stringify({ admin_id: adminId, user_id: userId }) });
+}
+
+export async function deleteAssignment(id: string) {
+  return request(`/api/admin/admins/assignments/${id}`, { method: "DELETE" });
+}
+
+export async function getMyStudents() {
+  return request("/api/admin/admins/my-students");
+}

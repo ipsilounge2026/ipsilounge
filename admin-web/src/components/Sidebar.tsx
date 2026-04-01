@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { logout } from "@/lib/auth";
+import { logout, getAdminInfo } from "@/lib/auth";
 import {
   FiHome,
   FiFileText,
@@ -10,25 +10,41 @@ import {
   FiUsers,
   FiDollarSign,
   FiSettings,
+  FiUserCheck,
+  FiLink,
 } from "react-icons/fi";
 
-const menuItems = [
-  { href: "/", label: "대시보드", icon: FiHome },
-  { href: "/analysis", label: "분석 관리", icon: FiFileText },
-  { href: "/consultation", label: "상담 관리", icon: FiCalendar },
-  { href: "/users", label: "회원 관리", icon: FiUsers },
-  { href: "/payments", label: "결제 현황", icon: FiDollarSign },
-  { href: "/settings", label: "설정", icon: FiSettings },
+const allMenuItems = [
+  { key: "dashboard", href: "/", label: "대시보드", icon: FiHome },
+  { key: "analysis", href: "/analysis", label: "분석 관리", icon: FiFileText },
+  { key: "consultation", href: "/consultation", label: "상담 관리", icon: FiCalendar },
+  { key: "users", href: "/users", label: "회원 관리", icon: FiUsers },
+  { key: "payments", href: "/payments", label: "결제 현황", icon: FiDollarSign },
+  { key: "admins", href: "/admins", label: "담당자 관리", icon: FiUserCheck },
+  { key: "assignments", href: "/assignments", label: "학생-담당자 매칭", icon: FiLink },
+  { key: "settings", href: "/settings", label: "설정", icon: FiSettings },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const adminInfo = getAdminInfo();
+
+  const visibleMenus = allMenuItems.filter((item) => {
+    if (!adminInfo) return item.key === "dashboard";
+    if (adminInfo.role === "super_admin") return true;
+    return adminInfo.allowed_menus.includes(item.key);
+  });
 
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">입시라운지 관리자</div>
+      {adminInfo && (
+        <div style={{ padding: "0 20px 12px", fontSize: 12, color: "#9ca3af" }}>
+          {adminInfo.name} ({adminInfo.role === "super_admin" ? "최고관리자" : "담당자"})
+        </div>
+      )}
       <nav className="sidebar-nav">
-        {menuItems.map((item) => {
+        {visibleMenus.map((item) => {
           const Icon = item.icon;
           const isActive =
             item.href === "/"

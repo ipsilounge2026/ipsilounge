@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { adminLogin } from "@/lib/api";
+import { adminLogin, getAdminMe } from "@/lib/api";
+import { setAdminInfo } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,6 +19,8 @@ export default function LoginPage() {
 
     try {
       await adminLogin(email, password);
+      const me = await getAdminMe();
+      setAdminInfo(me);
       router.push("/");
     } catch (err: any) {
       setError(err.message || "로그인에 실패했습니다");
