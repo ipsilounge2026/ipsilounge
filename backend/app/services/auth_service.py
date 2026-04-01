@@ -24,6 +24,9 @@ async def register_user(data: UserRegister, db: AsyncSession) -> User:
         password_hash=hash_password(data.password),
         name=data.name,
         phone=data.phone,
+        member_type=data.member_type,
+        student_name=data.student_name,
+        student_birth=data.student_birth,
     )
     db.add(user)
     await db.commit()

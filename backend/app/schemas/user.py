@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, EmailStr
 
@@ -9,6 +9,9 @@ class UserRegister(BaseModel):
     password: str
     name: str
     phone: str | None = None
+    member_type: str = "student"  # student / parent
+    student_name: str | None = None
+    student_birth: date | None = None
 
 
 class UserLogin(BaseModel):
@@ -21,6 +24,9 @@ class UserResponse(BaseModel):
     email: str
     name: str
     phone: str | None
+    member_type: str
+    student_name: str | None
+    student_birth: date | None
     is_active: bool
     created_at: datetime
 
@@ -30,6 +36,8 @@ class UserResponse(BaseModel):
 class UserUpdate(BaseModel):
     name: str | None = None
     phone: str | None = None
+    student_name: str | None = None
+    student_birth: date | None = None
 
 
 class TokenResponse(BaseModel):

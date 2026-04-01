@@ -34,10 +34,18 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 // --- 인증 ---
-export async function register(email: string, password: string, name: string, phone?: string) {
+export async function register(
+  email: string,
+  password: string,
+  name: string,
+  phone?: string,
+  member_type?: string,
+  student_name?: string,
+  student_birth?: string,
+) {
   return request("/api/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, name, phone }),
+    body: JSON.stringify({ email, password, name, phone, member_type, student_name, student_birth }),
   });
 }
 
@@ -55,7 +63,7 @@ export async function getMe() {
   return request("/api/users/me");
 }
 
-export async function updateMe(data: { name?: string; phone?: string }) {
+export async function updateMe(data: { name?: string; phone?: string; student_name?: string; student_birth?: string }) {
   return request("/api/users/me", { method: "PUT", body: JSON.stringify(data) });
 }
 

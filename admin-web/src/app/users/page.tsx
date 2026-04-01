@@ -11,6 +11,9 @@ interface UserItem {
   email: string;
   name: string;
   phone: string | null;
+  member_type: string;
+  student_name: string | null;
+  student_birth: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -80,8 +83,10 @@ export default function UsersPage() {
             <thead>
               <tr>
                 <th>이름</th>
+                <th>유형</th>
                 <th>이메일</th>
                 <th>연락처</th>
+                <th>자녀</th>
                 <th>가입일</th>
                 <th>상태</th>
                 <th></th>
@@ -91,8 +96,14 @@ export default function UsersPage() {
               {users.map((user) => (
                 <tr key={user.id}>
                   <td>{user.name}</td>
+                  <td>
+                    <span className={`badge ${user.member_type === "parent" ? "badge-processing" : "badge-completed"}`}>
+                      {user.member_type === "parent" ? "학부모" : "학생"}
+                    </span>
+                  </td>
                   <td>{user.email}</td>
                   <td>{user.phone || "-"}</td>
+                  <td>{user.member_type === "parent" && user.student_name ? user.student_name : "-"}</td>
                   <td>{new Date(user.created_at).toLocaleDateString("ko-KR")}</td>
                   <td>
                     <span className={`badge ${user.is_active ? "badge-completed" : "badge-cancelled"}`}>
@@ -109,7 +120,7 @@ export default function UsersPage() {
                 </tr>
               ))}
               {users.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: "center", padding: 40, color: "var(--gray-500)" }}>회원이 없습니다</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: "center", padding: 40, color: "var(--gray-500)" }}>회원이 없습니다</td></tr>
               )}
             </tbody>
           </table>
