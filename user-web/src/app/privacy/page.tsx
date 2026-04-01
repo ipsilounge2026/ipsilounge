@@ -157,7 +157,7 @@ export default function PrivacyPage() {
           서비스는 개인정보 처리에 관한 업무를 총괄하여 책임지고, 이용자의 불만 처리 및 피해 구제를 위하여 다음과 같이 개인정보 보호책임자를 지정하고 있습니다.
           <div style={{ backgroundColor: "#f9fafb", padding: 16, borderRadius: 8, marginTop: 12, fontSize: 14 }}>
             <p><strong>개인정보 보호책임자</strong></p>
-            <p>이메일: support@ipsilounge.co.kr</p>
+            <p>이메일: massivmiddle2@hotmail.com</p>
           </div>
         </Section>
 
