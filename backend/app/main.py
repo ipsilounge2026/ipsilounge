@@ -118,6 +118,18 @@ async def shutdown():
     stop_scheduler()
 
 
+@app.get("/api/files/{folder}/{filename}")
+async def serve_local_file(folder: str, filename: str):
+    """로컬 저장 파일 다운로드 (S3 미사용 시)"""
+    from fastapi.responses import FileResponse
+    from app.services.file_service import get_local_file_path, USE_S3
+    if USE_S3:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="S3 모드에서는 이 엔드포인트를 사용하지 않습니다")
+    file_path = get_local_file_path(f"{folder}/{filename}")
+    return FileResponse(file_path, filename=filename)
+
+
 @app.get("/")
 async def root():
     return {"service": "입시라운지 API", "version": "1.0.0", "status": "running"}
