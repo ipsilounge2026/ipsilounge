@@ -40,10 +40,15 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",      # 개발 환경 (사용자 웹)
-        "http://localhost:3001",      # 개발 환경 (관리자 웹)
-        "https://ipsilounge.com",     # 프로덕션 (사용자 웹)
-        "https://admin.ipsilounge.com",  # 프로덕션 (관리자 웹)
+        "http://localhost:3000",               # 개발 환경 (사용자 웹)
+        "http://localhost:3001",               # 개발 환경 (관리자 웹)
+        "https://ipsilounge.com",              # 프로덕션 (.com)
+        "https://admin.ipsilounge.com",        # 관리자 (.com)
+        "https://ipsilounge.co.kr",            # 프로덕션 (.co.kr)
+        "https://www.ipsilounge.co.kr",        # www (.co.kr)
+        "https://admin.ipsilounge.co.kr",      # 관리자 (.co.kr)
+        "https://ipsilounge20260331-user.vercel.app",   # Vercel 사용자
+        "https://ipsilounge-admin.vercel.app",          # Vercel 관리자
     ],
     allow_credentials=True,
     allow_methods=["*"],
