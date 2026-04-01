@@ -1,5 +1,11 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+/** 다운로드 URL이 상대경로이면 API 서버 주소를 앞에 붙여줌 */
+export function toFullUrl(url: string): string {
+  if (url.startsWith("/")) return `${API_BASE}${url}`;
+  return url;
+}
+
 async function request(path: string, options: RequestInit = {}) {
   const token = typeof window !== "undefined" ? localStorage.getItem("user_token") : null;
 

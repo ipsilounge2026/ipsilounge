@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import StatusBadge from "@/components/StatusBadge";
-import { getAnalysisDetail, getReportExcelUrl, getReportPdfUrl } from "@/lib/api";
+import { getAnalysisDetail, getReportExcelUrl, getReportPdfUrl, toFullUrl } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 interface Detail {
@@ -36,14 +36,14 @@ export default function AnalysisDetailPage() {
   const handleDownloadExcel = async () => {
     try {
       const res = await getReportExcelUrl(id);
-      window.open(res.download_url, "_blank");
+      window.open(toFullUrl(res.download_url), "_blank");
     } catch {}
   };
 
   const handleDownloadPdf = async () => {
     try {
       const res = await getReportPdfUrl(id);
-      window.open(res.download_url, "_blank");
+      window.open(toFullUrl(res.download_url), "_blank");
     } catch {}
   };
 

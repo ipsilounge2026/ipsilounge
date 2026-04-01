@@ -10,6 +10,7 @@ import {
   downloadSchoolRecord,
   uploadReport,
   updateAnalysisStatus,
+  toFullUrl,
 } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
@@ -57,7 +58,7 @@ export default function AnalysisDetailPage() {
   const handleDownload = async () => {
     try {
       const res = await downloadSchoolRecord(id);
-      window.open(res.download_url, "_blank");
+      window.open(toFullUrl(res.download_url), "_blank");
     } catch (err: any) {
       setMessage(err.message);
     }
