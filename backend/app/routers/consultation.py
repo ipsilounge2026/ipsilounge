@@ -6,6 +6,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.admin import Admin
 from app.models.consultation_booking import ConsultationBooking
 from app.models.consultation_slot import ConsultationSlot
 from app.models.user import User
@@ -13,6 +14,7 @@ from app.schemas.consultation import (
     AvailableSlotResponse,
     BookingRequest,
     BookingResponse,
+    CounselorResponse,
     MyBookingListResponse,
 )
 from app.services.consultation_service import check_slot_available
@@ -21,10 +23,47 @@ from app.utils.dependencies import get_current_user
 router = APIRouter(prefix="/api/consultation", tags=["상담예약"])
 
 
+@router.get("/counselors")
+async def get_counselors(
+    db: AsyncSession = Depends(get_db),
+):
+    """상담 가능한 관리자/상담자 목록 (사용자용)"""
+    # 활성 슬롯이 있는 관리자만 반환
+    result = await db.execute(
+        select(ConsultationSlot.admin_id)
+        .where(
+            ConsultationSlot.is_active == True,
+            ConsultationSlot.date >= date.today(),
+            ConsultationSlot.admin_id.isnot(None),
+        )
+        .distinct()
+    )
+    admin_ids = [row[0] for row in result.all()]
+
+    if not admin_ids:
+        return []
+
+    counselors = []
+    for aid in admin_ids:
+        try:
+            aid_uuid = uuid.UUID(aid)
+        except ValueError:
+            continue
+        admin_result = await db.execute(
+            select(Admin).where(Admin.id == aid_uuid, Admin.is_active == True)
+        )
+        admin = admin_result.scalar_one_or_none()
+        if admin:
+            counselors.append({"id": str(admin.id), "name": admin.name})
+
+    return counselors
+
+
 @router.get("/slots", response_model=list[AvailableSlotResponse])
 async def get_available_slots(
     year: int = Query(...),
     month: int = Query(...),
+    admin_id: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """예약 가능 시간대 조회 (달력용)"""
@@ -34,17 +73,34 @@ async def get_available_slots(
     else:
         end_date = date(year, month + 1, 1)
 
+    conditions = [
+        ConsultationSlot.date >= start_date,
+        ConsultationSlot.date < end_date,
+        ConsultationSlot.is_active == True,
+        ConsultationSlot.date >= date.today(),
+    ]
+
+    if admin_id:
+        conditions.append(ConsultationSlot.admin_id == admin_id)
+
     result = await db.execute(
-        select(ConsultationSlot).where(
-            and_(
-                ConsultationSlot.date >= start_date,
-                ConsultationSlot.date < end_date,
-                ConsultationSlot.is_active == True,
-                ConsultationSlot.date >= date.today(),
-            )
-        ).order_by(ConsultationSlot.date, ConsultationSlot.start_time)
+        select(ConsultationSlot).where(and_(*conditions))
+        .order_by(ConsultationSlot.date, ConsultationSlot.start_time)
     )
     slots = result.scalars().all()
+
+    # admin_name 일괄 조회
+    admin_ids = set(s.admin_id for s in slots if s.admin_id)
+    admin_names = {}
+    for aid in admin_ids:
+        try:
+            aid_uuid = uuid.UUID(aid)
+        except ValueError:
+            continue
+        admin_result = await db.execute(select(Admin).where(Admin.id == aid_uuid))
+        admin_obj = admin_result.scalar_one_or_none()
+        if admin_obj:
+            admin_names[aid] = admin_obj.name
 
     return [
         AvailableSlotResponse(
@@ -53,6 +109,8 @@ async def get_available_slots(
             start_time=s.start_time,
             end_time=s.end_time,
             remaining=s.max_bookings - s.current_bookings,
+            admin_id=s.admin_id,
+            admin_name=admin_names.get(s.admin_id),
         )
         for s in slots
         if s.current_bookings < s.max_bookings
@@ -94,6 +152,18 @@ async def book_consultation(
     await db.commit()
     await db.refresh(booking)
 
+    # 관리자 이름 조회
+    admin_name = None
+    if slot.admin_id:
+        try:
+            aid_uuid = uuid.UUID(slot.admin_id)
+            admin_result = await db.execute(select(Admin).where(Admin.id == aid_uuid))
+            admin_obj = admin_result.scalar_one_or_none()
+            if admin_obj:
+                admin_name = admin_obj.name
+        except ValueError:
+            pass
+
     return BookingResponse(
         id=booking.id,
         slot_date=slot.date,
@@ -102,6 +172,7 @@ async def book_consultation(
         type=booking.type,
         memo=booking.memo,
         status=booking.status,
+        admin_name=admin_name,
         created_at=booking.created_at,
     )
 
@@ -120,6 +191,19 @@ async def get_my_bookings(
     )
     rows = result.all()
 
+    # admin_name 조회
+    admin_ids = set(slot.admin_id for _, slot in rows if slot.admin_id)
+    admin_names = {}
+    for aid in admin_ids:
+        try:
+            aid_uuid = uuid.UUID(aid)
+            admin_result = await db.execute(select(Admin).where(Admin.id == aid_uuid))
+            admin_obj = admin_result.scalar_one_or_none()
+            if admin_obj:
+                admin_names[aid] = admin_obj.name
+        except ValueError:
+            pass
+
     items = [
         BookingResponse(
             id=booking.id,
@@ -129,6 +213,7 @@ async def get_my_bookings(
             type=booking.type,
             memo=booking.memo,
             status=booking.status,
+            admin_name=admin_names.get(slot.admin_id),
             created_at=booking.created_at,
         )
         for booking, slot in rows

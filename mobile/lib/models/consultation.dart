@@ -1,9 +1,25 @@
+class Counselor {
+  final String id;
+  final String name;
+
+  Counselor({required this.id, required this.name});
+
+  factory Counselor.fromJson(Map<String, dynamic> json) {
+    return Counselor(
+      id: json['id'],
+      name: json['name'],
+    );
+  }
+}
+
 class ConsultationSlot {
   final String id;
   final String date;
   final String startTime;
   final String endTime;
   final int remaining;
+  final String? adminId;
+  final String? adminName;
 
   ConsultationSlot({
     required this.id,
@@ -11,6 +27,8 @@ class ConsultationSlot {
     required this.startTime,
     required this.endTime,
     required this.remaining,
+    this.adminId,
+    this.adminName,
   });
 
   factory ConsultationSlot.fromJson(Map<String, dynamic> json) {
@@ -20,6 +38,8 @@ class ConsultationSlot {
       startTime: json['start_time'],
       endTime: json['end_time'],
       remaining: json['remaining'] ?? 0,
+      adminId: json['admin_id'],
+      adminName: json['admin_name'],
     );
   }
 

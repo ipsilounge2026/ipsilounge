@@ -24,10 +24,11 @@ async def check_slot_available(slot_id, db: AsyncSession) -> ConsultationSlot:
     return slot
 
 
-async def create_bulk_slots(data: SlotBulkCreateRequest, db: AsyncSession) -> int:
+async def create_bulk_slots(data: SlotBulkCreateRequest, db: AsyncSession, admin_id: str | None = None) -> int:
     """반복 시간대 일괄 생성. 생성된 슬롯 수 반환."""
     created_count = 0
     current_date = data.start_date
+    slot_admin_id = data.admin_id or admin_id
 
     while current_date <= data.end_date:
         if current_date.weekday() in data.weekdays:
@@ -38,17 +39,20 @@ async def create_bulk_slots(data: SlotBulkCreateRequest, db: AsyncSession) -> in
             while current_time + timedelta(minutes=data.duration_minutes) <= end_datetime:
                 slot_end = (current_time + timedelta(minutes=data.duration_minutes)).time()
 
-                # 중복 확인
+                # 중복 확인 (동일 관리자 + 동일 날짜 + 동일 시간)
+                conditions = [
+                    ConsultationSlot.date == current_date,
+                    ConsultationSlot.start_time == current_time.time(),
+                ]
+                if slot_admin_id:
+                    conditions.append(ConsultationSlot.admin_id == slot_admin_id)
+
                 result = await db.execute(
-                    select(ConsultationSlot).where(
-                        and_(
-                            ConsultationSlot.date == current_date,
-                            ConsultationSlot.start_time == current_time.time(),
-                        )
-                    )
+                    select(ConsultationSlot).where(and_(*conditions))
                 )
                 if result.scalar_one_or_none() is None:
                     slot = ConsultationSlot(
+                        admin_id=slot_admin_id,
                         date=current_date,
                         start_time=current_time.time(),
                         end_time=slot_end,

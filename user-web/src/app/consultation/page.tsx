@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getAvailableSlots, bookConsultation, checkConsultationEligible } from "@/lib/api";
+import { getAvailableSlots, getCounselors, bookConsultation, checkConsultationEligible } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
+
+interface Counselor {
+  id: string;
+  name: string;
+}
 
 interface Slot {
   id: string;
@@ -14,6 +19,8 @@ interface Slot {
   start_time: string;
   end_time: string;
   remaining: number;
+  admin_id: string | null;
+  admin_name: string | null;
 }
 
 interface EligibilityResult {
@@ -27,6 +34,8 @@ export default function ConsultationPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
+  const [counselors, setCounselors] = useState<Counselor[]>([]);
+  const [selectedCounselor, setSelectedCounselor] = useState<Counselor | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
@@ -45,11 +54,21 @@ export default function ConsultationPage() {
       .finally(() => setCheckingEligibility(false));
   }, []);
 
+  // 자격 충족 시 상담자 목록 로드
   useEffect(() => {
     if (eligibility?.eligible) {
-      getAvailableSlots(year, month).then(setSlots).catch(() => {});
+      getCounselors().then(setCounselors).catch(() => {});
     }
-  }, [year, month, eligibility]);
+  }, [eligibility]);
+
+  // 상담자 선택 시 슬롯 로드
+  useEffect(() => {
+    if (selectedCounselor) {
+      getAvailableSlots(year, month, selectedCounselor.id).then(setSlots).catch(() => {});
+    } else {
+      setSlots([]);
+    }
+  }, [year, month, selectedCounselor]);
 
   // 달력 데이터 생성
   const firstDay = new Date(year, month - 1, 1).getDay();
@@ -63,6 +82,19 @@ export default function ConsultationPage() {
   for (let d = 1; d <= daysInMonth; d++) calendarDays.push(d);
 
   const slotsForDate = selectedDate ? slots.filter((s) => s.date === selectedDate) : [];
+
+  const handleSelectCounselor = (c: Counselor) => {
+    setSelectedCounselor(c);
+    setSelectedDate(null);
+    setSelectedSlot(null);
+  };
+
+  const handleChangeCounselor = () => {
+    setSelectedCounselor(null);
+    setSelectedDate(null);
+    setSelectedSlot(null);
+    setSlots([]);
+  };
 
   const handleBook = async () => {
     if (!selectedSlot) return;
@@ -80,8 +112,8 @@ export default function ConsultationPage() {
     }
   };
 
-  const prevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
-  const nextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
+  const prevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); setSelectedDate(null); setSelectedSlot(null); };
+  const nextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); setSelectedDate(null); setSelectedSlot(null); };
 
   if (checkingEligibility) {
     return (
@@ -142,84 +174,161 @@ export default function ConsultationPage() {
               </div>
             )}
 
-            {/* 달력 */}
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <button className="btn btn-outline btn-sm" onClick={prevMonth}>이전</button>
-                <span style={{ fontWeight: 700, fontSize: 16 }}>{year}년 {month}월</span>
-                <button className="btn btn-outline btn-sm" onClick={nextMonth}>다음</button>
-              </div>
-
-              <div className="calendar-grid">
-                {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
-                  <div key={d} className="calendar-header">{d}</div>
-                ))}
-                {calendarDays.map((day, i) => {
-                  if (day === null) return <div key={i} className="calendar-day empty" />;
-                  const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                  const hasSlots = datesWithSlots.has(dateStr);
-                  const isPast = dateStr < today;
-                  const isSelected = dateStr === selectedDate;
-
-                  return (
-                    <div
-                      key={i}
-                      className={`calendar-day ${isSelected ? "selected" : ""} ${hasSlots ? "has-slots" : ""} ${isPast ? "disabled" : ""} ${dateStr === today ? "today" : ""}`}
-                      onClick={() => { if (!isPast && hasSlots) { setSelectedDate(dateStr); setSelectedSlot(null); } }}
-                    >
-                      {day}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 시간대 선택 */}
-            {selectedDate && (
+            {/* Step 1: 상담자 선택 */}
+            {!selectedCounselor ? (
               <div className="card" style={{ marginBottom: 16 }}>
-                <h2 style={{ fontSize: 16, marginBottom: 12 }}>
-                  {new Date(selectedDate + "T00:00:00").toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" })} 예약 가능 시간
-                </h2>
-                {slotsForDate.length === 0 ? (
-                  <p style={{ color: "var(--gray-500)" }}>이 날짜에 예약 가능한 시간이 없습니다</p>
+                <h2 style={{ fontSize: 16, marginBottom: 4 }}>상담자 선택</h2>
+                <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 16 }}>상담을 진행할 상담자를 선택해주세요</p>
+
+                {counselors.length === 0 ? (
+                  <p style={{ color: "var(--gray-500)", textAlign: "center", padding: 20 }}>현재 예약 가능한 상담자가 없습니다</p>
                 ) : (
-                  <div className="slot-grid">
-                    {slotsForDate.sort((a, b) => a.start_time.localeCompare(b.start_time)).map((slot) => (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {counselors.map((c) => (
                       <div
-                        key={slot.id}
-                        className={`slot-btn ${selectedSlot?.id === slot.id ? "selected" : ""} ${slot.remaining === 0 ? "disabled" : ""}`}
-                        onClick={() => { if (slot.remaining > 0) setSelectedSlot(slot); }}
+                        key={c.id}
+                        onClick={() => handleSelectCounselor(c)}
+                        style={{
+                          padding: "16px 20px",
+                          border: "1px solid #E5E7EB",
+                          borderRadius: 10,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          transition: "all 0.15s",
+                        }}
+                        onMouseOver={e => { e.currentTarget.style.borderColor = "#3B82F6"; e.currentTarget.style.background = "#F8FAFF"; }}
+                        onMouseOut={e => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.background = ""; }}
                       >
-                        <div className="slot-time">{slot.start_time.slice(0, 5)} ~ {slot.end_time.slice(0, 5)}</div>
-                        <div className="slot-remaining">{slot.remaining > 0 ? `${slot.remaining}자리 남음` : "마감"}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{
+                            width: 40, height: 40, borderRadius: "50%",
+                            background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center",
+                            fontWeight: 700, color: "#3B82F6", fontSize: 16,
+                          }}>
+                            {c.name.charAt(0)}
+                          </div>
+                          <span style={{ fontWeight: 600, fontSize: 15 }}>{c.name}</span>
+                        </div>
+                        <span style={{ color: "#3B82F6", fontSize: 13 }}>선택</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            )}
+            ) : (
+              <>
+                {/* 선택된 상담자 표시 */}
+                <div style={{
+                  padding: "12px 16px",
+                  background: "#EFF6FF",
+                  border: "1px solid #BFDBFE",
+                  borderRadius: 8,
+                  marginBottom: 16,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: "50%",
+                      background: "#3B82F6", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontWeight: 700, color: "#fff", fontSize: 14,
+                    }}>
+                      {selectedCounselor.name.charAt(0)}
+                    </div>
+                    <span style={{ fontWeight: 600 }}>{selectedCounselor.name}</span>
+                    <span style={{ fontSize: 13, color: "#6B7280" }}>상담자</span>
+                  </div>
+                  <button
+                    onClick={handleChangeCounselor}
+                    style={{ fontSize: 13, color: "#3B82F6", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                  >
+                    변경
+                  </button>
+                </div>
 
-            {/* 예약 폼 */}
-            {selectedSlot && (
-              <div className="card">
-                <h2 style={{ fontSize: 16, marginBottom: 16 }}>예약 정보 입력</h2>
-                <div className="form-group">
-                  <label>상담 유형</label>
-                  <select className="form-control" value={consultType} onChange={(e) => setConsultType(e.target.value)}>
-                    <option value="학생부분석">학생부 분석 상담</option>
-                    <option value="입시전략">입시 전략 상담</option>
-                    <option value="기타">기타</option>
-                  </select>
+                {/* Step 2: 달력 */}
+                <div className="card" style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <button className="btn btn-outline btn-sm" onClick={prevMonth}>이전</button>
+                    <span style={{ fontWeight: 700, fontSize: 16 }}>{year}년 {month}월</span>
+                    <button className="btn btn-outline btn-sm" onClick={nextMonth}>다음</button>
+                  </div>
+
+                  <div className="calendar-grid">
+                    {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+                      <div key={d} className="calendar-header">{d}</div>
+                    ))}
+                    {calendarDays.map((day, i) => {
+                      if (day === null) return <div key={i} className="calendar-day empty" />;
+                      const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                      const hasSlots = datesWithSlots.has(dateStr);
+                      const isPast = dateStr < today;
+                      const isSelected = dateStr === selectedDate;
+
+                      return (
+                        <div
+                          key={i}
+                          className={`calendar-day ${isSelected ? "selected" : ""} ${hasSlots ? "has-slots" : ""} ${isPast ? "disabled" : ""} ${dateStr === today ? "today" : ""}`}
+                          onClick={() => { if (!isPast && hasSlots) { setSelectedDate(dateStr); setSelectedSlot(null); } }}
+                        >
+                          {day}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>사전 질문 (선택)</label>
-                  <textarea className="form-control" value={memo} onChange={(e) => setMemo(e.target.value)}
-                    placeholder="상담 전에 궁금한 점이 있으면 입력해주세요" />
-                </div>
-                <button className="btn btn-primary btn-block btn-lg" onClick={handleBook} disabled={loading}>
-                  {loading ? "예약 중..." : "상담 예약 신청"}
-                </button>
-              </div>
+
+                {/* Step 3: 시간대 선택 */}
+                {selectedDate && (
+                  <div className="card" style={{ marginBottom: 16 }}>
+                    <h2 style={{ fontSize: 16, marginBottom: 12 }}>
+                      {new Date(selectedDate + "T00:00:00").toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" })} 예약 가능 시간
+                    </h2>
+                    {slotsForDate.length === 0 ? (
+                      <p style={{ color: "var(--gray-500)" }}>이 날짜에 예약 가능한 시간이 없습니다</p>
+                    ) : (
+                      <div className="slot-grid">
+                        {slotsForDate.sort((a, b) => a.start_time.localeCompare(b.start_time)).map((slot) => (
+                          <div
+                            key={slot.id}
+                            className={`slot-btn ${selectedSlot?.id === slot.id ? "selected" : ""} ${slot.remaining === 0 ? "disabled" : ""}`}
+                            onClick={() => { if (slot.remaining > 0) setSelectedSlot(slot); }}
+                          >
+                            <div className="slot-time">{slot.start_time.slice(0, 5)} ~ {slot.end_time.slice(0, 5)}</div>
+                            <div className="slot-remaining">{slot.remaining > 0 ? `${slot.remaining}자리 남음` : "마감"}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 4: 예약 폼 */}
+                {selectedSlot && (
+                  <div className="card">
+                    <h2 style={{ fontSize: 16, marginBottom: 16 }}>예약 정보 입력</h2>
+                    <div className="form-group">
+                      <label>상담 유형</label>
+                      <select className="form-control" value={consultType} onChange={(e) => setConsultType(e.target.value)}>
+                        <option value="학생부분석">학생부 분석 상담</option>
+                        <option value="입시전략">입시 전략 상담</option>
+                        <option value="기타">기타</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>사전 질문 (선택)</label>
+                      <textarea className="form-control" value={memo} onChange={(e) => setMemo(e.target.value)}
+                        placeholder="상담 전에 궁금한 점이 있으면 입력해주세요" />
+                    </div>
+                    <button className="btn btn-primary btn-block btn-lg" onClick={handleBook} disabled={loading}>
+                      {loading ? "예약 중..." : "상담 예약 신청"}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

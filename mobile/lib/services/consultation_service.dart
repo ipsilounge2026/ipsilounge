@@ -2,10 +2,17 @@ import 'api_service.dart';
 import '../models/consultation.dart';
 
 class ConsultationService {
+  static Future<List<Counselor>> getCounselors() async {
+    final res = await ApiService.get('/consultation/counselors');
+    final items = res as List;
+    return items.map((e) => Counselor.fromJson(e)).toList();
+  }
+
   static Future<List<ConsultationSlot>> getAvailableSlots(
-      int year, int month) async {
-    final res =
-        await ApiService.get('/consultation/slots?year=$year&month=$month');
+      int year, int month, {String? adminId}) async {
+    String url = '/consultation/slots?year=$year&month=$month';
+    if (adminId != null) url += '&admin_id=$adminId';
+    final res = await ApiService.get(url);
     final items = res as List;
     return items.map((e) => ConsultationSlot.fromJson(e)).toList();
   }

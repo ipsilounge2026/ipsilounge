@@ -99,10 +99,16 @@ async def startup():
 
         def _check_and_migrate(connection):
             inspector = sa_inspect(connection)
+            # admins 테이블에 user_id 컬럼 추가
             columns = [c["name"] for c in inspector.get_columns("admins")]
             if "user_id" not in columns:
                 connection.execute(text("ALTER TABLE admins ADD COLUMN user_id VARCHAR(36)"))
                 logger.info("admins 테이블에 user_id 컬럼 추가 완료")
+            # consultation_slots 테이블에 admin_id 컬럼 추가
+            slot_columns = [c["name"] for c in inspector.get_columns("consultation_slots")]
+            if "admin_id" not in slot_columns:
+                connection.execute(text("ALTER TABLE consultation_slots ADD COLUMN admin_id VARCHAR(36)"))
+                logger.info("consultation_slots 테이블에 admin_id 컬럼 추가 완료")
 
         await conn.run_sync(_check_and_migrate)
 

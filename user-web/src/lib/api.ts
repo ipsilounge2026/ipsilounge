@@ -116,8 +116,14 @@ export async function getReportPdfUrl(id: string) {
 }
 
 // --- 상담 ---
-export async function getAvailableSlots(year: number, month: number) {
-  return request(`/api/consultation/slots?year=${year}&month=${month}`);
+export async function getCounselors() {
+  return request("/api/consultation/counselors");
+}
+
+export async function getAvailableSlots(year: number, month: number, adminId?: string) {
+  const params = new URLSearchParams({ year: String(year), month: String(month) });
+  if (adminId) params.set("admin_id", adminId);
+  return request(`/api/consultation/slots?${params}`);
 }
 
 export async function bookConsultation(data: {

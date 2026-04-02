@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { getConsultationSlots, createSlotsBulk, deleteSlot, updateSlot } from "@/lib/api";
-import { isLoggedIn } from "@/lib/auth";
+import { getConsultationSlots, createSlotsBulk, deleteSlot, updateSlot, getCounselors } from "@/lib/api";
+import { isLoggedIn, getAdminInfo } from "@/lib/auth";
 
 interface Slot {
   id: string;
+  admin_id: string | null;
+  admin_name: string | null;
   date: string;
   start_time: string;
   end_time: string;
@@ -16,16 +18,28 @@ interface Slot {
   is_active: boolean;
 }
 
+interface Counselor {
+  id: string;
+  name: string;
+  role: string;
+}
+
 export default function ConsultationSettingsPage() {
   const router = useRouter();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [counselors, setCounselors] = useState<Counselor[]>([]);
   const [message, setMessage] = useState("");
+  const [filterAdminId, setFilterAdminId] = useState("");
+
+  const adminInfo = getAdminInfo();
+  const isSuperAdmin = adminInfo?.role === "super_admin";
 
   // 일괄 생성 폼
   const [bulkForm, setBulkForm] = useState({
+    admin_id: "",
     start_date: "",
     end_date: "",
     weekdays: [0, 1, 2, 3, 4] as number[],
@@ -37,12 +51,23 @@ export default function ConsultationSettingsPage() {
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
+    loadCounselors();
+  }, []);
+
+  useEffect(() => {
     loadSlots();
-  }, [year, month]);
+  }, [year, month, filterAdminId]);
+
+  const loadCounselors = async () => {
+    try {
+      const res = await getCounselors();
+      setCounselors(res);
+    } catch {}
+  };
 
   const loadSlots = async () => {
     try {
-      const res = await getConsultationSlots(year, month);
+      const res = await getConsultationSlots(year, month, filterAdminId || undefined);
       setSlots(res);
     } catch {}
   };
@@ -53,11 +78,14 @@ export default function ConsultationSettingsPage() {
       return;
     }
     try {
-      const res = await createSlotsBulk({
+      const payload: any = {
         ...bulkForm,
         start_time: bulkForm.start_time + ":00",
         end_time: bulkForm.end_time + ":00",
-      });
+      };
+      // admin_id가 비어있으면 제거 (서버에서 본인으로 설정)
+      if (!payload.admin_id) delete payload.admin_id;
+      const res = await createSlotsBulk(payload);
       setMessage(res.message);
       loadSlots();
     } catch (err: any) {
@@ -115,12 +143,33 @@ export default function ConsultationSettingsPage() {
         {message && (
           <div style={{ padding: "12px 16px", background: "#d4edda", borderRadius: 8, marginBottom: 16, fontSize: 14 }}>
             {message}
+            <button onClick={() => setMessage("")} style={{ float: "right", background: "none", border: "none", cursor: "pointer", fontSize: 16 }}>x</button>
           </div>
         )}
 
         {/* 일괄 생성 */}
         <div className="card" style={{ marginBottom: 24 }}>
           <h2 style={{ fontSize: 16, marginBottom: 16 }}>상담 시간 일괄 생성</h2>
+
+          {/* 상담자 선택 (최고관리자만) */}
+          {isSuperAdmin && counselors.length > 0 && (
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label>상담자 지정</label>
+              <select
+                className="form-control"
+                value={bulkForm.admin_id}
+                onChange={(e) => setBulkForm({ ...bulkForm, admin_id: e.target.value })}
+                style={{ maxWidth: 300 }}
+              >
+                <option value="">본인 ({adminInfo?.name})</option>
+                {counselors.filter(c => c.id !== adminInfo?.id).map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.role === "counselor" ? "상담자" : "담당자"})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
             <div className="form-group">
@@ -175,12 +224,27 @@ export default function ConsultationSettingsPage() {
           <button className="btn btn-primary" onClick={handleBulkCreate}>일괄 생성</button>
         </div>
 
-        {/* 월 선택 */}
-        <div className="filter-bar" style={{ marginBottom: 16 }}>
+        {/* 월 선택 + 상담자 필터 */}
+        <div className="filter-bar" style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
           <button className="btn btn-outline btn-sm" onClick={() => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); }}>이전 달</button>
           <span style={{ fontWeight: 600 }}>{year}년 {month}월</span>
           <button className="btn btn-outline btn-sm" onClick={() => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); }}>다음 달</button>
-          <span style={{ color: "var(--gray-600)", fontSize: 14 }}>총 {slots.length}개 시간대</span>
+
+          {isSuperAdmin && counselors.length > 0 && (
+            <select
+              className="form-control"
+              value={filterAdminId}
+              onChange={(e) => setFilterAdminId(e.target.value)}
+              style={{ width: 200, marginLeft: 16 }}
+            >
+              <option value="">전체 상담자</option>
+              {counselors.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+
+          <span style={{ color: "var(--gray-600)", fontSize: 14, marginLeft: "auto" }}>총 {slots.length}개 시간대</span>
         </div>
 
         {/* 시간대 목록 */}
@@ -205,6 +269,17 @@ export default function ConsultationSettingsPage() {
                   }}
                 >
                   <span>{slot.start_time.slice(0, 5)} ~ {slot.end_time.slice(0, 5)}</span>
+                  {slot.admin_name && (
+                    <span style={{
+                      fontSize: 11,
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      background: "#EFF6FF",
+                      color: "#2563EB",
+                    }}>
+                      {slot.admin_name}
+                    </span>
+                  )}
                   <span style={{ color: "var(--gray-500)" }}>({slot.current_bookings}/{slot.max_bookings})</span>
                   <button className="btn btn-outline btn-sm" style={{ padding: "2px 6px", fontSize: 11 }}
                     onClick={() => handleToggleActive(slot)}>

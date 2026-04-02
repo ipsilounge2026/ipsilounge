@@ -86,26 +86,24 @@ export async function updateAnalysisStatus(id: string, status: string, adminMemo
 }
 
 // --- 상담 관리 ---
-export async function getConsultationSlots(year: number, month: number) {
-  return request(`/api/admin/consultation/slots?year=${year}&month=${month}`);
+export async function getCounselors() {
+  return request("/api/admin/consultation/counselors");
 }
 
-export async function createSlot(data: { date: string; start_time: string; end_time: string; max_bookings: number }) {
+export async function getConsultationSlots(year: number, month: number, adminId?: string) {
+  const params = new URLSearchParams({ year: String(year), month: String(month) });
+  if (adminId) params.set("admin_id", adminId);
+  return request(`/api/admin/consultation/slots?${params}`);
+}
+
+export async function createSlot(data: { admin_id?: string; date: string; start_time: string; end_time: string; max_bookings: number }) {
   return request("/api/admin/consultation/slots", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
-export async function createSlotsBulk(data: {
-  start_date: string;
-  end_date: string;
-  weekdays: number[];
-  start_time: string;
-  end_time: string;
-  duration_minutes: number;
-  max_bookings: number;
-}) {
+export async function createSlotsBulk(data: Record<string, any>) {
   return request("/api/admin/consultation/slots/bulk", {
     method: "POST",
     body: JSON.stringify(data),

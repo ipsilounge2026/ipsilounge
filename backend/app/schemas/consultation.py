@@ -12,6 +12,15 @@ class AvailableSlotResponse(BaseModel):
     start_time: time
     end_time: time
     remaining: int  # 남은 예약 가능 수
+    admin_id: str | None = None
+    admin_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class CounselorResponse(BaseModel):
+    id: str
+    name: str
 
     model_config = {"from_attributes": True}
 
@@ -31,6 +40,7 @@ class BookingResponse(BaseModel):
     type: str
     memo: str | None
     status: str
+    admin_name: str | None = None
     created_at: datetime
 
 
@@ -42,6 +52,7 @@ class MyBookingListResponse(BaseModel):
 # --- 관리자용 ---
 
 class SlotCreateRequest(BaseModel):
+    admin_id: str | None = None  # 최고관리자가 지정 가능
     date: date
     start_time: time
     end_time: time
@@ -49,6 +60,7 @@ class SlotCreateRequest(BaseModel):
 
 
 class SlotBulkCreateRequest(BaseModel):
+    admin_id: str | None = None  # 최고관리자가 지정 가능
     start_date: date
     end_date: date
     weekdays: list[int]  # 0=월 ~ 6=일
@@ -65,6 +77,8 @@ class SlotUpdateRequest(BaseModel):
 
 class AdminSlotResponse(BaseModel):
     id: uuid.UUID
+    admin_id: str | None = None
+    admin_name: str | None = None
     date: date
     start_time: time
     end_time: time
@@ -84,6 +98,7 @@ class AdminBookingResponse(BaseModel):
     slot_date: date
     slot_start_time: time
     slot_end_time: time
+    admin_name: str | None = None
     type: str
     memo: str | None
     status: str

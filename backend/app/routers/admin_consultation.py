@@ -25,6 +25,42 @@ from app.utils.dependencies import get_current_admin
 router = APIRouter(prefix="/api/admin/consultation", tags=["관리자-상담"])
 
 
+async def _get_admin_name(admin_id: str | None, db: AsyncSession) -> str | None:
+    """admin_id로 관리자 이름 조회"""
+    if not admin_id:
+        return None
+    try:
+        aid = uuid.UUID(admin_id)
+    except ValueError:
+        return None
+    result = await db.execute(select(Admin).where(Admin.id == aid))
+    admin = result.scalar_one_or_none()
+    return admin.name if admin else None
+
+
+# --- 상담 가능한 관리자/상담자 목록 ---
+
+@router.get("/counselors")
+async def list_counselors(
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담 가능한 관리자/상담자 목록 (시간 설정용)"""
+    if admin.role == "super_admin":
+        # 최고관리자: 상담 관리 권한이 있는 모든 admin + counselor 조회
+        result = await db.execute(
+            select(Admin).where(Admin.is_active == True, Admin.role.in_(["admin", "counselor"]))
+        )
+        admins = result.scalars().all()
+        items = [{"id": str(a.id), "name": a.name, "role": a.role} for a in admins]
+        # 최고관리자 본인도 추가
+        items.insert(0, {"id": str(admin.id), "name": admin.name, "role": admin.role})
+        return items
+    else:
+        # 일반 관리자/상담자: 본인만
+        return [{"id": str(admin.id), "name": admin.name, "role": admin.role}]
+
+
 # --- 시간대 관리 ---
 
 @router.post("/slots", response_model=AdminSlotResponse)
@@ -34,7 +70,14 @@ async def create_slot(
     db: AsyncSession = Depends(get_db),
 ):
     """상담 가능 시간 생성"""
+    # 최고관리자가 아니면 본인 ID 강제
+    if admin.role == "super_admin":
+        slot_admin_id = data.admin_id or str(admin.id)
+    else:
+        slot_admin_id = str(admin.id)
+
     slot = ConsultationSlot(
+        admin_id=slot_admin_id,
         date=data.date,
         start_time=data.start_time,
         end_time=data.end_time,
@@ -43,7 +86,19 @@ async def create_slot(
     db.add(slot)
     await db.commit()
     await db.refresh(slot)
-    return slot
+
+    admin_name = await _get_admin_name(slot.admin_id, db)
+    return AdminSlotResponse(
+        id=slot.id,
+        admin_id=slot.admin_id,
+        admin_name=admin_name,
+        date=slot.date,
+        start_time=slot.start_time,
+        end_time=slot.end_time,
+        max_bookings=slot.max_bookings,
+        current_bookings=slot.current_bookings,
+        is_active=slot.is_active,
+    )
 
 
 @router.post("/slots/bulk")
@@ -53,7 +108,13 @@ async def create_slots_bulk(
     db: AsyncSession = Depends(get_db),
 ):
     """반복 시간 일괄 생성"""
-    count = await create_bulk_slots(data, db)
+    # 최고관리자가 아니면 본인 ID 강제
+    if admin.role != "super_admin":
+        forced_admin_id = str(admin.id)
+    else:
+        forced_admin_id = data.admin_id or str(admin.id)
+
+    count = await create_bulk_slots(data, db, admin_id=forced_admin_id)
     return {"message": f"{count}개의 상담 시간대가 생성되었습니다", "created_count": count}
 
 
@@ -61,6 +122,7 @@ async def create_slots_bulk(
 async def list_slots(
     year: int = Query(...),
     month: int = Query(...),
+    admin_id: str | None = None,
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -71,12 +133,44 @@ async def list_slots(
     else:
         end_date = date(year, month + 1, 1)
 
+    conditions = [
+        ConsultationSlot.date >= start_date,
+        ConsultationSlot.date < end_date,
+    ]
+
+    # 최고관리자가 아니면 본인 슬롯만
+    if admin.role != "super_admin":
+        conditions.append(ConsultationSlot.admin_id == str(admin.id))
+    elif admin_id:
+        conditions.append(ConsultationSlot.admin_id == admin_id)
+
     result = await db.execute(
         select(ConsultationSlot)
-        .where(and_(ConsultationSlot.date >= start_date, ConsultationSlot.date < end_date))
+        .where(and_(*conditions))
         .order_by(ConsultationSlot.date, ConsultationSlot.start_time)
     )
-    return result.scalars().all()
+    slots = result.scalars().all()
+
+    # admin_name 일괄 조회
+    admin_ids = set(s.admin_id for s in slots if s.admin_id)
+    admin_names = {}
+    for aid in admin_ids:
+        admin_names[aid] = await _get_admin_name(aid, db)
+
+    return [
+        AdminSlotResponse(
+            id=s.id,
+            admin_id=s.admin_id,
+            admin_name=admin_names.get(s.admin_id),
+            date=s.date,
+            start_time=s.start_time,
+            end_time=s.end_time,
+            max_bookings=s.max_bookings,
+            current_bookings=s.current_bookings,
+            is_active=s.is_active,
+        )
+        for s in slots
+    ]
 
 
 @router.put("/slots/{slot_id}", response_model=AdminSlotResponse)
@@ -92,6 +186,10 @@ async def update_slot(
     if slot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="시간대를 찾을 수 없습니다")
 
+    # 본인 슬롯만 수정 가능 (최고관리자 제외)
+    if admin.role != "super_admin" and slot.admin_id != str(admin.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인의 시간대만 수정할 수 있습니다")
+
     if data.max_bookings is not None:
         slot.max_bookings = data.max_bookings
     if data.is_active is not None:
@@ -99,7 +197,18 @@ async def update_slot(
 
     await db.commit()
     await db.refresh(slot)
-    return slot
+    admin_name = await _get_admin_name(slot.admin_id, db)
+    return AdminSlotResponse(
+        id=slot.id,
+        admin_id=slot.admin_id,
+        admin_name=admin_name,
+        date=slot.date,
+        start_time=slot.start_time,
+        end_time=slot.end_time,
+        max_bookings=slot.max_bookings,
+        current_bookings=slot.current_bookings,
+        is_active=slot.is_active,
+    )
 
 
 @router.delete("/slots/{slot_id}")
@@ -113,6 +222,9 @@ async def delete_slot(
     slot = result.scalar_one_or_none()
     if slot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="시간대를 찾을 수 없습니다")
+
+    if admin.role != "super_admin" and slot.admin_id != str(admin.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인의 시간대만 삭제할 수 있습니다")
 
     if slot.current_bookings > 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="예약이 있는 시간대는 삭제할 수 없습니다. 비활성화를 사용해주세요.")
@@ -163,6 +275,12 @@ async def list_bookings(
     result = await db.execute(query)
     rows = result.all()
 
+    # admin_name 조회
+    admin_ids = set(slot.admin_id for _, slot, _ in rows if slot.admin_id)
+    admin_names = {}
+    for aid in admin_ids:
+        admin_names[aid] = await _get_admin_name(aid, db)
+
     items = [
         AdminBookingResponse(
             id=booking.id,
@@ -173,6 +291,7 @@ async def list_bookings(
             slot_date=slot.date,
             slot_start_time=slot.start_time,
             slot_end_time=slot.end_time,
+            admin_name=admin_names.get(slot.admin_id),
             type=booking.type,
             memo=booking.memo,
             status=booking.status,

@@ -17,6 +17,7 @@ interface Booking {
   slot_date: string;
   slot_start_time: string;
   slot_end_time: string;
+  admin_name: string | null;
   type: string;
   memo: string | null;
   status: string;
@@ -90,6 +91,7 @@ export default function ConsultationPage() {
               <tr>
                 <th>상담일</th>
                 <th>시간</th>
+                <th>상담자</th>
                 <th>신청자</th>
                 <th>연락처</th>
                 <th>유형</th>
@@ -103,6 +105,7 @@ export default function ConsultationPage() {
                 <tr key={b.id}>
                   <td>{b.slot_date}</td>
                   <td>{b.slot_start_time?.slice(0, 5)} ~ {b.slot_end_time?.slice(0, 5)}</td>
+                  <td>{b.admin_name || "-"}</td>
                   <td>
                     <div>{b.user_name}</div>
                     <div style={{ fontSize: 12, color: "var(--gray-500)" }}>{b.user_email}</div>
@@ -136,7 +139,7 @@ export default function ConsultationPage() {
                 </tr>
               ))}
               {bookings.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: "center", padding: 40, color: "var(--gray-500)" }}>상담 예약이 없습니다</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: "center", padding: 40, color: "var(--gray-500)" }}>상담 예약이 없습니다</td></tr>
               )}
             </tbody>
           </table>
