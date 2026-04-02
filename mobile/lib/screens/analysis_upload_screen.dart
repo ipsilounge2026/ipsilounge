@@ -13,18 +13,17 @@ class AnalysisUploadScreen extends StatefulWidget {
 class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
   File? _selectedFile;
   String? _selectedFileName;
-  final _universityCtrl = TextEditingController();
-  final _majorCtrl = TextEditingController();
-  final _memoCtrl = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+  String? _orderId;
 
   @override
-  void dispose() {
-    _universityCtrl.dispose();
-    _majorCtrl.dispose();
-    _memoCtrl.dispose();
-    super.dispose();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final arg = ModalRoute.of(context)?.settings.arguments;
+    if (arg is String) {
+      _orderId = arg;
+    }
   }
 
   Future<void> _pickFile() async {
@@ -45,17 +44,16 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
       setState(() => _errorMessage = '파일을 선택해주세요');
       return;
     }
+    if (_orderId == null) {
+      setState(() => _errorMessage = '신청 정보를 찾을 수 없습니다');
+      return;
+    }
     setState(() { _isLoading = true; _errorMessage = null; });
     try {
-      await AnalysisService.upload(
-        _selectedFile!,
-        targetUniversity: _universityCtrl.text.trim(),
-        targetMajor: _majorCtrl.text.trim(),
-        memo: _memoCtrl.text.trim(),
-      );
+      await AnalysisService.uploadToOrder(_orderId!, _selectedFile!);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('학생부가 접수되었습니다. 분석 완료 후 알림을 보내드립니다.')),
+          const SnackBar(content: Text('파일이 업로드되었습니다. 분석 완료 후 알림을 보내드립니다.')),
         );
         Navigator.pop(context);
       }
@@ -69,7 +67,7 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('학생부 업로드')),
+      appBar: AppBar(title: const Text('학생부 파일 업로드')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -87,13 +85,12 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
                         ? const Color(0xFF3B82F6)
                         : const Color(0xFFD1D5DB),
                     width: 2,
-                    style: BorderStyle.solid,
                   ),
                 ),
                 child: _selectedFile == null
-                    ? Column(
+                    ? const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           Icon(Icons.cloud_upload_outlined,
                               size: 40, color: Color(0xFF9CA3AF)),
                           SizedBox(height: 8),
@@ -138,27 +135,6 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
                       ),
               ),
             ),
-            const SizedBox(height: 20),
-            _buildLabel('지원 대학 (선택)'),
-            TextField(
-              controller: _universityCtrl,
-              decoration: const InputDecoration(hintText: '예: 서울대학교'),
-            ),
-            const SizedBox(height: 16),
-            _buildLabel('지원 학과 (선택)'),
-            TextField(
-              controller: _majorCtrl,
-              decoration: const InputDecoration(hintText: '예: 컴퓨터공학과'),
-            ),
-            const SizedBox(height: 16),
-            _buildLabel('메모 (선택)'),
-            TextField(
-              controller: _memoCtrl,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: '분석 시 참고할 내용이 있으면 입력해주세요',
-              ),
-            ),
             if (_errorMessage != null) ...[
               const SizedBox(height: 16),
               Container(
@@ -181,12 +157,11 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
                 onPressed: _isLoading ? null : _upload,
                 child: _isLoading
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 20, height: 20,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text('분석 요청하기'),
+                    : const Text('업로드하기'),
               ),
             ),
             const SizedBox(height: 16),
@@ -200,23 +175,12 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
               child: const Text(
                 '• 파일 업로드 후 관리자가 검토하여 분석을 진행합니다\n'
                 '• 분석 완료 시 앱 푸시 알림을 보내드립니다\n'
-                '• 현재 무료 서비스 운영 중입니다',
+                '• 나중에 업로드하려면 뒤로 가기를 누르세요',
                 style: TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.7),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(
-            fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF374151)),
       ),
     );
   }

@@ -14,6 +14,32 @@ class AnalysisService {
     return AnalysisOrder.fromJson(res);
   }
 
+  /// 신청만 (파일 업로드 없이)
+  static Future<Map<String, dynamic>> apply({
+    required String serviceType,
+    String? targetUniversity,
+    String? targetMajor,
+    String? memo,
+  }) async {
+    final body = <String, dynamic>{'service_type': serviceType};
+    if (targetUniversity != null && targetUniversity.isNotEmpty) {
+      body['target_university'] = targetUniversity;
+    }
+    if (targetMajor != null && targetMajor.isNotEmpty) {
+      body['target_major'] = targetMajor;
+    }
+    if (memo != null && memo.isNotEmpty) {
+      body['memo'] = memo;
+    }
+    return await ApiService.post('/analysis/apply', body);
+  }
+
+  /// 기존 신청 건에 파일 업로드
+  static Future<void> uploadToOrder(String orderId, File file) async {
+    await ApiService.uploadFile('/analysis/$orderId/upload', file, 'file', {});
+  }
+
+  /// 레거시: 신청+업로드 동시
   static Future<void> upload(
     File file, {
     String? targetUniversity,

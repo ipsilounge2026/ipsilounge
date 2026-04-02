@@ -51,8 +51,8 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: '홈'),
-          BottomNavigationBarItem(icon: Icon(Icons.description_outlined), activeIcon: Icon(Icons.description), label: '분석'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), activeIcon: Icon(Icons.calendar_today), label: '상담'),
+          BottomNavigationBarItem(icon: Icon(Icons.description_outlined), activeIcon: Icon(Icons.description), label: '분석 라운지'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), activeIcon: Icon(Icons.calendar_today), label: '상담 라운지'),
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: '마이'),
         ],
       ),
@@ -118,21 +118,21 @@ class _HomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.upload_file,
-                  label: '학생부 업로드',
+                  icon: Icons.description_outlined,
+                  label: '학생부 라운지',
                   color: const Color(0xFFEFF6FF),
                   iconColor: const Color(0xFF3B82F6),
-                  onTap: () => Navigator.pushNamed(context, '/analysis/upload'),
+                  onTap: () => Navigator.pushNamed(context, '/analysis/apply', arguments: '학생부라운지'),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.calendar_month,
-                  label: '상담 예약',
+                  icon: Icons.school_outlined,
+                  label: '학종 라운지',
                   color: const Color(0xFFF0FDF4),
                   iconColor: const Color(0xFF22C55E),
-                  onTap: () => Navigator.pushNamed(context, '/consultation'),
+                  onTap: () => Navigator.pushNamed(context, '/analysis/apply', arguments: '학종라운지'),
                 ),
               ),
             ],
@@ -142,11 +142,11 @@ class _HomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.payment_outlined,
-                  label: '결제',
+                  icon: Icons.calendar_month,
+                  label: '상담 라운지',
                   color: const Color(0xFFFFF7ED),
                   iconColor: const Color(0xFFF97316),
-                  onTap: () => Navigator.pushNamed(context, '/payment'),
+                  onTap: () => Navigator.pushNamed(context, '/consultation'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -178,7 +178,7 @@ class _HomeTab extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             ...recent.map((o) => _RecentOrderCard(
-                  filename: o.schoolRecordFilename,
+                  filename: o.schoolRecordFilename ?? '${o.serviceTypeLabel} 신청',
                   status: o.status,
                   onTap: () => Navigator.pushNamed(context, '/analysis/${o.id}'),
                 )),

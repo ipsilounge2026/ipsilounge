@@ -27,6 +27,10 @@ class StatusBadge extends StatelessWidget {
 
   Map<String, dynamic> _getConfig(String status) {
     switch (status) {
+      case 'applied':
+        return {'label': '신청완료', 'bg': const Color(0xFFE8E0F0), 'text': const Color(0xFF5A3D8A)};
+      case 'uploaded':
+        return {'label': '업로드완료', 'bg': const Color(0xFFD1ECF1), 'text': const Color(0xFF0C5460)};
       case 'pending':
         return {'label': '접수완료', 'bg': const Color(0xFFFEF3C7), 'text': const Color(0xFF92400E)};
       case 'processing':
@@ -36,7 +40,7 @@ class StatusBadge extends StatelessWidget {
       case 'cancelled':
         return {'label': '취소됨', 'bg': const Color(0xFFF3F4F6), 'text': const Color(0xFF6B7280)};
       case 'requested':
-        return {'label': '신청완료', 'bg': const Color(0xFFFEF3C7), 'text': const Color(0xFF92400E)};
+        return {'label': '예약신청', 'bg': const Color(0xFFFEF3C7), 'text': const Color(0xFF92400E)};
       case 'confirmed':
         return {'label': '예약확정', 'bg': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)};
       default:

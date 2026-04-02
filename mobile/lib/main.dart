@@ -9,6 +9,7 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/analysis_list_screen.dart';
+import 'screens/analysis_apply_screen.dart';
 import 'screens/analysis_upload_screen.dart';
 import 'screens/analysis_detail_screen.dart';
 import 'screens/consultation_screen.dart';
@@ -134,6 +135,7 @@ class IpsiLoungeApp extends StatelessWidget {
           '/register': (context) => const RegisterScreen(),
           '/home': (context) => const HomeScreen(),
           '/analysis': (context) => const AnalysisListScreen(),
+          '/analysis/apply': (context) => const AnalysisApplyScreen(),
           '/analysis/upload': (context) => const AnalysisUploadScreen(),
           '/consultation': (context) => const ConsultationScreen(),
           '/consultation/my': (context) => const ConsultationListScreen(),
