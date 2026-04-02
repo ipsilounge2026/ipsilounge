@@ -181,6 +181,15 @@ export async function createAdmin(data: { email: string; password: string; name:
   return request("/api/admin/admins", { method: "POST", body: JSON.stringify(data) });
 }
 
+export async function promoteToAdmin(data: { user_id: string; role: string; allowed_menus: string[] }) {
+  return request("/api/admin/admins/promote", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function searchUsersForPromotion(search: string) {
+  const params = new URLSearchParams({ page: "1", size: "10", search });
+  return request(`/api/admin/users?${params}`);
+}
+
 export async function updateAdmin(id: string, data: { name?: string; role?: string; is_active?: boolean; allowed_menus?: string[] }) {
   return request(`/api/admin/admins/${id}`, { method: "PUT", body: JSON.stringify(data) });
 }

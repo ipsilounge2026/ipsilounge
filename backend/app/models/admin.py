@@ -15,8 +15,9 @@ class Admin(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    role: Mapped[str] = mapped_column(String(20), default="admin")  # super_admin / admin
+    role: Mapped[str] = mapped_column(String(20), default="admin")  # super_admin / admin / counselor
     allowed_menus: Mapped[str | None] = mapped_column(Text, nullable=True)  # 쉼표 구분 메뉴키 (admin만 적용, super_admin은 전체)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)  # 회원에서 승격된 경우 원본 user_id
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

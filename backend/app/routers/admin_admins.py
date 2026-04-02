@@ -24,11 +24,26 @@ ALL_MENUS = [
 ]
 
 
+VALID_ROLES = {"super_admin", "admin", "counselor"}
+
+ROLE_LABELS = {
+    "super_admin": "최고관리자",
+    "admin": "담당자",
+    "counselor": "상담자",
+}
+
+
 class AdminCreate(BaseModel):
     email: EmailStr
     password: str
     name: str
-    role: str = "admin"  # admin / super_admin
+    role: str = "admin"  # admin / super_admin / counselor
+    allowed_menus: list[str] | None = None
+
+
+class AdminPromote(BaseModel):
+    user_id: str
+    role: str = "admin"  # admin / counselor
     allowed_menus: list[str] | None = None
 
 
@@ -90,6 +105,7 @@ async def list_admins(
             "role": a.role,
             "allowed_menus": a.allowed_menus.split(",") if a.allowed_menus else [],
             "is_active": a.is_active,
+            "user_id": str(a.user_id) if a.user_id else None,
             "created_at": a.created_at.isoformat(),
         }
         for a in admins
@@ -114,6 +130,42 @@ async def create_admin(
         name=data.name,
         role=data.role,
         allowed_menus=allowed,
+    )
+    db.add(admin)
+    await db.commit()
+    await db.refresh(admin)
+    return {"id": str(admin.id), "email": admin.email, "name": admin.name, "role": admin.role}
+
+
+@router.post("/promote")
+async def promote_user_to_admin(
+    data: AdminPromote,
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin),
+):
+    """회원을 관리자로 승격 (super_admin 전용)"""
+    if data.role not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 역할입니다. ({', '.join(VALID_ROLES)})")
+
+    # 사용자 조회
+    user_result = await db.execute(select(User).where(User.id == data.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    # 이미 관리자인지 확인
+    existing = await db.execute(select(Admin).where(Admin.email == user.email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="이미 관리자로 등록된 사용자입니다.")
+
+    allowed = ",".join(data.allowed_menus) if data.allowed_menus else "dashboard"
+    admin = Admin(
+        email=user.email,
+        password_hash=user.password_hash,
+        name=user.name,
+        role=data.role,
+        allowed_menus=allowed,
+        user_id=user.id,
     )
     db.add(admin)
     await db.commit()

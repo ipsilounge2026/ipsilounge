@@ -93,6 +93,19 @@ async def startup():
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # 마이그레이션: admins 테이블에 user_id 컬럼 추가 (없는 경우)
+        from sqlalchemy import text, inspect as sa_inspect
+
+        def _check_and_migrate(connection):
+            inspector = sa_inspect(connection)
+            columns = [c["name"] for c in inspector.get_columns("admins")]
+            if "user_id" not in columns:
+                connection.execute(text("ALTER TABLE admins ADD COLUMN user_id VARCHAR(36)"))
+                logger.info("admins 테이블에 user_id 컬럼 추가 완료")
+
+        await conn.run_sync(_check_and_migrate)
+
     logger.info("DB 테이블 초기화 완료")
 
     # 관리자 초기 계정 생성 (없는 경우)
