@@ -137,6 +137,10 @@ export async function cancelBooking(id: string) {
   return request(`/api/consultation/${id}/cancel`, { method: "PUT" });
 }
 
+export async function getMyConsultationNotes() {
+  return request("/api/consultation-notes");
+}
+
 // --- 결제 ---
 export async function preparePayment(data: {
   order_type: "analysis" | "consultation";

@@ -1,12 +1,15 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { isLoggedIn, logout } from "@/lib/auth";
 
-export default function Navbar() {
+function NavbarInner() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const loggedIn = isLoggedIn();
+  const currentType = searchParams.get("type") || "";
 
   return (
     <nav className="navbar">
@@ -15,7 +18,8 @@ export default function Navbar() {
         <div className="navbar-menu">
           {loggedIn ? (
             <>
-              <Link href="/analysis" className={pathname.startsWith("/analysis") ? "active" : ""}>분석 라운지</Link>
+              <Link href="/analysis?type=학생부라운지" className={pathname.startsWith("/analysis") && currentType === "학생부라운지" ? "active" : ""}>학생부 라운지</Link>
+              <Link href="/analysis?type=학종라운지" className={pathname.startsWith("/analysis") && currentType === "학종라운지" ? "active" : ""}>학종 라운지</Link>
               <Link href="/consultation" className={pathname.startsWith("/consultation") ? "active" : ""}>상담 라운지</Link>
               <Link href="/mypage" className={pathname.startsWith("/mypage") ? "active" : ""}>마이페이지</Link>
               <button onClick={logout}>로그아웃</button>
@@ -29,5 +33,20 @@ export default function Navbar() {
         </div>
       </div>
     </nav>
+  );
+}
+
+export default function Navbar() {
+  return (
+    <Suspense fallback={
+      <nav className="navbar">
+        <div className="navbar-inner">
+          <span className="navbar-logo">입시라운지</span>
+          <div className="navbar-menu"></div>
+        </div>
+      </nav>
+    }>
+      <NavbarInner />
+    </Suspense>
   );
 }

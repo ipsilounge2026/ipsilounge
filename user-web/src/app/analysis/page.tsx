@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -21,42 +21,49 @@ interface AnalysisItem {
   has_report: boolean;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  applied: "신청완료 (파일 업로드 필요)",
-  uploaded: "업로드완료 (분석 대기중)",
-  processing: "분석중",
-  completed: "분석완료",
-  cancelled: "취소됨",
-};
-
-export default function AnalysisListPage() {
+function AnalysisListInner() {
   const router = useRouter();
-  const [items, setItems] = useState<AnalysisItem[]>([]);
+  const searchParams = useSearchParams();
+  const serviceType = searchParams.get("type") || "학생부라운지";
+  const [allItems, setAllItems] = useState<AnalysisItem[]>([]);
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
-    getAnalysisList().then((res) => setItems(res.items)).catch(() => {});
+    getAnalysisList().then((res) => setAllItems(res.items)).catch(() => {});
   }, []);
+
+  // 서비스 타입으로 필터링
+  const items = allItems.filter(item => item.service_type === serviceType);
+
+  const isHakjong = serviceType === "학종라운지";
+  const title = isHakjong ? "학종 라운지" : "학생부 라운지";
+  const applyUrl = `/analysis/apply?type=${serviceType}`;
+  const btnClass = isHakjong
+    ? "btn btn-outline"
+    : "btn btn-primary";
+  const btnStyle = isHakjong
+    ? { border: "1px solid #22C55E", color: "#16A34A" }
+    : {};
 
   return (
     <>
       <Navbar />
       <div className="container">
         <div className="page-header">
-          <h1>분석 라운지</h1>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Link href="/analysis/apply?type=학생부라운지" className="btn btn-primary">학생부 라운지 신청</Link>
-            <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline" style={{ border: "1px solid #22C55E", color: "#16A34A" }}>학종 라운지 신청</Link>
-          </div>
+          <h1>{title}</h1>
+          <Link href={applyUrl} className={btnClass} style={btnStyle}>
+            {title} 신청
+          </Link>
         </div>
 
         {items.length === 0 ? (
           <div className="card" style={{ textAlign: "center", padding: 60 }}>
-            <p style={{ fontSize: 16, color: "var(--gray-500)", marginBottom: 16 }}>아직 신청 내역이 없습니다</p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <Link href="/analysis/apply?type=학생부라운지" className="btn btn-primary">학생부 라운지 신청하기</Link>
-              <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline">학종 라운지 신청하기</Link>
-            </div>
+            <p style={{ fontSize: 16, color: "var(--gray-500)", marginBottom: 16 }}>
+              아직 {title} 신청 내역이 없습니다
+            </p>
+            <Link href={applyUrl} className={btnClass} style={btnStyle}>
+              {title} 신청하기
+            </Link>
           </div>
         ) : (
           <div className="card">
@@ -64,18 +71,6 @@ export default function AnalysisListPage() {
               <div key={item.id} className="analysis-item">
                 <div className="analysis-info">
                   <h3>
-                    <span style={{
-                      display: "inline-block",
-                      padding: "2px 8px",
-                      borderRadius: 4,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      marginRight: 8,
-                      backgroundColor: item.service_type === "학종라운지" ? "#F0FDF4" : "#EFF6FF",
-                      color: item.service_type === "학종라운지" ? "#16A34A" : "#2563EB",
-                    }}>
-                      {item.service_type}
-                    </span>
                     {item.school_record_filename || "파일 미업로드"}
                   </h3>
                   <p>
@@ -103,5 +98,13 @@ export default function AnalysisListPage() {
       </div>
       <Footer />
     </>
+  );
+}
+
+export default function AnalysisListPage() {
+  return (
+    <Suspense fallback={<><Navbar /><div className="container"><p>로딩 중...</p></div><Footer /></>}>
+      <AnalysisListInner />
+    </Suspense>
   );
 }

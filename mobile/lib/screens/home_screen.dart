@@ -124,7 +124,7 @@ class _HomeTab extends StatelessWidget {
               Expanded(
                 child: _MenuCard(
                   icon: Icons.description_outlined,
-                  label: '분석 라운지',
+                  label: '학생부 라운지',
                   color: const Color(0xFFEFF6FF),
                   iconColor: const Color(0xFF3B82F6),
                   onTap: () => onSwitchTab(1),
@@ -133,11 +133,11 @@ class _HomeTab extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.calendar_month,
-                  label: '상담 라운지',
-                  color: const Color(0xFFFFF7ED),
-                  iconColor: const Color(0xFFF97316),
-                  onTap: () => onSwitchTab(2),
+                  icon: Icons.school_outlined,
+                  label: '학종 라운지',
+                  color: const Color(0xFFF0FDF4),
+                  iconColor: const Color(0xFF22C55E),
+                  onTap: () => onSwitchTab(1),
                 ),
               ),
             ],
@@ -147,11 +147,11 @@ class _HomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.person_outline,
-                  label: '마이페이지',
-                  color: const Color(0xFFF5F3FF),
-                  iconColor: const Color(0xFF8B5CF6),
-                  onTap: () => onSwitchTab(3),
+                  icon: Icons.calendar_month,
+                  label: '상담 라운지',
+                  color: const Color(0xFFFFF7ED),
+                  iconColor: const Color(0xFFF97316),
+                  onTap: () => onSwitchTab(2),
                 ),
               ),
               const SizedBox(width: 12),
