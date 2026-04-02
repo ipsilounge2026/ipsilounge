@@ -167,7 +167,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.card_gift_card, color: Color(0xFF3B82F6), size: 36),
+            child: const Icon(Icons.card_giftcard, color: Color(0xFF3B82F6), size: 36),
           ),
           const SizedBox(height: 16),
           const Text(
