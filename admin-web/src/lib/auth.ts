@@ -32,3 +32,24 @@ export function hasMenuAccess(menuKey: string): boolean {
   if (info.role === "super_admin") return true;
   return info.allowed_menus.includes(menuKey);
 }
+
+const MENU_ROUTES: Record<string, string> = {
+  dashboard: "/",
+  analysis: "/analysis",
+  consultation: "/consultation",
+  users: "/users",
+  payments: "/payments",
+  admins: "/admins",
+  assignments: "/assignments",
+  settings: "/settings",
+};
+
+export function getDefaultRoute(): string {
+  const info = getAdminInfo();
+  if (!info) return "/login";
+  if (info.role === "super_admin") return "/";
+  for (const menu of info.allowed_menus) {
+    if (MENU_ROUTES[menu]) return MENU_ROUTES[menu];
+  }
+  return "/";
+}

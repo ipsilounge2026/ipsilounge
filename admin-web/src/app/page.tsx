@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { getDashboard } from "@/lib/api";
-import { isLoggedIn } from "@/lib/auth";
+import { isLoggedIn, hasMenuAccess, getDefaultRoute } from "@/lib/auth";
 
 interface DashboardData {
   analysis: { applied: number; uploaded: number; processing: number; completed_this_month: number };
@@ -20,6 +20,10 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!isLoggedIn()) {
       router.push("/login");
+      return;
+    }
+    if (!hasMenuAccess("dashboard")) {
+      router.push(getDefaultRoute());
       return;
     }
     getDashboard().then(setData).catch(() => router.push("/login"));
