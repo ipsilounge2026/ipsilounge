@@ -15,8 +15,8 @@ export default function Navbar() {
         <div className="navbar-menu">
           {loggedIn ? (
             <>
-              <Link href="/analysis" className={pathname.startsWith("/analysis") ? "active" : ""}>학생부 분석</Link>
-              <Link href="/consultation" className={pathname.startsWith("/consultation") ? "active" : ""}>상담 예약</Link>
+              <Link href="/analysis" className={pathname.startsWith("/analysis") ? "active" : ""}>학생부 라운지</Link>
+              <Link href="/consultation" className={pathname.startsWith("/consultation") ? "active" : ""}>상담 라운지</Link>
               <Link href="/mypage" className={pathname.startsWith("/mypage") ? "active" : ""}>마이페이지</Link>
               <button onClick={logout}>로그아웃</button>
             </>

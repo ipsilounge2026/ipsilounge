@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      router.push("/analysis");
+      router.push("/");
     } catch (err: any) {
       setError(err.message);
     } finally {
