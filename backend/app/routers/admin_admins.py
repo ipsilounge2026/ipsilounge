@@ -187,7 +187,11 @@ async def update_admin(
     current_admin: Admin = Depends(get_current_super_admin),
 ):
     """관리자 정보 수정 (super_admin 전용)"""
-    result = await db.execute(select(Admin).where(Admin.id == admin_id))
+    try:
+        aid = uuid.UUID(admin_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="유효하지 않은 관리자 ID입니다.")
+    result = await db.execute(select(Admin).where(Admin.id == aid))
     admin = result.scalar_one_or_none()
     if not admin:
         raise HTTPException(status_code=404, detail="관리자를 찾을 수 없습니다.")
@@ -220,7 +224,11 @@ async def reset_admin_password(
     if not new_password or len(new_password) < 8:
         raise HTTPException(status_code=400, detail="비밀번호는 8자 이상이어야 합니다.")
 
-    result = await db.execute(select(Admin).where(Admin.id == admin_id))
+    try:
+        aid = uuid.UUID(admin_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="유효하지 않은 관리자 ID입니다.")
+    result = await db.execute(select(Admin).where(Admin.id == aid))
     admin = result.scalar_one_or_none()
     if not admin:
         raise HTTPException(status_code=404, detail="관리자를 찾을 수 없습니다.")
@@ -293,7 +301,11 @@ async def delete_assignment(
     current_admin: Admin = Depends(get_current_super_admin),
 ):
     """학생-담당자 매칭 삭제 (super_admin 전용)"""
-    await db.execute(delete(AdminStudentAssignment).where(AdminStudentAssignment.id == assignment_id))
+    try:
+        aid = uuid.UUID(assignment_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="유효하지 않은 ID입니다.")
+    await db.execute(delete(AdminStudentAssignment).where(AdminStudentAssignment.id == aid))
     await db.commit()
     return {"message": "매칭 해제 완료"}
 
