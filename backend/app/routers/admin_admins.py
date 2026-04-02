@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import delete, select
@@ -148,7 +150,11 @@ async def promote_user_to_admin(
         raise HTTPException(status_code=400, detail=f"유효하지 않은 역할입니다. ({', '.join(VALID_ROLES)})")
 
     # 사용자 조회
-    user_result = await db.execute(select(User).where(User.id == data.user_id))
+    try:
+        uid = uuid.UUID(data.user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="유효하지 않은 사용자 ID입니다.")
+    user_result = await db.execute(select(User).where(User.id == uid))
     user = user_result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
@@ -165,7 +171,7 @@ async def promote_user_to_admin(
         name=user.name,
         role=data.role,
         allowed_menus=allowed,
-        user_id=user.id,
+        user_id=str(user.id),
     )
     db.add(admin)
     await db.commit()
