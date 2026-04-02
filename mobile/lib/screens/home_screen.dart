@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import '../providers/auth_provider.dart';
 import '../providers/analysis_provider.dart';
 import '../services/auth_service.dart';
@@ -19,36 +18,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _initFCM();
+    // FCM은 Firebase 설정 후 활성화
+    // _initFCM();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AnalysisProvider>().loadOrders();
-    });
-  }
-
-  Future<void> _initFCM() async {
-    final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(alert: true, badge: true, sound: true);
-    final token = await messaging.getToken();
-    if (token != null) await AuthService.saveFcmToken(token);
-
-    FirebaseMessaging.onMessage.listen((message) {
-      final notification = message.notification;
-      if (notification != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(notification.title ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                Text(notification.body ?? '', style: const TextStyle(fontSize: 13)),
-              ],
-            ),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
     });
   }
 

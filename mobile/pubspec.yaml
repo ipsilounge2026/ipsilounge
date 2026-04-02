@@ -25,9 +25,9 @@ dependencies:
   path_provider: ^2.1.2
   permission_handler: ^11.3.0
 
-  # FCM 푸시 알림
-  firebase_core: ^3.1.0
-  firebase_messaging: ^15.0.3
+  # FCM 푸시 알림 — google-services.json 설정 후 활성화
+  # firebase_core: ^3.1.0
+  # firebase_messaging: ^15.0.3
   flutter_local_notifications: ^17.1.2
 
   # 상태 관리
