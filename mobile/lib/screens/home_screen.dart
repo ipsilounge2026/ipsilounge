@@ -4,6 +4,9 @@ import '../providers/auth_provider.dart';
 import '../providers/analysis_provider.dart';
 import '../services/auth_service.dart';
 import '../widgets/status_badge.dart';
+import 'analysis_list_screen.dart';
+import 'consultation_list_screen.dart';
+import 'mypage_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -32,9 +35,9 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _selectedIndex,
         children: const [
           _HomeTab(),
-          _AnalysisTab(),
-          _ConsultationTab(),
-          _MypageTab(),
+          AnalysisListScreen(),
+          ConsultationListScreen(),
+          MypageScreen(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -276,66 +279,3 @@ class _RecentOrderCard extends StatelessWidget {
   }
 }
 
-class _AnalysisTab extends StatelessWidget {
-  const _AnalysisTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Navigator(
-      onGenerateRoute: (settings) => MaterialPageRoute(
-        builder: (context) => const AnalysisListInner(),
-      ),
-    );
-  }
-}
-
-class AnalysisListInner extends StatelessWidget {
-  const AnalysisListInner({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('분석 목록')),
-      body: Center(
-        child: TextButton(
-          onPressed: () => Navigator.pushNamed(context, '/analysis'),
-          child: const Text('분석 목록으로'),
-        ),
-      ),
-    );
-  }
-}
-
-class _ConsultationTab extends StatelessWidget {
-  const _ConsultationTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('상담')),
-      body: Center(
-        child: TextButton(
-          onPressed: () => Navigator.pushNamed(context, '/consultation'),
-          child: const Text('상담 예약하러 가기'),
-        ),
-      ),
-    );
-  }
-}
-
-class _MypageTab extends StatelessWidget {
-  const _MypageTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('마이페이지')),
-      body: Center(
-        child: TextButton(
-          onPressed: () => Navigator.pushNamed(context, '/mypage'),
-          child: const Text('마이페이지로'),
-        ),
-      ),
-    );
-  }
-}
