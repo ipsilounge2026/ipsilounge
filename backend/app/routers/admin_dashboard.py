@@ -26,8 +26,7 @@ async def get_dashboard(
 
     # 분석 현황
     analysis_applied = await _count(db, AnalysisOrder, AnalysisOrder.status == "applied")
-    analysis_uploaded = await _count(db, AnalysisOrder, AnalysisOrder.status == "uploaded")
-    analysis_pending = await _count(db, AnalysisOrder, AnalysisOrder.status == "pending")
+    analysis_uploaded = await _count(db, AnalysisOrder, AnalysisOrder.status.in_(["uploaded", "pending"]))
     analysis_processing = await _count(db, AnalysisOrder, AnalysisOrder.status == "processing")
     analysis_completed_month = await _count(
         db, AnalysisOrder,
@@ -58,7 +57,6 @@ async def get_dashboard(
         "analysis": {
             "applied": analysis_applied,
             "uploaded": analysis_uploaded,
-            "pending": analysis_pending,
             "processing": analysis_processing,
             "completed_this_month": analysis_completed_month,
         },

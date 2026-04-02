@@ -7,7 +7,7 @@ import { getDashboard } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 interface DashboardData {
-  analysis: { applied: number; uploaded: number; pending: number; processing: number; completed_this_month: number };
+  analysis: { applied: number; uploaded: number; processing: number; completed_this_month: number };
   consultation: { bookings_active: number };
   users: { total: number; new_this_month: number };
   revenue: { this_month: number };
