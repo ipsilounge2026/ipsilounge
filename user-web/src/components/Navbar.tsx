@@ -16,6 +16,7 @@ export default function Navbar() {
           {loggedIn ? (
             <>
               <Link href="/analysis" className={pathname.startsWith("/analysis") ? "active" : ""}>학생부 라운지</Link>
+              <Link href="/analysis/apply?type=학종라운지" className={pathname === "/analysis/apply" && typeof window !== "undefined" && window.location.search.includes("학종") ? "active" : ""}>학종 라운지</Link>
               <Link href="/consultation" className={pathname.startsWith("/consultation") ? "active" : ""}>상담 라운지</Link>
               <Link href="/mypage" className={pathname.startsWith("/mypage") ? "active" : ""}>마이페이지</Link>
               <button onClick={logout}>로그아웃</button>
