@@ -223,7 +223,7 @@ class _AnalysisDetailScreenState extends State<AnalysisDetailScreen> {
         children: [
           Row(
             children: [
-              Expanded(child: _infoItem('파일명', _data!.schoolRecordFilename)),
+              Expanded(child: _infoItem('파일명', _data!.schoolRecordFilename ?? '미업로드')),
               Expanded(child: _infoItem('접수일', _formatDate(_data!.createdAt))),
             ],
           ),
