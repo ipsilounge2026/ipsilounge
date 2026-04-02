@@ -1,12 +1,13 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.admin import Admin, AdminStudentAssignment
+from app.models.admin import Admin
 from app.models.consultation_booking import ConsultationBooking
 from app.models.consultation_slot import ConsultationSlot
 from app.models.user import User
@@ -14,11 +15,9 @@ from app.schemas.consultation import (
     AdminBookingResponse,
     AdminSlotResponse,
     BookingStatusUpdate,
-    SlotBulkCreateRequest,
     SlotCreateRequest,
     SlotUpdateRequest,
 )
-from app.services.consultation_service import create_bulk_slots
 from app.services.notification_service import send_booking_confirmed_notification
 from app.utils.dependencies import get_current_admin
 
@@ -26,7 +25,6 @@ router = APIRouter(prefix="/api/admin/consultation", tags=["관리자-상담"])
 
 
 async def _get_admin_name(admin_id: str | None, db: AsyncSession) -> str | None:
-    """admin_id로 관리자 이름 조회"""
     if not admin_id:
         return None
     try:
@@ -38,60 +36,16 @@ async def _get_admin_name(admin_id: str | None, db: AsyncSession) -> str | None:
     return admin.name if admin else None
 
 
-# --- 상담 가능한 관리자/상담자 목록 ---
-
-@router.get("/counselors")
-async def list_counselors(
-    admin: Admin = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """상담 가능한 관리자/상담자 목록 (시간 설정용)"""
-    if admin.role == "super_admin":
-        # 최고관리자: 상담 관리 권한이 있는 모든 admin + counselor 조회
-        result = await db.execute(
-            select(Admin).where(Admin.is_active == True, Admin.role.in_(["admin", "counselor"]))
-        )
-        admins = result.scalars().all()
-        items = [{"id": str(a.id), "name": a.name, "role": a.role} for a in admins]
-        # 최고관리자 본인도 추가
-        items.insert(0, {"id": str(admin.id), "name": admin.name, "role": admin.role})
-        return items
+async def _build_slot_response(slot: ConsultationSlot, db: AsyncSession, admin_names: dict | None = None) -> AdminSlotResponse:
+    if admin_names and slot.admin_id in admin_names:
+        name = admin_names[slot.admin_id]
     else:
-        # 일반 관리자/상담자: 본인만
-        return [{"id": str(admin.id), "name": admin.name, "role": admin.role}]
-
-
-# --- 시간대 관리 ---
-
-@router.post("/slots", response_model=AdminSlotResponse)
-async def create_slot(
-    data: SlotCreateRequest,
-    admin: Admin = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """상담 가능 시간 생성"""
-    # 최고관리자가 아니면 본인 ID 강제
-    if admin.role == "super_admin":
-        slot_admin_id = data.admin_id or str(admin.id)
-    else:
-        slot_admin_id = str(admin.id)
-
-    slot = ConsultationSlot(
-        admin_id=slot_admin_id,
-        date=data.date,
-        start_time=data.start_time,
-        end_time=data.end_time,
-        max_bookings=data.max_bookings,
-    )
-    db.add(slot)
-    await db.commit()
-    await db.refresh(slot)
-
-    admin_name = await _get_admin_name(slot.admin_id, db)
+        name = await _get_admin_name(slot.admin_id, db)
     return AdminSlotResponse(
         id=slot.id,
         admin_id=slot.admin_id,
-        admin_name=admin_name,
+        admin_name=name,
+        repeat_group_id=slot.repeat_group_id,
         date=slot.date,
         start_time=slot.start_time,
         end_time=slot.end_time,
@@ -101,24 +55,85 @@ async def create_slot(
     )
 
 
-@router.post("/slots/bulk")
-async def create_slots_bulk(
-    data: SlotBulkCreateRequest,
+# --- 상담 가능한 관리자/상담자 목록 ---
+
+@router.get("/counselors")
+async def list_counselors(
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """반복 시간 일괄 생성"""
-    # 최고관리자가 아니면 본인 ID 강제
-    if admin.role != "super_admin":
-        forced_admin_id = str(admin.id)
+    """상담 가능한 관리자/상담자 목록"""
+    if admin.role == "super_admin":
+        result = await db.execute(
+            select(Admin).where(Admin.is_active == True, Admin.role.in_(["admin", "counselor"]))
+        )
+        admins = result.scalars().all()
+        items = [{"id": str(a.id), "name": a.name, "role": a.role} for a in admins]
+        items.insert(0, {"id": str(admin.id), "name": admin.name, "role": admin.role})
+        return items
     else:
-        forced_admin_id = data.admin_id or str(admin.id)
-
-    count = await create_bulk_slots(data, db, admin_id=forced_admin_id)
-    return {"message": f"{count}개의 상담 시간대가 생성되었습니다", "created_count": count}
+        return [{"id": str(admin.id), "name": admin.name, "role": admin.role}]
 
 
-@router.get("/slots", response_model=list[AdminSlotResponse])
+# --- 시간대 관리 ---
+
+@router.post("/slots")
+async def create_slot(
+    data: SlotCreateRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담 시간 생성 (단건 + 반복)"""
+    slot_admin_id = data.admin_id if admin.role == "super_admin" and data.admin_id else str(admin.id)
+
+    # 반복 그룹 ID 생성 (반복인 경우)
+    repeat_group_id = str(uuid.uuid4()) if data.repeat_type and data.repeat_count > 0 else None
+
+    dates_to_create = [data.date]
+
+    if data.repeat_type == "weekly" and data.repeat_count > 0:
+        for i in range(1, data.repeat_count + 1):
+            dates_to_create.append(data.date + timedelta(weeks=i))
+    elif data.repeat_type == "monthly" and data.repeat_count > 0:
+        for i in range(1, data.repeat_count + 1):
+            dates_to_create.append(data.date + relativedelta(months=i))
+
+    created = []
+    for d in dates_to_create:
+        # 중복 확인
+        existing = await db.execute(
+            select(ConsultationSlot).where(
+                ConsultationSlot.admin_id == slot_admin_id,
+                ConsultationSlot.date == d,
+                ConsultationSlot.start_time == data.start_time,
+            )
+        )
+        if existing.scalar_one_or_none():
+            continue
+
+        slot = ConsultationSlot(
+            admin_id=slot_admin_id,
+            repeat_group_id=repeat_group_id,
+            date=d,
+            start_time=data.start_time,
+            end_time=data.end_time,
+            max_bookings=data.max_bookings,
+        )
+        db.add(slot)
+        created.append(slot)
+
+    await db.commit()
+    for s in created:
+        await db.refresh(s)
+
+    return {
+        "message": f"{len(created)}건의 상담 시간이 생성되었습니다",
+        "created_count": len(created),
+        "repeat_group_id": repeat_group_id,
+    }
+
+
+@router.get("/slots")
 async def list_slots(
     year: int = Query(...),
     month: int = Query(...),
@@ -128,110 +143,113 @@ async def list_slots(
 ):
     """시간대 목록 조회"""
     start_date = date(year, month, 1)
-    if month == 12:
-        end_date = date(year + 1, 1, 1)
-    else:
-        end_date = date(year, month + 1, 1)
+    end_date = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
 
-    conditions = [
-        ConsultationSlot.date >= start_date,
-        ConsultationSlot.date < end_date,
-    ]
+    conditions = [ConsultationSlot.date >= start_date, ConsultationSlot.date < end_date]
 
-    # 최고관리자가 아니면 본인 슬롯만
     if admin.role != "super_admin":
         conditions.append(ConsultationSlot.admin_id == str(admin.id))
     elif admin_id:
         conditions.append(ConsultationSlot.admin_id == admin_id)
 
     result = await db.execute(
-        select(ConsultationSlot)
-        .where(and_(*conditions))
+        select(ConsultationSlot).where(and_(*conditions))
         .order_by(ConsultationSlot.date, ConsultationSlot.start_time)
     )
     slots = result.scalars().all()
 
-    # admin_name 일괄 조회
     admin_ids = set(s.admin_id for s in slots if s.admin_id)
     admin_names = {}
     for aid in admin_ids:
         admin_names[aid] = await _get_admin_name(aid, db)
 
-    return [
-        AdminSlotResponse(
-            id=s.id,
-            admin_id=s.admin_id,
-            admin_name=admin_names.get(s.admin_id),
-            date=s.date,
-            start_time=s.start_time,
-            end_time=s.end_time,
-            max_bookings=s.max_bookings,
-            current_bookings=s.current_bookings,
-            is_active=s.is_active,
-        )
-        for s in slots
-    ]
+    return [await _build_slot_response(s, db, admin_names) for s in slots]
 
 
-@router.put("/slots/{slot_id}", response_model=AdminSlotResponse)
+@router.put("/slots/{slot_id}")
 async def update_slot(
     slot_id: uuid.UUID,
     data: SlotUpdateRequest,
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """시간대 수정"""
+    """시간대 수정 (단건 또는 반복 전체)"""
     result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == slot_id))
     slot = result.scalar_one_or_none()
     if slot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="시간대를 찾을 수 없습니다")
-
-    # 본인 슬롯만 수정 가능 (최고관리자 제외)
     if admin.role != "super_admin" and slot.admin_id != str(admin.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인의 시간대만 수정할 수 있습니다")
 
-    if data.max_bookings is not None:
-        slot.max_bookings = data.max_bookings
-    if data.is_active is not None:
-        slot.is_active = data.is_active
+    # 수정할 슬롯 목록 결정
+    if data.update_scope == "future_all" and slot.repeat_group_id:
+        # 해당 슬롯 날짜 이후의 동일 반복 그룹 전체
+        r = await db.execute(
+            select(ConsultationSlot).where(
+                ConsultationSlot.repeat_group_id == slot.repeat_group_id,
+                ConsultationSlot.date >= slot.date,
+            )
+        )
+        slots_to_update = r.scalars().all()
+    else:
+        slots_to_update = [slot]
+
+    updated_count = 0
+    for s in slots_to_update:
+        if data.start_time is not None:
+            s.start_time = data.start_time
+        if data.end_time is not None:
+            s.end_time = data.end_time
+        if data.max_bookings is not None:
+            s.max_bookings = data.max_bookings
+        if data.is_active is not None:
+            s.is_active = data.is_active
+        updated_count += 1
 
     await db.commit()
-    await db.refresh(slot)
-    admin_name = await _get_admin_name(slot.admin_id, db)
-    return AdminSlotResponse(
-        id=slot.id,
-        admin_id=slot.admin_id,
-        admin_name=admin_name,
-        date=slot.date,
-        start_time=slot.start_time,
-        end_time=slot.end_time,
-        max_bookings=slot.max_bookings,
-        current_bookings=slot.current_bookings,
-        is_active=slot.is_active,
-    )
+    return {"message": f"{updated_count}건이 수정되었습니다"}
 
 
 @router.delete("/slots/{slot_id}")
 async def delete_slot(
     slot_id: uuid.UUID,
+    scope: str = "single",  # "single" / "future_all"
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """시간대 삭제 (예약이 없는 경우만)"""
+    """시간대 삭제"""
     result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == slot_id))
     slot = result.scalar_one_or_none()
     if slot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="시간대를 찾을 수 없습니다")
-
     if admin.role != "super_admin" and slot.admin_id != str(admin.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인의 시간대만 삭제할 수 있습니다")
 
-    if slot.current_bookings > 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="예약이 있는 시간대는 삭제할 수 없습니다. 비활성화를 사용해주세요.")
+    if scope == "future_all" and slot.repeat_group_id:
+        r = await db.execute(
+            select(ConsultationSlot).where(
+                ConsultationSlot.repeat_group_id == slot.repeat_group_id,
+                ConsultationSlot.date >= slot.date,
+            )
+        )
+        slots_to_delete = r.scalars().all()
+    else:
+        slots_to_delete = [slot]
 
-    await db.delete(slot)
+    deleted = 0
+    skipped = 0
+    for s in slots_to_delete:
+        if s.current_bookings > 0:
+            skipped += 1
+            continue
+        await db.delete(s)
+        deleted += 1
+
     await db.commit()
-    return {"message": "시간대가 삭제되었습니다"}
+    msg = f"{deleted}건 삭제 완료"
+    if skipped > 0:
+        msg += f" ({skipped}건은 예약이 있어 삭제 불가)"
+    return {"message": msg, "deleted": deleted, "skipped": skipped}
 
 
 # --- 예약 관리 ---
@@ -244,23 +262,16 @@ async def list_bookings(
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """전체 예약 목록 (담당자/상담자는 매칭된 학생만)"""
-    # 매칭 필터링
-    matched_user_ids = None
-    if admin.role != "super_admin":
-        match_result = await db.execute(
-            select(AdminStudentAssignment.user_id).where(AdminStudentAssignment.admin_id == admin.id)
-        )
-        matched_user_ids = [row[0] for row in match_result.all()]
-
+    """전체 예약 목록 (담당자/상담자는 본인 슬롯 예약만)"""
     query = (
         select(ConsultationBooking, ConsultationSlot, User)
         .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
         .join(User, ConsultationBooking.user_id == User.id)
     )
 
-    if matched_user_ids is not None:
-        query = query.where(ConsultationBooking.user_id.in_(matched_user_ids))
+    # 최고관리자가 아니면 본인 슬롯의 예약만
+    if admin.role != "super_admin":
+        query = query.where(ConsultationSlot.admin_id == str(admin.id))
 
     if status_filter:
         query = query.where(ConsultationBooking.status == status_filter)
@@ -275,7 +286,6 @@ async def list_bookings(
     result = await db.execute(query)
     rows = result.all()
 
-    # admin_name 조회
     admin_ids = set(slot.admin_id for _, slot, _ in rows if slot.admin_id)
     admin_names = {}
     for aid in admin_ids:
@@ -318,14 +328,12 @@ async def update_booking_status(
 
     booking.status = data.status
 
-    # 확정 시 사용자에게 알림
     if data.status == "confirmed":
         user_result = await db.execute(select(User).where(User.id == booking.user_id))
         user = user_result.scalar_one_or_none()
         if user:
             await send_booking_confirmed_notification(user, db)
 
-    # 취소 시 슬롯 예약 수 감소
     if data.status == "cancelled":
         slot_result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == booking.slot_id))
         slot = slot_result.scalar_one_or_none()

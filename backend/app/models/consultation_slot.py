@@ -13,6 +13,7 @@ class ConsultationSlot(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     admin_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)  # 담당 관리자/상담자 ID
+    repeat_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)  # 반복 생성 그룹 ID
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     start_time: Mapped[time] = mapped_column(Time, nullable=False)
     end_time: Mapped[time] = mapped_column(Time, nullable=False)

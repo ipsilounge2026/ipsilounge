@@ -96,29 +96,22 @@ export async function getConsultationSlots(year: number, month: number, adminId?
   return request(`/api/admin/consultation/slots?${params}`);
 }
 
-export async function createSlot(data: { admin_id?: string; date: string; start_time: string; end_time: string; max_bookings: number }) {
+export async function createSlot(data: Record<string, any>) {
   return request("/api/admin/consultation/slots", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
-export async function createSlotsBulk(data: Record<string, any>) {
-  return request("/api/admin/consultation/slots/bulk", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
-
-export async function updateSlot(id: string, data: { max_bookings?: number; is_active?: boolean }) {
+export async function updateSlot(id: string, data: Record<string, any>) {
   return request(`/api/admin/consultation/slots/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
-export async function deleteSlot(id: string) {
-  return request(`/api/admin/consultation/slots/${id}`, { method: "DELETE" });
+export async function deleteSlot(id: string, scope: string = "single") {
+  return request(`/api/admin/consultation/slots/${id}?scope=${scope}`, { method: "DELETE" });
 }
 
 export async function getBookings(statusFilter?: string, year?: number, month?: number) {

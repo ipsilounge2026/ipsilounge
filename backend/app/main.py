@@ -104,11 +104,14 @@ async def startup():
             if "user_id" not in columns:
                 connection.execute(text("ALTER TABLE admins ADD COLUMN user_id VARCHAR(36)"))
                 logger.info("admins 테이블에 user_id 컬럼 추가 완료")
-            # consultation_slots 테이블에 admin_id 컬럼 추가
+            # consultation_slots 테이블 마이그레이션
             slot_columns = [c["name"] for c in inspector.get_columns("consultation_slots")]
             if "admin_id" not in slot_columns:
                 connection.execute(text("ALTER TABLE consultation_slots ADD COLUMN admin_id VARCHAR(36)"))
                 logger.info("consultation_slots 테이블에 admin_id 컬럼 추가 완료")
+            if "repeat_group_id" not in slot_columns:
+                connection.execute(text("ALTER TABLE consultation_slots ADD COLUMN repeat_group_id VARCHAR(36)"))
+                logger.info("consultation_slots 테이블에 repeat_group_id 컬럼 추가 완료")
 
         await conn.run_sync(_check_and_migrate)
 
