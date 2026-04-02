@@ -56,9 +56,10 @@ export async function getDashboard() {
 }
 
 // --- 분석 관리 ---
-export async function getAnalysisList(page = 1, status?: string) {
+export async function getAnalysisList(page = 1, status?: string, serviceType?: string) {
   const params = new URLSearchParams({ page: String(page), size: "20" });
   if (status) params.set("status_filter", status);
+  if (serviceType) params.set("service_type_filter", serviceType);
   return request(`/api/admin/analysis/list?${params}`);
 }
 

@@ -7,7 +7,7 @@ import { getDashboard } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 interface DashboardData {
-  analysis: { pending: number; processing: number; completed_this_month: number };
+  analysis: { applied: number; uploaded: number; pending: number; processing: number; completed_this_month: number };
   consultation: { bookings_active: number };
   users: { total: number; new_this_month: number };
   revenue: { this_month: number };
@@ -37,8 +37,12 @@ export default function DashboardPage() {
 
         <div className="stats-grid">
           <div className="card">
-            <div className="card-title">분석 대기</div>
-            <div className="card-value" style={{ color: "var(--warning)" }}>{data.analysis.pending}</div>
+            <div className="card-title">신청완료 (미업로드)</div>
+            <div className="card-value" style={{ color: "#5a3d8a" }}>{data.analysis.applied}</div>
+          </div>
+          <div className="card">
+            <div className="card-title">업로드완료</div>
+            <div className="card-value" style={{ color: "#0c5460" }}>{data.analysis.uploaded}</div>
           </div>
           <div className="card">
             <div className="card-title">분석 진행중</div>

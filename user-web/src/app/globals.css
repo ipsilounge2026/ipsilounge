@@ -111,6 +111,8 @@ a { color: inherit; text-decoration: none; }
   font-weight: 600;
 }
 
+.badge-applied { background: #e8e0f0; color: #5a3d8a; }
+.badge-uploaded { background: #d1ecf1; color: #0c5460; }
 .badge-pending { background: #fff3cd; color: #856404; }
 .badge-processing { background: #cce5ff; color: #004085; }
 .badge-completed { background: #d4edda; color: #155724; }

@@ -1,4 +1,6 @@
 const statusLabels: Record<string, string> = {
+  applied: "신청완료",
+  uploaded: "업로드완료",
   pending: "대기",
   processing: "분석중",
   completed: "완료",
