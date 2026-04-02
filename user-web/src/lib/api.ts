@@ -78,8 +78,25 @@ export async function getNotifications() {
 }
 
 // --- 분석 ---
+export async function applyAnalysis(data: {
+  service_type: string;
+  target_university?: string;
+  target_major?: string;
+  memo?: string;
+}) {
+  return request("/api/analysis/apply", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function uploadSchoolRecordToOrder(orderId: string, formData: FormData) {
+  return request(`/api/analysis/${orderId}/upload`, { method: "POST", body: formData });
+}
+
 export async function uploadSchoolRecord(formData: FormData) {
   return request("/api/analysis/upload", { method: "POST", body: formData });
+}
+
+export async function checkConsultationEligible() {
+  return request("/api/analysis/check-consultation-eligible");
 }
 
 export async function getAnalysisList() {

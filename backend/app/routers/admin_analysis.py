@@ -21,9 +21,25 @@ from app.utils.dependencies import get_current_admin
 router = APIRouter(prefix="/api/admin/analysis", tags=["관리자-분석"])
 
 
+@router.get("/stats")
+async def get_analysis_stats(
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """신청/업로드/처리 건수 통계"""
+    stats = {}
+    for s in ["applied", "uploaded", "processing", "completed", "cancelled"]:
+        r = await db.execute(select(func.count()).select_from(AnalysisOrder).where(AnalysisOrder.status == s))
+        stats[s] = r.scalar()
+    total_r = await db.execute(select(func.count()).select_from(AnalysisOrder))
+    stats["total"] = total_r.scalar()
+    return stats
+
+
 @router.get("/list")
 async def list_all_analysis(
     status_filter: str | None = None,
+    service_type_filter: str | None = None,
     page: int = 1,
     size: int = 20,
     admin: Admin = Depends(get_current_admin),
@@ -36,6 +52,10 @@ async def list_all_analysis(
     if status_filter:
         query = query.where(AnalysisOrder.status == status_filter)
         count_query = count_query.where(AnalysisOrder.status == status_filter)
+
+    if service_type_filter:
+        query = query.where(AnalysisOrder.service_type == service_type_filter)
+        count_query = count_query.where(AnalysisOrder.service_type == service_type_filter)
 
     query = query.order_by(AnalysisOrder.created_at.desc()).offset((page - 1) * size).limit(size)
 
@@ -52,6 +72,7 @@ async def list_all_analysis(
             user_name=user.name,
             user_email=user.email,
             user_phone=user.phone,
+            service_type=order.service_type,
             status=order.status,
             school_record_filename=order.school_record_filename,
             target_university=order.target_university,
@@ -59,6 +80,7 @@ async def list_all_analysis(
             memo=order.memo,
             admin_memo=order.admin_memo,
             created_at=order.created_at,
+            uploaded_at=order.uploaded_at,
             processing_at=order.processing_at,
             completed_at=order.completed_at,
             has_report=bool(order.report_excel_url or order.report_pdf_url),
@@ -92,6 +114,7 @@ async def get_analysis_detail(
         user_name=user.name,
         user_email=user.email,
         user_phone=user.phone,
+        service_type=order.service_type,
         status=order.status,
         school_record_filename=order.school_record_filename,
         target_university=order.target_university,
@@ -99,6 +122,7 @@ async def get_analysis_detail(
         memo=order.memo,
         admin_memo=order.admin_memo,
         created_at=order.created_at,
+        uploaded_at=order.uploaded_at,
         processing_at=order.processing_at,
         completed_at=order.completed_at,
         has_report=bool(order.report_excel_url or order.report_pdf_url),
@@ -167,7 +191,9 @@ async def update_analysis_status(
     if data.admin_memo is not None:
         order.admin_memo = data.admin_memo
 
-    if data.status == "processing":
+    if data.status == "uploaded":
+        order.uploaded_at = datetime.utcnow()
+    elif data.status == "processing":
         order.processing_at = datetime.utcnow()
     elif data.status == "completed":
         order.completed_at = datetime.utcnow()

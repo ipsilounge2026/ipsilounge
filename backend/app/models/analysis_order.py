@@ -13,9 +13,10 @@ class AnalysisOrder(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending / processing / completed / cancelled
-    school_record_url: Mapped[str] = mapped_column(String(500), nullable=False)
-    school_record_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    service_type: Mapped[str] = mapped_column(String(20), default="학생부라운지")  # 학생부라운지 / 학종라운지
+    status: Mapped[str] = mapped_column(String(20), default="applied")  # applied / uploaded / processing / completed / cancelled
+    school_record_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    school_record_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     target_university: Mapped[str | None] = mapped_column(String(100), nullable=True)
     target_major: Mapped[str | None] = mapped_column(String(100), nullable=True)
     report_excel_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -23,6 +24,7 @@ class AnalysisOrder(Base):
     memo: Mapped[str | None] = mapped_column(Text, nullable=True)
     admin_memo: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     processing_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
