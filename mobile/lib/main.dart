@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'providers/auth_provider.dart';
@@ -24,16 +22,21 @@ import 'screens/interview_questions_screen.dart';
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-}
+/// Firebase 사용 가능 여부 (google-services.json 설정 후 true로 변경)
+const bool kEnableFirebase = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
 
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  // Firebase 초기화 (설정된 경우만)
+  if (kEnableFirebase) {
+    try {
+      final firebaseCore = await _initFirebase();
+      debugPrint('Firebase 초기화 완료');
+    } catch (e) {
+      debugPrint('Firebase 초기화 실패: $e');
+    }
+  }
 
   // 로컬 알림 초기화
   const AndroidInitializationSettings initializationSettingsAndroid =
@@ -55,6 +58,15 @@ void main() async {
       ?.createNotificationChannel(channel);
 
   runApp(const IpsiLoungeApp());
+}
+
+Future<void> _initFirebase() async {
+  // Firebase 초기화는 kEnableFirebase가 true일 때만 호출됨
+  // google-services.json 설정 후 아래 import를 활성화:
+  // import 'package:firebase_core/firebase_core.dart';
+  // import 'package:firebase_messaging/firebase_messaging.dart';
+  // await Firebase.initializeApp();
+  // FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 }
 
 class IpsiLoungeApp extends StatelessWidget {

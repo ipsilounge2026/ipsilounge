@@ -2,7 +2,11 @@ plugins {
     id "com.android.application"
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
-    id "com.google.gms.google-services"  // Firebase
+}
+
+// Firebase: google-services.json이 있을 때만 플러그인 적용
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
 }
 
 // key.properties 파일 읽기 (존재하는 경우만 — 로컬 릴리즈 빌드용)
