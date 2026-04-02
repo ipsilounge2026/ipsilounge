@@ -35,11 +35,11 @@ class AnalysisService {
 
   static Future<String> getExcelDownloadUrl(String id) async {
     final res = await ApiService.get('/analysis/$id/report/excel');
-    return res['download_url'];
+    return ApiService.toFullUrl(res['download_url']);
   }
 
   static Future<String> getPdfDownloadUrl(String id) async {
     final res = await ApiService.get('/analysis/$id/report/pdf');
-    return res['download_url'];
+    return ApiService.toFullUrl(res['download_url']);
   }
 }

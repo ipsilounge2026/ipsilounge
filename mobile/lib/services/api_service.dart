@@ -12,8 +12,14 @@ class ApiException implements Exception {
 }
 
 class ApiService {
-  static const String baseUrl = 'http://YOUR_SERVER_IP:8000/api';
-  // TODO: 배포 후 실제 서버 주소로 변경 (예: https://api.ipsilounge.co.kr)
+  static const String baseUrl = 'https://api.ipsilounge.co.kr/api';
+  static const String serverBase = 'https://api.ipsilounge.co.kr';
+
+  /// 다운로드 URL이 상대경로(/api/files/...)이면 서버 주소를 붙여서 전체 URL로 변환
+  static String toFullUrl(String url) {
+    if (url.startsWith('/')) return '$serverBase$url';
+    return url;
+  }
 
   static Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
