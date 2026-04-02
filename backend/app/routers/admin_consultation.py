@@ -6,7 +6,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.admin import Admin
+from app.models.admin import Admin, AdminStudentAssignment
 from app.models.consultation_booking import ConsultationBooking
 from app.models.consultation_slot import ConsultationSlot
 from app.models.user import User
@@ -132,12 +132,23 @@ async def list_bookings(
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """전체 예약 목록"""
+    """전체 예약 목록 (담당자/상담자는 매칭된 학생만)"""
+    # 매칭 필터링
+    matched_user_ids = None
+    if admin.role != "super_admin":
+        match_result = await db.execute(
+            select(AdminStudentAssignment.user_id).where(AdminStudentAssignment.admin_id == admin.id)
+        )
+        matched_user_ids = [row[0] for row in match_result.all()]
+
     query = (
         select(ConsultationBooking, ConsultationSlot, User)
         .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
         .join(User, ConsultationBooking.user_id == User.id)
     )
+
+    if matched_user_ids is not None:
+        query = query.where(ConsultationBooking.user_id.in_(matched_user_ids))
 
     if status_filter:
         query = query.where(ConsultationBooking.status == status_filter)
