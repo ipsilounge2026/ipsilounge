@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { applyAnalysis } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
-export default function ApplyPage() {
+function ApplyForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const serviceType = searchParams.get("type") || "학생부라운지";
@@ -67,35 +67,18 @@ export default function ApplyPage() {
 
           {error && <div className="error-msg">{error}</div>}
 
-          {isHakjong && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <div className="form-group">
-                <label>지원 대학</label>
-                <input type="text" className="form-control" value={university}
-                  onChange={(e) => setUniversity(e.target.value)} placeholder="예: 서울대학교" />
-              </div>
-              <div className="form-group">
-                <label>지원 학과</label>
-                <input type="text" className="form-control" value={major}
-                  onChange={(e) => setMajor(e.target.value)} placeholder="예: 경영학과" />
-              </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div className="form-group">
+              <label>지원 대학{!isHakjong && " (선택)"}</label>
+              <input type="text" className="form-control" value={university}
+                onChange={(e) => setUniversity(e.target.value)} placeholder="예: 서울대학교" />
             </div>
-          )}
-
-          {!isHakjong && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <div className="form-group">
-                <label>지원 대학 (선택)</label>
-                <input type="text" className="form-control" value={university}
-                  onChange={(e) => setUniversity(e.target.value)} placeholder="예: 서울대학교" />
-              </div>
-              <div className="form-group">
-                <label>지원 학과 (선택)</label>
-                <input type="text" className="form-control" value={major}
-                  onChange={(e) => setMajor(e.target.value)} placeholder="예: 경영학과" />
-              </div>
+            <div className="form-group">
+              <label>지원 학과{!isHakjong && " (선택)"}</label>
+              <input type="text" className="form-control" value={major}
+                onChange={(e) => setMajor(e.target.value)} placeholder="예: 경영학과" />
             </div>
-          )}
+          </div>
 
           <div className="form-group">
             <label>메모 (선택)</label>
@@ -115,5 +98,13 @@ export default function ApplyPage() {
       </div>
       <Footer />
     </>
+  );
+}
+
+export default function ApplyPage() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: "center", padding: 60 }}>로딩 중...</div>}>
+      <ApplyForm />
+    </Suspense>
   );
 }
