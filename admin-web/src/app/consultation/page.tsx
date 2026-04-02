@@ -10,6 +10,7 @@ import { isLoggedIn } from "@/lib/auth";
 
 interface Booking {
   id: string;
+  user_id: string;
   user_name: string;
   user_email: string;
   user_phone: string | null;
@@ -56,7 +57,10 @@ export default function ConsultationPage() {
       <main className="admin-main">
         <div className="page-header">
           <h1>상담 관리</h1>
-          <Link href="/consultation/settings" className="btn btn-primary">시간 설정</Link>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Link href="/consultation/notes" className="btn btn-outline">상담 기록</Link>
+            <Link href="/consultation/settings" className="btn btn-primary">시간 설정</Link>
+          </div>
         </div>
 
         {message && (
@@ -116,6 +120,13 @@ export default function ConsultationPage() {
                       )}
                       {b.status === "confirmed" && (
                         <button className="btn btn-primary btn-sm" onClick={() => handleStatusChange(b.id, "completed")}>완료</button>
+                      )}
+                      {(b.status === "confirmed" || b.status === "completed") && (
+                        <Link
+                          href={`/consultation/notes?user_id=${b.user_id}&booking_id=${b.id}&user_name=${encodeURIComponent(b.user_name)}&date=${b.slot_date}`}
+                          className="btn btn-sm"
+                          style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE" }}
+                        >기록 작성</Link>
                       )}
                       {(b.status === "requested" || b.status === "confirmed") && (
                         <button className="btn btn-danger btn-sm" onClick={() => handleStatusChange(b.id, "cancelled")}>취소</button>

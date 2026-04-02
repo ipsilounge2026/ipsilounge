@@ -218,3 +218,36 @@ export async function deleteAssignment(id: string) {
 export async function getMyStudents() {
   return request("/api/admin/admins/my-students");
 }
+
+// --- 상담 기록 ---
+export async function getConsultationNotes(userId?: string, category?: string) {
+  const params = new URLSearchParams();
+  if (userId) params.set("user_id", userId);
+  if (category) params.set("category", category);
+  return request(`/api/admin/consultation-notes?${params}`);
+}
+
+export async function createConsultationNote(data: {
+  user_id: string;
+  booking_id?: string;
+  category: string;
+  consultation_date: string;
+  student_grade?: string;
+  goals?: string;
+  main_content: string;
+  advice_given?: string;
+  next_steps?: string;
+  next_topic?: string;
+  admin_private_notes?: string;
+  is_visible_to_user: boolean;
+}) {
+  return request("/api/admin/consultation-notes", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateConsultationNote(id: string, data: Record<string, any>) {
+  return request(`/api/admin/consultation-notes/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function deleteConsultationNote(id: string) {
+  return request(`/api/admin/consultation-notes/${id}`, { method: "DELETE" });
+}

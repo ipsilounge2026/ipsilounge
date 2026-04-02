@@ -155,6 +155,7 @@ async def list_bookings(
     items = [
         AdminBookingResponse(
             id=booking.id,
+            user_id=user.id,
             user_name=user.name,
             user_email=user.email,
             user_phone=user.phone,

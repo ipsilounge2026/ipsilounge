@@ -77,6 +77,7 @@ class AdminSlotResponse(BaseModel):
 
 class AdminBookingResponse(BaseModel):
     id: uuid.UUID
+    user_id: uuid.UUID
     user_name: str
     user_email: str
     user_phone: str | None
