@@ -84,6 +84,9 @@ async def create_slot(
     db: AsyncSession = Depends(get_db),
 ):
     """상담 시간 생성 (단건 + 반복)"""
+    if data.end_time <= data.start_time:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="종료 시간은 시작 시간보다 이후여야 합니다")
+
     slot_admin_id = data.admin_id if admin.role == "super_admin" and data.admin_id else str(admin.id)
 
     # 반복 그룹 ID 생성 (반복인 경우)
@@ -174,6 +177,9 @@ async def update_slot(
     db: AsyncSession = Depends(get_db),
 ):
     """시간대 수정 (단건 또는 반복 전체)"""
+    if data.start_time is not None and data.end_time is not None and data.end_time <= data.start_time:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="종료 시간은 시작 시간보다 이후여야 합니다")
+
     result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == slot_id))
     slot = result.scalar_one_or_none()
     if slot is None:

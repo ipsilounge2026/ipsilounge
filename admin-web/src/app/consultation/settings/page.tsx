@@ -101,6 +101,10 @@ export default function ConsultationSettingsPage() {
 
   const handleCreate = async () => {
     if (!selectedDate) return;
+    if (createForm.end_time <= createForm.start_time) {
+      setMessage("종료 시간은 시작 시간보다 이후여야 합니다");
+      return;
+    }
     try {
       const payload: Record<string, any> = {
         date: selectedDate,
@@ -132,6 +136,10 @@ export default function ConsultationSettingsPage() {
 
   const handleUpdate = async (scope: "single" | "future_all") => {
     if (!editSlot) return;
+    if (editForm.end_time <= editForm.start_time) {
+      setMessage("종료 시간은 시작 시간보다 이후여야 합니다");
+      return;
+    }
     try {
       await updateSlot(editSlot.id, {
         start_time: editForm.start_time + ":00",
