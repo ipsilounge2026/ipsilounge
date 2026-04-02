@@ -18,6 +18,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
+  void _switchTab(int index) {
+    setState(() => _selectedIndex = index);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -33,11 +37,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,
-        children: const [
-          _HomeTab(),
-          AnalysisListScreen(),
-          ConsultationListScreen(),
-          MypageScreen(),
+        children: [
+          _HomeTab(onSwitchTab: _switchTab),
+          const AnalysisListScreen(),
+          const ConsultationListScreen(),
+          const MypageScreen(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -61,7 +65,8 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _HomeTab extends StatelessWidget {
-  const _HomeTab();
+  final void Function(int) onSwitchTab;
+  const _HomeTab({required this.onSwitchTab});
 
   @override
   Widget build(BuildContext context) {
@@ -119,20 +124,20 @@ class _HomeTab extends StatelessWidget {
               Expanded(
                 child: _MenuCard(
                   icon: Icons.description_outlined,
-                  label: '학생부 라운지',
+                  label: '분석 라운지',
                   color: const Color(0xFFEFF6FF),
                   iconColor: const Color(0xFF3B82F6),
-                  onTap: () => Navigator.pushNamed(context, '/analysis/apply', arguments: '학생부라운지'),
+                  onTap: () => onSwitchTab(1),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.school_outlined,
-                  label: '학종 라운지',
-                  color: const Color(0xFFF0FDF4),
-                  iconColor: const Color(0xFF22C55E),
-                  onTap: () => Navigator.pushNamed(context, '/analysis/apply', arguments: '학종라운지'),
+                  icon: Icons.calendar_month,
+                  label: '상담 라운지',
+                  color: const Color(0xFFFFF7ED),
+                  iconColor: const Color(0xFFF97316),
+                  onTap: () => onSwitchTab(2),
                 ),
               ),
             ],
@@ -142,11 +147,11 @@ class _HomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.calendar_month,
-                  label: '상담 라운지',
-                  color: const Color(0xFFFFF7ED),
-                  iconColor: const Color(0xFFF97316),
-                  onTap: () => Navigator.pushNamed(context, '/consultation'),
+                  icon: Icons.person_outline,
+                  label: '마이페이지',
+                  color: const Color(0xFFF5F3FF),
+                  iconColor: const Color(0xFF8B5CF6),
+                  onTap: () => onSwitchTab(3),
                 ),
               ),
               const SizedBox(width: 12),
@@ -154,8 +159,8 @@ class _HomeTab extends StatelessWidget {
                 child: _MenuCard(
                   icon: Icons.notifications_outlined,
                   label: '알림',
-                  color: const Color(0xFFF5F3FF),
-                  iconColor: const Color(0xFF8B5CF6),
+                  color: const Color(0xFFFEF3C7),
+                  iconColor: const Color(0xFFD97706),
                   onTap: () => Navigator.pushNamed(context, '/notifications'),
                 ),
               ),

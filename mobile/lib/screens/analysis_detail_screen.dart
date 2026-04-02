@@ -73,6 +73,10 @@ class _AnalysisDetailScreenState extends State<AnalysisDetailScreen> {
                     if (_data!.status == 'cancelled')
                       _buildCancelledCard(),
 
+                    // 파일 업로드 안내 (applied 상태)
+                    if (_data!.status == 'applied')
+                      _buildUploadPromptCard(),
+
                     // 기본 정보
                     _buildInfoCard(),
 
@@ -108,13 +112,54 @@ class _AnalysisDetailScreenState extends State<AnalysisDetailScreen> {
     );
   }
 
+  Widget _buildUploadPromptCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: Column(
+        children: [
+          const Text(
+            '⚠️ 학생부 파일을 업로드해야 분석이 시작됩니다',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF92400E)),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                await Navigator.pushNamed(context, '/analysis/upload', arguments: widget.id);
+                _loadDetail();
+              },
+              icon: const Icon(Icons.upload_file, size: 18),
+              label: const Text('파일 업로드하기'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3B82F6),
+                minimumSize: const Size(0, 44),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProgressCard() {
     final steps = [
-      {'key': 'pending', 'label': '접수완료', 'date': _data!.createdAt},
+      {'key': 'applied', 'label': '신청', 'date': _data!.createdAt},
+      {'key': 'uploaded', 'label': '업로드', 'date': _data!.uploadedAt},
       {'key': 'processing', 'label': '분석중', 'date': _data!.processingAt},
       {'key': 'completed', 'label': '완료', 'date': _data!.completedAt},
     ];
-    final currentStep = _data!.status == 'completed' ? 2 : _data!.status == 'processing' ? 1 : 0;
+    final currentStep = _data!.status == 'completed' ? 3
+        : _data!.status == 'processing' ? 2
+        : (_data!.status == 'uploaded' || _data!.status == 'pending') ? 1
+        : 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

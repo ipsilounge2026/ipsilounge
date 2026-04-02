@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import StatusBadge from "@/components/StatusBadge";
@@ -11,12 +12,13 @@ import { isLoggedIn } from "@/lib/auth";
 interface Detail {
   id: string;
   status: string;
-  school_record_filename: string;
+  school_record_filename: string | null;
   target_university: string | null;
   target_major: string | null;
   memo: string | null;
   admin_memo: string | null;
   created_at: string;
+  uploaded_at: string | null;
   processing_at: string | null;
   completed_at: string | null;
   has_report: boolean;
@@ -50,12 +52,16 @@ export default function AnalysisDetailPage() {
   if (!data) return <><Navbar /><div className="container"><p>로딩 중...</p></div></>;
 
   const statusSteps = [
-    { key: "pending", label: "접수완료", date: data.created_at },
+    { key: "applied", label: "신청완료", date: data.created_at },
+    { key: "uploaded", label: "업로드완료", date: data.uploaded_at },
     { key: "processing", label: "분석중", date: data.processing_at },
     { key: "completed", label: "완료", date: data.completed_at },
   ];
 
-  const currentStep = data.status === "completed" ? 2 : data.status === "processing" ? 1 : 0;
+  const currentStep = data.status === "completed" ? 3
+    : data.status === "processing" ? 2
+    : data.status === "uploaded" || data.status === "pending" ? 1
+    : 0;
 
   return (
     <>
@@ -99,12 +105,22 @@ export default function AnalysisDetailPage() {
           </div>
         )}
 
+        {/* 파일 업로드 안내 (applied 상태) */}
+        {data.status === "applied" && (
+          <div className="card" style={{ marginBottom: 16, padding: 20, textAlign: "center", backgroundColor: "#FFF7ED", border: "1px solid #FED7AA" }}>
+            <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 8, color: "var(--gray-800)" }}>⚠️ 학생부 파일을 업로드해야 분석이 시작됩니다</p>
+            <Link href={`/analysis/${data.id}/upload`} className="btn btn-primary">파일 업로드하기</Link>
+          </div>
+        )}
+
         {/* 기본 정보 */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
               <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>파일명</div>
-              <div style={{ fontSize: 15 }}>{data.school_record_filename}</div>
+              <div style={{ fontSize: 15, color: data.school_record_filename ? undefined : "var(--danger)" }}>
+                {data.school_record_filename || "미업로드"}
+              </div>
             </div>
             <div>
               <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>접수일</div>
