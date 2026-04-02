@@ -43,10 +43,10 @@ export default function AnalysisListPage() {
       <Navbar />
       <div className="container">
         <div className="page-header">
-          <h1>학생부 라운지</h1>
+          <h1>분석 라운지</h1>
           <div style={{ display: "flex", gap: 8 }}>
             <Link href="/analysis/apply?type=학생부라운지" className="btn btn-primary">학생부 라운지 신청</Link>
-            <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline">학종 라운지 신청</Link>
+            <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline" style={{ border: "1px solid #22C55E", color: "#16A34A" }}>학종 라운지 신청</Link>
           </div>
         </div>
 

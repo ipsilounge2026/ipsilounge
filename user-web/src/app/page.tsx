@@ -23,12 +23,12 @@ export default function LandingPage() {
         </div>
 
         <div className="features-grid">
-          <Link href={loggedIn ? "/analysis" : "/login"} className="feature-card" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
+          <Link href={loggedIn ? "/analysis/apply?type=학생부라운지" : "/login"} className="feature-card" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
             <div className="icon">📄</div>
             <h3>학생부 라운지</h3>
             <p>학생부 PDF를 업로드하면 내신, 세특, 창체, 행특을 종합 분석한 리포트를 받아볼 수 있습니다</p>
           </Link>
-          <Link href={loggedIn ? "/analysis" : "/login"} className="feature-card" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
+          <Link href={loggedIn ? "/analysis/apply?type=학종라운지" : "/login"} className="feature-card" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
             <div className="icon">📊</div>
             <h3>학종 라운지</h3>
             <p>지원 대학과 학과를 지정하면 입결 비교, 교과 이수 충실도까지 포함된 맞춤 리포트를 제공합니다</p>
