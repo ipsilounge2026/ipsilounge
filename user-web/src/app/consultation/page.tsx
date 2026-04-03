@@ -74,6 +74,7 @@ export default function ConsultationPage() {
   const firstDay = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
   const today = new Date().toISOString().split("T")[0];
+  const earliestDate = eligibility?.earliest_date || null;
 
   const datesWithSlots = new Set(slots.map((s) => s.date));
 
@@ -153,20 +154,25 @@ export default function ConsultationPage() {
                 {eligibility.reason}
               </p>
             </div>
-            <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20, lineHeight: 1.6 }}>
-              상담 라운지는 학생부 라운지 또는 학종 라운지를 신청하고<br />
-              학생부 파일 업로드를 완료한 후 이용 가능합니다.<br />
-              학생부 분석에 최소 7일이 소요되므로, 업로드 완료일 기준 7일 이후부터 상담 예약이 가능합니다.
-            </p>
             {eligibility.reason?.includes("업로드를 완료") ? (
-              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <>
+                <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20, lineHeight: 1.6 }}>
+                  신청은 완료되었습니다. 학생부 파일을 업로드하면<br />
+                  학생부 분석 후 상담 진행을 위해 상담 예약이 가능합니다.
+                </p>
                 <Link href="/analysis" className="btn btn-primary">내 분석 목록에서 파일 업로드</Link>
-              </div>
+              </>
             ) : (
-              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-                <Link href="/analysis/apply?type=학생부라운지" className="btn btn-primary">학생부 라운지 신청</Link>
-                <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline">학종 라운지 신청</Link>
-              </div>
+              <>
+                <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20, lineHeight: 1.6 }}>
+                  상담 라운지는 학생부 라운지 또는 학종 라운지를 신청하고<br />
+                  학생부 파일 업로드를 완료한 후 이용 가능합니다.
+                </p>
+                <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                  <Link href="/analysis/apply?type=학생부라운지" className="btn btn-primary">학생부 라운지 신청</Link>
+                  <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline">학종 라운지 신청</Link>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -174,6 +180,22 @@ export default function ConsultationPage() {
         {/* 자격 충족 시 예약 UI */}
         {eligibility?.eligible && (
           <>
+            {/* earliest_date 안내 배너 */}
+            {earliestDate && earliestDate > today && (
+              <div style={{
+                padding: "12px 16px",
+                background: "#EFF6FF",
+                border: "1px solid #BFDBFE",
+                borderRadius: 8,
+                marginBottom: 16,
+                fontSize: 13,
+                color: "#1E40AF",
+                lineHeight: 1.6,
+              }}>
+                ℹ️ 학생부 분석 후 상담 진행을 위해 <strong>{earliestDate.replace(/-/g, ".")}</strong> 이후 날짜부터 예약 가능합니다.
+              </div>
+            )}
+
             {message && (
               <div style={{ padding: "12px 16px", background: "#d4edda", borderRadius: 8, marginBottom: 16, fontSize: 14, color: "#155724" }}>
                 {message}
@@ -272,13 +294,15 @@ export default function ConsultationPage() {
                       const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                       const hasSlots = datesWithSlots.has(dateStr);
                       const isPast = dateStr < today;
+                      const isBeforeEarliest = earliestDate ? dateStr < earliestDate : false;
+                      const isDisabled = isPast || isBeforeEarliest;
                       const isSelected = dateStr === selectedDate;
 
                       return (
                         <div
                           key={i}
-                          className={`calendar-day ${isSelected ? "selected" : ""} ${hasSlots ? "has-slots" : ""} ${isPast ? "disabled" : ""} ${dateStr === today ? "today" : ""}`}
-                          onClick={() => { if (!isPast && hasSlots) { setSelectedDate(dateStr); setSelectedSlot(null); } }}
+                          className={`calendar-day ${isSelected ? "selected" : ""} ${hasSlots && !isDisabled ? "has-slots" : ""} ${isDisabled ? "disabled" : ""} ${dateStr === today ? "today" : ""}`}
+                          onClick={() => { if (!isDisabled && hasSlots) { setSelectedDate(dateStr); setSelectedSlot(null); } }}
                         >
                           {day}
                         </div>

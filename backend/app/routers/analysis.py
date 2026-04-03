@@ -126,7 +126,8 @@ async def check_consultation_eligible(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """상담 예약 가능 여부 확인 (업로드 완료 + 7일 경과)"""
+    """상담 예약 가능 여부 확인 (업로드 완료 시 즉시 가능, earliest_date는 예약 가능 최소 날짜)"""
+    # 업로드 완료된 주문 확인
     result = await db.execute(
         select(AnalysisOrder).where(
             AnalysisOrder.user_id == user.id,
@@ -159,18 +160,10 @@ async def check_consultation_eligible(
             "earliest_date": None,
         }
 
+    # 업로드 완료 → 즉시 상담 예약 가능, 단 예약 날짜는 업로드일+7일 이후만
     from datetime import timedelta
     earliest_upload = orders[0].uploaded_at
-    eligible_date = earliest_upload + timedelta(days=7)
-    now = datetime.utcnow()
-
-    if now < eligible_date:
-        days_left = (eligible_date - now).days + 1
-        return {
-            "eligible": False,
-            "reason": f"학생부 업로드 후 분석에 최소 7일이 필요합니다. {days_left}일 후 상담 예약이 가능합니다.",
-            "earliest_date": eligible_date.isoformat(),
-        }
+    eligible_date = (earliest_upload + timedelta(days=7)).date()
 
     return {
         "eligible": True,
