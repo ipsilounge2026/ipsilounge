@@ -157,10 +157,34 @@ class _HomeTab extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.notifications_outlined,
-                  label: '알림',
+                  icon: Icons.emoji_events_outlined,
+                  label: '입시 사례',
                   color: const Color(0xFFFEF3C7),
                   iconColor: const Color(0xFFD97706),
+                  onTap: () => Navigator.pushNamed(context, '/admission-cases'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _MenuCard(
+                  icon: Icons.note_alt_outlined,
+                  label: '상담 기록',
+                  color: const Color(0xFFF5F3FF),
+                  iconColor: const Color(0xFF7C3AED),
+                  onTap: () => Navigator.pushNamed(context, '/consultation/notes'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _MenuCard(
+                  icon: Icons.notifications_outlined,
+                  label: '알림',
+                  color: const Color(0xFFFEF2F2),
+                  iconColor: const Color(0xFFEF4444),
                   onTap: () => Navigator.pushNamed(context, '/notifications'),
                 ),
               ),

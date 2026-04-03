@@ -149,6 +149,19 @@ class _ConsultationListScreenState extends State<ConsultationListScreen> {
                                     style: const TextStyle(
                                         fontSize: 13, color: Color(0xFF6B7280)),
                                   ),
+                                  if (b.adminName != null) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.person_outline, size: 14, color: Color(0xFF3B82F6)),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${b.adminName} 상담자',
+                                          style: const TextStyle(fontSize: 12, color: Color(0xFF3B82F6)),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                   if (b.memo != null) ...[
                                     const SizedBox(height: 4),
                                     Text(

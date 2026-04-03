@@ -55,6 +55,7 @@ class ConsultationBooking {
   final String type;
   final String? memo;
   final String status;
+  final String? adminName;
   final String createdAt;
 
   ConsultationBooking({
@@ -65,6 +66,7 @@ class ConsultationBooking {
     required this.type,
     this.memo,
     required this.status,
+    this.adminName,
     required this.createdAt,
   });
 
@@ -77,6 +79,7 @@ class ConsultationBooking {
       type: json['type'],
       memo: json['memo'],
       status: json['status'],
+      adminName: json['admin_name'],
       createdAt: json['created_at'],
     );
   }
