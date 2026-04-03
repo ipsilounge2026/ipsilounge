@@ -27,7 +27,7 @@ class CounselorResponse(BaseModel):
 
 class BookingRequest(BaseModel):
     slot_id: uuid.UUID
-    type: str  # 학생부분석 / 입시전략 / 기타
+    type: str  # 학생부분석 / 입시전략 / 학습상담 / 심리상담 / 기타
     memo: str | None = None
     analysis_order_id: uuid.UUID | None = None
 
@@ -113,3 +113,12 @@ class AdminBookingResponse(BaseModel):
 
 class BookingStatusUpdate(BaseModel):
     status: str  # requested / confirmed / completed / cancelled
+
+
+class ManualBookingRequest(BaseModel):
+    user_id: uuid.UUID
+    date: date
+    start_time: time
+    end_time: time
+    type: str = "기타"  # 학생부분석 / 입시전략 / 학습상담 / 심리상담 / 기타
+    memo: str | None = None

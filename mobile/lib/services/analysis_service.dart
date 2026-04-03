@@ -59,6 +59,10 @@ class AnalysisService {
     await ApiService.uploadFile('/analysis/upload', file, 'file', fields);
   }
 
+  static Future<Map<String, dynamic>> checkApplyCooldown() async {
+    return await ApiService.get('/analysis/check-apply-cooldown');
+  }
+
   static Future<String> getExcelDownloadUrl(String id) async {
     final res = await ApiService.get('/analysis/$id/report/excel');
     return ApiService.toFullUrl(res['download_url']);

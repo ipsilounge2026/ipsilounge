@@ -15,6 +15,7 @@ from app.schemas.consultation import (
     AdminBookingResponse,
     AdminSlotResponse,
     BookingStatusUpdate,
+    ManualBookingRequest,
     SlotCreateRequest,
     SlotUpdateRequest,
 )
@@ -348,3 +349,79 @@ async def update_booking_status(
 
     await db.commit()
     return {"message": f"예약 상태가 '{data.status}'로 변경되었습니다"}
+
+
+@router.post("/bookings/manual")
+async def create_manual_booking(
+    data: ManualBookingRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """관리자 직접 예약 생성 (학습상담, 심리상담 등)"""
+    # 사용자 존재 확인
+    user_result = await db.execute(select(User).where(User.id == data.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+
+    # 비공개 슬롯 생성
+    slot = ConsultationSlot(
+        admin_id=str(admin.id),
+        date=data.date,
+        start_time=data.start_time,
+        end_time=data.end_time,
+        max_bookings=1,
+        current_bookings=1,
+        is_active=False,
+    )
+    db.add(slot)
+    await db.flush()
+
+    # 확정 상태로 예약 생성
+    booking = ConsultationBooking(
+        user_id=data.user_id,
+        slot_id=slot.id,
+        type=data.type,
+        memo=data.memo,
+        status="confirmed",
+    )
+    db.add(booking)
+    await db.commit()
+    await db.refresh(booking)
+    await db.refresh(slot)
+
+    return AdminBookingResponse(
+        id=booking.id,
+        user_id=user.id,
+        user_name=user.name,
+        user_email=user.email,
+        user_phone=user.phone,
+        slot_date=slot.date,
+        slot_start_time=slot.start_time,
+        slot_end_time=slot.end_time,
+        admin_name=admin.name,
+        type=booking.type,
+        memo=booking.memo,
+        status=booking.status,
+        created_at=booking.created_at,
+    )
+
+
+@router.get("/users/search")
+async def search_users(
+    q: str = Query(..., min_length=1),
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """사용자 검색 (이름/이메일)"""
+    from sqlalchemy import or_
+    result = await db.execute(
+        select(User).where(
+            or_(
+                User.name.ilike(f"%{q}%"),
+                User.email.ilike(f"%{q}%"),
+            )
+        ).limit(10)
+    )
+    users = result.scalars().all()
+    return [{"id": str(u.id), "name": u.name, "email": u.email, "phone": u.phone} for u in users]

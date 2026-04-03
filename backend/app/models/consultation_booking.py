@@ -17,7 +17,7 @@ class ConsultationBooking(Base):
     analysis_order_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("analysis_orders.id"), nullable=True
     )
-    type: Mapped[str] = mapped_column(String(50), nullable=False)  # 학생부분석 / 입시전략 / 기타
+    type: Mapped[str] = mapped_column(String(50), nullable=False)  # 학생부분석 / 입시전략 / 학습상담 / 심리상담 / 기타
     memo: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="requested")  # requested / confirmed / completed / cancelled
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { applyAnalysis } from "@/lib/api";
+import { applyAnalysis, checkApplyCooldown } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 function ApplyForm() {
@@ -17,10 +17,15 @@ function ApplyForm() {
   const [memo, setMemo] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState<{ can_apply: boolean; cooldown_until: string | null; last_applied: string | null } | null>(null);
 
   if (typeof window !== "undefined" && !isLoggedIn()) {
     router.push("/login");
   }
+
+  useEffect(() => {
+    checkApplyCooldown().then(setCooldown).catch(() => {});
+  }, []);
 
   const handleSubmit = async () => {
     setError("");
@@ -65,6 +70,21 @@ function ApplyForm() {
             </p>
           </div>
 
+          {cooldown && !cooldown.can_apply && (
+            <div style={{
+              padding: "12px 16px",
+              background: "#FEF3C7",
+              border: "1px solid #FDE68A",
+              borderRadius: 8,
+              marginBottom: 16,
+              fontSize: 14,
+              color: "#92400E",
+              lineHeight: 1.6,
+            }}>
+              이전 신청일({cooldown.last_applied?.replace(/-/g, ".")}) 기준 3개월 이후({cooldown.cooldown_until?.replace(/-/g, ".")})부터 재신청이 가능합니다.
+            </div>
+          )}
+
           {error && <div className="error-msg">{error}</div>}
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -87,8 +107,8 @@ function ApplyForm() {
               placeholder="분석 시 참고할 사항이 있으면 입력해주세요" />
           </div>
 
-          <button className="btn btn-primary btn-block btn-lg" onClick={handleSubmit} disabled={loading}>
-            {loading ? "신청 중..." : "신청하기"}
+          <button className="btn btn-primary btn-block btn-lg" onClick={handleSubmit} disabled={loading || (cooldown !== null && !cooldown.can_apply)}>
+            {loading ? "신청 중..." : (cooldown && !cooldown.can_apply) ? "쿨다운 기간" : "신청하기"}
           </button>
 
           <p style={{ textAlign: "center", fontSize: 13, color: "var(--gray-500)", marginTop: 12 }}>

@@ -107,6 +107,14 @@ export async function checkConsultationEligible() {
   return request("/api/analysis/check-consultation-eligible");
 }
 
+export async function checkApplyCooldown() {
+  return request("/api/analysis/check-apply-cooldown");
+}
+
+export async function checkBookingCooldown() {
+  return request("/api/consultation/check-booking-cooldown");
+}
+
 export async function getAnalysisList() {
   return request("/api/analysis/list");
 }

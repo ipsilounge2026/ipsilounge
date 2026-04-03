@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getAvailableSlots, getCounselors, bookConsultation, checkConsultationEligible } from "@/lib/api";
+import { getAvailableSlots, getCounselors, bookConsultation, checkConsultationEligible, checkBookingCooldown } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 interface Counselor {
@@ -45,6 +45,7 @@ export default function ConsultationPage() {
   const [loading, setLoading] = useState(false);
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [checkingEligibility, setCheckingEligibility] = useState(true);
+  const [bookingCooldown, setBookingCooldown] = useState<{ can_book: boolean; cooldown_until: string | null; last_booked: string | null } | null>(null);
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
@@ -54,10 +55,11 @@ export default function ConsultationPage() {
       .finally(() => setCheckingEligibility(false));
   }, []);
 
-  // 자격 충족 시 상담자 목록 로드
+  // 자격 충족 시 상담자 목록 로드 + 쿨다운 확인
   useEffect(() => {
     if (eligibility?.eligible) {
       getCounselors().then(setCounselors).catch(() => {});
+      checkBookingCooldown().then(setBookingCooldown).catch(() => {});
     }
   }, [eligibility]);
 
@@ -192,7 +194,23 @@ export default function ConsultationPage() {
                 color: "#1E40AF",
                 lineHeight: 1.6,
               }}>
-                ℹ️ 학생부 분석 후 상담 진행을 위해 <strong>{earliestDate.replace(/-/g, ".")}</strong> 이후 날짜부터 예약 가능합니다.
+                학생부 분석 후 상담 진행을 위해 <strong>{earliestDate.replace(/-/g, ".")}</strong> 이후 날짜부터 예약 가능합니다.
+              </div>
+            )}
+
+            {/* 쿨다운 배너 */}
+            {bookingCooldown && !bookingCooldown.can_book && (
+              <div style={{
+                padding: "12px 16px",
+                background: "#FEF3C7",
+                border: "1px solid #FDE68A",
+                borderRadius: 8,
+                marginBottom: 16,
+                fontSize: 14,
+                color: "#92400E",
+                lineHeight: 1.6,
+              }}>
+                이전 상담 예약일({bookingCooldown.last_booked?.replace(/-/g, ".")}) 기준 3개월 이후({bookingCooldown.cooldown_until?.replace(/-/g, ".")})부터 재예약이 가능합니다.
               </div>
             )}
 
@@ -345,6 +363,8 @@ export default function ConsultationPage() {
                       <select className="form-control" value={consultType} onChange={(e) => setConsultType(e.target.value)}>
                         <option value="학생부분석">학생부 분석 상담</option>
                         <option value="입시전략">입시 전략 상담</option>
+                        <option value="학습상담">학습 상담</option>
+                        <option value="심리상담">심리 상담</option>
                         <option value="기타">기타</option>
                       </select>
                     </div>
@@ -353,8 +373,8 @@ export default function ConsultationPage() {
                       <textarea className="form-control" value={memo} onChange={(e) => setMemo(e.target.value)}
                         placeholder="상담 전에 궁금한 점이 있으면 입력해주세요" />
                     </div>
-                    <button className="btn btn-primary btn-block btn-lg" onClick={handleBook} disabled={loading}>
-                      {loading ? "예약 중..." : "상담 예약 신청"}
+                    <button className="btn btn-primary btn-block btn-lg" onClick={handleBook} disabled={loading || (bookingCooldown !== null && !bookingCooldown.can_book)}>
+                      {loading ? "예약 중..." : (bookingCooldown && !bookingCooldown.can_book) ? "쿨다운 기간" : "상담 예약 신청"}
                     </button>
                   </div>
                 )}

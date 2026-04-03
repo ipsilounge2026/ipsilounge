@@ -1,6 +1,7 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 
+from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -124,6 +125,22 @@ async def book_consultation(
     db: AsyncSession = Depends(get_db),
 ):
     """상담 예약 신청"""
+    # 3개월 쿨다운 확인
+    last_booking_result = await db.execute(
+        select(ConsultationBooking).where(
+            ConsultationBooking.user_id == user.id,
+            ConsultationBooking.status != "cancelled",
+        ).order_by(ConsultationBooking.created_at.desc())
+    )
+    last_b = last_booking_result.scalar_one_or_none()
+    if last_b:
+        cooldown_end = last_b.created_at + relativedelta(months=3)
+        if datetime.utcnow() < cooldown_end:
+            raise HTTPException(
+                status_code=400,
+                detail=f"이전 상담 예약일({last_b.created_at.strftime('%Y.%m.%d')}) 기준 3개월 이후({cooldown_end.strftime('%Y.%m.%d')})부터 재예약이 가능합니다."
+            )
+
     slot = await check_slot_available(data.slot_id, db)
 
     # 동일 시간대 중복 예약 확인
@@ -175,6 +192,31 @@ async def book_consultation(
         admin_name=admin_name,
         created_at=booking.created_at,
     )
+
+
+@router.get("/check-booking-cooldown")
+async def check_booking_cooldown(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담 예약 쿨다운 확인"""
+    last_booking_result = await db.execute(
+        select(ConsultationBooking).where(
+            ConsultationBooking.user_id == user.id,
+            ConsultationBooking.status != "cancelled",
+        ).order_by(ConsultationBooking.created_at.desc())
+    )
+    last = last_booking_result.scalar_one_or_none()
+    if not last:
+        return {"can_book": True, "cooldown_until": None, "last_booked": None}
+
+    cooldown_end = last.created_at + relativedelta(months=3)
+    can_book = datetime.utcnow() >= cooldown_end
+    return {
+        "can_book": can_book,
+        "cooldown_until": cooldown_end.strftime("%Y-%m-%d") if not can_book else None,
+        "last_booked": last.created_at.strftime("%Y-%m-%d"),
+    }
 
 
 @router.get("/my", response_model=MyBookingListResponse)

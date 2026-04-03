@@ -129,6 +129,24 @@ export async function updateBookingStatus(id: string, status: string) {
   });
 }
 
+export async function searchUsersForBooking(q: string) {
+  return request(`/api/admin/consultation/users/search?q=${encodeURIComponent(q)}`);
+}
+
+export async function createManualBooking(data: {
+  user_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  type: string;
+  memo?: string;
+}) {
+  return request("/api/admin/consultation/bookings/manual", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 // --- 회원 관리 ---
 export async function getUsers(page = 1, search?: string) {
   const params = new URLSearchParams({ page: String(page), size: "20" });

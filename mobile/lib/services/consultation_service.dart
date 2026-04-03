@@ -6,6 +6,10 @@ class ConsultationService {
     return await ApiService.get('/analysis/check-consultation-eligible');
   }
 
+  static Future<Map<String, dynamic>> checkBookingCooldown() async {
+    return await ApiService.get('/consultation/check-booking-cooldown');
+  }
+
   static Future<List<Counselor>> getCounselors() async {
     final res = await ApiService.get('/consultation/counselors');
     final items = res as List;

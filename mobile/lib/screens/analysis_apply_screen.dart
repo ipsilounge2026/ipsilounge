@@ -16,6 +16,28 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
   String? _errorMessage;
   String _serviceType = '학생부라운지';
 
+  // 쿨다운 상태
+  bool _canApply = true;
+  String? _cooldownUntil;
+  String? _lastApplied;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCooldown();
+  }
+
+  Future<void> _checkCooldown() async {
+    try {
+      final result = await AnalysisService.checkApplyCooldown();
+      setState(() {
+        _canApply = result['can_apply'] == true;
+        _cooldownUntil = result['cooldown_until'];
+        _lastApplied = result['last_applied'];
+      });
+    } catch (_) {}
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -112,6 +134,22 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
             ),
             const SizedBox(height: 24),
 
+            // 쿨다운 배너
+            if (!_canApply && _lastApplied != null && _cooldownUntil != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Text(
+                  '이전 신청일(${_lastApplied!.replaceAll('-', '.')}) 기준 3개월 이후(${_cooldownUntil!.replaceAll('-', '.')})부터 재신청이 가능합니다.',
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF92400E), height: 1.5),
+                ),
+              ),
+
             if (_isHakjong) ...[
               _buildLabel('지원 대학'),
               TextField(
@@ -167,7 +205,7 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _apply,
+                onPressed: (_isLoading || !_canApply) ? null : _apply,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isHakjong ? const Color(0xFF22C55E) : const Color(0xFF3B82F6),
                 ),
@@ -176,7 +214,7 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
                         width: 20, height: 20,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text('신청하기', style: TextStyle(color: Colors.white)),
+                    : Text(!_canApply ? '쿨다운 기간' : '신청하기', style: const TextStyle(color: Colors.white)),
               ),
             ),
           ],

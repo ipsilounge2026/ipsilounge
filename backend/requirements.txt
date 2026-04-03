@@ -11,6 +11,7 @@ python-multipart==0.0.18
 boto3==1.35.86
 firebase-admin==6.6.0
 httpx==0.28.1
+python-dateutil==2.9.0
 python-dotenv==1.0.1
 aiosmtplib==3.0.2
 apscheduler==3.10.4

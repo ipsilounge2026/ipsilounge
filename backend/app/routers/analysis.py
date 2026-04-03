@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 
+from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,22 @@ async def apply_analysis(
     """분석 신청 (파일 업로드 없이 신청만)"""
     if data.service_type not in ("학생부라운지", "학종라운지"):
         raise HTTPException(status_code=400, detail="service_type은 '학생부라운지' 또는 '학종라운지'여야 합니다")
+
+    # 3개월 쿨다운 확인
+    last_order_result = await db.execute(
+        select(AnalysisOrder).where(
+            AnalysisOrder.user_id == user.id,
+            AnalysisOrder.status != "cancelled",
+        ).order_by(AnalysisOrder.created_at.desc())
+    )
+    last = last_order_result.scalar_one_or_none()
+    if last:
+        cooldown_end = last.created_at + relativedelta(months=3)
+        if datetime.utcnow() < cooldown_end:
+            raise HTTPException(
+                status_code=400,
+                detail=f"이전 신청일({last.created_at.strftime('%Y.%m.%d')}) 기준 3개월 이후({cooldown_end.strftime('%Y.%m.%d')})부터 재신청이 가능합니다."
+            )
 
     order = AnalysisOrder(
         user_id=user.id,
@@ -119,6 +136,31 @@ async def list_my_analysis(
         items=[_to_response(o) for o in orders],
         total=total,
     )
+
+
+@router.get("/check-apply-cooldown")
+async def check_apply_cooldown(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """분석 신청 쿨다운 확인"""
+    last_order_result = await db.execute(
+        select(AnalysisOrder).where(
+            AnalysisOrder.user_id == user.id,
+            AnalysisOrder.status != "cancelled",
+        ).order_by(AnalysisOrder.created_at.desc())
+    )
+    last = last_order_result.scalar_one_or_none()
+    if not last:
+        return {"can_apply": True, "cooldown_until": None, "last_applied": None}
+
+    cooldown_end = last.created_at + relativedelta(months=3)
+    can_apply = datetime.utcnow() >= cooldown_end
+    return {
+        "can_apply": can_apply,
+        "cooldown_until": cooldown_end.strftime("%Y-%m-%d") if not can_apply else None,
+        "last_applied": last.created_at.strftime("%Y-%m-%d"),
+    }
 
 
 @router.get("/check-consultation-eligible")

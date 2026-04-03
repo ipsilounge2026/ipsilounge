@@ -28,6 +28,11 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   String? _eligibilityReason;
   String? _earliestDate;
 
+  // 쿨다운 상태
+  bool _canBook = true;
+  String? _bookingCooldownUntil;
+  String? _lastBooked;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +53,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       });
       if (_eligible) {
         _loadCounselors();
+        _checkBookingCooldown();
       }
     } catch (_) {
       setState(() {
@@ -56,6 +62,17 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
         _checkingEligibility = false;
       });
     }
+  }
+
+  Future<void> _checkBookingCooldown() async {
+    try {
+      final result = await ConsultationService.checkBookingCooldown();
+      setState(() {
+        _canBook = result['can_book'] == true;
+        _bookingCooldownUntil = result['cooldown_until'];
+        _lastBooked = result['last_booked'];
+      });
+    } catch (_) {}
   }
 
   @override
@@ -186,6 +203,22 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
               child: Text(
                 'ℹ️ 학생부 분석 후 상담 진행을 위해 ${_earliestDate!.replaceAll('-', '.')} 이후 날짜부터 예약 가능합니다.',
                 style: const TextStyle(fontSize: 13, color: Color(0xFF1E40AF), height: 1.5),
+              ),
+            ),
+
+          // 쿨다운 배너
+          if (!_canBook && _lastBooked != null && _bookingCooldownUntil != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '이전 상담 예약일(${_lastBooked!.replaceAll('-', '.')}) 기준 3개월 이후(${_bookingCooldownUntil!.replaceAll('-', '.')})부터 재예약이 가능합니다.',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF92400E), height: 1.5),
               ),
             ),
 
@@ -489,6 +522,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                       items: const [
                         DropdownMenuItem(value: '학생부분석', child: Text('학생부 분석 상담')),
                         DropdownMenuItem(value: '입시전략', child: Text('입시 전략 상담')),
+                        DropdownMenuItem(value: '학습상담', child: Text('학습 상담')),
+                        DropdownMenuItem(value: '심리상담', child: Text('심리 상담')),
                         DropdownMenuItem(value: '기타', child: Text('기타')),
                       ],
                       onChanged: (v) => setState(() => _consultType = v!),
@@ -506,11 +541,11 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                     SizedBox(
                       width: double.infinity, height: 48,
                       child: ElevatedButton(
-                        onPressed: _isLoading ? null : _book,
+                        onPressed: (_isLoading || !_canBook) ? null : _book,
                         child: _isLoading
                             ? const SizedBox(width: 20, height: 20,
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Text('상담 예약 신청'),
+                            : Text(!_canBook ? '쿨다운 기간' : '상담 예약 신청'),
                       ),
                     ),
                   ],
