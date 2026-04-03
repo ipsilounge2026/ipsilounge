@@ -153,14 +153,14 @@ export default function SeminarPage() {
           <div className="card" style={{ padding: 16, marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
             <div>
               <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>설명회</label>
-              <select className="input" value={filter.schedule_id} onChange={(e) => setFilter({ ...filter, schedule_id: e.target.value })}>
+              <select className="form-control" value={filter.schedule_id} onChange={(e) => setFilter({ ...filter, schedule_id: e.target.value })}>
                 <option value="">전체</option>
                 {schedules.map((s: any) => <option key={s.id} value={s.id}>{s.title}</option>)}
               </select>
             </div>
             <div>
               <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>상태</label>
-              <select className="input" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}>
+              <select className="form-control" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}>
                 <option value="">전체</option>
                 <option value="pending">승인대기</option>
                 <option value="modified">수정대기</option>
@@ -170,7 +170,7 @@ export default function SeminarPage() {
             </div>
             <div>
               <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>지점명</label>
-              <input className="input" placeholder="지점명 검색" value={filter.branch_name} onChange={(e) => setFilter({ ...filter, branch_name: e.target.value })} />
+              <input className="form-control" placeholder="지점명 검색" value={filter.branch_name} onChange={(e) => setFilter({ ...filter, branch_name: e.target.value })} />
             </div>
             <button className="btn btn-primary" onClick={handleSearch}>검색</button>
           </div>
@@ -276,7 +276,7 @@ export default function SeminarPage() {
         <div className="modal-overlay" onClick={() => setCancelModal({ id: "", show: false })}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ padding: 24, maxWidth: 400 }}>
             <h3 style={{ marginBottom: 12 }}>예약 취소</h3>
-            <textarea className="input" placeholder="취소 사유를 입력하세요" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={3} style={{ width: "100%", marginBottom: 12 }} />
+            <textarea className="form-control" placeholder="취소 사유를 입력하세요" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={3} style={{ width: "100%", marginBottom: 12 }} />
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn btn-outline" onClick={() => { setCancelModal({ id: "", show: false }); setCancelReason(""); }}>닫기</button>
               <button className="btn btn-danger" onClick={handleCancel}>취소 확정</button>
@@ -290,7 +290,7 @@ export default function SeminarPage() {
         <div className="modal-overlay" onClick={() => setAttendeeModal({ id: "", show: false, current: 0 })}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ padding: 24, maxWidth: 300 }}>
             <h3 style={{ marginBottom: 12 }}>실제 참석 인원</h3>
-            <input className="input" type="number" min={0} value={attendeeCount} onChange={(e) => setAttendeeCount(Number(e.target.value))} style={{ width: "100%", marginBottom: 12 }} />
+            <input className="form-control" type="number" min={0} value={attendeeCount} onChange={(e) => setAttendeeCount(Number(e.target.value))} style={{ width: "100%", marginBottom: 12 }} />
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn btn-outline" onClick={() => setAttendeeModal({ id: "", show: false, current: 0 })}>닫기</button>
               <button className="btn btn-primary" onClick={handleAttendeeUpdate}>저장</button>

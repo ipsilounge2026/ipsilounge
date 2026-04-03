@@ -157,11 +157,11 @@ export default function SeminarMailPage() {
           {/* 메일 내용 */}
           <div style={{ marginBottom: 12 }}>
             <label className="form-label">메일 제목 *</label>
-            <input className="input" value={subject} onChange={(e) => setSubject(e.target.value)} style={{ width: "100%" }} />
+            <input className="form-control" value={subject} onChange={(e) => setSubject(e.target.value)} style={{ width: "100%" }} />
           </div>
           <div style={{ marginBottom: 16 }}>
             <label className="form-label">메일 내용 *</label>
-            <textarea className="input" value={body} onChange={(e) => setBody(e.target.value)} rows={8} style={{ width: "100%" }} />
+            <textarea className="form-control" value={body} onChange={(e) => setBody(e.target.value)} rows={8} style={{ width: "100%" }} />
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>

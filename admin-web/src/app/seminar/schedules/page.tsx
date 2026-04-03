@@ -152,39 +152,39 @@ export default function SeminarSchedulesPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div style={{ gridColumn: "1 / -1" }}>
               <label className="form-label">설명회 제목 *</label>
-              <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={{ width: "100%" }} />
+              <input className="form-control" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={{ width: "100%" }} />
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <label className="form-label">설명 내용</label>
-              <textarea className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} style={{ width: "100%" }} />
+              <textarea className="form-control" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} style={{ width: "100%" }} />
             </div>
             <div>
               <label className="form-label">신청 시작일 *</label>
-              <input className="input" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} style={{ width: "100%" }} />
+              <input className="form-control" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} style={{ width: "100%" }} />
             </div>
             <div>
               <label className="form-label">신청 종료일 *</label>
-              <input className="input" type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} style={{ width: "100%" }} />
+              <input className="form-control" type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} style={{ width: "100%" }} />
             </div>
             <div>
               <label className="form-label">오전 최대 예약 수 (0=미운영)</label>
-              <input className="input" type="number" min={0} value={form.morning_max} onChange={(e) => setForm({ ...form, morning_max: Number(e.target.value) })} style={{ width: "100%" }} />
+              <input className="form-control" type="number" min={0} value={form.morning_max} onChange={(e) => setForm({ ...form, morning_max: Number(e.target.value) })} style={{ width: "100%" }} />
             </div>
             <div>
               <label className="form-label">오후 최대 예약 수 (0=미운영)</label>
-              <input className="input" type="number" min={0} value={form.afternoon_max} onChange={(e) => setForm({ ...form, afternoon_max: Number(e.target.value) })} style={{ width: "100%" }} />
+              <input className="form-control" type="number" min={0} value={form.afternoon_max} onChange={(e) => setForm({ ...form, afternoon_max: Number(e.target.value) })} style={{ width: "100%" }} />
             </div>
             <div>
               <label className="form-label">저녁 최대 예약 수 (0=미운영)</label>
-              <input className="input" type="number" min={0} value={form.evening_max} onChange={(e) => setForm({ ...form, evening_max: Number(e.target.value) })} style={{ width: "100%" }} />
+              <input className="form-control" type="number" min={0} value={form.evening_max} onChange={(e) => setForm({ ...form, evening_max: Number(e.target.value) })} style={{ width: "100%" }} />
             </div>
             <div>
               <label className="form-label">예약 마감일시 *</label>
-              <input className="input" type="datetime-local" value={form.deadline_at} onChange={(e) => setForm({ ...form, deadline_at: e.target.value })} style={{ width: "100%" }} />
+              <input className="form-control" type="datetime-local" value={form.deadline_at} onChange={(e) => setForm({ ...form, deadline_at: e.target.value })} style={{ width: "100%" }} />
             </div>
             <div>
               <label className="form-label">공개 여부</label>
-              <select className="input" value={form.is_visible ? "true" : "false"} onChange={(e) => setForm({ ...form, is_visible: e.target.value === "true" })} style={{ width: "100%" }}>
+              <select className="form-control" value={form.is_visible ? "true" : "false"} onChange={(e) => setForm({ ...form, is_visible: e.target.value === "true" })} style={{ width: "100%" }}>
                 <option value="true">공개</option>
                 <option value="false">비공개</option>
               </select>
