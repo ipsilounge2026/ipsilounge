@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -165,10 +165,21 @@ async def check_apply_cooldown(
 
 @router.get("/check-consultation-eligible")
 async def check_consultation_eligible(
+    consultation_type: str = Query(default="학생부분석"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """상담 예약 가능 여부 확인 (업로드 완료 시 즉시 가능, earliest_date는 예약 가능 최소 날짜)"""
+    """상담 예약 가능 여부 확인 (유형별 분기)"""
+    # 학습상담/심리상담/기타는 라운지 신청 불필요 → 바로 eligible
+    if consultation_type in ("학습상담", "심리상담", "기타"):
+        return {
+            "eligible": True,
+            "reason": None,
+            "earliest_date": None,
+            "needs_survey": True,
+        }
+
+    # 학생부분석/학종전략은 라운지 신청 + 업로드 필요
     # 업로드 완료된 주문 확인
     result = await db.execute(
         select(AnalysisOrder).where(
@@ -194,12 +205,14 @@ async def check_consultation_eligible(
                 "eligible": False,
                 "reason": "학생부 파일 업로드를 완료해주세요. 신청은 완료되었으나 학생부 파일이 아직 업로드되지 않았습니다.",
                 "earliest_date": None,
+                "needs_survey": False,
             }
 
         return {
             "eligible": False,
             "reason": "학생부 라운지 또는 학종 라운지를 먼저 신청하고 학생부를 업로드해주세요.",
             "earliest_date": None,
+            "needs_survey": False,
         }
 
     # 업로드 완료 → 즉시 상담 예약 가능, 단 예약 날짜는 가장 최근 업로드일+7일 이후만
@@ -211,6 +224,7 @@ async def check_consultation_eligible(
         "eligible": True,
         "reason": None,
         "earliest_date": eligible_date.isoformat(),
+        "needs_survey": False,
     }
 
 

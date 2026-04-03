@@ -120,8 +120,9 @@ export async function uploadSchoolRecord(formData: FormData) {
   return request("/api/analysis/upload", { method: "POST", body: formData });
 }
 
-export async function checkConsultationEligible() {
-  return request("/api/analysis/check-consultation-eligible");
+export async function checkConsultationEligible(consultationType?: string) {
+  const params = consultationType ? `?consultation_type=${encodeURIComponent(consultationType)}` : "";
+  return request(`/api/analysis/check-consultation-eligible${params}`);
 }
 
 export async function checkApplyCooldown() {

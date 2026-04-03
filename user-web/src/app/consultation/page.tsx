@@ -27,11 +27,28 @@ interface EligibilityResult {
   eligible: boolean;
   reason: string | null;
   earliest_date: string | null;
+  needs_survey: boolean;
 }
+
+const CONSULTATION_TYPES = [
+  { value: "학생부분석", label: "학생부 분석 상담", description: "학생부 분석 결과를 바탕으로 강점/보완점 상담", requiresUpload: true },
+  { value: "학종전략", label: "학종 전략 상담", description: "학생부종합전형 지원 전략 상담", requiresUpload: true },
+  { value: "학습상담", label: "학습 상담", description: "학습 방법, 성적 향상 전략 상담", requiresUpload: false },
+  { value: "심리상담", label: "심리 상담", description: "입시 스트레스, 진로 고민 등 심리 상담", requiresUpload: false },
+  { value: "기타", label: "기타 상담", description: "그 외 입시 관련 상담", requiresUpload: false },
+];
 
 export default function ConsultationPage() {
   const router = useRouter();
   const now = new Date();
+  const [step, setStep] = useState<"type" | "check" | "survey" | "booking">("type");
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+
+  // 자격 확인 관련
+  const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
+
+  // 예약 UI 관련
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [counselors, setCounselors] = useState<Counselor[]>([]);
@@ -39,29 +56,50 @@ export default function ConsultationPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
-  const [consultType, setConsultType] = useState("학생부분석");
   const [memo, setMemo] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
-  const [checkingEligibility, setCheckingEligibility] = useState(true);
   const [bookingCooldown, setBookingCooldown] = useState<{ can_book: boolean; cooldown_until: string | null; last_booked: string | null } | null>(null);
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
-    checkConsultationEligible()
-      .then(setEligibility)
-      .catch(() => setEligibility({ eligible: false, reason: "자격 확인에 실패했습니다.", earliest_date: null }))
-      .finally(() => setCheckingEligibility(false));
   }, []);
 
-  // 자격 충족 시 상담자 목록 로드 + 쿨다운 확인
-  useEffect(() => {
-    if (eligibility?.eligible) {
-      getCounselors().then(setCounselors).catch(() => {});
-      checkBookingCooldown().then(setBookingCooldown).catch(() => {});
+  // 상담 유형 선택 후 자격 확인
+  const handleSelectType = async (typeValue: string) => {
+    setSelectedType(typeValue);
+    const typeInfo = CONSULTATION_TYPES.find(t => t.value === typeValue);
+
+    if (typeInfo?.requiresUpload) {
+      // 학생부분석/학종전략 → 자격 확인
+      setStep("check");
+      setCheckingEligibility(true);
+      try {
+        const result = await checkConsultationEligible(typeValue);
+        setEligibility(result);
+        if (result.eligible) {
+          // 자격 충족 → 바로 예약 단계로
+          setStep("booking");
+          getCounselors().then(setCounselors).catch(() => {});
+          checkBookingCooldown().then(setBookingCooldown).catch(() => {});
+        }
+      } catch {
+        setEligibility({ eligible: false, reason: "자격 확인에 실패했습니다.", earliest_date: null, needs_survey: false });
+      } finally {
+        setCheckingEligibility(false);
+      }
+    } else {
+      // 학습/심리/기타 → 사전조사 페이지로
+      setStep("survey");
     }
-  }, [eligibility]);
+  };
+
+  // 사전조사 완료 후 예약으로 이동
+  const handleSurveyComplete = () => {
+    setStep("booking");
+    getCounselors().then(setCounselors).catch(() => {});
+    checkBookingCooldown().then(setBookingCooldown).catch(() => {});
+  };
 
   // 상담자 선택 시 슬롯 로드
   useEffect(() => {
@@ -72,18 +110,15 @@ export default function ConsultationPage() {
     }
   }, [year, month, selectedCounselor]);
 
-  // 달력 데이터 생성
+  // 달력 데이터
   const firstDay = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
   const today = new Date().toISOString().split("T")[0];
   const earliestDate = eligibility?.earliest_date || null;
-
   const datesWithSlots = new Set(slots.map((s) => s.date));
-
-  const calendarDays = [];
+  const calendarDays: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) calendarDays.push(null);
   for (let d = 1; d <= daysInMonth; d++) calendarDays.push(d);
-
   const slotsForDate = selectedDate ? slots.filter((s) => s.date === selectedDate) : [];
 
   const handleSelectCounselor = (c: Counselor) => {
@@ -100,10 +135,10 @@ export default function ConsultationPage() {
   };
 
   const handleBook = async () => {
-    if (!selectedSlot) return;
+    if (!selectedSlot || !selectedType) return;
     setLoading(true);
     try {
-      await bookConsultation({ slot_id: selectedSlot.id, type: consultType, memo: memo || undefined });
+      await bookConsultation({ slot_id: selectedSlot.id, type: selectedType, memo: memo || undefined });
       setMessage("상담 예약이 신청되었습니다! 확정 알림을 기다려주세요.");
       setSelectedSlot(null);
       setSelectedDate(null);
@@ -115,20 +150,21 @@ export default function ConsultationPage() {
     }
   };
 
+  const handleBack = () => {
+    setStep("type");
+    setSelectedType(null);
+    setEligibility(null);
+    setSelectedCounselor(null);
+    setSelectedDate(null);
+    setSelectedSlot(null);
+    setMessage("");
+    setMemo("");
+  };
+
   const prevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); setSelectedDate(null); setSelectedSlot(null); };
   const nextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); setSelectedDate(null); setSelectedSlot(null); };
 
-  if (checkingEligibility) {
-    return (
-      <>
-        <Navbar />
-        <div className="container" style={{ maxWidth: 640, textAlign: "center", padding: 60 }}>
-          <p>상담 예약 자격을 확인하고 있습니다...</p>
-        </div>
-        <Footer />
-      </>
-    );
-  }
+  const selectedTypeLabel = CONSULTATION_TYPES.find(t => t.value === selectedType)?.label || "";
 
   return (
     <>
@@ -139,11 +175,48 @@ export default function ConsultationPage() {
           <Link href="/consultation/my" className="btn btn-outline">내 예약 보기</Link>
         </div>
 
-        {/* 자격 미달 시 안내 */}
-        {eligibility && !eligibility.eligible && (
+        {/* Step 1: 상담 유형 선택 */}
+        {step === "type" && (
+          <div className="card">
+            <h2 style={{ fontSize: 16, marginBottom: 4 }}>상담 유형 선택</h2>
+            <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20 }}>원하시는 상담 유형을 선택해주세요</p>
+            <div style={{ display: "grid", gap: 12 }}>
+              {CONSULTATION_TYPES.map((type) => (
+                <div
+                  key={type.value}
+                  onClick={() => handleSelectType(type.value)}
+                  style={{
+                    padding: "16px 20px",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseOver={e => { e.currentTarget.style.borderColor = "#3B82F6"; e.currentTarget.style.background = "#F8FAFF"; }}
+                  onMouseOut={e => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.background = ""; }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{type.label}</div>
+                  <div style={{ fontSize: 13, color: "#6B7280" }}>{type.description}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Step 2a: 자격 확인 중 (학생부분석/학종전략) */}
+        {step === "check" && checkingEligibility && (
+          <div className="card" style={{ textAlign: "center", padding: 40 }}>
+            <p>상담 예약 자격을 확인하고 있습니다...</p>
+          </div>
+        )}
+
+        {/* Step 2b: 자격 미달 (학생부분석/학종전략) */}
+        {step === "check" && !checkingEligibility && eligibility && !eligibility.eligible && (
           <div className="card" style={{ textAlign: "center", padding: 40 }}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
-            <h2 style={{ fontSize: 18, marginBottom: 12, color: "var(--gray-700)" }}>상담 예약 조건</h2>
+            <h2 style={{ fontSize: 18, marginBottom: 12, color: "var(--gray-700)" }}>
+              {selectedTypeLabel} 예약 조건
+            </h2>
             <div style={{
               padding: 16,
               borderRadius: 8,
@@ -162,26 +235,79 @@ export default function ConsultationPage() {
                   신청은 완료되었습니다. 학생부 파일을 업로드하면<br />
                   학생부 분석 후 상담 진행을 위해 상담 예약이 가능합니다.
                 </p>
-                <Link href="/analysis" className="btn btn-primary">내 분석 목록에서 파일 업로드</Link>
+                <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                  <Link href="/analysis" className="btn btn-primary">학생부 업로드하러 가기</Link>
+                  <button onClick={handleBack} className="btn btn-outline">다른 상담 유형 선택</button>
+                </div>
               </>
             ) : (
               <>
                 <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20, lineHeight: 1.6 }}>
-                  상담 라운지는 학생부 라운지 또는 학종 라운지를 신청하고<br />
+                  {selectedTypeLabel}은 학생부 라운지 또는 학종 라운지를 신청하고<br />
                   학생부 파일 업로드를 완료한 후 이용 가능합니다.
                 </p>
-                <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
                   <Link href="/analysis/apply?type=학생부라운지" className="btn btn-primary">학생부 라운지 신청</Link>
                   <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline">학종 라운지 신청</Link>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <button onClick={handleBack} style={{ fontSize: 13, color: "#6B7280", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                    다른 상담 유형 선택
+                  </button>
                 </div>
               </>
             )}
           </div>
         )}
 
-        {/* 자격 충족 시 예약 UI */}
-        {eligibility?.eligible && (
+        {/* Step 2c: 사전 조사 (학습/심리/기타) */}
+        {step === "survey" && (
+          <div className="card" style={{ padding: 40 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+              <button onClick={handleBack} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#6B7280" }}>←</button>
+              <h2 style={{ fontSize: 16, margin: 0 }}>{selectedTypeLabel} - 사전 조사</h2>
+            </div>
+            <div style={{
+              padding: 24,
+              borderRadius: 8,
+              backgroundColor: "#F9FAFB",
+              border: "1px solid #E5E7EB",
+              textAlign: "center",
+              marginBottom: 20,
+            }}>
+              <p style={{ fontSize: 14, color: "#6B7280", margin: 0, lineHeight: 1.8 }}>
+                사전 조사 페이지는 준비 중입니다.<br />
+                아래 버튼을 눌러 바로 예약을 진행해주세요.
+              </p>
+            </div>
+            <button onClick={handleSurveyComplete} className="btn btn-primary btn-block btn-lg">
+              예약 진행하기
+            </button>
+          </div>
+        )}
+
+        {/* Step 3: 예약 UI */}
+        {step === "booking" && (
           <>
+            {/* 선택된 상담 유형 표시 */}
+            <div style={{
+              padding: "10px 16px",
+              background: "#F0FDF4",
+              border: "1px solid #BBF7D0",
+              borderRadius: 8,
+              marginBottom: 16,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}>
+              <span style={{ fontSize: 14, color: "#166534" }}>
+                <strong>{selectedTypeLabel}</strong> 선택됨
+              </span>
+              <button onClick={handleBack} style={{ fontSize: 13, color: "#166534", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                변경
+              </button>
+            </div>
+
             {/* earliest_date 안내 배너 */}
             {earliestDate && earliestDate > today && (
               <div style={{
@@ -220,7 +346,7 @@ export default function ConsultationPage() {
               </div>
             )}
 
-            {/* Step 1: 상담자 선택 */}
+            {/* 상담자 선택 */}
             {!selectedCounselor ? (
               <div className="card" style={{ marginBottom: 16 }}>
                 <h2 style={{ fontSize: 16, marginBottom: 4 }}>상담자 선택</h2>
@@ -295,7 +421,7 @@ export default function ConsultationPage() {
                   </button>
                 </div>
 
-                {/* Step 2: 달력 */}
+                {/* 달력 */}
                 <div className="card" style={{ marginBottom: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                     <button className="btn btn-outline btn-sm" onClick={prevMonth}>이전</button>
@@ -329,7 +455,7 @@ export default function ConsultationPage() {
                   </div>
                 </div>
 
-                {/* Step 3: 시간대 선택 */}
+                {/* 시간대 선택 */}
                 {selectedDate && (
                   <div className="card" style={{ marginBottom: 16 }}>
                     <h2 style={{ fontSize: 16, marginBottom: 12 }}>
@@ -354,19 +480,13 @@ export default function ConsultationPage() {
                   </div>
                 )}
 
-                {/* Step 4: 예약 폼 */}
+                {/* 예약 폼 */}
                 {selectedSlot && (
                   <div className="card">
                     <h2 style={{ fontSize: 16, marginBottom: 16 }}>예약 정보 입력</h2>
                     <div className="form-group">
                       <label>상담 유형</label>
-                      <select className="form-control" value={consultType} onChange={(e) => setConsultType(e.target.value)}>
-                        <option value="학생부분석">학생부 분석 상담</option>
-                        <option value="입시전략">입시 전략 상담</option>
-                        <option value="학습상담">학습 상담</option>
-                        <option value="심리상담">심리 상담</option>
-                        <option value="기타">기타</option>
-                      </select>
+                      <input className="form-control" value={selectedTypeLabel} disabled style={{ background: "#F9FAFB" }} />
                     </div>
                     <div className="form-group">
                       <label>사전 질문 (선택)</label>
