@@ -343,12 +343,31 @@ async def update_booking_status(
         user = user_result.scalar_one_or_none()
         if user:
             await send_booking_confirmed_notification(user, db)
+            # 확정 이메일 발송
+            slot_result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == booking.slot_id))
+            slot = slot_result.scalar_one_or_none()
+            if slot:
+                from app.services.email_service import send_consultation_confirmed_email
+                await send_consultation_confirmed_email(
+                    user.email, user.name,
+                    str(slot.date), f"{str(slot.start_time)[:5]} ~ {str(slot.end_time)[:5]}",
+                )
 
     if data.status == "cancelled":
         slot_result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == booking.slot_id))
         slot = slot_result.scalar_one_or_none()
         if slot and slot.current_bookings > 0:
             slot.current_bookings -= 1
+        # 취소 이메일 발송
+        user_result2 = await db.execute(select(User).where(User.id == booking.user_id))
+        user2 = user_result2.scalar_one_or_none()
+        if user2 and slot:
+            from app.services.email_service import send_consultation_cancelled_email
+            await send_consultation_cancelled_email(
+                user2.email, user2.name,
+                str(slot.date), f"{str(slot.start_time)[:5]} ~ {str(slot.end_time)[:5]}",
+                data.cancel_reason,
+            )
 
     await db.commit()
     return {"message": f"예약 상태가 '{data.status}'로 변경되었습니다"}

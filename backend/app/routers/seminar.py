@@ -373,7 +373,7 @@ async def modify_reservation(
     )
     schedule = sched_result.scalar_one_or_none()
 
-    # TODO: 관리자에게 재승인 요청 이메일 발송
+    # 관리자에게는 별도 이메일 발송하지 않음 (관리자 웹에서 수정 대기 목록으로 확인)
 
     return SeminarReservationResponse(
         id=reservation.id,
@@ -417,7 +417,5 @@ async def cancel_reservation(
     reservation.status = "cancelled"
     reservation.cancel_reason = data.cancel_reason
     await db.commit()
-
-    # TODO: 취소 안내 이메일 발송
 
     return {"message": "예약이 취소되었습니다"}

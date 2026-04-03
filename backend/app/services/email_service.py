@@ -110,6 +110,96 @@ async def send_consultation_confirmed_email(
     return await _send_email(to, subject, html)
 
 
+async def send_consultation_cancelled_email(
+    to: str, name: str, date_str: str, time_str: str, cancel_reason: str | None = None
+) -> bool:
+    subject = "[입시라운지] 상담 예약이 취소되었습니다"
+    reason_html = f"<p><strong>취소 사유:</strong> {cancel_reason}</p>" if cancel_reason else ""
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #ef4444;">상담 예약 취소 안내</h2>
+      <p>안녕하세요, <strong>{name}</strong>님.</p>
+      <p>아래 상담 예약이 취소되었습니다.</p>
+      <table style="border-collapse: collapse; margin: 16px 0;">
+        <tr>
+          <td style="padding: 8px 16px 8px 0; color: #6b7280;">날짜</td>
+          <td style="padding: 8px 0;"><strong>{date_str}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 16px 8px 0; color: #6b7280;">시간</td>
+          <td style="padding: 8px 0;"><strong>{time_str}</strong></td>
+        </tr>
+      </table>
+      {reason_html}
+      <p>새로운 상담 예약은 입시라운지에서 다시 신청해 주세요.</p>
+      <hr style="border:none; border-top:1px solid #e5e7eb; margin: 24px 0;">
+      <p style="color:#9ca3af; font-size:12px;">입시라운지 | ipsilounge.com</p>
+    </div>
+    """
+    return await _send_email(to, subject, html)
+
+
+async def send_seminar_approved_email(
+    to: str, name: str, schedule_title: str, date_str: str, time_slot: str
+) -> bool:
+    time_label = {"morning": "오전", "afternoon": "오후", "evening": "저녁"}.get(time_slot, time_slot)
+    subject = "[입시라운지] 설명회 예약이 승인되었습니다"
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">설명회 예약 승인</h2>
+      <p>안녕하세요, <strong>{name}</strong>님.</p>
+      <p>설명회 예약이 승인되었습니다.</p>
+      <table style="border-collapse: collapse; margin: 16px 0;">
+        <tr>
+          <td style="padding: 8px 16px 8px 0; color: #6b7280;">설명회</td>
+          <td style="padding: 8px 0;"><strong>{schedule_title}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 16px 8px 0; color: #6b7280;">날짜</td>
+          <td style="padding: 8px 0;"><strong>{date_str}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 16px 8px 0; color: #6b7280;">시간대</td>
+          <td style="padding: 8px 0;"><strong>{time_label}</strong></td>
+        </tr>
+      </table>
+      <hr style="border:none; border-top:1px solid #e5e7eb; margin: 24px 0;">
+      <p style="color:#9ca3af; font-size:12px;">입시라운지 | ipsilounge.com</p>
+    </div>
+    """
+    return await _send_email(to, subject, html)
+
+
+async def send_seminar_cancelled_email(
+    to: str, name: str, schedule_title: str, cancel_reason: str | None = None
+) -> bool:
+    subject = "[입시라운지] 설명회 예약이 취소되었습니다"
+    reason_html = f"<p><strong>취소 사유:</strong> {cancel_reason}</p>" if cancel_reason else ""
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #ef4444;">설명회 예약 취소 안내</h2>
+      <p>안녕하세요, <strong>{name}</strong>님.</p>
+      <p><strong>{schedule_title}</strong> 설명회 예약이 취소되었습니다.</p>
+      {reason_html}
+      <hr style="border:none; border-top:1px solid #e5e7eb; margin: 24px 0;">
+      <p style="color:#9ca3af; font-size:12px;">입시라운지 | ipsilounge.com</p>
+    </div>
+    """
+    return await _send_email(to, subject, html)
+
+
+async def send_seminar_bulk_email(to: str, subject: str, body: str) -> bool:
+    """설명회 일괄 메일 발송"""
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="white-space: pre-wrap; line-height: 1.6;">{body}</div>
+      <hr style="border:none; border-top:1px solid #e5e7eb; margin: 24px 0;">
+      <p style="color:#9ca3af; font-size:12px;">입시라운지 | ipsilounge.com</p>
+    </div>
+    """
+    return await _send_email(to, subject, html)
+
+
 async def send_consultation_reminder_email(
     to: str, name: str, date_str: str, time_str: str
 ) -> bool:

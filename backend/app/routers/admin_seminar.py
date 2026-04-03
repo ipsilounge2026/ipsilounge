@@ -299,7 +299,17 @@ async def approve_reservation(
     reservation.approved_at = datetime.utcnow()
     await db.commit()
 
-    # TODO: 승인 이메일 발송
+    # 승인 이메일 발송
+    from app.services.email_service import send_seminar_approved_email
+    user_result = await db.execute(select(User).where(User.id == reservation.user_id))
+    user = user_result.scalar_one_or_none()
+    sched_result = await db.execute(select(SeminarSchedule).where(SeminarSchedule.id == reservation.schedule_id))
+    schedule = sched_result.scalar_one_or_none()
+    if user and schedule:
+        await send_seminar_approved_email(
+            user.email, user.name, schedule.title,
+            str(reservation.reservation_date), reservation.time_slot,
+        )
 
     return {"message": "예약이 승인되었습니다"}
 
@@ -323,7 +333,14 @@ async def cancel_reservation(
     reservation.cancel_reason = data.cancel_reason
     await db.commit()
 
-    # TODO: 취소 이메일 발송
+    # 취소 이메일 발송
+    from app.services.email_service import send_seminar_cancelled_email
+    user_result = await db.execute(select(User).where(User.id == reservation.user_id))
+    user = user_result.scalar_one_or_none()
+    sched_result = await db.execute(select(SeminarSchedule).where(SeminarSchedule.id == reservation.schedule_id))
+    schedule = sched_result.scalar_one_or_none()
+    if user and schedule:
+        await send_seminar_cancelled_email(user.email, user.name, schedule.title, data.cancel_reason)
 
     return {"message": "예약이 취소되었습니다"}
 
@@ -386,8 +403,13 @@ async def send_mail(
     recipients_list = list(recipients_map.values())
     total_count = len(recipients_list)
 
-    # TODO: 실제 이메일 발송 로직 (SMTP)
-    success_count = total_count  # 현재는 전부 성공으로 처리
+    # 실제 이메일 발송
+    from app.services.email_service import send_seminar_bulk_email
+    success_count = 0
+    for recipient in recipients_list:
+        sent = await send_seminar_bulk_email(recipient["email"], data.subject, data.body)
+        if sent:
+            success_count += 1
 
     # 발송 이력 저장
     log = SeminarMailLog(
