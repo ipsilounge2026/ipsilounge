@@ -107,8 +107,8 @@ function ApplyForm() {
               placeholder="분석 시 참고할 사항이 있으면 입력해주세요" />
           </div>
 
-          <button className="btn btn-primary btn-block btn-lg" onClick={handleSubmit} disabled={loading || (cooldown !== null && !cooldown.can_apply)}>
-            {loading ? "신청 중..." : (cooldown && !cooldown.can_apply) ? "쿨다운 기간" : "신청하기"}
+          <button className="btn btn-primary btn-block btn-lg" onClick={handleSubmit} disabled={loading || cooldown === null || !cooldown.can_apply}>
+            {loading ? "신청 중..." : cooldown === null ? "확인 중..." : !cooldown.can_apply ? "쿨다운 기간" : "신청하기"}
           </button>
 
           <p style={{ textAlign: "center", fontSize: 13, color: "var(--gray-500)", marginTop: 12 }}>

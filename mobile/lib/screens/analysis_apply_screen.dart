@@ -16,8 +16,8 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
   String? _errorMessage;
   String _serviceType = '학생부라운지';
 
-  // 쿨다운 상태
-  bool _canApply = true;
+  // 쿨다운 상태 (기본 false: API 확인 전까지 버튼 비활성)
+  bool _canApply = false;
   String? _cooldownUntil;
   String? _lastApplied;
 
@@ -35,7 +35,10 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
         _cooldownUntil = result['cooldown_until'];
         _lastApplied = result['last_applied'];
       });
-    } catch (_) {}
+    } catch (_) {
+      // API 실패 시에도 신청 허용 (서버에서 재검증)
+      setState(() => _canApply = true);
+    }
   }
 
   @override

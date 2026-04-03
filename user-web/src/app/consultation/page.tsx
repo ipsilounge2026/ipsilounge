@@ -373,8 +373,8 @@ export default function ConsultationPage() {
                       <textarea className="form-control" value={memo} onChange={(e) => setMemo(e.target.value)}
                         placeholder="상담 전에 궁금한 점이 있으면 입력해주세요" />
                     </div>
-                    <button className="btn btn-primary btn-block btn-lg" onClick={handleBook} disabled={loading || (bookingCooldown !== null && !bookingCooldown.can_book)}>
-                      {loading ? "예약 중..." : (bookingCooldown && !bookingCooldown.can_book) ? "쿨다운 기간" : "상담 예약 신청"}
+                    <button className="btn btn-primary btn-block btn-lg" onClick={handleBook} disabled={loading || bookingCooldown === null || !bookingCooldown.can_book}>
+                      {loading ? "예약 중..." : bookingCooldown === null ? "확인 중..." : !bookingCooldown.can_book ? "쿨다운 기간" : "상담 예약 신청"}
                     </button>
                   </div>
                 )}

@@ -202,10 +202,10 @@ async def check_consultation_eligible(
             "earliest_date": None,
         }
 
-    # 업로드 완료 → 즉시 상담 예약 가능, 단 예약 날짜는 업로드일+7일 이후만
+    # 업로드 완료 → 즉시 상담 예약 가능, 단 예약 날짜는 가장 최근 업로드일+7일 이후만
     from datetime import timedelta
-    earliest_upload = orders[0].uploaded_at
-    eligible_date = (earliest_upload + timedelta(days=7)).date()
+    latest_upload = orders[-1].uploaded_at  # asc 정렬이므로 마지막이 가장 최근
+    eligible_date = (latest_upload + timedelta(days=7)).date()
 
     return {
         "eligible": True,

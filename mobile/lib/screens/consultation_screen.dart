@@ -28,8 +28,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   String? _eligibilityReason;
   String? _earliestDate;
 
-  // 쿨다운 상태
-  bool _canBook = true;
+  // 쿨다운 상태 (기본 false: API 확인 전까지 버튼 비활성)
+  bool _canBook = false;
   String? _bookingCooldownUntil;
   String? _lastBooked;
 
@@ -72,7 +72,10 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
         _bookingCooldownUntil = result['cooldown_until'];
         _lastBooked = result['last_booked'];
       });
-    } catch (_) {}
+    } catch (_) {
+      // API 실패 시에도 예약 허용 (서버에서 재검증)
+      setState(() => _canBook = true);
+    }
   }
 
   @override
