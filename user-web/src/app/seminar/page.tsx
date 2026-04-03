@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import {
   getMe,
   getSeminarSchedules,
@@ -187,11 +189,13 @@ export default function SeminarPage() {
     }
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: "center" }}>로딩 중...</div>;
+  if (loading) return <><Navbar /><div style={{ padding: 40, textAlign: "center" }}>로딩 중...</div></>;
 
   const dateSlots = getDateSlots();
 
   return (
+    <>
+    <Navbar />
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 16px" }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24 }}>설명회 예약</h1>
 
@@ -269,19 +273,19 @@ export default function SeminarPage() {
               <div style={{ display: "grid", gap: 12 }}>
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 4 }}>담당자 이름 *</label>
-                  <input className="input" value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} style={{ width: "100%" }} />
+                  <input className="form-control" value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} style={{ width: "100%" }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 4 }}>연락처 *</label>
-                  <input className="input" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} style={{ width: "100%" }} />
+                  <input className="form-control" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} style={{ width: "100%" }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 4 }}>참석 예정 인원 *</label>
-                  <input className="input" type="number" min={1} value={form.attendee_count} onChange={(e) => setForm({ ...form, attendee_count: Number(e.target.value) })} style={{ width: "100%" }} />
+                  <input className="form-control" type="number" min={1} value={form.attendee_count} onChange={(e) => setForm({ ...form, attendee_count: Number(e.target.value) })} style={{ width: "100%" }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 4 }}>요청사항 (선택)</label>
-                  <textarea className="input" value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} rows={3} style={{ width: "100%" }} />
+                  <textarea className="form-control" value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} rows={3} style={{ width: "100%" }} />
                 </div>
                 <button
                   className="btn btn-primary"
@@ -297,5 +301,7 @@ export default function SeminarPage() {
         </>
       )}
     </div>
+    <Footer />
+    </>
   );
 }

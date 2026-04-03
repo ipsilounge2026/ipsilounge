@@ -83,6 +83,7 @@ export default function MyBookingsPage() {
                     {b.slot_start_time?.slice(0, 5)} ~ {b.slot_end_time?.slice(0, 5)} | {b.type}
                   </div>
                   {b.memo && <div style={{ fontSize: 13, color: "var(--gray-500)" }}>메모: {b.memo}</div>}
+                  {b.cancel_reason && <div style={{ fontSize: 13, color: "#ef4444", marginTop: 4 }}>취소 사유: {b.cancel_reason}</div>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <StatusBadge status={b.status} />

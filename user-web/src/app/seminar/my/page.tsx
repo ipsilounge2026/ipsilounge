@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import {
   getMe,
   getMySeminarReservations,
@@ -112,9 +114,11 @@ export default function MySeminarPage() {
     }
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: "center" }}>로딩 중...</div>;
+  if (loading) return <><Navbar /><div style={{ padding: 40, textAlign: "center" }}>로딩 중...</div></>;
 
   return (
+    <>
+    <Navbar />
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 16px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>내 설명회 예약</h1>
@@ -244,5 +248,7 @@ export default function MySeminarPage() {
         </div>
       )}
     </div>
+    <Footer />
+    </>
   );
 }

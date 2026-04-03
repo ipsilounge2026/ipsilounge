@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
@@ -12,11 +11,11 @@ export default function LandingPage() {
   const loggedIn = isLoggedIn();
   const memberType = getMemberType();
 
-  useEffect(() => {
-    if (loggedIn && memberType === "branch_manager") {
-      router.replace("/seminar");
-    }
-  }, [loggedIn, memberType, router]);
+  // branch_manager는 렌더링하지 않고 바로 리다이렉트
+  if (loggedIn && memberType === "branch_manager") {
+    router.replace("/seminar");
+    return <><Navbar /><div style={{ padding: 40, textAlign: "center" }}>설명회 페이지로 이동 중...</div></>;
+  }
 
   return (
     <>

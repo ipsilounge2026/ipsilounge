@@ -312,6 +312,7 @@ async def list_bookings(
             type=booking.type,
             memo=booking.memo,
             status=booking.status,
+            cancel_reason=booking.cancel_reason,
             created_at=booking.created_at,
         )
         for booking, slot, user in rows
@@ -334,6 +335,8 @@ async def update_booking_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="예약을 찾을 수 없습니다")
 
     booking.status = data.status
+    if data.status == "cancelled" and data.cancel_reason:
+        booking.cancel_reason = data.cancel_reason
 
     if data.status == "confirmed":
         user_result = await db.execute(select(User).where(User.id == booking.user_id))
@@ -403,6 +406,7 @@ async def create_manual_booking(
         type=booking.type,
         memo=booking.memo,
         status=booking.status,
+        cancel_reason=booking.cancel_reason,
         created_at=booking.created_at,
     )
 

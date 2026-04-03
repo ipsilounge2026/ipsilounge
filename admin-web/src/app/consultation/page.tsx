@@ -48,6 +48,8 @@ export default function ConsultationPage() {
   const [manualType, setManualType] = useState("기타");
   const [manualMemo, setManualMemo] = useState("");
   const [manualLoading, setManualLoading] = useState(false);
+  const [cancelModal, setCancelModal] = useState<{ id: string; show: boolean }>({ id: "", show: false });
+  const [cancelReason, setCancelReason] = useState("");
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
@@ -61,14 +63,21 @@ export default function ConsultationPage() {
     } catch {}
   };
 
-  const handleStatusChange = async (bookingId: string, newStatus: string) => {
+  const handleStatusChange = async (bookingId: string, newStatus: string, reason?: string) => {
     try {
-      await updateBookingStatus(bookingId, newStatus);
+      await updateBookingStatus(bookingId, newStatus, reason);
       setMessage(`예약 상태가 변경되었습니다`);
       loadData();
     } catch (err: any) {
       setMessage(err.message);
     }
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!cancelReason.trim()) { alert("취소 사유를 입력해주세요"); return; }
+    await handleStatusChange(cancelModal.id, "cancelled", cancelReason);
+    setCancelModal({ id: "", show: false });
+    setCancelReason("");
   };
 
   const handleManualUserSearch = async (q: string) => {
@@ -178,7 +187,10 @@ export default function ConsultationPage() {
                   </td>
                   <td>{b.user_phone || "-"}</td>
                   <td>{b.type}</td>
-                  <td><StatusBadge status={b.status} /></td>
+                  <td>
+                    <StatusBadge status={b.status} />
+                    {b.cancel_reason && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>사유: {b.cancel_reason}</div>}
+                  </td>
                   <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {b.memo || "-"}
                   </td>
@@ -198,7 +210,7 @@ export default function ConsultationPage() {
                         >기록 작성</Link>
                       )}
                       {(b.status === "requested" || b.status === "confirmed") && (
-                        <button className="btn btn-danger btn-sm" onClick={() => handleStatusChange(b.id, "cancelled")}>취소</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => setCancelModal({ id: b.id, show: true })}>취소</button>
                       )}
                     </div>
                   </td>
@@ -304,6 +316,21 @@ export default function ConsultationPage() {
                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleManualBooking} disabled={manualLoading}>
                   {manualLoading ? "생성 중..." : "예약 생성"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 취소 사유 모달 */}
+        {cancelModal.show && (
+          <div className="modal-overlay" onClick={() => setCancelModal({ id: "", show: false })}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ padding: 24, maxWidth: 400 }}>
+              <h3 style={{ marginBottom: 12 }}>예약 취소</h3>
+              <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>취소 사유를 입력해주세요. 사용자에게 표시됩니다.</p>
+              <textarea className="form-control" placeholder="취소 사유를 입력하세요" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={3} style={{ width: "100%", marginBottom: 12 }} />
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="btn btn-outline" onClick={() => { setCancelModal({ id: "", show: false }); setCancelReason(""); }}>닫기</button>
+                <button className="btn btn-danger" onClick={handleCancelConfirm}>취소 확정</button>
               </div>
             </div>
           </div>

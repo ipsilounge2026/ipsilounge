@@ -40,6 +40,7 @@ class BookingResponse(BaseModel):
     type: str
     memo: str | None
     status: str
+    cancel_reason: str | None = None
     admin_name: str | None = None
     created_at: datetime
 
@@ -108,11 +109,13 @@ class AdminBookingResponse(BaseModel):
     type: str
     memo: str | None
     status: str
+    cancel_reason: str | None = None
     created_at: datetime
 
 
 class BookingStatusUpdate(BaseModel):
     status: str  # requested / confirmed / completed / cancelled
+    cancel_reason: str | None = None
 
 
 class ManualBookingRequest(BaseModel):

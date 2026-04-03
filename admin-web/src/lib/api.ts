@@ -122,10 +122,12 @@ export async function getBookings(statusFilter?: string, year?: number, month?: 
   return request(`/api/admin/consultation/bookings?${params}`);
 }
 
-export async function updateBookingStatus(id: string, status: string) {
+export async function updateBookingStatus(id: string, status: string, cancelReason?: string) {
+  const payload: any = { status };
+  if (cancelReason) payload.cancel_reason = cancelReason;
   return request(`/api/admin/consultation/bookings/${id}/status`, {
     method: "PUT",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(payload),
   });
 }
 

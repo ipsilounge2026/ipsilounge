@@ -193,6 +193,7 @@ async def book_consultation(
         type=booking.type,
         memo=booking.memo,
         status=booking.status,
+        cancel_reason=booking.cancel_reason,
         admin_name=admin_name,
         created_at=booking.created_at,
     )
@@ -263,6 +264,7 @@ async def get_my_bookings(
             type=booking.type,
             memo=booking.memo,
             status=booking.status,
+            cancel_reason=booking.cancel_reason,
             admin_name=admin_names.get(slot.admin_id),
             created_at=booking.created_at,
         )

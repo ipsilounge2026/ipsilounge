@@ -143,6 +143,13 @@ async def startup():
                 connection.execute(text("UPDATE users SET grade_year = EXTRACT(YEAR FROM CURRENT_DATE) WHERE grade IS NOT NULL AND grade_year IS NULL"))
                 logger.info("기존 사용자 grade_year 초기값 설정 완료")
 
+            # consultation_bookings 테이블에 cancel_reason 컬럼 추가
+            if inspector.has_table("consultation_bookings"):
+                booking_columns = [c["name"] for c in inspector.get_columns("consultation_bookings")]
+                if "cancel_reason" not in booking_columns:
+                    connection.execute(text("ALTER TABLE consultation_bookings ADD COLUMN cancel_reason TEXT"))
+                    logger.info("consultation_bookings 테이블에 cancel_reason 컬럼 추가 완료")
+
         await conn.run_sync(_check_and_migrate)
 
     logger.info("DB 테이블 초기화 완료")

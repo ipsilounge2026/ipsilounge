@@ -20,6 +20,7 @@ class ConsultationBooking(Base):
     type: Mapped[str] = mapped_column(String(50), nullable=False)  # 학생부분석 / 입시전략 / 학습상담 / 심리상담 / 기타
     memo: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="requested")  # requested / confirmed / completed / cancelled
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="consultation_bookings")
