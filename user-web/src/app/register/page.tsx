@@ -176,7 +176,7 @@ export default function RegisterPage() {
     }
   };
 
-  const update = (field: string, value: string) => setForm({ ...form, [field]: value });
+  const update = (field: string, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
 
   const memberTypes = [
     { key: "student", label: "학생" },
