@@ -77,7 +77,9 @@ export default function MyPage() {
             <>
               <div className="form-group">
                 <label>이름</label>
-                <input type="text" className="form-control" value={name} onChange={(e) => setName(e.target.value)} />
+                <input type="text" className="form-control" value={name} disabled
+                  style={{ background: "#F3F4F6", color: "#6B7280", cursor: "not-allowed" }} />
+                <span style={{ fontSize: 12, color: "#9CA3AF" }}>이름은 변경할 수 없습니다</span>
               </div>
               <div className="form-group">
                 <label>연락처</label>

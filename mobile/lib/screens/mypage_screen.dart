@@ -143,7 +143,16 @@ class _MypageScreenState extends State<MypageScreen> {
                 const SizedBox(height: 16),
                 if (_editing) ...[
                   _buildLabel('이름'),
-                  TextField(controller: _nameCtrl, decoration: const InputDecoration()),
+                  TextField(
+                    controller: _nameCtrl,
+                    enabled: false,
+                    decoration: const InputDecoration(
+                      filled: true,
+                      fillColor: Color(0xFFF3F4F6),
+                      helperText: '이름은 변경할 수 없습니다',
+                      helperStyle: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   _buildLabel('연락처'),
                   TextField(

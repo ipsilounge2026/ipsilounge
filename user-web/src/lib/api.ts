@@ -7,7 +7,9 @@ export function toFullUrl(url: string): string {
 }
 
 async function request(path: string, options: RequestInit = {}) {
-  const token = typeof window !== "undefined" ? localStorage.getItem("user_token") : null;
+  const token = typeof window !== "undefined"
+    ? (localStorage.getItem("user_token") || sessionStorage.getItem("user_token"))
+    : null;
 
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
@@ -26,6 +28,7 @@ async function request(path: string, options: RequestInit = {}) {
   if (res.status === 401) {
     if (typeof window !== "undefined") {
       localStorage.removeItem("user_token");
+      sessionStorage.removeItem("user_token");
       window.location.href = "/login";
     }
     throw new Error("인증이 만료되었습니다");
@@ -60,7 +63,12 @@ export async function login(email: string, password: string) {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
-  localStorage.setItem("user_token", data.access_token);
+  const keepLoggedIn = localStorage.getItem("keep_logged_in") === "true";
+  if (keepLoggedIn) {
+    localStorage.setItem("user_token", data.access_token);
+  } else {
+    sessionStorage.setItem("user_token", data.access_token);
+  }
   return data;
 }
 

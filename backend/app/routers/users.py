@@ -23,9 +23,7 @@ async def update_me(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 정보 수정"""
-    if data.name is not None:
-        user.name = data.name
+    """내 정보 수정 (이름은 변경 불가)"""
     if data.phone is not None:
         user.phone = data.phone
     await db.commit()

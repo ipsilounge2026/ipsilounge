@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -15,6 +16,25 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordCtrl = TextEditingController();
   String? _errorMessage;
   bool _obscure = true;
+  bool _rememberEmail = false;
+  bool _keepLoggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedEmail();
+  }
+
+  Future<void> _loadSavedEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('saved_email');
+    if (saved != null && saved.isNotEmpty) {
+      setState(() {
+        _emailCtrl.text = saved;
+        _rememberEmail = true;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -27,6 +47,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _errorMessage = null);
     try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberEmail) {
+        await prefs.setString('saved_email', _emailCtrl.text.trim());
+      } else {
+        await prefs.remove('saved_email');
+      }
+      await prefs.setBool('keep_logged_in', _keepLoggedIn);
       await context.read<AuthProvider>().login(_emailCtrl.text.trim(), _passwordCtrl.text);
       if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
@@ -121,7 +148,44 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        SizedBox(
+                          height: 20, width: 20,
+                          child: Checkbox(
+                            value: _rememberEmail,
+                            onChanged: (v) => setState(() => _rememberEmail = v!),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () => setState(() => _rememberEmail = !_rememberEmail),
+                          child: const Text('아이디 저장', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          height: 20, width: 20,
+                          child: Checkbox(
+                            value: _keepLoggedIn,
+                            onChanged: (v) => setState(() => _keepLoggedIn = v!),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () => setState(() => _keepLoggedIn = !_keepLoggedIn),
+                          child: const Text('로그인 유지', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => Navigator.pushNamed(context, '/forgot-password'),
+                          child: const Text('비밀번호 찾기', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
                       height: 48,

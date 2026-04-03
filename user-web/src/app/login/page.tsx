@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
@@ -12,6 +12,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rememberEmail, setRememberEmail] = useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("saved_email");
+    if (saved) {
+      setEmail(saved);
+      setRememberEmail(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,6 +29,16 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
+      if (rememberEmail) {
+        localStorage.setItem("saved_email", email);
+      } else {
+        localStorage.removeItem("saved_email");
+      }
+      if (keepLoggedIn) {
+        localStorage.setItem("keep_logged_in", "true");
+      } else {
+        localStorage.removeItem("keep_logged_in");
+      }
       router.push("/");
     } catch (err: any) {
       setError(err.message);
@@ -46,6 +66,22 @@ export default function LoginPage() {
             <label>비밀번호</label>
             <input type="password" className="form-control" value={password}
               onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호를 입력하세요" required />
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, fontSize: 13 }}>
+            <div style={{ display: "flex", gap: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", color: "var(--gray-600)" }}>
+                <input type="checkbox" checked={rememberEmail} onChange={(e) => setRememberEmail(e.target.checked)} />
+                아이디 저장
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", color: "var(--gray-600)" }}>
+                <input type="checkbox" checked={keepLoggedIn} onChange={(e) => setKeepLoggedIn(e.target.checked)} />
+                로그인 유지
+              </label>
+            </div>
+            <Link href="/forgot-password" style={{ color: "var(--gray-500)", textDecoration: "none" }}>
+              비밀번호 찾기
+            </Link>
           </div>
 
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
