@@ -22,6 +22,7 @@ ALL_MENUS = [
     {"key": "payments", "label": "결제 현황"},
     {"key": "admins", "label": "담당자 관리"},
     {"key": "seminar", "label": "설명회 관리"},
+    {"key": "notice", "label": "공지사항 관리"},
     {"key": "assignments", "label": "학생-담당자 매칭"},
     {"key": "settings", "label": "설정"},
 ]

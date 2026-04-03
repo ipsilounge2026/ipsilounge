@@ -363,3 +363,34 @@ export async function getSeminarMailLogs() {
 export async function getSeminarMailLogDetail(id: string) {
   return request(`/api/admin/seminar/mail/logs/${id}`);
 }
+
+// --- 공지사항 관리 ---
+export async function getNotices(page = 1, targetAudience?: string, isActive?: boolean) {
+  const params = new URLSearchParams({ page: String(page), size: "20" });
+  if (targetAudience) params.set("target_audience", targetAudience);
+  if (isActive !== undefined) params.set("is_active", String(isActive));
+  return request(`/api/admin/notices?${params}`);
+}
+
+export async function getNoticeDetail(id: string) {
+  return request(`/api/admin/notices/${id}`);
+}
+
+export async function createNotice(data: {
+  title: string;
+  content: string;
+  target_audience: string;
+  is_pinned: boolean;
+  is_active: boolean;
+  send_push: boolean;
+}) {
+  return request("/api/admin/notices", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateNotice(id: string, data: Record<string, any>) {
+  return request(`/api/admin/notices/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function deleteNotice(id: string) {
+  return request(`/api/admin/notices/${id}`, { method: "DELETE" });
+}

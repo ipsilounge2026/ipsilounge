@@ -244,3 +244,8 @@ export async function cancelSeminarReservation(id: string, cancelReason: string)
     body: JSON.stringify({ cancel_reason: cancelReason }),
   });
 }
+
+// --- 공지사항 ---
+export async function getActiveNotices() {
+  return request("/api/notices/active");
+}

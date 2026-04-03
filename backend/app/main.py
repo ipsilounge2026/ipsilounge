@@ -26,6 +26,8 @@ from app.routers import (
     schools,
     seminar,
     admin_seminar,
+    admin_notice,
+    notice,
 )
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 from app.utils.security import hash_password
@@ -77,6 +79,8 @@ app.include_router(admission_cases.router)
 app.include_router(schools.router)
 app.include_router(seminar.router)
 app.include_router(admin_seminar.router)
+app.include_router(admin_notice.router)
+app.include_router(notice.router)
 
 
 @app.on_event("startup")
@@ -98,6 +102,7 @@ async def startup():
         seminar_schedule,
         seminar_reservation,
         seminar_mail_log,
+        notice as notice_model,
     )
 
     async with engine.begin() as conn:

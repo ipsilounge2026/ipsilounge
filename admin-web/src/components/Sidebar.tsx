@@ -13,6 +13,7 @@ import {
   FiUserCheck,
   FiLink,
   FiMic,
+  FiBell,
 } from "react-icons/fi";
 
 const allMenuItems = [
@@ -23,6 +24,7 @@ const allMenuItems = [
   { key: "payments", href: "/payments", label: "결제 현황", icon: FiDollarSign },
   { key: "admins", href: "/admins", label: "담당자 관리", icon: FiUserCheck },
   { key: "seminar", href: "/seminar", label: "설명회 관리", icon: FiMic },
+  { key: "notice", href: "/notice", label: "공지사항 관리", icon: FiBell },
   { key: "assignments", href: "/assignments", label: "학생-담당자 매칭", icon: FiLink },
   { key: "settings", href: "/settings", label: "설정", icon: FiSettings },
 ];

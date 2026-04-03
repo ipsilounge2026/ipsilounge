@@ -23,6 +23,7 @@ class Admin(Base):
 
     consultation_notes = relationship("ConsultationNote", back_populates="admin")
     assigned_students = relationship("AdminStudentAssignment", back_populates="admin")
+    notices = relationship("Notice", back_populates="admin")
 
 
 class AdminStudentAssignment(Base):
