@@ -22,13 +22,38 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   bool _isLoading = false;
   String? _message;
 
+  // 자격 확인
+  bool _checkingEligibility = true;
+  bool _eligible = false;
+  String? _eligibilityReason;
+
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _year = now.year;
     _month = now.month;
-    _loadCounselors();
+    _checkEligibility();
+  }
+
+  Future<void> _checkEligibility() async {
+    try {
+      final result = await ConsultationService.checkEligible();
+      setState(() {
+        _eligible = result['eligible'] == true;
+        _eligibilityReason = result['reason'];
+        _checkingEligibility = false;
+      });
+      if (_eligible) {
+        _loadCounselors();
+      }
+    } catch (_) {
+      setState(() {
+        _eligible = false;
+        _eligibilityReason = '자격 확인에 실패했습니다.';
+        _checkingEligibility = false;
+      });
+    }
   }
 
   @override
@@ -132,7 +157,18 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
           ),
         ],
       ),
-      body: ListView(
+      body: _checkingEligibility
+          ? const Center(child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('상담 예약 자격을 확인하고 있습니다...', style: TextStyle(color: Color(0xFF6B7280))),
+              ],
+            ))
+          : !_eligible
+              ? _buildEligibilityBlock()
+              : ListView(
         padding: const EdgeInsets.all(16),
         children: [
           if (_message != null)
@@ -463,6 +499,70 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
             ],
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildEligibilityBlock() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(height: 40),
+            const Icon(Icons.lock_outline, size: 48, color: Color(0xFF9CA3AF)),
+            const SizedBox(height: 16),
+            const Text('상담 예약 조건',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Text(
+                _eligibilityReason ?? '',
+                style: const TextStyle(fontSize: 14, color: Color(0xFF92400E), height: 1.6),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '상담 라운지는 학생부 라운지 또는 학종 라운지를 신청하고\n학생부 파일 업로드를 완료한 후 이용 가능합니다.\n학생부 분석에 최소 7일이 소요되므로,\n업로드 완료일 기준 7일 이후부터 상담 예약이 가능합니다.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.6),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pushNamed(context, '/analysis/apply', arguments: '학생부라운지'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3B82F6),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('학생부 라운지 신청', style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pushNamed(context, '/analysis/apply', arguments: '학종라운지'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF22C55E),
+                      side: const BorderSide(color: Color(0xFF22C55E)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('학종 라운지 신청', style: TextStyle(fontSize: 13)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

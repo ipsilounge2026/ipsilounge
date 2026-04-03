@@ -2,6 +2,10 @@ import 'api_service.dart';
 import '../models/consultation.dart';
 
 class ConsultationService {
+  static Future<Map<String, dynamic>> checkEligible() async {
+    return await ApiService.get('/analysis/check-consultation-eligible');
+  }
+
   static Future<List<Counselor>> getCounselors() async {
     final res = await ApiService.get('/consultation/counselors');
     final items = res as List;

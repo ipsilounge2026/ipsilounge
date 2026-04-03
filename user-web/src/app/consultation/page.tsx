@@ -158,10 +158,16 @@ export default function ConsultationPage() {
               학생부 파일 업로드를 완료한 후 이용 가능합니다.<br />
               학생부 분석에 최소 7일이 소요되므로, 업로드 완료일 기준 7일 이후부터 상담 예약이 가능합니다.
             </p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <Link href="/analysis/apply?type=학생부라운지" className="btn btn-primary">학생부 라운지 신청</Link>
-              <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline">학종 라운지 신청</Link>
-            </div>
+            {eligibility.reason?.includes("업로드를 완료") ? (
+              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                <Link href="/analysis" className="btn btn-primary">내 분석 목록에서 파일 업로드</Link>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                <Link href="/analysis/apply?type=학생부라운지" className="btn btn-primary">학생부 라운지 신청</Link>
+                <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline">학종 라운지 신청</Link>
+              </div>
+            )}
           </div>
         )}
 

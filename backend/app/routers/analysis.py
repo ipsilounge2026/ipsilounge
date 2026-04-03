@@ -137,6 +137,22 @@ async def check_consultation_eligible(
     orders = result.scalars().all()
 
     if not orders:
+        # 신청만 하고 파일 미업로드인지 확인
+        applied_result = await db.execute(
+            select(AnalysisOrder).where(
+                AnalysisOrder.user_id == user.id,
+                AnalysisOrder.status == "applied",
+            )
+        )
+        applied_orders = applied_result.scalars().all()
+
+        if applied_orders:
+            return {
+                "eligible": False,
+                "reason": "학생부 파일 업로드를 완료해주세요. 신청은 완료되었으나 학생부 파일이 아직 업로드되지 않았습니다.",
+                "earliest_date": None,
+            }
+
         return {
             "eligible": False,
             "reason": "학생부 라운지 또는 학종 라운지를 먼저 신청하고 학생부를 업로드해주세요.",
