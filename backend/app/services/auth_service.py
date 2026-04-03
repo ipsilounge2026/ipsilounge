@@ -22,6 +22,8 @@ async def register_user(data: UserRegister, db: AsyncSession) -> User:
     # 지점 담당자는 관리자 승인 전까지 비활성 상태
     is_active = data.member_type != "branch_manager"
 
+    from datetime import date as date_type
+
     user = User(
         email=data.email,
         password_hash=hash_password(data.password),
@@ -33,6 +35,7 @@ async def register_user(data: UserRegister, db: AsyncSession) -> User:
         birth_date=data.birth_date,
         school_name=data.school_name,
         grade=data.grade,
+        grade_year=date_type.today().year if data.grade is not None else None,
         branch_name=data.branch_name,
         is_active=is_active,
     )

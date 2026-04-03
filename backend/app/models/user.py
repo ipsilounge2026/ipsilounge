@@ -22,6 +22,7 @@ class User(Base):
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     school_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     grade: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    grade_year: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 학년 설정 연도 (자동 진급 계산용)
     branch_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

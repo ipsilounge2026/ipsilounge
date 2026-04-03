@@ -171,6 +171,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     // 추가 검증
+    if (_memberType == 'student' || _memberType == 'parent') {
+      if (_birthDate == null) {
+        setState(() => _errorMessage = '생년월일을 입력해주세요');
+        return;
+      }
+      if (_schoolCtrl.text.trim().isEmpty) {
+        setState(() => _errorMessage = '재학 학교를 입력해주세요');
+        return;
+      }
+      if (_grade == null) {
+        setState(() => _errorMessage = '학년을 선택해주세요');
+        return;
+      }
+    }
     if (_memberType == 'parent') {
       if (_studentNameCtrl.text.trim().isEmpty) {
         setState(() => _errorMessage = '자녀 이름을 입력해주세요');
@@ -330,7 +344,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: 12),
 
                         // 본인 생년월일
-                        _buildLabel('생년월일 (선택)'),
+                        _buildLabel('생년월일'),
                         GestureDetector(
                           onTap: () => _pickDate(isStudentBirth: false),
                           child: Container(
@@ -392,7 +406,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ],
 
                         // 학교 검색
-                        _buildLabel(_memberType == 'parent' ? '자녀 재학 학교 (선택)' : '재학 학교 (선택)'),
+                        _buildLabel(_memberType == 'parent' ? '자녀 재학 학교' : '재학 학교'),
                         CompositedTransformTarget(
                           link: _schoolLayerLink,
                           child: TextFormField(
@@ -413,7 +427,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: 12),
 
                         // 학년
-                        _buildLabel(_memberType == 'parent' ? '자녀 학년 (선택)' : '학년 (선택)'),
+                        _buildLabel(_memberType == 'parent' ? '자녀 학년' : '학년'),
                         DropdownButtonFormField<int>(
                           value: _grade,
                           items: const [

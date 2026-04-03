@@ -123,6 +123,9 @@ export default function RegisterPage() {
     // member_type별 검증
     if (form.member_type === "student" || form.member_type === "parent") {
       if (!form.phone) { setError("연락처를 입력해주세요"); return; }
+      if (!form.birth_date) { setError("생년월일을 입력해주세요"); return; }
+      if (!form.school_name) { setError("재학 학교를 입력해주세요"); return; }
+      if (!form.grade) { setError("학년을 선택해주세요"); return; }
     }
     if (form.member_type === "parent") {
       if (!form.student_name) { setError("자녀 이름을 입력해주세요"); return; }
@@ -260,9 +263,9 @@ export default function RegisterPage() {
               </p>
 
               <div className="form-group" style={{ marginBottom: 12 }}>
-                <label>생년월일 (선택)</label>
+                <label>생년월일</label>
                 <input type="date" className="form-control" value={form.birth_date}
-                  onChange={(e) => update("birth_date", e.target.value)} />
+                  onChange={(e) => update("birth_date", e.target.value)} required />
               </div>
 
               {/* 학부모: 자녀 정보 */}
@@ -283,7 +286,7 @@ export default function RegisterPage() {
 
               {/* 학교 검색 */}
               <div className="form-group" style={{ marginBottom: 12, position: "relative" }} ref={schoolDropdownRef}>
-                <label>{form.member_type === "parent" ? "자녀 재학 학교 (선택)" : "재학 학교 (선택)"}</label>
+                <label>{form.member_type === "parent" ? "자녀 재학 학교" : "재학 학교"}</label>
                 <input
                   type="text"
                   className="form-control"
@@ -336,7 +339,7 @@ export default function RegisterPage() {
 
               {/* 학년 */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>{form.member_type === "parent" ? "자녀 학년 (선택)" : "학년 (선택)"}</label>
+                <label>{form.member_type === "parent" ? "자녀 학년" : "학년"}</label>
                 <select className="form-control" value={form.grade}
                   onChange={(e) => update("grade", e.target.value)}>
                   <option value="">선택하세요</option>

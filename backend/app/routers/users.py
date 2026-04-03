@@ -35,7 +35,9 @@ async def update_me(
     if data.school_name is not None:
         user.school_name = data.school_name
     if data.grade is not None:
+        from datetime import date as date_type
         user.grade = data.grade
+        user.grade_year = date_type.today().year
     if data.branch_name is not None:
         user.branch_name = data.branch_name
     await db.commit()

@@ -129,6 +129,12 @@ async def startup():
             if "branch_name" not in user_columns:
                 connection.execute(text("ALTER TABLE users ADD COLUMN branch_name VARCHAR(100)"))
                 logger.info("users 테이블에 branch_name 컬럼 추가 완료")
+            if "grade_year" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN grade_year INTEGER"))
+                logger.info("users 테이블에 grade_year 컬럼 추가 완료")
+                # 기존 데이터: grade가 있는 사용자에게 현재 연도 설정
+                connection.execute(text("UPDATE users SET grade_year = EXTRACT(YEAR FROM CURRENT_DATE) WHERE grade IS NOT NULL AND grade_year IS NULL"))
+                logger.info("기존 사용자 grade_year 초기값 설정 완료")
 
         await conn.run_sync(_check_and_migrate)
 
