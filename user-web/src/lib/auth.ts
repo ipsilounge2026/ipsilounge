@@ -27,6 +27,17 @@ export function getToken(): string | null {
   return localStorage.getItem("user_token") || sessionStorage.getItem("user_token");
 }
 
+export function getMemberType(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.member_type || null;
+  } catch {
+    return null;
+  }
+}
+
 export function logout() {
   localStorage.removeItem("user_token");
   sessionStorage.removeItem("user_token");

@@ -266,3 +266,98 @@ export async function updateConsultationNote(id: string, data: Record<string, an
 export async function deleteConsultationNote(id: string) {
   return request(`/api/admin/consultation-notes/${id}`, { method: "DELETE" });
 }
+
+// --- 설명회 관리 ---
+export async function getSeminarDashboard(scheduleId?: string) {
+  const params = new URLSearchParams();
+  if (scheduleId) params.set("schedule_id", scheduleId);
+  return request(`/api/admin/seminar/dashboard?${params}`);
+}
+
+export async function getSeminarSchedules() {
+  return request("/api/admin/seminar/schedules");
+}
+
+export async function getSeminarSchedule(id: string) {
+  return request(`/api/admin/seminar/schedules/${id}`);
+}
+
+export async function createSeminarSchedule(data: {
+  title: string;
+  description?: string;
+  start_date: string;
+  end_date: string;
+  blocked_dates?: string[];
+  morning_max: number;
+  afternoon_max: number;
+  evening_max: number;
+  deadline_at: string;
+  is_visible: boolean;
+}) {
+  return request("/api/admin/seminar/schedules", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateSeminarSchedule(id: string, data: Record<string, any>) {
+  return request(`/api/admin/seminar/schedules/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function deleteSeminarSchedule(id: string) {
+  return request(`/api/admin/seminar/schedules/${id}`, { method: "DELETE" });
+}
+
+export async function toggleSeminarVisibility(id: string) {
+  return request(`/api/admin/seminar/schedules/${id}/visibility`, { method: "PUT" });
+}
+
+export async function getSeminarReservations(scheduleId?: string, statusFilter?: string, branchName?: string) {
+  const params = new URLSearchParams();
+  if (scheduleId) params.set("schedule_id", scheduleId);
+  if (statusFilter) params.set("status_filter", statusFilter);
+  if (branchName) params.set("branch_name", branchName);
+  return request(`/api/admin/seminar/reservations?${params}`);
+}
+
+export async function approveSeminarReservation(id: string) {
+  return request(`/api/admin/seminar/reservations/${id}/approve`, { method: "PUT" });
+}
+
+export async function cancelSeminarReservation(id: string, cancelReason: string) {
+  return request(`/api/admin/seminar/reservations/${id}/cancel`, {
+    method: "PUT",
+    body: JSON.stringify({ cancel_reason: cancelReason }),
+  });
+}
+
+export async function updateSeminarActualAttendee(id: string, count: number) {
+  return request(`/api/admin/seminar/reservations/${id}/actual-attendee`, {
+    method: "PUT",
+    body: JSON.stringify({ actual_attendee_count: count }),
+  });
+}
+
+export async function getSeminarStatsByBranch(scheduleId?: string) {
+  const params = new URLSearchParams();
+  if (scheduleId) params.set("schedule_id", scheduleId);
+  return request(`/api/admin/seminar/stats/by-branch?${params}`);
+}
+
+export async function getSeminarStatsBySchedule() {
+  return request("/api/admin/seminar/stats/by-schedule");
+}
+
+export async function sendSeminarMail(data: {
+  schedule_ids?: string[];
+  branch_names?: string[];
+  subject: string;
+  body: string;
+}) {
+  return request("/api/admin/seminar/mail/send", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function getSeminarMailLogs() {
+  return request("/api/admin/seminar/mail/logs");
+}
+
+export async function getSeminarMailLogDetail(id: string) {
+  return request(`/api/admin/seminar/mail/logs/${id}`);
+}

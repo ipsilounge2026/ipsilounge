@@ -200,3 +200,47 @@ export async function confirmTossPayment(data: {
 export async function getMyPayments() {
   return request("/api/payment/my");
 }
+
+// --- 설명회 (지점 담당자용) ---
+export async function getSeminarSchedules() {
+  return request("/api/seminar/schedules");
+}
+
+export async function getSeminarAvailability(scheduleId: string) {
+  return request(`/api/seminar/schedules/${scheduleId}/availability`);
+}
+
+export async function createSeminarReservation(data: {
+  schedule_id: string;
+  reservation_date: string;
+  time_slot: string;
+  contact_name: string;
+  contact_phone: string;
+  attendee_count: number;
+  memo?: string;
+}) {
+  return request("/api/seminar/reserve", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function getMySeminarReservations() {
+  return request("/api/seminar/my");
+}
+
+export async function modifySeminarReservation(id: string, data: {
+  reservation_date?: string;
+  time_slot?: string;
+  contact_name?: string;
+  contact_phone?: string;
+  attendee_count?: number;
+  memo?: string;
+  modify_reason: string;
+}) {
+  return request(`/api/seminar/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function cancelSeminarReservation(id: string, cancelReason: string) {
+  return request(`/api/seminar/${id}/cancel`, {
+    method: "PUT",
+    body: JSON.stringify({ cancel_reason: cancelReason }),
+  });
+}

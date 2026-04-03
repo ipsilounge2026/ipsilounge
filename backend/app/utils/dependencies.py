@@ -53,6 +53,14 @@ async def get_current_admin(
     return admin
 
 
+async def get_current_branch_manager(
+    user: User = Depends(get_current_user),
+) -> User:
+    if user.member_type != "branch_manager":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="지점 담당자만 접근 가능합니다")
+    return user
+
+
 async def get_current_super_admin(
     current_admin: Admin = Depends(get_current_admin),
 ) -> Admin:

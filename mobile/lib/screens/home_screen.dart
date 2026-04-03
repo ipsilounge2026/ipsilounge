@@ -7,6 +7,7 @@ import '../widgets/status_badge.dart';
 import 'analysis_list_screen.dart';
 import 'consultation_list_screen.dart';
 import 'mypage_screen.dart';
+import 'seminar_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -166,6 +167,25 @@ class _HomeTab extends StatelessWidget {
               ),
             ],
           ),
+          // 설명회 메뉴 (지점 담당자만)
+          if (user?.memberType == 'branch_manager') ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _MenuCard(
+                    icon: Icons.mic_outlined,
+                    label: '설명회 예약',
+                    color: const Color(0xFFEDE9FE),
+                    iconColor: const Color(0xFF8B5CF6),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SeminarScreen())),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(child: SizedBox()),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [

@@ -34,3 +34,4 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user")
     reset_tokens = relationship("PasswordResetToken", back_populates="user")
     consultation_notes = relationship("ConsultationNote", back_populates="user")
+    seminar_reservations = relationship("SeminarReservation", back_populates="user")

@@ -3,12 +3,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { isLoggedIn, logout } from "@/lib/auth";
+import { isLoggedIn, logout, getMemberType } from "@/lib/auth";
 
 function NavbarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const loggedIn = isLoggedIn();
+  const memberType = getMemberType();
   const currentType = searchParams.get("type") || "";
 
   return (
@@ -21,6 +22,9 @@ function NavbarInner() {
               <Link href="/analysis?type=학생부라운지" className={pathname.startsWith("/analysis") && currentType === "학생부라운지" ? "active" : ""}>학생부 라운지</Link>
               <Link href="/analysis?type=학종라운지" className={pathname.startsWith("/analysis") && currentType === "학종라운지" ? "active" : ""}>학종 라운지</Link>
               <Link href="/consultation" className={pathname.startsWith("/consultation") ? "active" : ""}>상담 라운지</Link>
+              {memberType === "branch_manager" && (
+                <Link href="/seminar" className={pathname.startsWith("/seminar") ? "active" : ""}>설명회</Link>
+              )}
               <Link href="/mypage" className={pathname.startsWith("/mypage") ? "active" : ""}>마이페이지</Link>
               <button onClick={logout}>로그아웃</button>
             </>

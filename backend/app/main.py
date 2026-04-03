@@ -24,6 +24,8 @@ from app.routers import (
     users,
     admission_cases,
     schools,
+    seminar,
+    admin_seminar,
 )
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 from app.utils.security import hash_password
@@ -73,6 +75,8 @@ app.include_router(admin_admission_cases.router)
 app.include_router(consultation_notes.router)
 app.include_router(admission_cases.router)
 app.include_router(schools.router)
+app.include_router(seminar.router)
+app.include_router(admin_seminar.router)
 
 
 @app.on_event("startup")
@@ -91,6 +95,9 @@ async def startup():
         admission_case,
         interview_question,
         analysis_share,
+        seminar_schedule,
+        seminar_reservation,
+        seminar_mail_log,
     )
 
     async with engine.begin() as conn:
