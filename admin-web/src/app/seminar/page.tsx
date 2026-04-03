@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Sidebar from "@/components/Sidebar";
+import { isLoggedIn, hasMenuAccess, getDefaultRoute } from "@/lib/auth";
 import {
   getSeminarDashboard,
   getSeminarReservations,
@@ -34,6 +37,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function SeminarPage() {
+  const router = useRouter();
   const [dashboard, setDashboard] = useState<any>(null);
   const [reservations, setReservations] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -65,7 +69,11 @@ export default function SeminarPage() {
     }
   };
 
-  useEffect(() => { load(); }, [filter.schedule_id, filter.status]);
+  useEffect(() => {
+    if (!isLoggedIn()) { router.push("/login"); return; }
+    if (!hasMenuAccess("seminar")) { router.push(getDefaultRoute()); return; }
+    load();
+  }, [filter.schedule_id, filter.status]);
 
   const handleApprove = async (id: string) => {
     if (!confirm("이 예약을 승인하시겠습니까?")) return;
@@ -102,7 +110,9 @@ export default function SeminarPage() {
   const handleSearch = () => { load(); };
 
   return (
-    <div>
+    <div className="admin-layout">
+      <Sidebar />
+      <main className="admin-main">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 className="page-title">설명회 관리</h1>
         <div style={{ display: "flex", gap: 8 }}>
@@ -288,6 +298,7 @@ export default function SeminarPage() {
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }

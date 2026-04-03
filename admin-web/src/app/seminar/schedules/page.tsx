@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Sidebar from "@/components/Sidebar";
+import { isLoggedIn, hasMenuAccess, getDefaultRoute } from "@/lib/auth";
 import {
   getSeminarSchedules,
   createSeminarSchedule,
@@ -11,6 +14,7 @@ import {
 import Link from "next/link";
 
 export default function SeminarSchedulesPage() {
+  const router = useRouter();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -36,7 +40,11 @@ export default function SeminarSchedulesPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!isLoggedIn()) { router.push("/login"); return; }
+    if (!hasMenuAccess("seminar")) { router.push(getDefaultRoute()); return; }
+    load();
+  }, []);
 
   const resetForm = () => {
     setForm({ title: "", description: "", start_date: "", end_date: "", blocked_dates: [], morning_max: 0, afternoon_max: 0, evening_max: 0, deadline_at: "", is_visible: true });
@@ -126,7 +134,9 @@ export default function SeminarSchedulesPage() {
   };
 
   return (
-    <div>
+    <div className="admin-layout">
+      <Sidebar />
+      <main className="admin-main">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 className="page-title">설명회 일정 관리</h1>
         <div style={{ display: "flex", gap: 8 }}>
@@ -261,6 +271,7 @@ export default function SeminarSchedulesPage() {
           </tbody>
         </table>
       </div>
+      </main>
     </div>
   );
 }

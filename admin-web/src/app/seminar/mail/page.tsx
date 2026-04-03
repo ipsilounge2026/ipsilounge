@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Sidebar from "@/components/Sidebar";
+import { isLoggedIn, hasMenuAccess, getDefaultRoute } from "@/lib/auth";
 import {
   getSeminarSchedules,
   getSeminarReservations,
@@ -11,6 +14,7 @@ import {
 import Link from "next/link";
 
 export default function SeminarMailPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"send" | "history">("send");
   const [schedules, setSchedules] = useState<any[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
@@ -40,7 +44,11 @@ export default function SeminarMailPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!isLoggedIn()) { router.push("/login"); return; }
+    if (!hasMenuAccess("seminar")) { router.push(getDefaultRoute()); return; }
+    load();
+  }, []);
 
   const toggleSchedule = (id: string) => {
     setSelectedSchedules((prev) =>
@@ -99,7 +107,9 @@ export default function SeminarMailPage() {
   };
 
   return (
-    <div>
+    <div className="admin-layout">
+      <Sidebar />
+      <main className="admin-main">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 className="page-title">설명회 메일 발송</h1>
         <Link href="/seminar" className="btn btn-outline" style={{ textDecoration: "none" }}>목록으로</Link>
@@ -227,6 +237,7 @@ export default function SeminarMailPage() {
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }
