@@ -32,6 +32,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   List<Map<String, dynamic>> _schoolResults = [];
   bool _showSchoolDropdown = false;
   bool _searchingSchool = false;
+  bool _schoolSelected = false; // 검색 결과에서 선택했는지 여부
+  String _selectedSchoolName = ''; // 선택된 학교명 (실제 전송값)
   Timer? _searchTimer;
   final _schoolFocusNode = FocusNode();
   final LayerLink _schoolLayerLink = LayerLink();
@@ -41,6 +43,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void initState() {
     super.initState();
     _schoolCtrl.addListener(_onSchoolTextChanged);
+    _schoolFocusNode.addListener(_onSchoolFocusChanged);
+  }
+
+  void _onSchoolFocusChanged() {
+    if (!_schoolFocusNode.hasFocus) {
+      // 포커스를 잃었을 때 검색 결과에서 선택하지 않았으면 입력값 초기화
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (!_schoolSelected) {
+          _schoolCtrl.removeListener(_onSchoolTextChanged);
+          _schoolCtrl.text = '';
+          _schoolCtrl.addListener(_onSchoolTextChanged);
+        }
+        _removeOverlay();
+      });
+    }
   }
 
   @override
@@ -62,6 +79,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _onSchoolTextChanged() {
     final query = _schoolCtrl.text.trim();
     _searchTimer?.cancel();
+    // 타이핑 중에는 선택 상태 해제
+    if (_schoolSelected && _schoolCtrl.text != _selectedSchoolName) {
+      setState(() {
+        _schoolSelected = false;
+        _selectedSchoolName = '';
+      });
+    }
     if (query.length < 2) {
       _removeOverlay();
       return;
@@ -114,8 +138,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   final school = _schoolResults[index];
                   return InkWell(
                     onTap: () {
-                      _schoolCtrl.text = school['school_name'] ?? '';
+                      final name = school['school_name'] ?? '';
+                      _schoolCtrl.removeListener(_onSchoolTextChanged);
+                      _schoolCtrl.text = name;
+                      _schoolCtrl.addListener(_onSchoolTextChanged);
+                      setState(() {
+                        _schoolSelected = true;
+                        _selectedSchoolName = name;
+                      });
                       _removeOverlay();
+                      _schoolFocusNode.unfocus();
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -176,8 +208,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() => _errorMessage = '생년월일을 입력해주세요');
         return;
       }
-      if (_schoolCtrl.text.trim().isEmpty) {
-        setState(() => _errorMessage = '재학 학교를 입력해주세요');
+      if (!_schoolSelected || _selectedSchoolName.isEmpty) {
+        setState(() => _errorMessage = '재학 학교를 검색하여 선택해주세요');
         return;
       }
       if (_grade == null) {
@@ -209,7 +241,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         phone: _phoneCtrl.text.trim(),
         memberType: _memberType,
         birthDate: _birthDate,
-        schoolName: _schoolCtrl.text.trim().isNotEmpty ? _schoolCtrl.text.trim() : null,
+        schoolName: _selectedSchoolName.isNotEmpty ? _selectedSchoolName : null,
         grade: _grade,
         studentName: _memberType == 'parent' ? _studentNameCtrl.text.trim() : null,
         studentBirth: _memberType == 'parent' ? _studentBirth : null,
@@ -413,7 +445,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _schoolCtrl,
                             focusNode: _schoolFocusNode,
                             decoration: InputDecoration(
-                              hintText: '학교명을 입력하세요 (2글자 이상)',
+                              hintText: '학교명 검색 후 선택 (2글자 이상)',
                               suffixIcon: _searchingSchool
                                   ? const Padding(
                                       padding: EdgeInsets.all(12),

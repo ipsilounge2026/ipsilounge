@@ -41,17 +41,25 @@ export default function RegisterPage() {
 
   // School search
   const [schoolQuery, setSchoolQuery] = useState("");
+  const [schoolSelected, setSchoolSelected] = useState(false); // 검색 결과에서 선택했는지 여부
   const [schoolResults, setSchoolResults] = useState<SchoolResult[]>([]);
   const [showSchoolDropdown, setShowSchoolDropdown] = useState(false);
   const [searchingSchool, setSearchingSchool] = useState(false);
   const schoolDropdownRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Click outside to close dropdown
+  // Click outside to close dropdown — 선택 안 했으면 입력값 초기화
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (schoolDropdownRef.current && !schoolDropdownRef.current.contains(e.target as Node)) {
         setShowSchoolDropdown(false);
+        setSchoolSelected((wasSelected) => {
+          if (!wasSelected) {
+            // 검색만 하고 선택하지 않은 경우: 검색어 지우고 기존 선택값 유지
+            setSchoolQuery("");
+          }
+          return wasSelected;
+        });
       }
     };
     document.addEventListener("mousedown", handleClick);
@@ -60,7 +68,8 @@ export default function RegisterPage() {
 
   const handleSchoolSearch = useCallback((value: string) => {
     setSchoolQuery(value);
-    update("school_name", value);
+    setSchoolSelected(false);
+    // 타이핑 중에는 form.school_name을 업데이트하지 않음 (선택해야만 저장)
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (value.length < 2) {
       setSchoolResults([]);
@@ -84,6 +93,7 @@ export default function RegisterPage() {
   const selectSchool = (school: SchoolResult) => {
     update("school_name", school.school_name);
     setSchoolQuery(school.school_name);
+    setSchoolSelected(true);
     setShowSchoolDropdown(false);
   };
 
@@ -124,7 +134,7 @@ export default function RegisterPage() {
     if (form.member_type === "student" || form.member_type === "parent") {
       if (!form.phone) { setError("연락처를 입력해주세요"); return; }
       if (!form.birth_date) { setError("생년월일을 입력해주세요"); return; }
-      if (!form.school_name) { setError("재학 학교를 입력해주세요"); return; }
+      if (!form.school_name || !schoolSelected) { setError("재학 학교를 검색하여 선택해주세요"); return; }
       if (!form.grade) { setError("학년을 선택해주세요"); return; }
     }
     if (form.member_type === "parent") {
@@ -290,8 +300,15 @@ export default function RegisterPage() {
                 <input
                   type="text"
                   className="form-control"
-                  value={schoolQuery || form.school_name}
+                  value={schoolSelected ? form.school_name : schoolQuery}
                   onChange={(e) => handleSchoolSearch(e.target.value)}
+                  onFocus={() => {
+                    // 포커스 시: 이미 선택된 학교가 있으면 검색어로 전환하여 재검색 가능
+                    if (schoolSelected && form.school_name) {
+                      setSchoolQuery(form.school_name);
+                      setSchoolSelected(false);
+                    }
+                  }}
                   placeholder="학교명을 입력하세요 (2글자 이상)"
                   autoComplete="off"
                 />
