@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getMe, updateMe, getNotifications } from "@/lib/api";
-import { isLoggedIn } from "@/lib/auth";
+import { getMe, updateMe, getNotifications, getMySeminarReservations } from "@/lib/api";
+import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 interface User {
   id: string;
@@ -24,19 +24,29 @@ interface NotificationItem {
   created_at: string;
 }
 
+const TIME_SLOT_LABELS: Record<string, string> = { morning: "오전", afternoon: "오후", evening: "저녁" };
+const STATUS_LABELS: Record<string, string> = { pending: "승인대기", modified: "수정대기", approved: "승인완료", cancelled: "취소" };
+const STATUS_COLORS: Record<string, string> = { pending: "#f59e0b", modified: "#8b5cf6", approved: "#10b981", cancelled: "#9ca3af" };
+
 export default function MyPage() {
   const router = useRouter();
+  const memberType = getMemberType();
   const [user, setUser] = useState<User | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [seminarReservations, setSeminarReservations] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
     getMe().then((u) => { setUser(u); setName(u.name); setPhone(u.phone || ""); }).catch(() => {});
-    getNotifications().then((res) => setNotifications(res.items)).catch(() => {});
+    if (memberType === "branch_manager") {
+      getMySeminarReservations().then((res) => setSeminarReservations(res.items || [])).catch(() => {});
+    } else {
+      getNotifications().then((res) => setNotifications(res.items)).catch(() => {});
+    }
   }, []);
 
   const handleSave = async () => {
@@ -112,55 +122,93 @@ export default function MyPage() {
           )}
         </div>
 
-        {/* 바로가기 메뉴 */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h2 style={{ fontSize: 16, marginBottom: 12 }}>빠른 메뉴</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {[
-              { href: "/consultation/notes", icon: "📋", label: "상담 기록 보기" },
-              { href: "/consultation/my", icon: "📅", label: "예약 현황" },
-              { href: "/analysis", icon: "📊", label: "분석 내역" },
-              { href: "/admission-cases", icon: "🏆", label: "합격 사례" },
-            ].map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "12px 14px", borderRadius: 10,
-                  border: "1px solid var(--gray-200)",
-                  fontSize: 14, color: "var(--gray-700)",
-                  textDecoration: "none", fontWeight: 500,
-                }}
-              >
-                <span style={{ fontSize: 18 }}>{item.icon}</span>
-                {item.label}
-              </a>
-            ))}
-          </div>
-        </div>
-
-        {/* 알림 */}
-        <div className="card">
-          <h2 style={{ fontSize: 16, marginBottom: 16 }}>알림</h2>
-          {notifications.length === 0 ? (
-            <p style={{ color: "var(--gray-500)", fontSize: 14 }}>알림이 없습니다</p>
-          ) : (
-            notifications.slice(0, 10).map((n) => (
-              <div key={n.id} style={{
-                padding: "12px 0",
-                borderBottom: "1px solid var(--gray-100)",
-                opacity: n.is_read ? 0.6 : 1,
-              }}>
-                <div style={{ fontSize: 14, fontWeight: n.is_read ? 400 : 600 }}>{n.title}</div>
-                <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 2 }}>{n.body}</div>
-                <div style={{ fontSize: 12, color: "var(--gray-400)", marginTop: 4 }}>
-                  {new Date(n.created_at).toLocaleString("ko-KR")}
-                </div>
+        {memberType === "branch_manager" ? (
+          /* 지점 담당자: 설명회 예약 내역 */
+          <div className="card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ fontSize: 16 }}>설명회 예약 내역</h2>
+              <a href="/seminar" style={{ fontSize: 13, color: "var(--primary)", textDecoration: "none" }}>새 예약 &rarr;</a>
+            </div>
+            {seminarReservations.length === 0 ? (
+              <p style={{ color: "var(--gray-500)", fontSize: 14 }}>예약 내역이 없습니다</p>
+            ) : (
+              <div style={{ display: "grid", gap: 10 }}>
+                {seminarReservations.map((r: any) => (
+                  <div key={r.id} style={{
+                    padding: 14, borderRadius: 10, border: "1px solid var(--gray-200)",
+                    opacity: r.status === "cancelled" ? 0.5 : 1,
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>{r.schedule_title}</span>
+                      <span style={{
+                        padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, color: "#fff",
+                        backgroundColor: STATUS_COLORS[r.status] || "#9ca3af",
+                      }}>{STATUS_LABELS[r.status] || r.status}</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--gray-600)" }}>
+                      {r.reservation_date} ({TIME_SLOT_LABELS[r.time_slot] || r.time_slot}) | 참석 예정 {r.attendee_count}명
+                    </div>
+                    {r.actual_attendee_count != null && (
+                      <div style={{ fontSize: 13, color: "#10b981", marginTop: 2 }}>실제 참석: {r.actual_attendee_count}명</div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* 학생/학부모: 바로가기 메뉴 */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <h2 style={{ fontSize: 16, marginBottom: 12 }}>빠른 메뉴</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { href: "/consultation/notes", icon: "📋", label: "상담 기록 보기" },
+                  { href: "/consultation/my", icon: "📅", label: "예약 현황" },
+                  { href: "/analysis", icon: "📊", label: "분석 내역" },
+                  { href: "/admission-cases", icon: "🏆", label: "합격 사례" },
+                ].map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "12px 14px", borderRadius: 10,
+                      border: "1px solid var(--gray-200)",
+                      fontSize: 14, color: "var(--gray-700)",
+                      textDecoration: "none", fontWeight: 500,
+                    }}
+                  >
+                    <span style={{ fontSize: 18 }}>{item.icon}</span>
+                    {item.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* 알림 */}
+            <div className="card">
+              <h2 style={{ fontSize: 16, marginBottom: 16 }}>알림</h2>
+              {notifications.length === 0 ? (
+                <p style={{ color: "var(--gray-500)", fontSize: 14 }}>알림이 없습니다</p>
+              ) : (
+                notifications.slice(0, 10).map((n) => (
+                  <div key={n.id} style={{
+                    padding: "12px 0",
+                    borderBottom: "1px solid var(--gray-100)",
+                    opacity: n.is_read ? 0.6 : 1,
+                  }}>
+                    <div style={{ fontSize: 14, fontWeight: n.is_read ? 400 : 600 }}>{n.title}</div>
+                    <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 2 }}>{n.body}</div>
+                    <div style={{ fontSize: 12, color: "var(--gray-400)", marginTop: 4 }}>
+                      {new Date(n.created_at).toLocaleString("ko-KR")}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </div>
       <Footer />
     </>

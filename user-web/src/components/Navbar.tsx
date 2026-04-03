@@ -19,9 +19,13 @@ function NavbarInner() {
         <div className="navbar-menu">
           {loggedIn ? (
             <>
-              <Link href="/analysis?type=학생부라운지" className={pathname.startsWith("/analysis") && currentType === "학생부라운지" ? "active" : ""}>학생부 라운지</Link>
-              <Link href="/analysis?type=학종라운지" className={pathname.startsWith("/analysis") && currentType === "학종라운지" ? "active" : ""}>학종 라운지</Link>
-              <Link href="/consultation" className={pathname.startsWith("/consultation") ? "active" : ""}>상담 라운지</Link>
+              {memberType !== "branch_manager" && (
+                <>
+                  <Link href="/analysis?type=학생부라운지" className={pathname.startsWith("/analysis") && currentType === "학생부라운지" ? "active" : ""}>학생부 라운지</Link>
+                  <Link href="/analysis?type=학종라운지" className={pathname.startsWith("/analysis") && currentType === "학종라운지" ? "active" : ""}>학종 라운지</Link>
+                  <Link href="/consultation" className={pathname.startsWith("/consultation") ? "active" : ""}>상담 라운지</Link>
+                </>
+              )}
               {memberType === "branch_manager" && (
                 <Link href="/seminar" className={pathname.startsWith("/seminar") ? "active" : ""}>설명회</Link>
               )}

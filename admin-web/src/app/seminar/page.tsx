@@ -121,6 +121,36 @@ export default function SeminarPage() {
         </div>
       </div>
 
+      {/* 진행중 설명회 일정 */}
+      {schedules.filter((s: any) => s.end_date >= new Date().toISOString().split("T")[0]).length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 10, color: "#374151" }}>진행중인 설명회</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+            {schedules.filter((s: any) => s.end_date >= new Date().toISOString().split("T")[0]).map((s: any) => (
+              <div key={s.id} className="card" style={{ padding: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</span>
+                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, backgroundColor: s.is_visible ? "#dcfce7" : "#f3f4f6", color: s.is_visible ? "#16a34a" : "#6b7280" }}>
+                    {s.is_visible ? "공개" : "비공개"}
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, color: "#6b7280" }}>
+                  {s.start_date} ~ {s.end_date}
+                </div>
+                <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>
+                  오전 {s.morning_max}명 / 오후 {s.afternoon_max}명 / 저녁 {s.evening_max}명
+                </div>
+                {s.deadline_at && (
+                  <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                    마감: {new Date(s.deadline_at).toLocaleString("ko-KR")}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 대시보드 카드 */}
       {dashboard && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
