@@ -19,6 +19,9 @@ async def register_user(data: UserRegister, db: AsyncSession) -> User:
     if result.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이미 등록된 이메일입니다")
 
+    # 지점 담당자는 관리자 승인 전까지 비활성 상태
+    is_active = data.member_type != "branch_manager"
+
     user = User(
         email=data.email,
         password_hash=hash_password(data.password),
@@ -27,6 +30,11 @@ async def register_user(data: UserRegister, db: AsyncSession) -> User:
         member_type=data.member_type,
         student_name=data.student_name,
         student_birth=data.student_birth,
+        birth_date=data.birth_date,
+        school_name=data.school_name,
+        grade=data.grade,
+        branch_name=data.branch_name,
+        is_active=is_active,
     )
     db.add(user)
     await db.commit()
@@ -40,9 +48,14 @@ async def login_user(email: str, password: str, db: AsyncSession) -> TokenRespon
     if user is None or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="이메일 또는 비밀번호가 올바르지 않습니다")
     if not user.is_active:
+        if user.member_type == "branch_manager":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="승인 대기 중입니다. 관리자 승인 후 로그인할 수 있습니다.",
+            )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="비활성화된 계정입니다")
 
-    token_data = {"sub": str(user.id), "role": "user"}
+    token_data = {"sub": str(user.id), "role": "user", "member_type": user.member_type}
     return TokenResponse(
         access_token=create_access_token(token_data),
         refresh_token=create_refresh_token(token_data),
@@ -70,6 +83,11 @@ async def refresh_tokens(refresh_token: str, db: AsyncSession) -> TokenResponse:
     role = payload.get("role")
     sub = payload.get("sub")
     token_data = {"sub": sub, "role": role}
+
+    # member_type 보존
+    if payload.get("member_type"):
+        token_data["member_type"] = payload["member_type"]
+
     return TokenResponse(
         access_token=create_access_token(token_data),
         refresh_token=create_refresh_token(token_data),

@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # 비밀번호 재설정 토큰 유효 시간 (분)
     RESET_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # 학교 검색 (NEIS 교육정보 개방포털 API)
+    NEIS_API_KEY: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

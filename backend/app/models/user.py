@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, date
 
-from sqlalchemy import Boolean, Date, DateTime, String
+from sqlalchemy import Boolean, Date, DateTime, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,9 +16,13 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     phone: Mapped[str] = mapped_column(String(20), nullable=True)
-    member_type: Mapped[str] = mapped_column(String(20), nullable=False, default="student")  # student / parent
+    member_type: Mapped[str] = mapped_column(String(20), nullable=False, default="student")  # student / parent / branch_manager
     student_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     student_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    school_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    grade: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    branch_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

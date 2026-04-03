@@ -8,11 +8,25 @@ class UserService {
     return User.fromJson(res);
   }
 
-  static Future<User> updateMe(String name, String? phone) async {
-    final res = await ApiService.put('/users/me', {
+  static Future<User> updateMe(String name, String? phone, {
+    String? birthDate,
+    String? schoolName,
+    int? grade,
+    String? studentName,
+    String? studentBirth,
+    String? branchName,
+  }) async {
+    final body = <String, dynamic>{
       'name': name,
       if (phone != null && phone.isNotEmpty) 'phone': phone,
-    });
+      if (birthDate != null) 'birth_date': birthDate,
+      if (schoolName != null) 'school_name': schoolName,
+      if (grade != null) 'grade': grade,
+      if (studentName != null) 'student_name': studentName,
+      if (studentBirth != null) 'student_birth': studentBirth,
+      if (branchName != null) 'branch_name': branchName,
+    };
+    final res = await ApiService.put('/users/me', body);
     return User.fromJson(res);
   }
 

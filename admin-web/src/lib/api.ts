@@ -148,14 +148,20 @@ export async function createManualBooking(data: {
 }
 
 // --- 회원 관리 ---
-export async function getUsers(page = 1, search?: string) {
+export async function getUsers(page = 1, search?: string, memberType?: string, isActive?: boolean) {
   const params = new URLSearchParams({ page: String(page), size: "20" });
   if (search) params.set("search", search);
+  if (memberType) params.set("member_type", memberType);
+  if (isActive !== undefined) params.set("is_active", String(isActive));
   return request(`/api/admin/users?${params}`);
 }
 
 export async function getUserDetail(id: string) {
   return request(`/api/admin/users/${id}`);
+}
+
+export async function activateUser(id: string) {
+  return request(`/api/admin/users/${id}/activate`, { method: "PUT" });
 }
 
 export async function deactivateUser(id: string) {

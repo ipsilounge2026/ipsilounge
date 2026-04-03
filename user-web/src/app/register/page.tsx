@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { register, login } from "@/lib/api";
+import { register, login, searchSchools } from "@/lib/api";
+
+interface SchoolResult {
+  school_name: string;
+  school_code: string;
+  address: string;
+  region: string;
+  school_type: string;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -14,15 +22,70 @@ export default function RegisterPage() {
     passwordConfirm: "",
     name: "",
     phone: "",
-    member_type: "student" as "student" | "parent",
+    member_type: "student" as "student" | "parent" | "branch_manager",
+    // student/parent
+    birth_date: "",
+    school_name: "",
+    grade: "",
+    // parent only
     student_name: "",
     student_birth: "",
+    // branch_manager only
+    branch_name: "",
   });
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [agreeAll, setAgreeAll] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // School search
+  const [schoolQuery, setSchoolQuery] = useState("");
+  const [schoolResults, setSchoolResults] = useState<SchoolResult[]>([]);
+  const [showSchoolDropdown, setShowSchoolDropdown] = useState(false);
+  const [searchingSchool, setSearchingSchool] = useState(false);
+  const schoolDropdownRef = useRef<HTMLDivElement>(null);
+  const searchTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (schoolDropdownRef.current && !schoolDropdownRef.current.contains(e.target as Node)) {
+        setShowSchoolDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const handleSchoolSearch = useCallback((value: string) => {
+    setSchoolQuery(value);
+    update("school_name", value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (value.length < 2) {
+      setSchoolResults([]);
+      setShowSchoolDropdown(false);
+      return;
+    }
+    searchTimer.current = setTimeout(async () => {
+      setSearchingSchool(true);
+      try {
+        const results = await searchSchools(value);
+        setSchoolResults(results);
+        setShowSchoolDropdown(results.length > 0);
+      } catch {
+        setSchoolResults([]);
+      } finally {
+        setSearchingSchool(false);
+      }
+    }, 300);
+  }, []);
+
+  const selectSchool = (school: SchoolResult) => {
+    update("school_name", school.school_name);
+    setSchoolQuery(school.school_name);
+    setShowSchoolDropdown(false);
+  };
 
   const handleAgreeAll = (checked: boolean) => {
     setAgreeAll(checked);
@@ -56,24 +119,53 @@ export default function RegisterPage() {
       setError("비밀번호는 6자 이상이어야 합니다");
       return;
     }
-    if (form.member_type === "parent" && (!form.student_name || !form.student_birth)) {
-      setError("학부모 회원은 자녀 이름과 생년월일을 입력해주세요");
-      return;
+
+    // member_type별 검증
+    if (form.member_type === "student" || form.member_type === "parent") {
+      if (!form.phone) { setError("연락처를 입력해주세요"); return; }
+    }
+    if (form.member_type === "parent") {
+      if (!form.student_name) { setError("자녀 이름을 입력해주세요"); return; }
+      if (!form.student_birth) { setError("자녀 생년월일을 입력해주세요"); return; }
+    }
+    if (form.member_type === "branch_manager") {
+      if (!form.branch_name) { setError("지점명을 입력해주세요"); return; }
+      if (!form.phone) { setError("연락처를 입력해주세요"); return; }
     }
 
     setLoading(true);
     try {
-      await register(
-        form.email,
-        form.password,
-        form.name,
-        form.phone || undefined,
-        form.member_type,
-        form.member_type === "parent" ? form.student_name || undefined : undefined,
-        form.member_type === "parent" ? form.student_birth || undefined : undefined,
-      );
-      await login(form.email, form.password);
-      router.push("/analysis");
+      const payload: Record<string, any> = {
+        email: form.email,
+        password: form.password,
+        name: form.name,
+        phone: form.phone || undefined,
+        member_type: form.member_type,
+      };
+
+      if (form.member_type === "student" || form.member_type === "parent") {
+        if (form.birth_date) payload.birth_date = form.birth_date;
+        if (form.school_name) payload.school_name = form.school_name;
+        if (form.grade) payload.grade = Number(form.grade);
+      }
+      if (form.member_type === "parent") {
+        payload.student_name = form.student_name || undefined;
+        payload.student_birth = form.student_birth || undefined;
+      }
+      if (form.member_type === "branch_manager") {
+        payload.branch_name = form.branch_name;
+      }
+
+      await register(payload as any);
+
+      if (form.member_type === "branch_manager") {
+        // 지점 담당자: 자동 로그인 없음, 승인 안내 후 로그인 페이지로
+        alert("회원가입이 완료되었습니다.\n관리자 승인 후 로그인할 수 있습니다.");
+        router.push("/login");
+      } else {
+        await login(form.email, form.password);
+        router.push("/analysis");
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -83,59 +175,51 @@ export default function RegisterPage() {
 
   const update = (field: string, value: string) => setForm({ ...form, [field]: value });
 
+  const memberTypes = [
+    { key: "student", label: "학생" },
+    { key: "parent", label: "학부모" },
+    { key: "branch_manager", label: "지점 담당자" },
+  ] as const;
+
   return (
     <>
       <Navbar />
       <div className="auth-page">
         <form className="auth-card" onSubmit={handleSubmit}>
           <h1>회원가입</h1>
-          <p>입시라운지에 가입하고 학생부 분석을 시작하세요</p>
+          <p>입시라운지에 가입하고 서비스를 시작하세요</p>
 
           {error && <div className="error-msg">{error}</div>}
 
           {/* 회원 유형 선택 */}
           <div className="form-group">
             <label>회원 유형</label>
-            <div style={{ display: "flex", gap: 12 }}>
-              <button
-                type="button"
-                onClick={() => update("member_type", "student")}
-                style={{
-                  flex: 1,
-                  padding: "12px 16px",
-                  border: form.member_type === "student" ? "2px solid #2563eb" : "2px solid #e5e7eb",
-                  borderRadius: 8,
-                  backgroundColor: form.member_type === "student" ? "#eff6ff" : "#fff",
-                  color: form.member_type === "student" ? "#2563eb" : "#374151",
-                  fontWeight: form.member_type === "student" ? 600 : 400,
-                  cursor: "pointer",
-                  fontSize: 14,
-                  transition: "all 0.2s",
-                }}
-              >
-                학생
-              </button>
-              <button
-                type="button"
-                onClick={() => update("member_type", "parent")}
-                style={{
-                  flex: 1,
-                  padding: "12px 16px",
-                  border: form.member_type === "parent" ? "2px solid #2563eb" : "2px solid #e5e7eb",
-                  borderRadius: 8,
-                  backgroundColor: form.member_type === "parent" ? "#eff6ff" : "#fff",
-                  color: form.member_type === "parent" ? "#2563eb" : "#374151",
-                  fontWeight: form.member_type === "parent" ? 600 : 400,
-                  cursor: "pointer",
-                  fontSize: 14,
-                  transition: "all 0.2s",
-                }}
-              >
-                학부모
-              </button>
+            <div style={{ display: "flex", gap: 10 }}>
+              {memberTypes.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => update("member_type", key)}
+                  style={{
+                    flex: 1,
+                    padding: "12px 8px",
+                    border: form.member_type === key ? "2px solid #2563eb" : "2px solid #e5e7eb",
+                    borderRadius: 8,
+                    backgroundColor: form.member_type === key ? "#eff6ff" : "#fff",
+                    color: form.member_type === key ? "#2563eb" : "#374151",
+                    fontWeight: form.member_type === key ? 600 : 400,
+                    cursor: "pointer",
+                    fontSize: 14,
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 
+          {/* 공통 필드 */}
           <div className="form-group">
             <label>이름</label>
             <input type="text" className="form-control" value={form.name}
@@ -157,13 +241,13 @@ export default function RegisterPage() {
               onChange={(e) => update("passwordConfirm", e.target.value)} placeholder="비밀번호를 다시 입력하세요" required />
           </div>
           <div className="form-group">
-            <label>연락처 (선택)</label>
+            <label>연락처</label>
             <input type="tel" className="form-control" value={form.phone}
-              onChange={(e) => update("phone", e.target.value)} placeholder="010-0000-0000" />
+              onChange={(e) => update("phone", e.target.value)} placeholder="010-0000-0000" required />
           </div>
 
-          {/* 학부모 추가 정보 */}
-          {form.member_type === "parent" && (
+          {/* 학생/학부모 공통 추가 필드 */}
+          {(form.member_type === "student" || form.member_type === "parent") && (
             <div style={{
               backgroundColor: "#f9fafb",
               border: "1px solid #e5e7eb",
@@ -171,19 +255,119 @@ export default function RegisterPage() {
               padding: 16,
               marginBottom: 16,
             }}>
-              <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
-                학부모 회원은 자녀 정보를 입력해주세요
+              <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12, fontWeight: 500 }}>
+                {form.member_type === "student" ? "학생 정보" : "학부모 및 자녀 정보"}
               </p>
+
               <div className="form-group" style={{ marginBottom: 12 }}>
-                <label>자녀 이름</label>
-                <input type="text" className="form-control" value={form.student_name}
-                  onChange={(e) => update("student_name", e.target.value)} placeholder="자녀 이름을 입력하세요" />
+                <label>생년월일 (선택)</label>
+                <input type="date" className="form-control" value={form.birth_date}
+                  onChange={(e) => update("birth_date", e.target.value)} />
               </div>
+
+              {/* 학부모: 자녀 정보 */}
+              {form.member_type === "parent" && (
+                <>
+                  <div className="form-group" style={{ marginBottom: 12 }}>
+                    <label>자녀 이름</label>
+                    <input type="text" className="form-control" value={form.student_name}
+                      onChange={(e) => update("student_name", e.target.value)} placeholder="자녀 이름을 입력하세요" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 12 }}>
+                    <label>자녀 생년월일</label>
+                    <input type="date" className="form-control" value={form.student_birth}
+                      onChange={(e) => update("student_birth", e.target.value)} />
+                  </div>
+                </>
+              )}
+
+              {/* 학교 검색 */}
+              <div className="form-group" style={{ marginBottom: 12, position: "relative" }} ref={schoolDropdownRef}>
+                <label>{form.member_type === "parent" ? "자녀 재학 학교 (선택)" : "재학 학교 (선택)"}</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={schoolQuery || form.school_name}
+                  onChange={(e) => handleSchoolSearch(e.target.value)}
+                  placeholder="학교명을 입력하세요 (2글자 이상)"
+                  autoComplete="off"
+                />
+                {searchingSchool && (
+                  <div style={{ position: "absolute", right: 12, top: 38, color: "#9CA3AF", fontSize: 12 }}>
+                    검색 중...
+                  </div>
+                )}
+                {showSchoolDropdown && schoolResults.length > 0 && (
+                  <div style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    zIndex: 50,
+                    backgroundColor: "#fff",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 8,
+                    maxHeight: 200,
+                    overflowY: "auto",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                  }}>
+                    {schoolResults.map((s, i) => (
+                      <div
+                        key={`${s.school_code}-${i}`}
+                        onClick={() => selectSchool(s)}
+                        style={{
+                          padding: "10px 14px",
+                          cursor: "pointer",
+                          borderBottom: "1px solid #f3f4f6",
+                          fontSize: 14,
+                        }}
+                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#f9fafb")}
+                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "")}
+                      >
+                        <div style={{ fontWeight: 500 }}>{s.school_name}</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>
+                          {s.region} {s.school_type && `(${s.school_type})`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 학년 */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>자녀 생년월일</label>
-                <input type="date" className="form-control" value={form.student_birth}
-                  onChange={(e) => update("student_birth", e.target.value)} />
+                <label>{form.member_type === "parent" ? "자녀 학년 (선택)" : "학년 (선택)"}</label>
+                <select className="form-control" value={form.grade}
+                  onChange={(e) => update("grade", e.target.value)}>
+                  <option value="">선택하세요</option>
+                  <option value="1">1학년</option>
+                  <option value="2">2학년</option>
+                  <option value="3">3학년</option>
+                </select>
               </div>
+            </div>
+          )}
+
+          {/* 지점 담당자 추가 필드 */}
+          {form.member_type === "branch_manager" && (
+            <div style={{
+              backgroundColor: "#FFF7ED",
+              border: "1px solid #FED7AA",
+              borderRadius: 8,
+              padding: 16,
+              marginBottom: 16,
+            }}>
+              <p style={{ fontSize: 13, color: "#9A3412", marginBottom: 12, fontWeight: 500 }}>
+                지점 담당자 정보
+              </p>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>지점명</label>
+                <input type="text" className="form-control" value={form.branch_name}
+                  onChange={(e) => update("branch_name", e.target.value)} placeholder="예: 강남점" required />
+              </div>
+              <p style={{ fontSize: 12, color: "#B45309", marginTop: 8 }}>
+                * 지점 담당자 가입은 관리자 승인 후 이용 가능합니다.
+              </p>
             </div>
           )}
 
@@ -194,7 +378,6 @@ export default function RegisterPage() {
             padding: 16,
             marginBottom: 16,
           }}>
-            {/* 전체 동의 */}
             <label style={{
               display: "flex",
               alignItems: "center",
@@ -215,7 +398,6 @@ export default function RegisterPage() {
               전체 동의
             </label>
 
-            {/* 이용약관 */}
             <label style={{
               display: "flex",
               alignItems: "center",
@@ -242,7 +424,6 @@ export default function RegisterPage() {
               </Link>
             </label>
 
-            {/* 개인정보처리방침 */}
             <label style={{
               display: "flex",
               alignItems: "center",

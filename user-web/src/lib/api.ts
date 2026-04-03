@@ -43,19 +43,27 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 // --- 인증 ---
-export async function register(
-  email: string,
-  password: string,
-  name: string,
-  phone?: string,
-  member_type?: string,
-  student_name?: string,
-  student_birth?: string,
-) {
+export async function register(data: {
+  email: string;
+  password: string;
+  name: string;
+  phone?: string;
+  member_type?: string;
+  student_name?: string;
+  student_birth?: string;
+  birth_date?: string;
+  school_name?: string;
+  grade?: number;
+  branch_name?: string;
+}) {
   return request("/api/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, name, phone, member_type, student_name, student_birth }),
+    body: JSON.stringify(data),
   });
+}
+
+export async function searchSchools(query: string) {
+  return request(`/api/schools/search?query=${encodeURIComponent(query)}`);
 }
 
 export async function login(email: string, password: string) {
@@ -77,7 +85,16 @@ export async function getMe() {
   return request("/api/users/me");
 }
 
-export async function updateMe(data: { name?: string; phone?: string; student_name?: string; student_birth?: string }) {
+export async function updateMe(data: {
+  name?: string;
+  phone?: string;
+  student_name?: string;
+  student_birth?: string;
+  birth_date?: string;
+  school_name?: string;
+  grade?: number;
+  branch_name?: string;
+}) {
   return request("/api/users/me", { method: "PUT", body: JSON.stringify(data) });
 }
 

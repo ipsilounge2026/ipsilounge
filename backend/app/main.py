@@ -23,6 +23,7 @@ from app.routers import (
     payment,
     users,
     admission_cases,
+    schools,
 )
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 from app.utils.security import hash_password
@@ -71,6 +72,7 @@ app.include_router(admin_consultation_notes.router)
 app.include_router(admin_admission_cases.router)
 app.include_router(consultation_notes.router)
 app.include_router(admission_cases.router)
+app.include_router(schools.router)
 
 
 @app.on_event("startup")
@@ -112,6 +114,21 @@ async def startup():
             if "repeat_group_id" not in slot_columns:
                 connection.execute(text("ALTER TABLE consultation_slots ADD COLUMN repeat_group_id VARCHAR(36)"))
                 logger.info("consultation_slots 테이블에 repeat_group_id 컬럼 추가 완료")
+
+            # users 테이블 마이그레이션: 신규 필드 추가
+            user_columns = [c["name"] for c in inspector.get_columns("users")]
+            if "birth_date" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN birth_date DATE"))
+                logger.info("users 테이블에 birth_date 컬럼 추가 완료")
+            if "school_name" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN school_name VARCHAR(100)"))
+                logger.info("users 테이블에 school_name 컬럼 추가 완료")
+            if "grade" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN grade INTEGER"))
+                logger.info("users 테이블에 grade 컬럼 추가 완료")
+            if "branch_name" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN branch_name VARCHAR(100)"))
+                logger.info("users 테이블에 branch_name 컬럼 추가 완료")
 
         await conn.run_sync(_check_and_migrate)
 

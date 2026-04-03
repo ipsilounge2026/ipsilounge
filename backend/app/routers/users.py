@@ -26,6 +26,18 @@ async def update_me(
     """내 정보 수정 (이름은 변경 불가)"""
     if data.phone is not None:
         user.phone = data.phone
+    if data.student_name is not None:
+        user.student_name = data.student_name
+    if data.student_birth is not None:
+        user.student_birth = data.student_birth
+    if data.birth_date is not None:
+        user.birth_date = data.birth_date
+    if data.school_name is not None:
+        user.school_name = data.school_name
+    if data.grade is not None:
+        user.grade = data.grade
+    if data.branch_name is not None:
+        user.branch_name = data.branch_name
     await db.commit()
     await db.refresh(user)
     return user
