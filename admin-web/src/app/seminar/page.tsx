@@ -51,22 +51,11 @@ export default function SeminarPage() {
   const [activeTab, setActiveTab] = useState<"reservations" | "stats">("reservations");
 
   const load = async () => {
-    try {
-      const [d, r, s, bs, ss] = await Promise.all([
-        getSeminarDashboard(filter.schedule_id || undefined),
-        getSeminarReservations(filter.schedule_id || undefined, filter.status || undefined, filter.branch_name || undefined),
-        getSeminarSchedules(),
-        getSeminarStatsByBranch(filter.schedule_id || undefined),
-        getSeminarStatsBySchedule(),
-      ]);
-      setDashboard(d);
-      setReservations(r.items || []);
-      setSchedules(s);
-      setBranchStats(bs);
-      setScheduleStats(ss);
-    } catch (e: any) {
-      console.error(e);
-    }
+    try { setDashboard(await getSeminarDashboard(filter.schedule_id || undefined)); } catch (e) { console.error("dashboard", e); }
+    try { const r = await getSeminarReservations(filter.schedule_id || undefined, filter.status || undefined, filter.branch_name || undefined); setReservations(r.items || []); } catch (e) { console.error("reservations", e); }
+    try { setSchedules(await getSeminarSchedules()); } catch (e) { console.error("schedules", e); }
+    try { setBranchStats(await getSeminarStatsByBranch(filter.schedule_id || undefined)); } catch (e) { console.error("branchStats", e); }
+    try { setScheduleStats(await getSeminarStatsBySchedule()); } catch (e) { console.error("scheduleStats", e); }
   };
 
   useEffect(() => {

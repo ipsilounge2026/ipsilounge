@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -487,9 +487,9 @@ async def stats_by_schedule(
             SeminarSchedule.start_date,
             SeminarSchedule.end_date,
             func.count(SeminarReservation.id).label("reservation_count"),
-            func.sum(func.case((SeminarReservation.status == "approved", 1), else_=0)).label("approved_count"),
-            func.sum(func.case((SeminarReservation.status != "cancelled", SeminarReservation.attendee_count), else_=0)).label("total_attendee"),
-            func.sum(func.case((SeminarReservation.status == "approved", func.coalesce(SeminarReservation.actual_attendee_count, 0)), else_=0)).label("total_actual"),
+            func.sum(case((SeminarReservation.status == "approved", 1), else_=0)).label("approved_count"),
+            func.sum(case((SeminarReservation.status != "cancelled", SeminarReservation.attendee_count), else_=0)).label("total_attendee"),
+            func.sum(case((SeminarReservation.status == "approved", func.coalesce(SeminarReservation.actual_attendee_count, 0)), else_=0)).label("total_actual"),
         )
         .outerjoin(SeminarReservation, SeminarSchedule.id == SeminarReservation.schedule_id)
         .group_by(SeminarSchedule.id, SeminarSchedule.title, SeminarSchedule.start_date, SeminarSchedule.end_date)
