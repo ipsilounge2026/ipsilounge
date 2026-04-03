@@ -49,6 +49,7 @@ export default function SeminarPage() {
   const [attendeeModal, setAttendeeModal] = useState<{ id: string; show: boolean; current: number }>({ id: "", show: false, current: 0 });
   const [attendeeCount, setAttendeeCount] = useState(0);
   const [activeTab, setActiveTab] = useState<"reservations" | "stats">("reservations");
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>("");
 
   const load = async () => {
     try { setDashboard(await getSeminarDashboard(filter.schedule_id || undefined)); } catch (e) { console.error("dashboard", e); }
@@ -260,20 +261,6 @@ export default function SeminarPage() {
 
       {activeTab === "stats" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {/* 지점별 현황 */}
-          <div className="card" style={{ padding: 16 }}>
-            <h3 style={{ marginBottom: 12 }}>지점별 참석 현황</h3>
-            <table className="table">
-              <thead><tr><th>지점명</th><th>예약 수</th><th>신청 인원</th><th>실제 참석</th></tr></thead>
-              <tbody>
-                {branchStats.map((b: any) => (
-                  <tr key={b.branch_name}><td>{b.branch_name}</td><td>{b.reservation_count}</td><td>{b.total_attendee}</td><td>{b.total_actual}</td></tr>
-                ))}
-                {branchStats.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", color: "#9ca3af" }}>데이터 없음</td></tr>}
-              </tbody>
-            </table>
-          </div>
-
           {/* 일정별 현황 */}
           <div className="card" style={{ padding: 16 }}>
             <h3 style={{ marginBottom: 12 }}>일정별 현황</h3>
@@ -281,11 +268,47 @@ export default function SeminarPage() {
               <thead><tr><th>설명회</th><th>기간</th><th>승인</th><th>신청 인원</th><th>실제 참석</th></tr></thead>
               <tbody>
                 {scheduleStats.map((s: any) => (
-                  <tr key={s.id}><td>{s.title}</td><td>{s.start_date}~{s.end_date}</td><td>{s.approved_count}</td><td>{s.total_attendee}</td><td>{s.total_actual}</td></tr>
+                  <tr
+                    key={s.id}
+                    style={{ cursor: "pointer", backgroundColor: selectedScheduleId === s.id ? "#EFF6FF" : undefined }}
+                    onClick={async () => {
+                      setSelectedScheduleId(s.id);
+                      try { setBranchStats(await getSeminarStatsByBranch(s.id)); } catch (e) { console.error(e); }
+                    }}
+                  >
+                    <td>{s.title}</td><td>{s.start_date}~{s.end_date}</td><td>{s.approved_count}</td><td>{s.total_attendee}</td><td>{s.total_actual}</td>
+                  </tr>
                 ))}
                 {scheduleStats.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", color: "#9ca3af" }}>데이터 없음</td></tr>}
               </tbody>
             </table>
+          </div>
+
+          {/* 지점별 신청 현황 */}
+          <div className="card" style={{ padding: 16 }}>
+            <h3 style={{ marginBottom: 12 }}>
+              지점별 신청 현황
+              {selectedScheduleId && scheduleStats.find((s: any) => s.id === selectedScheduleId) && (
+                <span style={{ fontSize: 13, fontWeight: 400, color: "#6b7280", marginLeft: 8 }}>
+                  — {scheduleStats.find((s: any) => s.id === selectedScheduleId)?.title}
+                </span>
+              )}
+            </h3>
+            {!selectedScheduleId ? (
+              <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", fontSize: 14 }}>
+                왼쪽 일정별 현황에서 설명회를 선택해주세요
+              </div>
+            ) : (
+              <table className="table">
+                <thead><tr><th>지점명</th><th>예약 수</th><th>신청 인원</th><th>실제 참석</th></tr></thead>
+                <tbody>
+                  {branchStats.map((b: any) => (
+                    <tr key={b.branch_name}><td>{b.branch_name}</td><td>{b.reservation_count}</td><td>{b.total_attendee}</td><td>{b.total_actual}</td></tr>
+                  ))}
+                  {branchStats.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", color: "#9ca3af" }}>데이터 없음</td></tr>}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
