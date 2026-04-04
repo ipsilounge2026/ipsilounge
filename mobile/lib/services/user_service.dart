@@ -39,4 +39,10 @@ class UserService {
   static Future<void> markNotificationRead(String id) async {
     await ApiService.put('/users/notifications/$id/read', {});
   }
+
+  static Future<List<Map<String, dynamic>>> getActiveNotices() async {
+    final res = await ApiService.get('/notices/active');
+    final items = res['items'] as List;
+    return items.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
 }
