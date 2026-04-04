@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.admin import Admin, AdminStudentAssignment
+from app.models.analysis_order import AnalysisOrder
+from app.models.consultation_booking import ConsultationBooking
 from app.models.user import User
 from app.utils.dependencies import get_current_admin, get_current_super_admin
 from app.utils.security import hash_password
@@ -338,3 +340,61 @@ async def get_my_students(
                 "created_at": user.created_at.isoformat(),
             })
     return students
+
+
+@router.get("/assignments/unmatched")
+async def list_unmatched_students(
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin),
+):
+    """담당자 미매칭 학생 목록 (라운지 신청 또는 상담 신청한 학생 중 매칭 안 된 학생)"""
+    # 매칭된 user_id 목록
+    matched_result = await db.execute(select(AdminStudentAssignment.user_id))
+    matched_user_ids = set(row[0] for row in matched_result.all())
+
+    # 라운지 신청한 user_id
+    analysis_result = await db.execute(
+        select(AnalysisOrder.user_id).distinct()
+    )
+    analysis_user_ids = set(row[0] for row in analysis_result.all())
+
+    # 상담 신청한 user_id
+    booking_result = await db.execute(
+        select(ConsultationBooking.user_id).where(
+            ConsultationBooking.status != "cancelled"
+        ).distinct()
+    )
+    booking_user_ids = set(row[0] for row in booking_result.all())
+
+    # 라운지 또는 상담 신청했지만 매칭 안 된 user_id
+    unmatched_ids = (analysis_user_ids | booking_user_ids) - matched_user_ids
+
+    if not unmatched_ids:
+        return []
+
+    users_result = await db.execute(
+        select(User).where(User.id.in_(unmatched_ids)).order_by(User.created_at.desc())
+    )
+    users = users_result.scalars().all()
+
+    items = []
+    for user in users:
+        # 어떤 서비스를 신청했는지 표기
+        services = []
+        if user.id in analysis_user_ids:
+            services.append("라운지")
+        if user.id in booking_user_ids:
+            services.append("상담")
+
+        items.append({
+            "id": str(user.id),
+            "name": user.name,
+            "email": user.email,
+            "phone": user.phone,
+            "member_type": user.member_type,
+            "student_name": user.student_name,
+            "services": services,
+            "created_at": user.created_at.isoformat(),
+        })
+
+    return items

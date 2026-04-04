@@ -52,6 +52,7 @@ export default function ConsultationPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [counselors, setCounselors] = useState<Counselor[]>([]);
+  const [isAssigned, setIsAssigned] = useState(false);
   const [selectedCounselor, setSelectedCounselor] = useState<Counselor | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -80,7 +81,7 @@ export default function ConsultationPage() {
         if (result.eligible) {
           // 자격 충족 → 바로 예약 단계로
           setStep("booking");
-          getCounselors().then(setCounselors).catch(() => {});
+          loadCounselors();
           checkBookingCooldown().then(setBookingCooldown).catch(() => {});
         }
       } catch {
@@ -94,10 +95,25 @@ export default function ConsultationPage() {
     }
   };
 
+  // 상담자 목록 로드
+  const loadCounselors = async () => {
+    try {
+      const data = await getCounselors();
+      setCounselors(data.counselors || []);
+      setIsAssigned(data.assigned || false);
+      // 주 담당자가 있고 1명이면 자동 선택
+      if (data.assigned && data.counselors?.length === 1) {
+        setSelectedCounselor(data.counselors[0]);
+      }
+    } catch {
+      setCounselors([]);
+    }
+  };
+
   // 사전조사 완료 후 예약으로 이동
   const handleSurveyComplete = () => {
     setStep("booking");
-    getCounselors().then(setCounselors).catch(() => {});
+    loadCounselors();
     checkBookingCooldown().then(setBookingCooldown).catch(() => {});
   };
 
@@ -394,8 +410,8 @@ export default function ConsultationPage() {
                 {/* 선택된 상담자 표시 */}
                 <div style={{
                   padding: "12px 16px",
-                  background: "#EFF6FF",
-                  border: "1px solid #BFDBFE",
+                  background: isAssigned ? "#F0FDF4" : "#EFF6FF",
+                  border: `1px solid ${isAssigned ? "#BBF7D0" : "#BFDBFE"}`,
                   borderRadius: 8,
                   marginBottom: 16,
                   display: "flex",
@@ -405,20 +421,24 @@ export default function ConsultationPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{
                       width: 32, height: 32, borderRadius: "50%",
-                      background: "#3B82F6", display: "flex", alignItems: "center", justifyContent: "center",
+                      background: isAssigned ? "#22C55E" : "#3B82F6", display: "flex", alignItems: "center", justifyContent: "center",
                       fontWeight: 700, color: "#fff", fontSize: 14,
                     }}>
                       {selectedCounselor.name.charAt(0)}
                     </div>
                     <span style={{ fontWeight: 600 }}>{selectedCounselor.name}</span>
-                    <span style={{ fontSize: 13, color: "#6B7280" }}>상담자</span>
+                    <span style={{ fontSize: 13, color: isAssigned ? "#166534" : "#6B7280" }}>
+                      {isAssigned ? "담당 상담자" : "상담자"}
+                    </span>
                   </div>
-                  <button
-                    onClick={handleChangeCounselor}
-                    style={{ fontSize: 13, color: "#3B82F6", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                  >
-                    변경
-                  </button>
+                  {!isAssigned && (
+                    <button
+                      onClick={handleChangeCounselor}
+                      style={{ fontSize: 13, color: "#3B82F6", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      변경
+                    </button>
+                  )}
                 </div>
 
                 {/* 달력 */}

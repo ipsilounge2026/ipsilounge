@@ -236,6 +236,10 @@ export async function getMyStudents() {
   return request("/api/admin/admins/my-students");
 }
 
+export async function getUnmatchedStudents() {
+  return request("/api/admin/admins/assignments/unmatched");
+}
+
 // --- 상담 기록 ---
 export async function getConsultationNotes(userId?: string, category?: string) {
   const params = new URLSearchParams();

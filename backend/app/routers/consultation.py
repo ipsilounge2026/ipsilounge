@@ -7,7 +7,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.admin import Admin
+from app.models.admin import Admin, AdminStudentAssignment
 from app.models.consultation_booking import ConsultationBooking
 from app.models.consultation_slot import ConsultationSlot
 from app.models.user import User
@@ -21,15 +21,48 @@ from app.schemas.consultation import (
 from app.services.consultation_service import check_slot_available
 from app.utils.dependencies import get_current_user
 
+
+async def _get_assigned_admin(user_id, db: AsyncSession):
+    """사용자에게 매칭된 주 담당자 조회"""
+    result = await db.execute(
+        select(AdminStudentAssignment).where(AdminStudentAssignment.user_id == user_id)
+    )
+    assignment = result.scalar_one_or_none()
+    if not assignment:
+        return None
+    admin_result = await db.execute(
+        select(Admin).where(Admin.id == assignment.admin_id, Admin.is_active == True)
+    )
+    return admin_result.scalar_one_or_none()
+
 router = APIRouter(prefix="/api/consultation", tags=["상담예약"])
 
 
 @router.get("/counselors")
 async def get_counselors(
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """상담 가능한 관리자/상담자 목록 (사용자용)"""
-    # 활성 슬롯이 있는 관리자만 반환
+    """상담 가능한 관리자/상담자 목록 (사용자용) - 주 담당자가 있으면 그 사람만 반환"""
+    assigned_admin = await _get_assigned_admin(user.id, db)
+
+    if assigned_admin:
+        # 주 담당자가 있으면 그 담당자만 반환 (+ 활성 슬롯이 있는지 여부도 함께)
+        slot_check = await db.execute(
+            select(ConsultationSlot.id).where(
+                ConsultationSlot.admin_id == str(assigned_admin.id),
+                ConsultationSlot.is_active == True,
+                ConsultationSlot.date >= date.today(),
+            ).limit(1)
+        )
+        has_slots = slot_check.scalar_one_or_none() is not None
+        return {
+            "assigned": True,
+            "counselors": [{"id": str(assigned_admin.id), "name": assigned_admin.name}],
+            "has_slots": has_slots,
+        }
+
+    # 주 담당자 없으면 활성 슬롯이 있는 전체 상담자 반환
     result = await db.execute(
         select(ConsultationSlot.admin_id)
         .where(
@@ -42,7 +75,7 @@ async def get_counselors(
     admin_ids = [row[0] for row in result.all()]
 
     if not admin_ids:
-        return []
+        return {"assigned": False, "counselors": [], "has_slots": False}
 
     counselors = []
     for aid in admin_ids:
@@ -57,7 +90,7 @@ async def get_counselors(
         if admin:
             counselors.append({"id": str(admin.id), "name": admin.name})
 
-    return counselors
+    return {"assigned": False, "counselors": counselors, "has_slots": True}
 
 
 @router.get("/slots", response_model=list[AvailableSlotResponse])
@@ -170,6 +203,20 @@ async def book_consultation(
     db.add(booking)
 
     slot.current_bookings += 1
+
+    # 주 담당자가 없는 경우 → 선택한 상담자를 자동으로 주 담당자로 매칭
+    if slot.admin_id:
+        existing_assignment = await db.execute(
+            select(AdminStudentAssignment).where(AdminStudentAssignment.user_id == user.id)
+        )
+        if existing_assignment.scalar_one_or_none() is None:
+            try:
+                admin_uuid = uuid.UUID(slot.admin_id)
+                new_assignment = AdminStudentAssignment(admin_id=admin_uuid, user_id=user.id)
+                db.add(new_assignment)
+            except ValueError:
+                pass
+
     await db.commit()
     await db.refresh(booking)
 
