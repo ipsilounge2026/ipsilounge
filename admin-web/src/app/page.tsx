@@ -175,7 +175,7 @@ export default function DashboardPage() {
           <StatCard label="이번 달 신규" value={String(data.users.new_this_month)} color="var(--primary)" />
           <StatCard label="담당자 매칭 완료" value={String(data.matching.matched)} color="#22C55E" />
           <StatCard
-            label="매칭 필요"
+            label="담당자 매칭 필요"
             value={String(data.matching.unmatched)}
             color={data.matching.unmatched > 0 ? "#EF4444" : "#22C55E"}
           />
