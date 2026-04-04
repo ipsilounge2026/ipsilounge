@@ -1,16 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { getDashboard, getChangeRequests, processChangeRequest, getAdmins } from "@/lib/api";
 import { isLoggedIn, hasMenuAccess, getDefaultRoute, getAdminInfo } from "@/lib/auth";
 
+interface AnalysisStats {
+  applied: number;
+  uploaded: number;
+  processing: number;
+  completed: number;
+}
+
+interface ConsultationTypeStats {
+  booked: number;
+  completed: number;
+}
+
 interface DashboardData {
-  analysis: { applied: number; uploaded: number; processing: number; completed_this_month: number };
-  consultation: { bookings_active: number };
+  period: { year: number; month: number };
+  revenue: {
+    year: number;
+    month: number;
+    prev_year: number;
+    prev_year_month: number;
+  };
+  student_lounge: { year: AnalysisStats; month: AnalysisStats };
+  hakjong_lounge: { year: AnalysisStats; month: AnalysisStats };
+  consultation: {
+    year: Record<string, ConsultationTypeStats>;
+    month: Record<string, ConsultationTypeStats>;
+  };
   users: { total: number; new_this_month: number };
-  revenue: { this_month: number };
   matching: { matched: number; unmatched: number };
   change_requests: { pending: number };
 }
@@ -33,6 +55,14 @@ interface AdminItem {
   role: string;
   is_active: boolean;
 }
+
+const CONSULTATION_TYPE_LABELS: Record<string, string> = {
+  "학생부분석": "학생부분석",
+  "입시전략": "입시전략",
+  "학습상담": "학습상담",
+  "심리상담": "심리상담",
+  "기타": "기타",
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -88,7 +118,13 @@ export default function DashboardPage() {
     }
   };
 
+  const formatMoney = (amount: number) => {
+    return amount.toLocaleString() + "원";
+  };
+
   if (!data) return <div className="admin-layout"><Sidebar /><main className="admin-main"><p>로딩 중...</p></main></div>;
+
+  const { period } = data;
 
   return (
     <div className="admin-layout">
@@ -104,56 +140,48 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* 분석 현황 */}
-        <div className="stats-grid">
-          <div className="card">
-            <div className="card-title">신청완료 (미업로드)</div>
-            <div className="card-value" style={{ color: "#5a3d8a" }}>{data.analysis.applied}</div>
-          </div>
-          <div className="card">
-            <div className="card-title">업로드완료</div>
-            <div className="card-value" style={{ color: "#0c5460" }}>{data.analysis.uploaded}</div>
-          </div>
-          <div className="card">
-            <div className="card-title">분석 진행중</div>
-            <div className="card-value" style={{ color: "var(--info)" }}>{data.analysis.processing}</div>
-          </div>
-          <div className="card">
-            <div className="card-title">이번 달 완료</div>
-            <div className="card-value" style={{ color: "var(--success)" }}>{data.analysis.completed_this_month}</div>
-          </div>
-          <div className="card">
-            <div className="card-title">활성 상담 예약</div>
-            <div className="card-value">{data.consultation.bookings_active}</div>
-          </div>
+        {/* ========== 매출 ========== */}
+        <SectionTitle title="매출" />
+        <div className="stats-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+          <StatCard label={`${period.year}년 매출`} value={formatMoney(data.revenue.year)} color="#5a3d8a" />
+          <StatCard label={`${period.month}월 매출`} value={formatMoney(data.revenue.month)} color="#0c5460" />
+          <StatCard label={`${period.year - 1}년 매출`} value={formatMoney(data.revenue.prev_year)} color="#6B7280" />
+          <StatCard label={`${period.year - 1}년 ${period.month}월 매출`} value={formatMoney(data.revenue.prev_year_month)} color="#6B7280" />
         </div>
 
-        <div className="stats-grid">
-          <div className="card">
-            <div className="card-title">전체 회원</div>
-            <div className="card-value">{data.users.total}</div>
-          </div>
-          <div className="card">
-            <div className="card-title">이번 달 신규</div>
-            <div className="card-value" style={{ color: "var(--primary)" }}>{data.users.new_this_month}</div>
-          </div>
-          <div className="card">
-            <div className="card-title">이번 달 매출</div>
-            <div className="card-value">{data.revenue.this_month.toLocaleString()}원</div>
-          </div>
-          <div className="card">
-            <div className="card-title">담당자 매칭 완료</div>
-            <div className="card-value" style={{ color: "#22C55E" }}>{data.matching.matched}</div>
-          </div>
-          <div className="card">
-            <div className="card-title">매칭 필요</div>
-            <div className="card-value" style={{ color: data.matching.unmatched > 0 ? "#EF4444" : "#22C55E" }}>
-              {data.matching.unmatched}
-            </div>
-          </div>
+        {/* ========== 학생부 라운지 ========== */}
+        <SectionTitle title="학생부 라운지" />
+        <AnalysisStatsRow label={`${period.year}년 전체`} stats={data.student_lounge.year} />
+        <AnalysisStatsRow label={`${period.month}월`} stats={data.student_lounge.month} />
+
+        {/* ========== 학종 라운지 ========== */}
+        <SectionTitle title="학종 라운지" />
+        <AnalysisStatsRow label={`${period.year}년 전체`} stats={data.hakjong_lounge.year} />
+        <AnalysisStatsRow label={`${period.month}월`} stats={data.hakjong_lounge.month} />
+
+        {/* ========== 상담 라운지 ========== */}
+        <SectionTitle title="상담 라운지" />
+        <ConsultationStatsTable
+          yearLabel={`${period.year}년 전체`}
+          monthLabel={`${period.month}월`}
+          yearData={data.consultation.year}
+          monthData={data.consultation.month}
+        />
+
+        {/* ========== 기타 현황 ========== */}
+        <SectionTitle title="기타 현황" />
+        <div className="stats-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+          <StatCard label="전체 회원" value={String(data.users.total)} />
+          <StatCard label="이번 달 신규" value={String(data.users.new_this_month)} color="var(--primary)" />
+          <StatCard label="담당자 매칭 완료" value={String(data.matching.matched)} color="#22C55E" />
+          <StatCard
+            label="매칭 필요"
+            value={String(data.matching.unmatched)}
+            color={data.matching.unmatched > 0 ? "#EF4444" : "#22C55E"}
+          />
         </div>
 
-        {/* 담당자 변경 요청 (super_admin만) */}
+        {/* ========== 담당자 변경 요청 (super_admin만) ========== */}
         {isSuperAdmin && changeRequests.length > 0 && (
           <div style={{ marginTop: 24 }}>
             <h2 style={{ fontSize: 16, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
@@ -238,6 +266,109 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+/* ========== 하위 컴포넌트 ========== */
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <h2 style={{
+      fontSize: 15, fontWeight: 700, marginTop: 28, marginBottom: 10,
+      paddingBottom: 6, borderBottom: "2px solid var(--gray-200)",
+      color: "var(--gray-800)",
+    }}>
+      {title}
+    </h2>
+  );
+}
+
+function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="card">
+      <div className="card-title">{label}</div>
+      <div className="card-value" style={{ color: color || "inherit" }}>{value}</div>
+    </div>
+  );
+}
+
+function AnalysisStatsRow({ label, stats }: { label: string; stats: AnalysisStats }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      <div className="stats-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <StatCard label="신청완료 (미업로드)" value={String(stats.applied)} color="#5a3d8a" />
+        <StatCard label="업로드 완료" value={String(stats.uploaded)} color="#0c5460" />
+        <StatCard label="분석 진행중" value={String(stats.processing)} color="var(--info)" />
+        <StatCard label="분석 완료" value={String(stats.completed)} color="var(--success)" />
+      </div>
+    </div>
+  );
+}
+
+function ConsultationStatsTable({
+  yearLabel,
+  monthLabel,
+  yearData,
+  monthData,
+}: {
+  yearLabel: string;
+  monthLabel: string;
+  yearData: Record<string, ConsultationTypeStats>;
+  monthData: Record<string, ConsultationTypeStats>;
+}) {
+  const types = Object.keys(CONSULTATION_TYPE_LABELS);
+
+  return (
+    <div className="table-wrapper" style={{ marginBottom: 8 }}>
+      <table>
+        <thead>
+          <tr>
+            <th>기간</th>
+            {types.map(t => (
+              <th key={t} colSpan={2} style={{ textAlign: "center" }}>
+                {CONSULTATION_TYPE_LABELS[t]}
+              </th>
+            ))}
+          </tr>
+          <tr>
+            <th></th>
+            {types.map(t => (
+              <React.Fragment key={t}>
+                <th style={{ textAlign: "center", fontSize: 12, color: "var(--info)" }}>예약</th>
+                <th style={{ textAlign: "center", fontSize: 12, color: "var(--success)" }}>완료</th>
+              </React.Fragment>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style={{ fontWeight: 600, fontSize: 13 }}>{yearLabel}</td>
+            {types.map(t => {
+              const s = yearData[t] || { booked: 0, completed: 0 };
+              return (
+                <React.Fragment key={t}>
+                  <td style={{ textAlign: "center", color: "var(--info)", fontWeight: 600 }}>{s.booked}</td>
+                  <td style={{ textAlign: "center", color: "var(--success)", fontWeight: 600 }}>{s.completed}</td>
+                </React.Fragment>
+              );
+            })}
+          </tr>
+          <tr>
+            <td style={{ fontWeight: 600, fontSize: 13 }}>{monthLabel}</td>
+            {types.map(t => {
+              const s = monthData[t] || { booked: 0, completed: 0 };
+              return (
+                <React.Fragment key={t}>
+                  <td style={{ textAlign: "center", color: "var(--info)", fontWeight: 600 }}>{s.booked}</td>
+                  <td style={{ textAlign: "center", color: "var(--success)", fontWeight: 600 }}>{s.completed}</td>
+                </React.Fragment>
+              );
+            })}
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
