@@ -103,7 +103,7 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'PDF, JPG, PNG 지원',
+                            'PDF, JPG, PNG 지원 (최대 20MB)',
                             style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
                           ),
                         ],

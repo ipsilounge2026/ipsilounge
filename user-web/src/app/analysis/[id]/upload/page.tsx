@@ -76,7 +76,7 @@ export default function UploadToOrderPage() {
                 <>
                   <div className="upload-icon">📁</div>
                   <p>클릭하여 파일을 선택하세요</p>
-                  <p style={{ fontSize: 12, color: "var(--gray-400)", marginTop: 4 }}>PDF, JPG, PNG 지원</p>
+                  <p style={{ fontSize: 12, color: "var(--gray-400)", marginTop: 4 }}>PDF, JPG, PNG 지원 (최대 20MB)</p>
                 </>
               )}
             </div>
