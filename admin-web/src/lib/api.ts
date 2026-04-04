@@ -240,6 +240,15 @@ export async function getUnmatchedStudents() {
   return request("/api/admin/admins/assignments/unmatched");
 }
 
+export async function getChangeRequests(status?: string) {
+  const params = status ? `?status_filter=${status}` : "";
+  return request(`/api/admin/admins/change-requests${params}`);
+}
+
+export async function processChangeRequest(requestId: string, data: { status: string; new_admin_id?: string | null; admin_memo?: string }) {
+  return request(`/api/admin/admins/change-requests/${requestId}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
 // --- 상담 기록 ---
 export async function getConsultationNotes(userId?: string, category?: string) {
   const params = new URLSearchParams();

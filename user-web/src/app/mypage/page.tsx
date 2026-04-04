@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getMe, updateMe, getNotifications, getMySeminarReservations } from "@/lib/api";
+import { getMe, updateMe, getNotifications, getMySeminarReservations, getMyCounselor, getAvailableCounselors, requestCounselorChange } from "@/lib/api";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 interface User {
@@ -12,6 +12,7 @@ interface User {
   email: string;
   name: string;
   phone: string | null;
+  member_type: string;
   created_at: string;
 }
 
@@ -23,6 +24,27 @@ interface NotificationItem {
   is_read: boolean;
   created_at: string;
 }
+
+interface CounselorInfo {
+  id: string;
+  name: string;
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  student: "학생",
+  parent: "학부모",
+  branch_manager: "지점 담당자",
+  admin: "관리자",
+  counselor: "상담자",
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  student: "#3B82F6",
+  parent: "#8B5CF6",
+  branch_manager: "#F59E0B",
+  admin: "#EF4444",
+  counselor: "#10B981",
+};
 
 const TIME_SLOT_LABELS: Record<string, string> = { morning: "오전", afternoon: "오후", evening: "저녁" };
 const STATUS_LABELS: Record<string, string> = { pending: "승인대기", modified: "수정대기", approved: "승인완료", cancelled: "취소" };
@@ -39,6 +61,15 @@ export default function MyPage() {
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(false);
 
+  // 담당자 관련
+  const [myCounselor, setMyCounselor] = useState<CounselorInfo | null>(null);
+  const [isAssigned, setIsAssigned] = useState(false);
+  const [showChangeRequest, setShowChangeRequest] = useState(false);
+  const [availableCounselors, setAvailableCounselors] = useState<CounselorInfo[]>([]);
+  const [selectedNewCounselor, setSelectedNewCounselor] = useState<string>("recommend");
+  const [changeReason, setChangeReason] = useState("");
+  const [changeLoading, setChangeLoading] = useState(false);
+
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
     getMe().then((u) => { setUser(u); setName(u.name); setPhone(u.phone || ""); }).catch(() => {});
@@ -46,6 +77,11 @@ export default function MyPage() {
       getMySeminarReservations().then((res) => setSeminarReservations(res.items || [])).catch(() => {});
     } else {
       getNotifications().then((res) => setNotifications(res.items)).catch(() => {});
+      // 담당자 조회
+      getMyCounselor().then((res) => {
+        setIsAssigned(res.assigned);
+        setMyCounselor(res.counselor);
+      }).catch(() => {});
     }
   }, []);
 
@@ -60,7 +96,40 @@ export default function MyPage() {
     }
   };
 
+  const handleOpenChangeRequest = async () => {
+    setShowChangeRequest(true);
+    try {
+      const counselors = await getAvailableCounselors();
+      setAvailableCounselors(counselors);
+    } catch {}
+  };
+
+  const handleSubmitChangeRequest = async () => {
+    if (!changeReason.trim()) {
+      setMessage("변경 사유를 입력해주세요.");
+      return;
+    }
+    setChangeLoading(true);
+    try {
+      await requestCounselorChange({
+        requested_admin_id: selectedNewCounselor === "recommend" ? null : selectedNewCounselor,
+        reason: changeReason,
+      });
+      setMessage("담당자 변경 요청이 접수되었습니다. 관리자 확인 후 처리됩니다.");
+      setShowChangeRequest(false);
+      setChangeReason("");
+      setSelectedNewCounselor("recommend");
+    } catch (err: any) {
+      setMessage(err.message);
+    } finally {
+      setChangeLoading(false);
+    }
+  };
+
   if (!user) return <><Navbar /><div className="container"><p>로딩 중...</p></div></>;
+
+  const roleLabel = ROLE_LABELS[user.member_type] || user.member_type;
+  const roleColor = ROLE_COLORS[user.member_type] || "#6B7280";
 
   return (
     <>
@@ -79,7 +148,19 @@ export default function MyPage() {
         {/* 회원 정보 */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 style={{ fontSize: 16 }}>회원 정보</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <h2 style={{ fontSize: 16, margin: 0 }}>회원 정보</h2>
+              <span style={{
+                padding: "3px 10px",
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#fff",
+                backgroundColor: roleColor,
+              }}>
+                {roleLabel}
+              </span>
+            </div>
             {!editing && <button className="btn btn-outline btn-sm" onClick={() => setEditing(true)}>수정</button>}
           </div>
 
@@ -101,26 +182,102 @@ export default function MyPage() {
               </div>
             </>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>이름</div>
-                <div>{user.name}</div>
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>이름</div>
+                  <div>{user.name}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>이메일</div>
+                  <div>{user.email}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>연락처</div>
+                  <div>{user.phone || "-"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>가입일</div>
+                  <div>{new Date(user.created_at).toLocaleDateString("ko-KR")}</div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>이메일</div>
-                <div>{user.email}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>연락처</div>
-                <div>{user.phone || "-"}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>가입일</div>
-                <div>{new Date(user.created_at).toLocaleDateString("ko-KR")}</div>
-              </div>
-            </div>
+
+              {/* 담당자 정보 (학생/학부모만) */}
+              {memberType !== "branch_manager" && (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--gray-100)" }}>
+                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 6 }}>담당 상담자</div>
+                  {isAssigned && myCounselor ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: "50%",
+                        background: "#22C55E", display: "flex", alignItems: "center", justifyContent: "center",
+                        fontWeight: 700, color: "#fff", fontSize: 14,
+                      }}>
+                        {myCounselor.name.charAt(0)}
+                      </div>
+                      <span style={{ fontWeight: 600, fontSize: 15 }}>{myCounselor.name}</span>
+                      <button
+                        onClick={handleOpenChangeRequest}
+                        style={{
+                          marginLeft: "auto",
+                          fontSize: 12,
+                          padding: "4px 12px",
+                          borderRadius: 6,
+                          border: "1px solid #E5E7EB",
+                          background: "#fff",
+                          color: "#6B7280",
+                          cursor: "pointer",
+                        }}
+                      >
+                        담당자 변경 요청
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 14, color: "#9CA3AF" }}>
+                      아직 배정된 담당자가 없습니다. 상담 예약 시 자동 배정됩니다.
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
+
+        {/* 담당자 변경 요청 모달 */}
+        {showChangeRequest && (
+          <div className="card" style={{ marginBottom: 16, border: "1px solid #FDE68A", background: "#FFFBEB" }}>
+            <h3 style={{ fontSize: 15, marginBottom: 12 }}>담당자 변경 요청</h3>
+            <div className="form-group">
+              <label>변경 희망 담당자</label>
+              <select
+                className="form-control"
+                value={selectedNewCounselor}
+                onChange={e => setSelectedNewCounselor(e.target.value)}
+              >
+                <option value="recommend">추천 희망 (관리자가 배정)</option>
+                {availableCounselors.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>변경 사유</label>
+              <textarea
+                className="form-control"
+                value={changeReason}
+                onChange={e => setChangeReason(e.target.value)}
+                placeholder="담당자 변경을 요청하는 사유를 입력해주세요"
+                rows={3}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-primary" onClick={handleSubmitChangeRequest} disabled={changeLoading}>
+                {changeLoading ? "요청 중..." : "변경 요청 제출"}
+              </button>
+              <button className="btn btn-outline" onClick={() => setShowChangeRequest(false)}>취소</button>
+            </div>
+          </div>
+        )}
 
         {memberType === "branch_manager" ? (
           /* 지점 담당자: 설명회 예약 내역 */

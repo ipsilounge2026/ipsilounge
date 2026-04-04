@@ -5,9 +5,10 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.admin import Admin
+from app.models.admin import Admin, AdminStudentAssignment
 from app.models.analysis_order import AnalysisOrder
 from app.models.consultation_booking import ConsultationBooking
+from app.models.counselor_change_request import CounselorChangeRequest
 from app.models.payment import Payment
 from app.models.user import User
 from app.utils.dependencies import get_current_admin
@@ -53,6 +54,23 @@ async def get_dashboard(
     )
     monthly_revenue = revenue_result.scalar()
 
+    # 담당자 매칭 현황
+    matched_count = await _count(db, AdminStudentAssignment)
+    # 라운지 또는 상담 신청한 고유 사용자 수
+    analysis_users_result = await db.execute(select(AnalysisOrder.user_id).distinct())
+    analysis_user_ids = set(row[0] for row in analysis_users_result.all())
+    booking_users_result = await db.execute(
+        select(ConsultationBooking.user_id).where(ConsultationBooking.status != "cancelled").distinct()
+    )
+    booking_user_ids = set(row[0] for row in booking_users_result.all())
+    matched_user_result = await db.execute(select(AdminStudentAssignment.user_id).distinct())
+    matched_user_ids = set(row[0] for row in matched_user_result.all())
+    service_user_ids = analysis_user_ids | booking_user_ids
+    unmatched_count = len(service_user_ids - matched_user_ids)
+
+    # 담당자 변경 요청 현황
+    change_requests_pending = await _count(db, CounselorChangeRequest, CounselorChangeRequest.status == "pending")
+
     return {
         "analysis": {
             "applied": analysis_applied,
@@ -69,6 +87,13 @@ async def get_dashboard(
         },
         "revenue": {
             "this_month": monthly_revenue,
+        },
+        "matching": {
+            "matched": len(matched_user_ids),
+            "unmatched": unmatched_count,
+        },
+        "change_requests": {
+            "pending": change_requests_pending,
         },
     }
 

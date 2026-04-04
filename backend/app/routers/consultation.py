@@ -6,10 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pydantic import BaseModel
+
 from app.database import get_db
 from app.models.admin import Admin, AdminStudentAssignment
 from app.models.consultation_booking import ConsultationBooking
 from app.models.consultation_slot import ConsultationSlot
+from app.models.counselor_change_request import CounselorChangeRequest
 from app.models.user import User
 from app.schemas.consultation import (
     AvailableSlotResponse,
@@ -350,3 +353,77 @@ async def cancel_booking(
 
     await db.commit()
     return {"message": "상담 예약이 취소되었습니다"}
+
+
+# --- 내 담당자 관련 ---
+
+@router.get("/my-counselor")
+async def get_my_counselor(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """내 주 담당자 조회"""
+    assigned_admin = await _get_assigned_admin(user.id, db)
+    if assigned_admin:
+        return {
+            "assigned": True,
+            "counselor": {"id": str(assigned_admin.id), "name": assigned_admin.name},
+        }
+    return {"assigned": False, "counselor": None}
+
+
+@router.get("/available-counselors")
+async def get_available_counselors(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """담당자 변경 시 선택 가능한 상담자 목록 (현재 담당자 제외)"""
+    assigned_admin = await _get_assigned_admin(user.id, db)
+    current_admin_id = assigned_admin.id if assigned_admin else None
+
+    result = await db.execute(
+        select(Admin).where(Admin.is_active == True, Admin.role.in_(["admin", "counselor", "super_admin"]))
+    )
+    admins = result.scalars().all()
+
+    counselors = [
+        {"id": str(a.id), "name": a.name}
+        for a in admins
+        if a.id != current_admin_id
+    ]
+    return counselors
+
+
+class CounselorChangeRequestCreate(BaseModel):
+    requested_admin_id: str | None = None  # None = 추천 희망
+    reason: str
+
+
+@router.post("/change-counselor-request")
+async def create_counselor_change_request(
+    data: CounselorChangeRequestCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """담당자 변경 요청"""
+    # 이미 대기중인 요청이 있는지 확인
+    existing = await db.execute(
+        select(CounselorChangeRequest).where(
+            CounselorChangeRequest.user_id == user.id,
+            CounselorChangeRequest.status == "pending",
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="이미 처리 대기 중인 변경 요청이 있습니다.")
+
+    assigned_admin = await _get_assigned_admin(user.id, db)
+
+    req = CounselorChangeRequest(
+        user_id=user.id,
+        current_admin_id=assigned_admin.id if assigned_admin else None,
+        requested_admin_id=uuid.UUID(data.requested_admin_id) if data.requested_admin_id else None,
+        reason=data.reason,
+    )
+    db.add(req)
+    await db.commit()
+    return {"message": "담당자 변경 요청이 접수되었습니다."}

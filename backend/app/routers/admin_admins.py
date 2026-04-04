@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
@@ -9,6 +10,7 @@ from app.database import get_db
 from app.models.admin import Admin, AdminStudentAssignment
 from app.models.analysis_order import AnalysisOrder
 from app.models.consultation_booking import ConsultationBooking
+from app.models.counselor_change_request import CounselorChangeRequest
 from app.models.user import User
 from app.utils.dependencies import get_current_admin, get_current_super_admin
 from app.utils.security import hash_password
@@ -398,3 +400,100 @@ async def list_unmatched_students(
         })
 
     return items
+
+
+# --- 담당자 변경 요청 관리 ---
+
+@router.get("/change-requests")
+async def list_change_requests(
+    status_filter: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin),
+):
+    """담당자 변경 요청 목록 (super_admin 전용)"""
+    query = select(CounselorChangeRequest).order_by(CounselorChangeRequest.created_at.desc())
+    if status_filter:
+        query = query.where(CounselorChangeRequest.status == status_filter)
+    result = await db.execute(query)
+    requests = result.scalars().all()
+
+    items = []
+    for req in requests:
+        user_result = await db.execute(select(User).where(User.id == req.user_id))
+        user = user_result.scalar_one_or_none()
+
+        current_admin_name = None
+        if req.current_admin_id:
+            a_result = await db.execute(select(Admin).where(Admin.id == req.current_admin_id))
+            a = a_result.scalar_one_or_none()
+            current_admin_name = a.name if a else None
+
+        requested_admin_name = "추천 희망"
+        if req.requested_admin_id:
+            a_result = await db.execute(select(Admin).where(Admin.id == req.requested_admin_id))
+            a = a_result.scalar_one_or_none()
+            requested_admin_name = a.name if a else "알 수 없음"
+
+        items.append({
+            "id": str(req.id),
+            "user_id": str(req.user_id),
+            "user_name": user.name if user else "",
+            "user_email": user.email if user else "",
+            "current_admin_name": current_admin_name,
+            "requested_admin_name": requested_admin_name,
+            "requested_admin_id": str(req.requested_admin_id) if req.requested_admin_id else None,
+            "reason": req.reason,
+            "status": req.status,
+            "admin_memo": req.admin_memo,
+            "created_at": req.created_at.isoformat(),
+            "processed_at": req.processed_at.isoformat() if req.processed_at else None,
+        })
+    return items
+
+
+class ChangeRequestProcess(BaseModel):
+    status: str  # approved / rejected
+    new_admin_id: str | None = None  # 승인 시 배정할 관리자 (추천 희망인 경우 필요)
+    admin_memo: str | None = None
+
+
+@router.put("/change-requests/{request_id}")
+async def process_change_request(
+    request_id: str,
+    data: ChangeRequestProcess,
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin),
+):
+    """담당자 변경 요청 처리 (super_admin 전용)"""
+    try:
+        rid = uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="유효하지 않은 ID입니다.")
+
+    result = await db.execute(select(CounselorChangeRequest).where(CounselorChangeRequest.id == rid))
+    req = result.scalar_one_or_none()
+    if not req:
+        raise HTTPException(status_code=404, detail="변경 요청을 찾을 수 없습니다.")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail="이미 처리된 요청입니다.")
+
+    req.status = data.status
+    req.admin_memo = data.admin_memo
+    req.processed_at = datetime.utcnow()
+
+    if data.status == "approved":
+        new_admin_id = data.new_admin_id or (str(req.requested_admin_id) if req.requested_admin_id else None)
+        if not new_admin_id:
+            raise HTTPException(status_code=400, detail="배정할 담당자를 지정해주세요.")
+
+        await db.execute(
+            delete(AdminStudentAssignment).where(AdminStudentAssignment.user_id == req.user_id)
+        )
+        new_assignment = AdminStudentAssignment(
+            admin_id=uuid.UUID(new_admin_id),
+            user_id=req.user_id,
+        )
+        db.add(new_assignment)
+
+    await db.commit()
+    return {"message": f"변경 요청이 {'승인' if data.status == 'approved' else '거절'}되었습니다."}

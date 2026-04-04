@@ -103,6 +103,7 @@ async def startup():
         seminar_reservation,
         seminar_mail_log,
         notice as notice_model,
+        counselor_change_request,
     )
 
     async with engine.begin() as conn:

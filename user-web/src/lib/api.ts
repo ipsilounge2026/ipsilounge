@@ -173,6 +173,18 @@ export async function getMyBookings() {
   return request("/api/consultation/my");
 }
 
+export async function getMyCounselor() {
+  return request("/api/consultation/my-counselor");
+}
+
+export async function getAvailableCounselors() {
+  return request("/api/consultation/available-counselors");
+}
+
+export async function requestCounselorChange(data: { requested_admin_id: string | null; reason: string }) {
+  return request("/api/consultation/change-counselor-request", { method: "POST", body: JSON.stringify(data) });
+}
+
 export async function cancelBooking(id: string) {
   return request(`/api/consultation/${id}/cancel`, { method: "PUT" });
 }
