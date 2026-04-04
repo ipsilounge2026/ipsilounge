@@ -12,6 +12,90 @@ USE_S3 = bool(settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY)
 # 로컬 저장 경로 (서버 루트 기준)
 LOCAL_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
 
+# ─── 파일 업로드 보안 설정 ──────────────────────────────────────────────
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+
+# 용도별 허용 확장자
+ALLOWED_EXTENSIONS = {
+    "school-records": {"pdf", "jpg", "jpeg", "png"},       # 사용자: 학생부 업로드
+    "reports": {"pdf", "xlsx", "xls"},                       # 관리자: 리포트 업로드
+}
+
+# 확장자별 허용 MIME 타입 (실제 파일 내용 검증용)
+ALLOWED_MIME_TYPES = {
+    "pdf": {"application/pdf"},
+    "jpg": {"image/jpeg"},
+    "jpeg": {"image/jpeg"},
+    "png": {"image/png"},
+    "xlsx": {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/zip",  # xlsx는 zip 형식
+    },
+    "xls": {
+        "application/vnd.ms-excel",
+        "application/octet-stream",
+    },
+}
+
+# 파일 매직 넘버 (실제 파일 내용의 첫 바이트로 진짜 파일인지 확인)
+FILE_SIGNATURES = {
+    "pdf": [b"%PDF"],
+    "jpg": [b"\xff\xd8\xff"],
+    "jpeg": [b"\xff\xd8\xff"],
+    "png": [b"\x89PNG"],
+    "xlsx": [b"PK"],      # xlsx는 ZIP 포맷
+    "xls": [b"\xd0\xcf\x11\xe0"],  # OLE2 포맷
+}
+
+
+def _validate_file(file: UploadFile, contents: bytes, folder: str):
+    """파일 보안 검증: 크기, 확장자, MIME 타입, 매직 넘버"""
+
+    # 1. 파일 크기 검증
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"파일 크기가 {MAX_FILE_SIZE // (1024*1024)}MB를 초과합니다",
+        )
+
+    if len(contents) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="빈 파일은 업로드할 수 없습니다",
+        )
+
+    # 2. 확장자 검증
+    filename = file.filename or ""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    allowed = ALLOWED_EXTENSIONS.get(folder, set())
+
+    if not ext or ext not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"허용되지 않는 파일 형식입니다. 허용 형식: {', '.join(sorted(allowed))}",
+        )
+
+    # 3. MIME 타입 검증
+    content_type = (file.content_type or "").lower()
+    allowed_mimes = ALLOWED_MIME_TYPES.get(ext, set())
+    if allowed_mimes and content_type not in allowed_mimes:
+        # content_type이 없거나 generic인 경우 매직 넘버로만 판단
+        if content_type and content_type != "application/octet-stream":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"파일 내용이 확장자({ext})와 일치하지 않습니다",
+            )
+
+    # 4. 매직 넘버 (파일 시그니처) 검증
+    signatures = FILE_SIGNATURES.get(ext, [])
+    if signatures:
+        matched = any(contents[:len(sig)] == sig for sig in signatures)
+        if not matched:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"파일 내용이 {ext.upper()} 형식이 아닙니다. 올바른 파일을 업로드해주세요.",
+            )
+
 
 def _ensure_local_dir(folder: str):
     """로컬 저장 디렉토리 생성"""
@@ -38,11 +122,14 @@ async def upload_file(file: UploadFile, folder: str) -> tuple[str, str]:
     """파일을 업로드하고 (저장 키, 원본 파일명)을 반환.
     S3 키가 설정되면 S3에, 아니면 로컬에 저장."""
 
-    file_ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "bin"
+    contents = await file.read()
+
+    # 보안 검증 수행
+    _validate_file(file, contents, folder)
+
+    file_ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "bin"
     unique_name = f"{uuid.uuid4()}.{file_ext}"
     storage_key = f"{folder}/{unique_name}"
-
-    contents = await file.read()
 
     if USE_S3:
         try:

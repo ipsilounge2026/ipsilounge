@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ from app.schemas.user import (
 )
 from app.services.auth_service import login_admin, login_user, refresh_tokens, register_user
 from app.services.email_service import send_password_reset_email
+from app.utils.rate_limiter import limiter
 from app.utils.security import hash_password
 
 router = APIRouter(prefix="/api/auth", tags=["인증"])
@@ -35,31 +36,36 @@ class ResetPasswordRequest(BaseModel):
 
 
 @router.post("/register", response_model=UserResponse)
-async def api_register(data: UserRegister, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/hour")
+async def api_register(request: Request, data: UserRegister, db: AsyncSession = Depends(get_db)):
     """회원가입"""
     return await register_user(data, db)
 
 
 @router.post("/login", response_model=TokenResponse)
-async def api_login(data: UserLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def api_login(request: Request, data: UserLogin, db: AsyncSession = Depends(get_db)):
     """사용자 로그인"""
     return await login_user(data.email, data.password, db)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def api_refresh(data: TokenRefresh, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def api_refresh(request: Request, data: TokenRefresh, db: AsyncSession = Depends(get_db)):
     """토큰 갱신"""
     return await refresh_tokens(data.refresh_token, db)
 
 
 @router.post("/admin/login", response_model=TokenResponse)
-async def api_admin_login(data: AdminLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def api_admin_login(request: Request, data: AdminLogin, db: AsyncSession = Depends(get_db)):
     """관리자 로그인"""
     return await login_admin(data.email, data.password, db)
 
 
 @router.post("/forgot-password")
-async def api_forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("3/hour")
+async def api_forgot_password(request: Request, data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     """비밀번호 재설정 링크 이메일 발송"""
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()

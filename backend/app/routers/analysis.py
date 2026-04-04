@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.analysis import AnalysisApplyRequest, AnalysisListResponse, AnalysisOrderResponse
 from app.services.file_service import generate_download_url, upload_file
 from app.utils.dependencies import get_current_user
+from app.utils.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/analysis", tags=["분석"])
 
@@ -58,7 +59,9 @@ async def apply_analysis(
 
 
 @router.post("/{order_id}/upload", response_model=AnalysisOrderResponse)
+@limiter.limit("10/hour")
 async def upload_school_record(
+    request: Request,
     order_id: uuid.UUID,
     file: UploadFile = File(...),
     user: User = Depends(get_current_user),
@@ -84,7 +87,9 @@ async def upload_school_record(
 
 
 @router.post("/upload", response_model=AnalysisOrderResponse)
+@limiter.limit("10/hour")
 async def upload_and_apply(
+    request: Request,
     file: UploadFile = File(...),
     service_type: str = Form("학생부라운지"),
     target_university: str | None = Form(None),

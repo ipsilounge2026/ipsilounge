@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,12 +16,15 @@ from app.schemas.payment import (
 )
 from app.services.payment_service import verify_google_purchase, verify_toss_payment
 from app.utils.dependencies import get_current_user
+from app.utils.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/payment", tags=["결제"])
 
 
 @router.post("/toss/ready")
+@limiter.limit("5/minute")
 async def toss_payment_ready(
+    request: Request,
     data: TossPaymentReady,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -50,7 +53,9 @@ async def toss_payment_ready(
 
 
 @router.post("/toss/confirm", response_model=PaymentResponse)
+@limiter.limit("5/minute")
 async def toss_payment_confirm(
+    request: Request,
     data: TossPaymentConfirm,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -72,7 +77,9 @@ async def toss_payment_confirm(
 
 
 @router.post("/google/verify", response_model=PaymentResponse)
+@limiter.limit("5/minute")
 async def google_payment_verify(
+    request: Request,
     data: GooglePaymentVerify,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

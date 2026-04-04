@@ -2,11 +2,14 @@ import logging
 
 from fastapi import FastAPI  # Deploy Backend CI/CD test
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
 from app.config import settings
 from app.database import Base, engine, async_session
 from app.models.admin import Admin
+from app.utils.rate_limiter import limiter
 from app.routers import (
     admin_analysis,
     admin_consultation,
@@ -40,6 +43,10 @@ app = FastAPI(
     description="학생부 분석 + 상담 예약 서비스 API",
     version="1.0.0",
 )
+
+# Rate Limiter 등록
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS 설정 (프론트엔드 도메인 허용)
 app.add_middleware(
