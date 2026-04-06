@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getMyCounselor, getAvailableCounselors, requestCounselorChange } from "@/lib/api";
+import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange } from "@/lib/api";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 interface User {
@@ -63,9 +63,13 @@ export default function MyPage() {
 
   // 수정/취소 관련
   const [editingReservation, setEditingReservation] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editTimeSlot, setEditTimeSlot] = useState("");
   const [editAttendeeCount, setEditAttendeeCount] = useState<number>(0);
   const [editMemo, setEditMemo] = useState("");
   const [modifyReason, setModifyReason] = useState("");
+  const [availableDates, setAvailableDates] = useState<any[]>([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
@@ -140,25 +144,41 @@ export default function MyPage() {
     return new Date() < new Date(deadlineAt);
   };
 
-  const handleStartEdit = (r: any) => {
+  const handleStartEdit = async (r: any) => {
     setEditingReservation(r.id);
+    setEditDate(r.reservation_date);
+    setEditTimeSlot(r.time_slot);
     setEditAttendeeCount(r.attendee_count);
     setEditMemo(r.memo || "");
     setModifyReason("");
+    setAvailableDates([]);
+    setAvailabilityLoading(true);
+    try {
+      const res = await getSeminarAvailability(r.schedule_id);
+      setAvailableDates(res.available_dates || []);
+    } catch {
+      setAvailableDates([]);
+    } finally {
+      setAvailabilityLoading(false);
+    }
   };
 
-  const handleSubmitEdit = async (id: string) => {
+  const handleSubmitEdit = async (id: string, originalDate: string, originalSlot: string) => {
     if (!modifyReason.trim()) {
       setMessage("수정 사유를 입력해주세요.");
       return;
     }
     setActionLoading(true);
     try {
-      await modifySeminarReservation(id, {
+      const payload: any = {
         attendee_count: editAttendeeCount,
         memo: editMemo || undefined,
         modify_reason: modifyReason,
-      });
+      };
+      if (editDate !== originalDate) payload.reservation_date = editDate;
+      if (editTimeSlot !== originalSlot) payload.time_slot = editTimeSlot;
+
+      await modifySeminarReservation(id, payload);
       setMessage("예약이 수정되었습니다. 관리자 재승인 후 확정됩니다.");
       setEditingReservation(null);
       const res = await getMySeminarReservations();
@@ -404,6 +424,70 @@ export default function MyPage() {
                     {/* 수정 폼 */}
                     {editingReservation === r.id && (
                       <div style={{ marginTop: 12, padding: 12, background: "#F0F9FF", borderRadius: 8 }}>
+                        {availabilityLoading ? (
+                          <p style={{ fontSize: 13, color: "var(--gray-500)" }}>가용 일정 로딩 중...</p>
+                        ) : (
+                          <>
+                            <div className="form-group" style={{ marginBottom: 10 }}>
+                              <label style={{ fontSize: 12, color: "var(--gray-600)" }}>예약 날짜</label>
+                              <select className="form-control" value={editDate}
+                                onChange={e => { setEditDate(e.target.value); setEditTimeSlot(""); }}>
+                                {/* 현재 날짜가 available_dates에 없을 수도 있으므로 포함 */}
+                                {!availableDates.find((d: any) => d.date === r.reservation_date) && (
+                                  <option value={r.reservation_date}>{r.reservation_date} (현재)</option>
+                                )}
+                                {availableDates.map((d: any) => (
+                                  <option key={d.date} value={d.date}>
+                                    {d.date}
+                                    {d.date === r.reservation_date ? " (현재)" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 10 }}>
+                              <label style={{ fontSize: 12, color: "var(--gray-600)" }}>시간대</label>
+                              {(() => {
+                                const selectedDateInfo = availableDates.find((d: any) => d.date === editDate);
+                                const slots = [
+                                  { value: "morning", label: "오전", remaining: selectedDateInfo?.morning_remaining ?? 0 },
+                                  { value: "afternoon", label: "오후", remaining: selectedDateInfo?.afternoon_remaining ?? 0 },
+                                  { value: "evening", label: "저녁", remaining: selectedDateInfo?.evening_remaining ?? 0 },
+                                ];
+                                return (
+                                  <div style={{ display: "flex", gap: 8 }}>
+                                    {slots.map(slot => {
+                                      const isCurrentSlot = editDate === r.reservation_date && slot.value === r.time_slot;
+                                      const available = slot.remaining > 0 || isCurrentSlot;
+                                      const isSelected = editTimeSlot === slot.value;
+                                      return (
+                                        <button
+                                          key={slot.value}
+                                          type="button"
+                                          disabled={!available}
+                                          onClick={() => setEditTimeSlot(slot.value)}
+                                          style={{
+                                            flex: 1, padding: "8px 0", borderRadius: 6, fontSize: 13,
+                                            fontWeight: isSelected ? 600 : 400, cursor: available ? "pointer" : "not-allowed",
+                                            border: isSelected ? "2px solid #3B82F6" : "1px solid #D1D5DB",
+                                            background: isSelected ? "#EFF6FF" : available ? "#fff" : "#F3F4F6",
+                                            color: available ? (isSelected ? "#1D4ED8" : "#374151") : "#9CA3AF",
+                                          }}
+                                        >
+                                          {slot.label}
+                                          {selectedDateInfo && (
+                                            <div style={{ fontSize: 10, marginTop: 2, color: "#9CA3AF" }}>
+                                              {isCurrentSlot ? "현재" : `잔여 ${slot.remaining}`}
+                                            </div>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </>
+                        )}
                         <div className="form-group" style={{ marginBottom: 10 }}>
                           <label style={{ fontSize: 12, color: "var(--gray-600)" }}>참석 예정 인원</label>
                           <input type="number" className="form-control" min={1}
@@ -419,9 +503,12 @@ export default function MyPage() {
                           <input type="text" className="form-control"
                             value={modifyReason} onChange={e => setModifyReason(e.target.value)} placeholder="수정 사유를 입력하세요" />
                         </div>
+                        <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 10, lineHeight: 1.5 }}>
+                          수정 후 관리자 재승인이 필요합니다.
+                        </div>
                         <div style={{ display: "flex", gap: 8 }}>
-                          <button className="btn btn-primary btn-sm" disabled={actionLoading}
-                            onClick={() => handleSubmitEdit(r.id)}>
+                          <button className="btn btn-primary btn-sm" disabled={actionLoading || !editTimeSlot}
+                            onClick={() => handleSubmitEdit(r.id, r.reservation_date, r.time_slot)}>
                             {actionLoading ? "처리 중..." : "수정 확인"}
                           </button>
                           <button className="btn btn-outline btn-sm"
