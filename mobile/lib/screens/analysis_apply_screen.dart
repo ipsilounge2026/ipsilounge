@@ -128,7 +128,7 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
                   const SizedBox(height: 8),
                   Text(
                     _isHakjong
-                        ? '지원 대학과 학과를 지정하면 입결 비교, 교과 이수 충실도까지 포함된 맞춤 리포트를 제공합니다.'
+                        ? '희망 지원 대학과 학과를 지정하면 입결 비교, 교과 이수 충실도까지 포함된 맞춤 리포트를 제공합니다.'
                         : '학생부 PDF를 업로드하면 내신, 세특, 창체, 행특을 종합 분석한 리포트를 받아볼 수 있습니다.',
                     style: const TextStyle(fontSize: 13, color: Color(0xFF374151), height: 1.5),
                   ),
@@ -154,13 +154,13 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
               ),
 
             if (_isHakjong) ...[
-              _buildLabel('지원 대학'),
+              _buildLabel('희망 지원 대학'),
               TextField(
                 controller: _universityCtrl,
                 decoration: const InputDecoration(hintText: '예: 서울대학교'),
               ),
               const SizedBox(height: 16),
-              _buildLabel('지원 학과'),
+              _buildLabel('희망 지원 학과'),
               TextField(
                 controller: _majorCtrl,
                 decoration: const InputDecoration(hintText: '예: 컴퓨터공학과'),

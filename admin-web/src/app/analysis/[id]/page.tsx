@@ -127,7 +127,7 @@ export default function AnalysisDetailPage() {
               <div>{new Date(data.created_at).toLocaleString("ko-KR")}</div>
             </div>
             <div>
-              <div className="card-title">지원 대학/학과</div>
+              <div className="card-title">희망 지원 대학/학과</div>
               <div>{data.target_university || "-"} / {data.target_major || "-"}</div>
             </div>
             <div style={{ gridColumn: "1 / -1" }}>

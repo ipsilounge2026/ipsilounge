@@ -87,7 +87,7 @@ export default function AnalysisListPage() {
                 <th>신청자</th>
                 <th>서비스</th>
                 <th>파일</th>
-                <th>지원 대학/학과</th>
+                <th>희망 지원 대학/학과</th>
                 <th>상태</th>
                 <th>리포트</th>
                 <th></th>

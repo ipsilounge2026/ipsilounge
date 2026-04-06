@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getMe, updateMe, getNotifications, getMySeminarReservations, getMyCounselor, getAvailableCounselors, requestCounselorChange } from "@/lib/api";
+import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getMyCounselor, getAvailableCounselors, requestCounselorChange } from "@/lib/api";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 interface User {
@@ -60,6 +60,15 @@ export default function MyPage() {
   const [seminarReservations, setSeminarReservations] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(false);
+
+  // 수정/취소 관련
+  const [editingReservation, setEditingReservation] = useState<string | null>(null);
+  const [editAttendeeCount, setEditAttendeeCount] = useState<number>(0);
+  const [editMemo, setEditMemo] = useState("");
+  const [modifyReason, setModifyReason] = useState("");
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
 
   // 담당자 관련
   const [myCounselor, setMyCounselor] = useState<CounselorInfo | null>(null);
@@ -123,6 +132,61 @@ export default function MyPage() {
       setMessage(err.message);
     } finally {
       setChangeLoading(false);
+    }
+  };
+
+  const isBeforeDeadline = (deadlineAt: string | null) => {
+    if (!deadlineAt) return false;
+    return new Date() < new Date(deadlineAt);
+  };
+
+  const handleStartEdit = (r: any) => {
+    setEditingReservation(r.id);
+    setEditAttendeeCount(r.attendee_count);
+    setEditMemo(r.memo || "");
+    setModifyReason("");
+  };
+
+  const handleSubmitEdit = async (id: string) => {
+    if (!modifyReason.trim()) {
+      setMessage("수정 사유를 입력해주세요.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await modifySeminarReservation(id, {
+        attendee_count: editAttendeeCount,
+        memo: editMemo || undefined,
+        modify_reason: modifyReason,
+      });
+      setMessage("예약이 수정되었습니다. 관리자 재승인 후 확정됩니다.");
+      setEditingReservation(null);
+      const res = await getMySeminarReservations();
+      setSeminarReservations(res.items || []);
+    } catch (err: any) {
+      setMessage(err.message || "수정에 실패했습니다");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSubmitCancel = async (id: string) => {
+    if (!cancelReason.trim()) {
+      setMessage("취소 사유를 입력해주세요.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await cancelSeminarReservation(id, cancelReason);
+      setMessage("예약이 취소되었습니다.");
+      setCancelTarget(null);
+      setCancelReason("");
+      const res = await getMySeminarReservations();
+      setSeminarReservations(res.items || []);
+    } catch (err: any) {
+      setMessage(err.message || "취소에 실패했습니다");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -290,7 +354,9 @@ export default function MyPage() {
               <p style={{ color: "var(--gray-500)", fontSize: 14 }}>예약 내역이 없습니다</p>
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
-                {seminarReservations.map((r: any) => (
+                {seminarReservations.map((r: any) => {
+                  const canModify = r.status !== "cancelled" && isBeforeDeadline(r.deadline_at);
+                  return (
                   <div key={r.id} style={{
                     padding: 14, borderRadius: 10, border: "1px solid var(--gray-200)",
                     opacity: r.status === "cancelled" ? 0.5 : 1,
@@ -308,8 +374,86 @@ export default function MyPage() {
                     {r.actual_attendee_count != null && (
                       <div style={{ fontSize: 13, color: "#10b981", marginTop: 2 }}>실제 참석: {r.actual_attendee_count}명</div>
                     )}
+                    {r.deadline_at && (
+                      <div style={{ fontSize: 12, color: canModify ? "var(--gray-400)" : "#EF4444", marginTop: 4 }}>
+                        예약 마감: {new Date(r.deadline_at).toLocaleString("ko-KR")}
+                        {!canModify && r.status !== "cancelled" && " (마감)"}
+                      </div>
+                    )}
+
+                    {/* 수정/취소 버튼 */}
+                    {canModify && editingReservation !== r.id && cancelTarget !== r.id && (
+                      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                        <button
+                          onClick={() => handleStartEdit(r)}
+                          style={{
+                            padding: "5px 14px", borderRadius: 6, fontSize: 12, fontWeight: 500,
+                            border: "1px solid #3B82F6", background: "#fff", color: "#3B82F6", cursor: "pointer",
+                          }}
+                        >수정</button>
+                        <button
+                          onClick={() => { setCancelTarget(r.id); setCancelReason(""); }}
+                          style={{
+                            padding: "5px 14px", borderRadius: 6, fontSize: 12, fontWeight: 500,
+                            border: "1px solid #EF4444", background: "#fff", color: "#EF4444", cursor: "pointer",
+                          }}
+                        >취소</button>
+                      </div>
+                    )}
+
+                    {/* 수정 폼 */}
+                    {editingReservation === r.id && (
+                      <div style={{ marginTop: 12, padding: 12, background: "#F0F9FF", borderRadius: 8 }}>
+                        <div className="form-group" style={{ marginBottom: 10 }}>
+                          <label style={{ fontSize: 12, color: "var(--gray-600)" }}>참석 예정 인원</label>
+                          <input type="number" className="form-control" min={1}
+                            value={editAttendeeCount} onChange={e => setEditAttendeeCount(Number(e.target.value))} />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 10 }}>
+                          <label style={{ fontSize: 12, color: "var(--gray-600)" }}>메모</label>
+                          <input type="text" className="form-control"
+                            value={editMemo} onChange={e => setEditMemo(e.target.value)} placeholder="메모 (선택)" />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 10 }}>
+                          <label style={{ fontSize: 12, color: "var(--gray-600)" }}>수정 사유 *</label>
+                          <input type="text" className="form-control"
+                            value={modifyReason} onChange={e => setModifyReason(e.target.value)} placeholder="수정 사유를 입력하세요" />
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button className="btn btn-primary btn-sm" disabled={actionLoading}
+                            onClick={() => handleSubmitEdit(r.id)}>
+                            {actionLoading ? "처리 중..." : "수정 확인"}
+                          </button>
+                          <button className="btn btn-outline btn-sm"
+                            onClick={() => setEditingReservation(null)}>닫기</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 취소 폼 */}
+                    {cancelTarget === r.id && (
+                      <div style={{ marginTop: 12, padding: 12, background: "#FEF2F2", borderRadius: 8 }}>
+                        <div className="form-group" style={{ marginBottom: 10 }}>
+                          <label style={{ fontSize: 12, color: "#991B1B" }}>취소 사유 *</label>
+                          <input type="text" className="form-control"
+                            value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="취소 사유를 입력하세요" />
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button style={{
+                            padding: "6px 16px", borderRadius: 6, fontSize: 13, fontWeight: 600,
+                            border: "none", background: "#EF4444", color: "#fff", cursor: "pointer",
+                          }} disabled={actionLoading}
+                            onClick={() => handleSubmitCancel(r.id)}>
+                            {actionLoading ? "처리 중..." : "취소 확인"}
+                          </button>
+                          <button className="btn btn-outline btn-sm"
+                            onClick={() => setCancelTarget(null)}>닫기</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

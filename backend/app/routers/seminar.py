@@ -279,6 +279,7 @@ async def get_my_reservations(
             approved_at=res.approved_at,
             modify_reason=res.modify_reason,
             cancel_reason=res.cancel_reason,
+            deadline_at=sched.deadline_at,
         )
         for res, sched in rows
     ]
@@ -294,7 +295,7 @@ async def modify_reservation(
     user: User = Depends(get_current_branch_manager),
     db: AsyncSession = Depends(get_db),
 ):
-    """예약 수정 (사유 필수)"""
+    """예약 수정 (사유 필수, 마감일 전까지만 가능)"""
     result = await db.execute(
         select(SeminarReservation).where(
             SeminarReservation.id == reservation_id,
@@ -306,6 +307,14 @@ async def modify_reservation(
         raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다")
     if reservation.status == "cancelled":
         raise HTTPException(status_code=400, detail="취소된 예약은 수정할 수 없습니다")
+
+    # 마감일 확인
+    sched_check = await db.execute(
+        select(SeminarSchedule).where(SeminarSchedule.id == reservation.schedule_id)
+    )
+    sched_for_deadline = sched_check.scalar_one_or_none()
+    if sched_for_deadline and datetime.utcnow() > sched_for_deadline.deadline_at:
+        raise HTTPException(status_code=400, detail="예약 마감일이 지나 수정할 수 없습니다")
 
     # 날짜/시간대 변경 시 유효성 검증
     new_date = data.reservation_date or reservation.reservation_date
@@ -401,7 +410,7 @@ async def cancel_reservation(
     user: User = Depends(get_current_branch_manager),
     db: AsyncSession = Depends(get_db),
 ):
-    """예약 취소 (사유 필수)"""
+    """예약 취소 (사유 필수, 마감일 전까지만 가능)"""
     result = await db.execute(
         select(SeminarReservation).where(
             SeminarReservation.id == reservation_id,
@@ -413,6 +422,14 @@ async def cancel_reservation(
         raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다")
     if reservation.status == "cancelled":
         raise HTTPException(status_code=400, detail="이미 취소된 예약입니다")
+
+    # 마감일 확인
+    sched_check = await db.execute(
+        select(SeminarSchedule).where(SeminarSchedule.id == reservation.schedule_id)
+    )
+    sched_for_deadline = sched_check.scalar_one_or_none()
+    if sched_for_deadline and datetime.utcnow() > sched_for_deadline.deadline_at:
+        raise HTTPException(status_code=400, detail="예약 마감일이 지나 취소할 수 없습니다")
 
     reservation.status = "cancelled"
     reservation.cancel_reason = data.cancel_reason

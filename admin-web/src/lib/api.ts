@@ -6,6 +6,34 @@ export function toFullUrl(url: string): string {
   return url;
 }
 
+let isRefreshing = false;
+
+async function tryAutoReLogin(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (isRefreshing) return false;
+  const keepLoggedIn = localStorage.getItem("admin_keep_logged_in");
+  const savedEmail = localStorage.getItem("admin_saved_email");
+  const savedCred = localStorage.getItem("admin_keep_cred");
+  if (keepLoggedIn !== "true" || !savedEmail || !savedCred) return false;
+
+  isRefreshing = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: savedEmail, password: atob(savedCred) }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    localStorage.setItem("admin_token", data.access_token);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    isRefreshing = false;
+  }
+}
+
 async function request(path: string, options: RequestInit = {}) {
   const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
 
@@ -22,14 +50,23 @@ async function request(path: string, options: RequestInit = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
   if (res.status === 401) {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("admin_token");
-      window.location.href = "/login";
+    // 로그인 유지 설정 시 자동 재로그인 시도
+    const refreshed = await tryAutoReLogin();
+    if (refreshed) {
+      const newToken = localStorage.getItem("admin_token");
+      headers["Authorization"] = `Bearer ${newToken}`;
+      res = await fetch(`${API_BASE}${path}`, { ...options, headers });
     }
-    throw new Error("인증이 만료되었습니다");
+    if (res.status === 401) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("admin_token");
+        window.location.href = "/login";
+      }
+      throw new Error("인증이 만료되었습니다");
+    }
   }
 
   if (!res.ok) {

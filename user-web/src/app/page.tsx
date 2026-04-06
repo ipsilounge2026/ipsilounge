@@ -40,7 +40,7 @@ export default function LandingPage() {
           <Link href={loggedIn ? "/analysis?type=학종라운지" : "/login"} className="feature-card" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
             <div className="icon">📊</div>
             <h3>학종 라운지</h3>
-            <p>지원 대학과 학과를 지정하면 입결 비교, 교과 이수 충실도까지 포함된 맞춤 리포트를 제공합니다</p>
+            <p>희망 지원 대학과 학과를 지정하면 입결 비교, 교과 이수 충실도까지 포함된 맞춤 리포트를 제공합니다</p>
           </Link>
           <Link href={loggedIn ? "/consultation" : "/login"} className="feature-card" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
             <div className="icon">💬</div>

@@ -127,11 +127,11 @@ export default function AnalysisDetailPage() {
               <div style={{ fontSize: 15 }}>{new Date(data.created_at).toLocaleString("ko-KR")}</div>
             </div>
             <div>
-              <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>지원 대학</div>
+              <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>희망 지원 대학</div>
               <div style={{ fontSize: 15 }}>{data.target_university || "미지정"}</div>
             </div>
             <div>
-              <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>지원 학과</div>
+              <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>희망 지원 학과</div>
               <div style={{ fontSize: 15 }}>{data.target_major || "미지정"}</div>
             </div>
           </div>

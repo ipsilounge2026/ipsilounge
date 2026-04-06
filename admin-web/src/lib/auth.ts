@@ -8,6 +8,8 @@ export function isLoggedIn(): boolean {
 export function logout() {
   localStorage.removeItem("admin_token");
   localStorage.removeItem("admin_info");
+  localStorage.removeItem("admin_keep_logged_in");
+  localStorage.removeItem("admin_keep_cred");
   window.location.href = "/login";
 }
 

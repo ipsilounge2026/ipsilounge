@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { adminLogin, getAdminMe } from "@/lib/api";
 import { setAdminInfo, getDefaultRoute } from "@/lib/auth";
@@ -11,6 +11,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rememberEmail, setRememberEmail] = useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("admin_saved_email");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberEmail(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +31,23 @@ export default function LoginPage() {
       await adminLogin(email, password);
       const me = await getAdminMe();
       setAdminInfo(me);
+
+      // 아이디 저장
+      if (rememberEmail) {
+        localStorage.setItem("admin_saved_email", email);
+      } else {
+        localStorage.removeItem("admin_saved_email");
+      }
+
+      // 로그인 유지
+      if (keepLoggedIn) {
+        localStorage.setItem("admin_keep_logged_in", "true");
+        localStorage.setItem("admin_keep_cred", btoa(password));
+      } else {
+        localStorage.removeItem("admin_keep_logged_in");
+        localStorage.removeItem("admin_keep_cred");
+      }
+
       router.push(getDefaultRoute());
     } catch (err: any) {
       setError(err.message || "로그인에 실패했습니다");
@@ -59,6 +86,27 @@ export default function LoginPage() {
             placeholder="비밀번호를 입력하세요"
             required
           />
+        </div>
+
+        <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#6B7280", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={rememberEmail}
+              onChange={(e) => setRememberEmail(e.target.checked)}
+              style={{ width: 16, height: 16, cursor: "pointer" }}
+            />
+            아이디 저장
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#6B7280", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={keepLoggedIn}
+              onChange={(e) => setKeepLoggedIn(e.target.checked)}
+              style={{ width: 16, height: 16, cursor: "pointer" }}
+            />
+            로그인 유지
+          </label>
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={loading}>

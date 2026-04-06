@@ -92,6 +92,7 @@ class SeminarReservationResponse(BaseModel):
     approved_at: datetime | None = None
     modify_reason: str | None = None
     cancel_reason: str | None = None
+    deadline_at: datetime | None = None
 
 
 # --- 예약 (관리자용) ---

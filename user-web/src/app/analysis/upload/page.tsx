@@ -75,15 +75,15 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* 지원 대학/학과 */}
+          {/* 희망 지원 대학/학과 */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div className="form-group">
-              <label>지원 대학 (선택)</label>
+              <label>희망 지원 대학 (선택)</label>
               <input type="text" className="form-control" value={university}
                 onChange={(e) => setUniversity(e.target.value)} placeholder="예: 서울대학교" />
             </div>
             <div className="form-group">
-              <label>지원 학과 (선택)</label>
+              <label>희망 지원 학과 (선택)</label>
               <input type="text" className="form-control" value={major}
                 onChange={(e) => setMajor(e.target.value)} placeholder="예: 경영학과" />
             </div>

@@ -275,8 +275,8 @@ class _AnalysisDetailScreenState extends State<AnalysisDetailScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _infoItem('지원 대학', _data!.targetUniversity ?? '미지정')),
-              Expanded(child: _infoItem('지원 학과', _data!.targetMajor ?? '미지정')),
+              Expanded(child: _infoItem('희망 지원 대학', _data!.targetUniversity ?? '미지정')),
+              Expanded(child: _infoItem('희망 지원 학과', _data!.targetMajor ?? '미지정')),
             ],
           ),
           if (_data!.memo != null) ...[

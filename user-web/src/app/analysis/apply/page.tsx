@@ -65,7 +65,7 @@ function ApplyForm() {
           }}>
             <p style={{ fontSize: 14, color: "var(--gray-700)", margin: 0 }}>
               {isHakjong
-                ? "📊 학종 라운지: 지원 대학과 학과를 지정하면 입결 비교, 교과 이수 충실도까지 포함된 맞춤 리포트를 제공합니다."
+                ? "📊 학종 라운지: 희망 지원 대학과 학과를 지정하면 입결 비교, 교과 이수 충실도까지 포함된 맞춤 리포트를 제공합니다."
                 : "📄 학생부 라운지: 학생부 PDF를 업로드하면 내신, 세특, 창체, 행특을 종합 분석한 리포트를 받아볼 수 있습니다."}
             </p>
           </div>
@@ -89,12 +89,12 @@ function ApplyForm() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div className="form-group">
-              <label>지원 대학{!isHakjong && " (선택)"}</label>
+              <label>희망 지원 대학{!isHakjong && " (선택)"}</label>
               <input type="text" className="form-control" value={university}
                 onChange={(e) => setUniversity(e.target.value)} placeholder="예: 서울대학교" />
             </div>
             <div className="form-group">
-              <label>지원 학과{!isHakjong && " (선택)"}</label>
+              <label>희망 지원 학과{!isHakjong && " (선택)"}</label>
               <input type="text" className="form-control" value={major}
                 onChange={(e) => setMajor(e.target.value)} placeholder="예: 경영학과" />
             </div>
