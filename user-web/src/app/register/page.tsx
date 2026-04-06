@@ -382,8 +382,20 @@ export default function RegisterPage() {
               </p>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>지점명</label>
-                <input type="text" className="form-control" value={form.branch_name}
-                  onChange={(e) => update("branch_name", e.target.value)} placeholder="예: 강남점" required />
+                <select className="form-control" value={form.branch_name}
+                  onChange={(e) => update("branch_name", e.target.value)} required>
+                  <option value="">지점을 선택해주세요</option>
+                  <option value="경복궁점">경복궁점</option>
+                  <option value="광화문점">광화문점</option>
+                  <option value="구리점">구리점</option>
+                  <option value="대치점">대치점</option>
+                  <option value="대흥점">대흥점</option>
+                  <option value="마포점">마포점</option>
+                  <option value="분당점">분당점</option>
+                  <option value="은평점">은평점</option>
+                  <option value="중계점">중계점</option>
+                  <option value="대치스터디센터점">대치스터디센터점</option>
+                </select>
               </div>
               <p style={{ fontSize: 12, color: "#B45309", marginTop: 8 }}>
                 * 지점 담당자 가입은 관리자 승인 후 이용 가능합니다.
