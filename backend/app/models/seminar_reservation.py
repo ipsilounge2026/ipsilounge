@@ -27,7 +27,7 @@ class SeminarReservation(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     modify_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    google_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    google_event_id: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     schedule = relationship("SeminarSchedule", back_populates="reservations")
     user = relationship("User", back_populates="seminar_reservations")

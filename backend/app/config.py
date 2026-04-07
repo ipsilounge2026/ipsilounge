@@ -30,7 +30,8 @@ class Settings(BaseSettings):
 
     # Google Calendar 연동
     GOOGLE_CALENDAR_CREDENTIALS_PATH: str = ""  # 서비스 계정 JSON 키 파일 경로
-    GOOGLE_CALENDAR_ID: str = ""  # 캘린더 ID
+    GOOGLE_CALENDAR_ID: str = ""  # 관리자 캘린더 ID
+    GOOGLE_CALENDAR_EXTRA_IDS: str = ""  # 추가 캘린더 ID (쉼표 구분)
 
     # 관리자 초기 계정
     ADMIN_EMAIL: str = "admin@ipsilounge.com"
