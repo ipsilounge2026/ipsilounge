@@ -352,8 +352,27 @@ async def update_booking_status(
                     user.email, user.name,
                     str(slot.date), f"{str(slot.start_time)[:5]} ~ {str(slot.end_time)[:5]}",
                 )
+                # Google Calendar 연동
+                from app.services.calendar_service import create_consultation_event
+                event_id = await create_consultation_event(
+                    booking_id=str(booking.id),
+                    user_name=user.name,
+                    consultation_type=booking.type,
+                    date=str(slot.date),
+                    start_time=str(slot.start_time)[:5],
+                    end_time=str(slot.end_time)[:5],
+                    memo=booking.memo,
+                )
+                if event_id:
+                    booking.google_event_id = event_id
 
     if data.status == "cancelled":
+        # Google Calendar 일정 삭제
+        if booking.google_event_id:
+            from app.services.calendar_service import delete_consultation_event
+            await delete_consultation_event(booking.google_event_id)
+            booking.google_event_id = None
+
         slot_result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == booking.slot_id))
         slot = slot_result.scalar_one_or_none()
         if slot and slot.current_bookings > 0:

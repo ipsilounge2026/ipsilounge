@@ -431,8 +431,14 @@ async def cancel_reservation(
     if sched_for_deadline and datetime.utcnow() > sched_for_deadline.deadline_at:
         raise HTTPException(status_code=400, detail="예약 마감일이 지나 취소할 수 없습니다")
 
+    # Google Calendar 일정 삭제
+    if reservation.google_event_id:
+        from app.services.calendar_service import delete_seminar_event
+        await delete_seminar_event(reservation.google_event_id)
+
     reservation.status = "cancelled"
     reservation.cancel_reason = data.cancel_reason
+    reservation.google_event_id = None
     await db.commit()
 
     return {"message": "예약이 취소되었습니다"}

@@ -343,6 +343,12 @@ async def cancel_booking(
     if booking.status in ("completed", "cancelled"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이미 완료되었거나 취소된 예약입니다")
 
+    # Google Calendar 일정 삭제
+    if booking.google_event_id:
+        from app.services.calendar_service import delete_consultation_event
+        await delete_consultation_event(booking.google_event_id)
+        booking.google_event_id = None
+
     booking.status = "cancelled"
 
     # 슬롯 예약 수 감소

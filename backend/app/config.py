@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     GOOGLE_PLAY_PACKAGE_NAME: str = "com.ipsilounge.app"
     GOOGLE_SERVICE_ACCOUNT_JSON: str = ""  # 서비스 계정 JSON 파일 경로 또는 JSON 문자열
 
+    # Google Calendar 연동
+    GOOGLE_CALENDAR_CREDENTIALS_PATH: str = ""  # 서비스 계정 JSON 키 파일 경로
+    GOOGLE_CALENDAR_ID: str = ""  # 캘린더 ID
+
     # 관리자 초기 계정
     ADMIN_EMAIL: str = "admin@ipsilounge.com"
     ADMIN_PASSWORD: str = "change-this-password"

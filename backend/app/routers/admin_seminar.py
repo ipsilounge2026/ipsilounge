@@ -297,14 +297,44 @@ async def approve_reservation(
 
     reservation.status = "approved"
     reservation.approved_at = datetime.utcnow()
+
+    # Google Calendar 연동
+    from app.services.calendar_service import create_seminar_event, update_seminar_event
+    sched_result = await db.execute(select(SeminarSchedule).where(SeminarSchedule.id == reservation.schedule_id))
+    schedule = sched_result.scalar_one_or_none()
+
+    if schedule:
+        if reservation.google_event_id:
+            # 기존 이벤트 수정 (수정 후 재승인)
+            await update_seminar_event(
+                event_id=reservation.google_event_id,
+                title=schedule.title,
+                reservation_date=str(reservation.reservation_date),
+                time_slot=reservation.time_slot,
+                branch_name=reservation.branch_name,
+                attendee_count=reservation.attendee_count,
+                contact_name=reservation.contact_name,
+            )
+        else:
+            # 신규 이벤트 생성
+            event_id = await create_seminar_event(
+                reservation_id=str(reservation.id),
+                title=schedule.title,
+                reservation_date=str(reservation.reservation_date),
+                time_slot=reservation.time_slot,
+                branch_name=reservation.branch_name,
+                attendee_count=reservation.attendee_count,
+                contact_name=reservation.contact_name,
+            )
+            if event_id:
+                reservation.google_event_id = event_id
+
     await db.commit()
 
     # 승인 이메일 발송
     from app.services.email_service import send_seminar_approved_email
     user_result = await db.execute(select(User).where(User.id == reservation.user_id))
     user = user_result.scalar_one_or_none()
-    sched_result = await db.execute(select(SeminarSchedule).where(SeminarSchedule.id == reservation.schedule_id))
-    schedule = sched_result.scalar_one_or_none()
     if user and schedule:
         await send_seminar_approved_email(
             user.email, user.name, schedule.title,
@@ -329,8 +359,14 @@ async def cancel_reservation(
     if reservation.status == "cancelled":
         raise HTTPException(status_code=400, detail="이미 취소된 예약입니다")
 
+    # Google Calendar 일정 삭제
+    if reservation.google_event_id:
+        from app.services.calendar_service import delete_seminar_event
+        await delete_seminar_event(reservation.google_event_id)
+
     reservation.status = "cancelled"
     reservation.cancel_reason = data.cancel_reason
+    reservation.google_event_id = None
     await db.commit()
 
     # 취소 이메일 발송

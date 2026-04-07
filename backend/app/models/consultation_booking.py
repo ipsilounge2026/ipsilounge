@@ -22,6 +22,7 @@ class ConsultationBooking(Base):
     status: Mapped[str] = mapped_column(String(20), default="requested")  # requested / confirmed / completed / cancelled
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    google_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     user = relationship("User", back_populates="consultation_bookings")
     slot = relationship("ConsultationSlot", back_populates="bookings")
