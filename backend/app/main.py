@@ -31,6 +31,7 @@ from app.routers import (
     admin_seminar,
     admin_notice,
     notice,
+    universities,
 )
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 from app.utils.security import hash_password
@@ -88,6 +89,7 @@ app.include_router(seminar.router)
 app.include_router(admin_seminar.router)
 app.include_router(admin_notice.router)
 app.include_router(notice.router)
+app.include_router(universities.router)
 
 
 @app.on_event("startup")
@@ -104,6 +106,7 @@ async def startup():
         password_reset_token,
         consultation_note,
         admission_case,
+        admission_data,
         interview_question,
         analysis_share,
         seminar_schedule,
