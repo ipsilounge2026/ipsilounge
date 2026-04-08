@@ -6,6 +6,17 @@
 
 ## 2026-04-07 ~ 2026-04-08
 
+### 학생부 라운지 / 학종 라운지 상담 자격 분리
+- **문제**: 학생부 라운지를 신청하지 않았는데 학종 라운지만 신청했어도, "학생부 분석 상담"이 자격 충족으로 인식되어 예약 가능했음. 즉 두 라운지가 구분 없이 처리됨
+- **수정**
+  - `backend/app/routers/analysis.py` `check_consultation_eligible`
+    - `consultation_type` → `service_type` 매핑 추가 (`학생부분석` → `학생부라운지`, `학종전략` → `학종라운지`)
+    - `AnalysisOrder` 조회 시 해당 `service_type` 필터 적용
+    - 자격 미달 메시지·가이드를 라운지별로 명확히 분기
+    - 응답에 `required_service` 필드 추가
+  - `user-web/src/app/consultation/page.tsx`: 자격 미달 화면에서 상담 유형에 맞는 라운지(학생부/학종)만 안내
+  - `mobile/lib/screens/consultation_screen.dart`: 동일하게 상담 유형별로 안내 라운지 분기
+
 ### 학생-담당자 매칭에서 지점관리자 제외
 - **문제**: 지점관리자로 가입한 회원이 학생-담당자 매칭 페이지의 학생 목록에 노출됨
 - **수정**

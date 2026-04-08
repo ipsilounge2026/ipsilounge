@@ -420,32 +420,26 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                 ),
               ),
             ] else ...[
-              const Text(
-                '학생부 라운지 또는 학종 라운지를 신청하고\n학생부 파일 업로드를 완료해주세요.',
+              Text(
+                _selectedType?.value == '학생부분석'
+                    ? '학생부 라운지를 신청하고\n학생부 파일 업로드를 완료해주세요.'
+                    : '학종 라운지를 신청하고\n학생부 파일 업로드를 완료해주세요.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.6),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.6),
               ),
               const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pushNamed(context, '/analysis/apply', arguments: '학생부라운지'),
-                      child: const Text('학생부 라운지 신청', style: TextStyle(fontSize: 13)),
-                    ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    '/analysis/apply',
+                    arguments: _selectedType?.value == '학생부분석' ? '학생부라운지' : '학종라운지',
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pushNamed(context, '/analysis/apply', arguments: '학종라운지'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF22C55E),
-                        side: const BorderSide(color: Color(0xFF22C55E)),
-                      ),
-                      child: const Text('학종 라운지 신청', style: TextStyle(fontSize: 13)),
-                    ),
+                  child: Text(
+                    _selectedType?.value == '학생부분석' ? '학생부 라운지 신청' : '학종 라운지 신청',
                   ),
-                ],
+                ),
               ),
             ],
             const SizedBox(height: 12),

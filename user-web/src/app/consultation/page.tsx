@@ -245,34 +245,44 @@ export default function ConsultationPage() {
                 {eligibility.reason}
               </p>
             </div>
-            {eligibility.reason?.includes("업로드를 완료") ? (
-              <>
-                <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20, lineHeight: 1.6 }}>
-                  신청은 완료되었습니다. 학생부 파일을 업로드하면<br />
-                  학생부 분석 후 상담 진행을 위해 상담 예약이 가능합니다.
-                </p>
-                <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-                  <Link href="/analysis" className="btn btn-primary">학생부 업로드하러 가기</Link>
-                  <button onClick={handleBack} className="btn btn-outline">다른 상담 유형 선택</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20, lineHeight: 1.6 }}>
-                  {selectedTypeLabel}은 학생부 라운지 또는 학종 라운지를 신청하고<br />
-                  학생부 파일 업로드를 완료한 후 이용 가능합니다.
-                </p>
-                <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-                  <Link href="/analysis/apply?type=학생부라운지" className="btn btn-primary">학생부 라운지 신청</Link>
-                  <Link href="/analysis/apply?type=학종라운지" className="btn btn-outline">학종 라운지 신청</Link>
-                </div>
-                <div style={{ marginTop: 12 }}>
-                  <button onClick={handleBack} style={{ fontSize: 13, color: "#6B7280", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                    다른 상담 유형 선택
-                  </button>
-                </div>
-              </>
-            )}
+            {(() => {
+              // 상담 유형 → 필요한 라운지 매핑
+              const requiredService = selectedType === "학생부분석" ? "학생부라운지" : selectedType === "학종전략" ? "학종라운지" : null;
+              const serviceLabel = requiredService === "학생부라운지" ? "학생부 라운지" : requiredService === "학종라운지" ? "학종 라운지" : null;
+              const isUploadIncomplete = eligibility.reason?.includes("업로드를 완료");
+
+              if (isUploadIncomplete) {
+                return (
+                  <>
+                    <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20, lineHeight: 1.6 }}>
+                      {serviceLabel} 신청은 완료되었습니다. 학생부 파일을 업로드하면<br />
+                      {selectedTypeLabel} 예약이 가능합니다.
+                    </p>
+                    <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                      <Link href="/analysis" className="btn btn-primary">학생부 업로드하러 가기</Link>
+                      <button onClick={handleBack} className="btn btn-outline">다른 상담 유형 선택</button>
+                    </div>
+                  </>
+                );
+              }
+
+              return (
+                <>
+                  <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20, lineHeight: 1.6 }}>
+                    {selectedTypeLabel}은 <strong>{serviceLabel}</strong>를 신청하고<br />
+                    학생부 파일 업로드를 완료한 후 이용 가능합니다.
+                  </p>
+                  <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+                    <Link href={`/analysis/apply?type=${requiredService}`} className="btn btn-primary">{serviceLabel} 신청</Link>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <button onClick={handleBack} style={{ fontSize: 13, color: "#6B7280", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                      다른 상담 유형 선택
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 

@@ -184,11 +184,27 @@ async def check_consultation_eligible(
             "needs_survey": True,
         }
 
-    # 학생부분석/학종전략은 라운지 신청 + 업로드 필요
-    # 업로드 완료된 주문 확인
+    # 학생부분석 → 학생부라운지 / 학종전략 → 학종라운지로 매핑
+    consultation_to_service = {
+        "학생부분석": "학생부라운지",
+        "학종전략": "학종라운지",
+    }
+    required_service = consultation_to_service.get(consultation_type)
+    if not required_service:
+        return {
+            "eligible": False,
+            "reason": "알 수 없는 상담 유형입니다.",
+            "earliest_date": None,
+            "needs_survey": False,
+        }
+
+    service_label = "학생부 라운지" if required_service == "학생부라운지" else "학종 라운지"
+
+    # 해당 service_type의 업로드 완료된 주문만 확인
     result = await db.execute(
         select(AnalysisOrder).where(
             AnalysisOrder.user_id == user.id,
+            AnalysisOrder.service_type == required_service,
             AnalysisOrder.status.in_(["uploaded", "processing", "completed"]),
             AnalysisOrder.uploaded_at.isnot(None),
         ).order_by(AnalysisOrder.uploaded_at.asc())
@@ -196,10 +212,11 @@ async def check_consultation_eligible(
     orders = result.scalars().all()
 
     if not orders:
-        # 신청만 하고 파일 미업로드인지 확인
+        # 동일 서비스 타입에서 신청만 하고 파일 미업로드인지 확인
         applied_result = await db.execute(
             select(AnalysisOrder).where(
                 AnalysisOrder.user_id == user.id,
+                AnalysisOrder.service_type == required_service,
                 AnalysisOrder.status == "applied",
             )
         )
@@ -208,16 +225,18 @@ async def check_consultation_eligible(
         if applied_orders:
             return {
                 "eligible": False,
-                "reason": "학생부 파일 업로드를 완료해주세요. 신청은 완료되었으나 학생부 파일이 아직 업로드되지 않았습니다.",
+                "reason": f"{service_label} 학생부 파일 업로드를 완료해주세요. 신청은 완료되었으나 학생부 파일이 아직 업로드되지 않았습니다.",
                 "earliest_date": None,
                 "needs_survey": False,
+                "required_service": required_service,
             }
 
         return {
             "eligible": False,
-            "reason": "학생부 라운지 또는 학종 라운지를 먼저 신청하고 학생부를 업로드해주세요.",
+            "reason": f"{service_label}를 먼저 신청하고 학생부를 업로드해주세요.",
             "earliest_date": None,
             "needs_survey": False,
+            "required_service": required_service,
         }
 
     # 업로드 완료 → 즉시 상담 예약 가능, 단 예약 날짜는 가장 최근 업로드일+7일 이후만
@@ -230,6 +249,7 @@ async def check_consultation_eligible(
         "reason": None,
         "earliest_date": eligible_date.isoformat(),
         "needs_survey": False,
+        "required_service": required_service,
     }
 
 
