@@ -4,7 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { applyAnalysis, checkApplyCooldown } from "@/lib/api";
+import SearchableSelect from "@/components/SearchableSelect";
+import { applyAnalysis, checkApplyCooldown, getUniversities, getUniversityMajors } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 function ApplyForm() {
@@ -18,6 +19,10 @@ function ApplyForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState<{ can_apply: boolean; cooldown_until: string | null; last_applied: string | null } | null>(null);
+  const [universityOptions, setUniversityOptions] = useState<string[]>([]);
+  const [majorOptions, setMajorOptions] = useState<string[]>([]);
+  const [loadingMajors, setLoadingMajors] = useState(false);
+  const [dataYear, setDataYear] = useState<number | null>(null);
 
   if (typeof window !== "undefined" && !isLoggedIn()) {
     router.push("/login");
@@ -25,7 +30,27 @@ function ApplyForm() {
 
   useEffect(() => {
     checkApplyCooldown().then(setCooldown).catch(() => {});
+    getUniversities()
+      .then((res) => {
+        setUniversityOptions(res.universities);
+        setDataYear(res.year);
+      })
+      .catch(() => {});
   }, []);
+
+  // 대학 선택 시 해당 대학의 학과 목록 로드
+  useEffect(() => {
+    if (!university) {
+      setMajorOptions([]);
+      setMajor("");
+      return;
+    }
+    setLoadingMajors(true);
+    getUniversityMajors(university)
+      .then((res) => setMajorOptions(res.majors))
+      .catch(() => setMajorOptions([]))
+      .finally(() => setLoadingMajors(false));
+  }, [university]);
 
   const handleSubmit = async () => {
     setError("");
@@ -90,15 +115,31 @@ function ApplyForm() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div className="form-group">
               <label>희망 지원 대학{!isHakjong && " (선택)"}</label>
-              <input type="text" className="form-control" value={university}
-                onChange={(e) => setUniversity(e.target.value)} placeholder="예: 서울대학교" />
+              <SearchableSelect
+                options={universityOptions}
+                value={university}
+                onChange={setUniversity}
+                placeholder="대학명 검색"
+                emptyMessage="대학 데이터를 불러오는 중..."
+              />
             </div>
             <div className="form-group">
               <label>희망 지원 학과{!isHakjong && " (선택)"}</label>
-              <input type="text" className="form-control" value={major}
-                onChange={(e) => setMajor(e.target.value)} placeholder="예: 경영학과" />
+              <SearchableSelect
+                options={majorOptions}
+                value={major}
+                onChange={setMajor}
+                placeholder={university ? "학과명 검색" : "대학을 먼저 선택하세요"}
+                disabled={!university || loadingMajors}
+                emptyMessage={loadingMajors ? "불러오는 중..." : "학과 데이터가 없습니다"}
+              />
             </div>
           </div>
+          {dataYear && (
+            <p style={{ fontSize: 12, color: "var(--gray-500)", marginTop: -8, marginBottom: 16 }}>
+              ※ {dataYear}학년도 기준 대학·학과 데이터입니다.
+            </p>
+          )}
 
           <div className="form-group">
             <label>메모 (선택)</label>

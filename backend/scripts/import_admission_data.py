@@ -19,8 +19,8 @@ import openpyxl
 from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# 프로젝트 루트를 PYTHONPATH에 추가
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# backend 디렉터리를 PYTHONPATH에 추가 (app 모듈 찾기)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.database import async_session, engine, Base  # noqa: E402
 from app.models.admission_data import AdmissionData  # noqa: E402

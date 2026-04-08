@@ -9,9 +9,9 @@ class AnalysisApplyScreen extends StatefulWidget {
 }
 
 class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
-  final _universityCtrl = TextEditingController();
-  final _majorCtrl = TextEditingController();
   final _memoCtrl = TextEditingController();
+  String _university = '';
+  String _major = '';
   bool _isLoading = false;
   String? _errorMessage;
   String _serviceType = '학생부라운지';
@@ -21,10 +21,17 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
   String? _cooldownUntil;
   String? _lastApplied;
 
+  // 대학/학과 드롭다운 데이터
+  List<String> _universities = [];
+  List<String> _majors = [];
+  int? _dataYear;
+  bool _loadingMajors = false;
+
   @override
   void initState() {
     super.initState();
     _checkCooldown();
+    _loadUniversities();
   }
 
   Future<void> _checkCooldown() async {
@@ -41,6 +48,34 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
     }
   }
 
+  Future<void> _loadUniversities() async {
+    try {
+      final result = await AnalysisService.getUniversities();
+      setState(() {
+        _universities = List<String>.from(result['universities'] ?? []);
+        _dataYear = result['year'] as int?;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadMajors(String university) async {
+    if (university.isEmpty) {
+      setState(() { _majors = []; });
+      return;
+    }
+    setState(() { _loadingMajors = true; });
+    try {
+      final result = await AnalysisService.getUniversityMajors(university);
+      setState(() {
+        _majors = List<String>.from(result['majors'] ?? []);
+      });
+    } catch (_) {
+      setState(() { _majors = []; });
+    } finally {
+      if (mounted) setState(() { _loadingMajors = false; });
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -52,8 +87,6 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
 
   @override
   void dispose() {
-    _universityCtrl.dispose();
-    _majorCtrl.dispose();
     _memoCtrl.dispose();
     super.dispose();
   }
@@ -65,8 +98,8 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
     try {
       final result = await AnalysisService.apply(
         serviceType: _serviceType,
-        targetUniversity: _universityCtrl.text.trim(),
-        targetMajor: _majorCtrl.text.trim(),
+        targetUniversity: _university.trim(),
+        targetMajor: _major.trim(),
         memo: _memoCtrl.text.trim(),
       );
       if (mounted) {
@@ -153,33 +186,20 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
                 ),
               ),
 
-            if (_isHakjong) ...[
-              _buildLabel('희망 지원 대학'),
-              TextField(
-                controller: _universityCtrl,
-                decoration: const InputDecoration(hintText: '예: 서울대학교'),
+            _buildLabel(_isHakjong ? '희망 지원 대학' : '지원 대학 (선택)'),
+            _buildUniversityAutocomplete(),
+            const SizedBox(height: 16),
+            _buildLabel(_isHakjong ? '희망 지원 학과' : '지원 학과 (선택)'),
+            _buildMajorAutocomplete(),
+            if (_dataYear != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '※ ${_dataYear}학년도 기준 대학·학과 데이터입니다.',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                ),
               ),
-              const SizedBox(height: 16),
-              _buildLabel('희망 지원 학과'),
-              TextField(
-                controller: _majorCtrl,
-                decoration: const InputDecoration(hintText: '예: 컴퓨터공학과'),
-              ),
-              const SizedBox(height: 16),
-            ] else ...[
-              _buildLabel('지원 대학 (선택)'),
-              TextField(
-                controller: _universityCtrl,
-                decoration: const InputDecoration(hintText: '예: 서울대학교'),
-              ),
-              const SizedBox(height: 16),
-              _buildLabel('지원 학과 (선택)'),
-              TextField(
-                controller: _majorCtrl,
-                decoration: const InputDecoration(hintText: '예: 컴퓨터공학과'),
-              ),
-              const SizedBox(height: 16),
-            ],
+            const SizedBox(height: 16),
 
             _buildLabel('메모 (선택)'),
             TextField(
@@ -234,6 +254,160 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
         style: const TextStyle(
             fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF374151)),
       ),
+    );
+  }
+
+  Widget _buildUniversityAutocomplete() {
+    return Autocomplete<String>(
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (_universities.isEmpty) return const Iterable<String>.empty();
+        if (textEditingValue.text.isEmpty) return _universities;
+        final q = textEditingValue.text.toLowerCase();
+        return _universities.where((u) => u.toLowerCase().contains(q));
+      },
+      onSelected: (String selection) {
+        setState(() {
+          _university = selection;
+          _major = '';
+          _majors = [];
+        });
+        _loadMajors(selection);
+      },
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            hintText: _universities.isEmpty
+                ? '대학 목록을 불러오는 중...'
+                : '대학명을 검색하세요',
+            suffixIcon: controller.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () {
+                      controller.clear();
+                      setState(() {
+                        _university = '';
+                        _major = '';
+                        _majors = [];
+                      });
+                    },
+                  )
+                : const Icon(Icons.search, size: 18),
+          ),
+          onChanged: (value) {
+            _university = value;
+          },
+          onSubmitted: (_) => onFieldSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 400),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options.elementAt(index);
+                  return InkWell(
+                    onTap: () => onSelected(option),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: Text(
+                        option,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMajorAutocomplete() {
+    final disabled = _university.isEmpty || _majors.isEmpty;
+    return Autocomplete<String>(
+      key: ValueKey('major_$_university'),
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (_majors.isEmpty) return const Iterable<String>.empty();
+        if (textEditingValue.text.isEmpty) return _majors;
+        final q = textEditingValue.text.toLowerCase();
+        return _majors.where((m) => m.toLowerCase().contains(q));
+      },
+      onSelected: (String selection) {
+        setState(() => _major = selection);
+      },
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: !disabled,
+          decoration: InputDecoration(
+            hintText: _loadingMajors
+                ? '학과 목록을 불러오는 중...'
+                : (_university.isEmpty
+                    ? '대학을 먼저 선택하세요'
+                    : (_majors.isEmpty ? '학과 데이터가 없습니다' : '학과명을 검색하세요')),
+            suffixIcon: controller.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () {
+                      controller.clear();
+                      setState(() => _major = '');
+                    },
+                  )
+                : const Icon(Icons.search, size: 18),
+          ),
+          onChanged: (value) {
+            _major = value;
+          },
+          onSubmitted: (_) => onFieldSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 400),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options.elementAt(index);
+                  return InkWell(
+                    onTap: () => onSelected(option),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: Text(
+                        option,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

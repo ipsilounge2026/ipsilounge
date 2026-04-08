@@ -262,3 +262,12 @@ export async function cancelSeminarReservation(id: string, cancelReason: string)
 export async function getActiveNotices() {
   return request("/api/notices/active");
 }
+
+// --- 대학/학과 드롭다운 ---
+export async function getUniversities(): Promise<{ year: number | null; universities: string[] }> {
+  return request("/api/universities");
+}
+
+export async function getUniversityMajors(university: string): Promise<{ year: number | null; university: string; majors: string[] }> {
+  return request(`/api/universities/majors?university=${encodeURIComponent(university)}`);
+}

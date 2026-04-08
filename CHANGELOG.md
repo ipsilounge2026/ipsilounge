@@ -6,6 +6,36 @@
 
 ## 2026-04-07 ~ 2026-04-08
 
+### 대학/학과 선택 드롭다운 (입결 DB 기반)
+- **변경**: 학생부 라운지 / 학종 라운지 신청 시 대학·학과를 자유 텍스트 입력 → **검색 가능한 드롭다운**으로 전환
+- **데이터 소스**: `school-record-analyzer/data/admission_db.xlsx` (수시입결RAW 시트)
+  - 컬럼: `대학|전형구분|전형명|모집단위명|학년도|모집인원|지원자|경쟁률|추합|입결50%|입결70%|비고`
+  - 최신 학년도 자동 감지(`SELECT MAX(year) FROM admission_data`) → 연도 하드코딩 없이 자동 전환
+  - 대학/학과 모두 **가나다 순** 정렬
+  - 현재 반영: 2027학년도 기준 82개 대학, 총 35,173 rows 적재 (2024~2027)
+- **백엔드 신규/수정 파일**
+  - `backend/app/models/admission_data.py` (신규): `admission_data` 테이블 모델 (university, major, year 인덱스)
+  - `backend/app/routers/universities.py` (신규)
+    - `GET /api/universities` → `{year, universities[]}` 반환
+    - `GET /api/universities/majors?university=...` → `{year, university, majors[]}` 반환
+    - `_get_latest_year()` 헬퍼로 최신 학년도 조회
+  - `backend/scripts/import_admission_data.py` (신규): 엑셀 파싱 후 `admission_data` 테이블 bulk insert (1000행 단위 배치, `--clear` 옵션 지원)
+  - `backend/app/main.py`: `universities` 라우터 및 `admission_data` 모델 등록
+- **user-web 신규/수정 파일**
+  - `user-web/src/components/SearchableSelect.tsx` (신규): 재사용 가능한 검색형 combobox 컴포넌트 (실시간 필터, 외부 클릭 닫힘, 지우기 버튼)
+  - `user-web/src/lib/api.ts`: `getUniversities()`, `getUniversityMajors(university)` 추가
+  - `user-web/src/app/analysis/apply/page.tsx`
+    - `TextField` → `SearchableSelect`로 교체 (대학 선택 시 학과 목록 자동 로드)
+    - "※ N학년도 기준 대학·학과 데이터입니다." 안내 문구 표시
+- **mobile 수정 파일**
+  - `mobile/lib/services/analysis_service.dart`: `getUniversities()`, `getUniversityMajors(university)` 추가
+  - `mobile/lib/screens/analysis_apply_screen.dart`
+    - Flutter `Autocomplete<String>` 위젯으로 대학/학과 입력 필드 교체
+    - `TextEditingController` 제거 → `_university`, `_major` 상태 변수로 전환
+    - 대학 선택 시 해당 학과 목록 자동 로드, 학과 필드는 대학 선택 전까지 비활성화
+    - 대학·학과 검색 결과 드롭다운, 지우기 버튼, 데이터 기준 학년도 안내 표시
+- **운영 반영**: 서버에 `openpyxl` 설치 후 `scripts/import_admission_data.py` 실행 → `admission_data` 테이블에 35,173 rows 적재 완료
+
 ### 학생부 라운지 / 학종 라운지 상담 자격 분리
 - **문제**: 학생부 라운지를 신청하지 않았는데 학종 라운지만 신청했어도, "학생부 분석 상담"이 자격 충족으로 인식되어 예약 가능했음. 즉 두 라운지가 구분 없이 처리됨
 - **수정**

@@ -72,4 +72,15 @@ class AnalysisService {
     final res = await ApiService.get('/analysis/$id/report/pdf');
     return ApiService.toFullUrl(res['download_url']);
   }
+
+  /// 대학 목록 조회 (최신 학년도 기준, 가나다 순)
+  static Future<Map<String, dynamic>> getUniversities() async {
+    return await ApiService.get('/universities');
+  }
+
+  /// 특정 대학의 학과 목록 조회 (최신 학년도 기준, 가나다 순)
+  static Future<Map<String, dynamic>> getUniversityMajors(String university) async {
+    final encoded = Uri.encodeComponent(university);
+    return await ApiService.get('/universities/majors?university=$encoded');
+  }
 }
