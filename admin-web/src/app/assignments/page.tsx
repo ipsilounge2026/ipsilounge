@@ -247,11 +247,13 @@ export default function AssignmentsPage() {
                   <button className="btn btn-sm" onClick={handleSearchUsers}>검색</button>
                 </div>
                 <select className="form-control" value={selectedUser} onChange={e => setSelectedUser(e.target.value)} size={5} style={{ height: "auto" }}>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.email}) {u.member_type === "parent" ? "[학부모]" : "[학생]"}
-                    </option>
-                  ))}
+                  {users
+                    .filter(u => !assignments.some(a => a.user_id === u.id))
+                    .map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email}) {u.member_type === "parent" ? "[학부모]" : "[학생]"}
+                      </option>
+                    ))}
                 </select>
               </div>
             </div>
