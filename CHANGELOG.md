@@ -6,6 +6,23 @@
 
 ## 2026-04-07 ~ 2026-04-08
 
+### 앱 아이콘/파비콘 적용 (user-web + mobile)
+- **원본 아이콘**: `ipsilounge/assets/favicon.png` (1025×1025 RGBA PNG, 파란/청록 그라디언트 위치 핀 + 홈 심볼)
+- **user-web** (Next.js App Router가 자동 인식)
+  - `user-web/src/app/favicon.ico` (멀티 사이즈 16/32/48)
+  - `user-web/src/app/icon.png` (512×512)
+  - `user-web/src/app/apple-icon.png` (180×180, iOS "홈 화면에 추가")
+- **mobile (Android)**: Python + Pillow로 5개 mipmap 폴더의 `ic_launcher.png` 자동 생성
+  - `mipmap-mdpi` 48×48
+  - `mipmap-hdpi` 72×72
+  - `mipmap-xhdpi` 96×96
+  - `mipmap-xxhdpi` 144×144
+  - `mipmap-xxxhdpi` 192×192
+  - 원본 보관: `mobile/assets/icon/icon.png` (1024×1024)
+  - 재생성 스크립트: `mobile/scripts/generate_launcher_icons.py` (원본 교체 후 해당 스크립트만 실행하면 전 사이즈 자동 재생성)
+- **admin-web**: 요청 사항에 따라 현 상태 유지 (파비콘 미적용)
+- **참고**: `flutter_launcher_icons` 패키지는 쓰지 않음 — 한글 경로에서 `flutter pub run` 이슈를 피하기 위해 Python 스크립트 방식 채택
+
 ### [버그 수정] 비밀번호 찾기/재설정 API URL 오류 (404)
 - **문제**: `forgot-password` / `reset-password` 페이지가 API 호출 시 `/api` 프리픽스 없이 `/auth/forgot-password`, `/auth/reset-password`로 요청하여 **404 Not Found** 발생. 사용자가 비밀번호 찾기를 시도해도 항상 "오류가 발생했습니다" 메시지만 뜨는 상태였음
 - **원인**: `fetch` 호출 URL에서 `/api` 경로 누락 (공통 `request()` 헬퍼를 사용하지 않고 직접 fetch 호출)

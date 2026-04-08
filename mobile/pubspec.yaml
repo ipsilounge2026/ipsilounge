@@ -50,7 +50,12 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^3.0.0
 
+# 런처 아이콘 재생성 (원본: assets/icon/icon.png, 1024x1024 권장)
+#   scripts/generate_launcher_icons.py 실행
+#   Python + Pillow로 각 mipmap 폴더의 ic_launcher.png를 자동 생성
+
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/icon/
