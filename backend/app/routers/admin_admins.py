@@ -375,7 +375,10 @@ async def list_unmatched_students(
         return []
 
     users_result = await db.execute(
-        select(User).where(User.id.in_(unmatched_ids)).order_by(User.created_at.desc())
+        select(User)
+        .where(User.id.in_(unmatched_ids))
+        .where(User.member_type != "branch_manager")
+        .order_by(User.created_at.desc())
     )
     users = users_result.scalars().all()
 

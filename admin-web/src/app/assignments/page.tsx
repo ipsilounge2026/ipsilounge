@@ -71,7 +71,7 @@ export default function AssignmentsPage() {
       if (isSuperAdmin) {
         const [adminList, userList, unmatched] = await Promise.all([
           getAdmins(),
-          getUsers(1),
+          getUsers(1, undefined, undefined, undefined, true),
           getUnmatchedStudents(),
         ]);
         setAdmins(adminList.filter((a: AdminItem) => a.is_active));
@@ -107,7 +107,7 @@ export default function AssignmentsPage() {
 
   const handleSearchUsers = async () => {
     try {
-      const result = await getUsers(1, userSearch || undefined);
+      const result = await getUsers(1, userSearch || undefined, undefined, undefined, true);
       setUsers(result.items || []);
     } catch {}
   };

@@ -20,10 +20,11 @@ async def list_users(
     search: str | None = None,
     member_type: str | None = None,
     is_active: bool | None = None,
+    exclude_branch_manager: bool = False,
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """회원 목록 (member_type, is_active 필터 지원)"""
+    """회원 목록 (member_type, is_active, exclude_branch_manager 필터 지원)"""
     query = select(User)
     count_query = select(func.count()).select_from(User)
 
@@ -35,6 +36,9 @@ async def list_users(
     if member_type:
         query = query.where(User.member_type == member_type)
         count_query = count_query.where(User.member_type == member_type)
+    elif exclude_branch_manager:
+        query = query.where(User.member_type != "branch_manager")
+        count_query = count_query.where(User.member_type != "branch_manager")
 
     if is_active is not None:
         query = query.where(User.is_active == is_active)
