@@ -6,6 +6,17 @@
 
 ## 2026-04-07 ~ 2026-04-08
 
+### [버그 수정] 비밀번호 찾기/재설정 API URL 오류 (404)
+- **문제**: `forgot-password` / `reset-password` 페이지가 API 호출 시 `/api` 프리픽스 없이 `/auth/forgot-password`, `/auth/reset-password`로 요청하여 **404 Not Found** 발생. 사용자가 비밀번호 찾기를 시도해도 항상 "오류가 발생했습니다" 메시지만 뜨는 상태였음
+- **원인**: `fetch` 호출 URL에서 `/api` 경로 누락 (공통 `request()` 헬퍼를 사용하지 않고 직접 fetch 호출)
+- **발견 경위**: 특정 지점관리자가 로그인·비밀번호 찾기가 모두 안 된다는 제보 → 서버 로그 분석 결과 `POST /auth/forgot-password HTTP/1.0 404 Not Found` 확인
+- **수정**
+  - `user-web/src/app/forgot-password/page.tsx`
+    - URL: `/auth/forgot-password` → `/api/auth/forgot-password`
+    - 에러 처리 개선: 429(rate limit) 별도 메시지, 서버 응답의 `detail` 필드 표시
+  - `user-web/src/app/reset-password/page.tsx`
+    - URL: `/auth/reset-password` → `/api/auth/reset-password`
+
 ### 대학/학과 선택 드롭다운 (입결 DB 기반)
 - **변경**: 학생부 라운지 / 학종 라운지 신청 시 대학·학과를 자유 텍스트 입력 → **검색 가능한 드롭다운**으로 전환
 - **데이터 소스**: `school-record-analyzer/data/admission_db.xlsx` (수시입결RAW 시트)

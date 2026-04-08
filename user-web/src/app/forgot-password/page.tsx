@@ -14,15 +14,21 @@ export default function ForgotPasswordPage() {
     setError("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/forgot-password`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      if (!res.ok) throw new Error("요청 실패");
+      if (!res.ok) {
+        if (res.status === 429) {
+          throw new Error("요청이 너무 많습니다. 1시간 후 다시 시도해주세요.");
+        }
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail ?? "요청에 실패했습니다.");
+      }
       setSent(true);
-    } catch {
-      setError("오류가 발생했습니다. 다시 시도해주세요.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }
