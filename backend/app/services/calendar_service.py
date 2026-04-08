@@ -18,9 +18,9 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 # 시간대 매핑 (설명회)
 SEMINAR_TIME_SLOTS = {
-    "morning": ("09:00", "12:00"),
-    "afternoon": ("13:00", "17:00"),
-    "evening": ("18:00", "21:00"),
+    "morning": ("11:00", "13:00"),
+    "afternoon": ("14:00", "16:00"),
+    "evening": ("19:00", "21:00"),
 }
 
 
@@ -149,7 +149,7 @@ async def create_seminar_event(
     if not service:
         return None
 
-    start_time, end_time = SEMINAR_TIME_SLOTS.get(time_slot, ("09:00", "12:00"))
+    start_time, end_time = SEMINAR_TIME_SLOTS.get(time_slot, ("11:00", "13:00"))
     slot_label = {"morning": "오전", "afternoon": "오후", "evening": "저녁"}.get(time_slot, time_slot)
 
     event = {
@@ -190,7 +190,7 @@ async def update_seminar_event(
     if not service or not event_id:
         return False
 
-    start_time, end_time = SEMINAR_TIME_SLOTS.get(time_slot, ("09:00", "12:00"))
+    start_time, end_time = SEMINAR_TIME_SLOTS.get(time_slot, ("11:00", "13:00"))
     slot_label = {"morning": "오전", "afternoon": "오후", "evening": "저녁"}.get(time_slot, time_slot)
 
     event = {
