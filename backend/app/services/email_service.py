@@ -200,6 +200,39 @@ async def send_seminar_bulk_email(to: str, subject: str, body: str) -> bool:
     return await _send_email(to, subject, html)
 
 
+async def send_survey_resume_email(
+    to: str,
+    name: str,
+    resume_url: str,
+    expires_at_str: str,
+    survey_label: str = "사전 상담 설문",
+) -> bool:
+    """사전 상담 설문 이어쓰기 링크 발송"""
+    subject = f"[입시라운지] {survey_label} 이어쓰기 링크"
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">{survey_label} 이어쓰기</h2>
+      <p>안녕하세요, <strong>{name}</strong>님.</p>
+      <p>작성 중이신 {survey_label}을 이어서 작성하실 수 있는 링크입니다.<br>
+         아래 버튼을 클릭하면 마지막 작성 위치부터 자동으로 이어집니다.</p>
+      <p>
+        <a href="{resume_url}"
+           style="display:inline-block; padding:12px 24px; background:#2563eb;
+                  color:#fff; text-decoration:none; border-radius:6px; font-size:15px;">
+          이어쓰기 시작
+        </a>
+      </p>
+      <p style="color:#6b7280; font-size:13px;">
+        이 링크는 <strong>{expires_at_str}</strong>까지 유효합니다.<br>
+        링크를 받은 본인 외에는 사용하지 마세요.
+      </p>
+      <hr style="border:none; border-top:1px solid #e5e7eb; margin: 24px 0;">
+      <p style="color:#9ca3af; font-size:12px;">입시라운지 | ipsilounge.com</p>
+    </div>
+    """
+    return await _send_email(to, subject, html)
+
+
 async def send_consultation_reminder_email(
     to: str, name: str, date_str: str, time_str: str
 ) -> bool:

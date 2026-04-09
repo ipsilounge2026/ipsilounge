@@ -23,6 +23,7 @@ from app.routers import (
     auth,
     consultation,
     consultation_notes,
+    consultation_survey,
     payment,
     users,
     admission_cases,
@@ -83,6 +84,7 @@ app.include_router(admin_admins.router)
 app.include_router(admin_consultation_notes.router)
 app.include_router(admin_admission_cases.router)
 app.include_router(consultation_notes.router)
+app.include_router(consultation_survey.router)
 app.include_router(admission_cases.router)
 app.include_router(schools.router)
 app.include_router(seminar.router)
@@ -100,6 +102,7 @@ async def startup():
         analysis_order,
         consultation_booking,
         consultation_slot,
+        consultation_survey,
         notification,
         payment as payment_model,
         user,

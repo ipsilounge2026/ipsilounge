@@ -1,0 +1,1113 @@
+{
+  "id": "preheigh1",
+  "version": "0.2.0-draft",
+  "title": "예비고1 고등학교 지원 전략 & 학습 준비 상담",
+  "target": "중학교 3학년 (예비고1)",
+  "estimated_time_minutes": [34, 52],
+  "source_doc": "예비고1 상담시스템_기획서_V2_2.md",
+
+  "subject_codes": {
+    "ko": "국어",
+    "en": "영어",
+    "ma": "수학",
+    "so": "사회",
+    "sc": "과학"
+  },
+
+  "categories": [
+    {
+      "id": "A",
+      "order": 1,
+      "title": "기본 정보",
+      "description": "학생 기본 정보와 희망 고등학교를 알려주세요",
+      "estimated_time_minutes": [2, 3],
+      "fatigue": "light",
+      "platforms": ["web", "mobile"],
+      "skippable": true,
+      "questions": [
+        {
+          "id": "A1",
+          "type": "text",
+          "label": "학생 이름",
+          "required": true,
+          "placeholder": "예: 홍길동"
+        },
+        {
+          "id": "A2",
+          "type": "text",
+          "label": "재학 중학교",
+          "required": true,
+          "placeholder": "예: 대치중학교",
+          "note": "지역 자동 매핑에 사용됩니다"
+        },
+        {
+          "id": "A3",
+          "type": "cascading_select",
+          "label": "거주 지역",
+          "required": true,
+          "note": "통학권 분석용",
+          "levels": [
+            { "name": "sido", "label": "시·도", "options_source": "regions.sido" },
+            { "name": "sigungu", "label": "시·군·구", "options_source": "regions.sigungu", "depends_on": "sido" }
+          ]
+        },
+        {
+          "id": "A4",
+          "type": "multi_select",
+          "label": "희망 고등학교 유형 (복수 선택 가능)",
+          "required": false,
+          "min_items": 0,
+          "options": [
+            { "value": "일반고", "label": "일반고" },
+            { "value": "자사고", "label": "자사고" },
+            { "value": "외고", "label": "외고" },
+            { "value": "과고", "label": "과고" },
+            { "value": "국제고", "label": "국제고" },
+            { "value": "영재학교", "label": "영재학교" },
+            { "value": "예술고", "label": "예술고" },
+            { "value": "체육고", "label": "체육고" },
+            { "value": "마이스터고", "label": "마이스터고" },
+            { "value": "아직모름", "label": "아직 모름", "exclusive": true }
+          ]
+        },
+        {
+          "id": "A5",
+          "type": "text_list",
+          "label": "구체적 희망 고등학교명 (있다면)",
+          "required": false,
+          "max_items": 3,
+          "placeholder": "예: 휘문고등학교"
+        },
+        {
+          "id": "A6",
+          "type": "group_select",
+          "label": "고등학교 선택 시 중요하게 생각하는 기준",
+          "instruction": "5개 그룹에서 각각 1개씩 선택해주세요 (해당 없는 그룹은 '없음')",
+          "required": true,
+          "groups": [
+            {
+              "id": "A6_1",
+              "label": "① 학업/성적 환경",
+              "options": [
+                { "value": "학업분위기", "label": "학업 분위기" },
+                { "value": "학생수", "label": "학생 수 (등급 유불리)" },
+                { "value": "시험출제유형", "label": "시험 출제 유형 (수능형 등)" },
+                { "value": "수행평가비중", "label": "수행평가 비중" },
+                { "value": "없음", "label": "없음" }
+              ]
+            },
+            {
+              "id": "A6_2",
+              "label": "② 대입 지원 체계",
+              "options": [
+                { "value": "대입실적", "label": "대입 실적" },
+                { "value": "수시정시대응력", "label": "수시·정시 대응력" },
+                { "value": "세특관리체계", "label": "세특 관리 체계" },
+                { "value": "진학상담체계", "label": "진학 상담 체계" },
+                { "value": "없음", "label": "없음" }
+              ]
+            },
+            {
+              "id": "A6_3",
+              "label": "③ 교육과정/활동",
+              "options": [
+                { "value": "개설과목다양성", "label": "개설 과목 다양성" },
+                { "value": "특색프로그램", "label": "특색 프로그램" },
+                { "value": "동아리운영", "label": "동아리 운영" },
+                { "value": "교내대회행사", "label": "교내 대회·행사" },
+                { "value": "없음", "label": "없음" }
+              ]
+            },
+            {
+              "id": "A6_4",
+              "label": "④ 생활/환경",
+              "options": [
+                { "value": "통학거리교통", "label": "통학 거리·교통편" },
+                { "value": "학교시설", "label": "학교 시설" },
+                { "value": "기숙사", "label": "기숙사 여부" },
+                { "value": "야자운영", "label": "야자 운영" },
+                { "value": "남녀공학", "label": "남녀공학 여부" },
+                { "value": "없음", "label": "없음" }
+              ]
+            },
+            {
+              "id": "A6_5",
+              "label": "⑤ 안전/비용/기타",
+              "options": [
+                { "value": "비용", "label": "비용 (등록금·교재비)" },
+                { "value": "교우관계", "label": "교우 관계" },
+                { "value": "학교폭력현황", "label": "학교폭력 현황" },
+                { "value": "전출입학업중단비율", "label": "전출입·학업중단 비율" },
+                { "value": "없음", "label": "없음" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "B",
+      "order": 2,
+      "title": "진로 & 대입 방향성",
+      "description": "관심 있는 진로와 대입 전형에 대한 생각을 알려주세요",
+      "estimated_time_minutes": [3, 5],
+      "fatigue": "light",
+      "platforms": ["web", "mobile"],
+      "skippable": true,
+      "questions": [
+        {
+          "id": "B1",
+          "type": "career_select",
+          "label": "관심 있는 진로/직업 분야",
+          "instruction": "복수 선택 가능, 계열 자동 매핑됨",
+          "required": false,
+          "categories": [
+            {
+              "key": "humanities",
+              "label": "인문·어문",
+              "mapped_track": "인문",
+              "subcategories": ["국어국문", "영어영문", "기타외국어", "철학·윤리", "역사·문화"]
+            },
+            {
+              "key": "social",
+              "label": "사회·법",
+              "mapped_track": "사회",
+              "subcategories": ["정치·외교", "법학", "행정·공공", "사회학·복지", "심리학"]
+            },
+            {
+              "key": "business",
+              "label": "상경·경영",
+              "mapped_track": "상경",
+              "subcategories": ["경영학", "경제학", "회계·세무", "금융·보험", "무역·물류"]
+            },
+            {
+              "key": "education",
+              "label": "교육",
+              "mapped_track": "인문/사회",
+              "subcategories": ["초등교육", "중등교육", "유아교육", "특수교육"]
+            },
+            {
+              "key": "natural_science",
+              "label": "자연과학",
+              "mapped_track": "자연",
+              "subcategories": ["수학·통계", "물리", "화학", "생명과학", "지구·환경과학"]
+            },
+            {
+              "key": "engineering",
+              "label": "공학·IT",
+              "mapped_track": "공학",
+              "subcategories": ["컴퓨터·SW", "AI·데이터", "전자·전기", "기계·로봇", "건축·토목", "화학공학", "신소재"]
+            },
+            {
+              "key": "medical",
+              "label": "의약·보건",
+              "mapped_track": "의약",
+              "subcategories": ["의학", "치의학", "한의학", "약학", "간호", "보건·재활", "수의학"]
+            },
+            {
+              "key": "arts",
+              "label": "예술·체육",
+              "mapped_track": "예체능",
+              "subcategories": ["미술·디자인", "음악", "체육·스포츠", "영상·미디어", "연극·영화"]
+            },
+            {
+              "key": "etc",
+              "label": "기타",
+              "mapped_track": "기타",
+              "subcategories": ["군·경찰·소방", "조리·식품", "항공·해양", "농업·생물자원", "직접입력"]
+            },
+            {
+              "key": "exploring",
+              "label": "탐색 중",
+              "mapped_track": "미정",
+              "subcategories": []
+            }
+          ]
+        },
+        {
+          "id": "B2",
+          "type": "slider",
+          "label": "대입 전형 이해도",
+          "instruction": "현재 대입 전형 구조에 대해 얼마나 알고 있나요?",
+          "required": true,
+          "min": 1,
+          "max": 10,
+          "step": 1,
+          "labels": {
+            "1": "전혀 모름",
+            "10": "매우 잘 앎"
+          }
+        },
+        {
+          "id": "B3",
+          "type": "radio",
+          "label": "대입 주력 전형",
+          "instruction": "가장 관심 있는 전형을 선택해주세요",
+          "required": true,
+          "options": [
+            { "value": "학생부교과", "label": "학생부교과" },
+            { "value": "학생부종합", "label": "학생부종합" },
+            { "value": "수능위주", "label": "수능위주" },
+            { "value": "논술", "label": "논술" },
+            { "value": "예체능", "label": "예체능" },
+            { "value": "아직모름", "label": "아직 모름" }
+          ]
+        },
+        {
+          "id": "B4",
+          "type": "rank",
+          "label": "고등학교에서 중요하게 준비하고 싶은 것",
+          "instruction": "상위 5개를 순위대로 선택해주세요 (1순위가 가장 중요)",
+          "required": true,
+          "max_picks": 5,
+          "options": [
+            { "value": "교과내신", "label": "교과 내신 성적 (지필평가)", "group": "내신" },
+            { "value": "수행평가", "label": "수행평가", "group": "내신" },
+            { "value": "수능", "label": "수능 준비", "group": "수능" },
+            { "value": "교과세특", "label": "교과 세특", "group": "세특" },
+            { "value": "자율활동", "label": "자율활동", "group": "창체" },
+            { "value": "동아리활동", "label": "동아리활동", "group": "창체" },
+            { "value": "진로활동", "label": "진로활동", "group": "창체" },
+            { "value": "행특", "label": "행동특성 및 종합의견", "group": "행특" },
+            { "value": "독서봉사", "label": "독서 / 봉사활동", "group": "기타" }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "C",
+      "order": 3,
+      "title": "중학교 성적",
+      "description": "학기별 내신 성적을 입력해주세요",
+      "estimated_time_minutes": [8, 12],
+      "fatigue": "heavy",
+      "platforms": ["web"],
+      "skippable": true,
+      "questions": [
+        {
+          "id": "C1_C6",
+          "type": "semester_grade_matrix",
+          "label": "학기별 교과 성적",
+          "instruction": "각 학기마다 자유학기제/미진행 여부를 먼저 확인 후, 해당하지 않으면 과목별 성적을 입력하세요",
+          "required": true,
+          "semesters": [
+            { "key": "C1", "label": "중1-1학기", "exempt_label": "자유학기제", "exempt_reason": "free_semester" },
+            { "key": "C2", "label": "중1-2학기", "exempt_label": "자유학기제", "exempt_reason": "free_semester" },
+            { "key": "C3", "label": "중2-1학기", "exempt_label": "자유학기제", "exempt_reason": "free_semester" },
+            { "key": "C4", "label": "중2-2학기", "exempt_label": "자유학기제", "exempt_reason": "free_semester" },
+            { "key": "C5", "label": "중3-1학기", "exempt_label": "미진행 (성적 미산출)", "exempt_reason": "not_graded" },
+            { "key": "C6", "label": "중3-2학기", "exempt_label": "미진행 (성적 미산출)", "exempt_reason": "not_graded" }
+          ],
+          "subjects": ["국어", "영어", "수학", "사회", "과학"],
+          "fields": [
+            { "name": "raw_score", "label": "원점수", "type": "number", "min": 0, "max": 100, "required": true },
+            { "name": "subject_avg", "label": "과목평균", "type": "number", "min": 0, "max": 100, "required": false },
+            { "name": "stdev", "label": "표준편차", "type": "number", "min": 0, "max": 50, "required": false }
+          ]
+        },
+        {
+          "id": "C7",
+          "type": "auto_calculated",
+          "label": "성적 추이 (자동 산출)",
+          "instruction": "C1~C6 입력 후 자동 계산됨",
+          "calculations": [
+            { "name": "all_subject_trend", "label": "전과목 추이 라인 차트" },
+            { "name": "by_subject_trend", "label": "과목별 개별 추이 라인 차트" },
+            { "name": "trend_badge", "label": "추세 뱃지", "rules": "마지막-처음 ≥ +3점 → 상승 / |차이| < 3점 → 유지 / ≤ -3점 → 하락 / 편차 > 5점 → 등락" }
+          ]
+        },
+        {
+          "id": "C8",
+          "type": "subject_pick",
+          "label": "가장 자신 있는 과목 (상위 2개)",
+          "required": true,
+          "max_picks": 2,
+          "subject_pool": ["국어", "영어", "수학", "사회", "과학"]
+        },
+        {
+          "id": "C9",
+          "type": "subject_pick",
+          "label": "가장 어려운 과목 (상위 2개)",
+          "required": true,
+          "max_picks": 2,
+          "subject_pool": ["국어", "영어", "수학", "사회", "과학"]
+        }
+      ]
+    },
+
+    {
+      "id": "D",
+      "order": 4,
+      "title": "학습 습관 & 자기주도학습 역량",
+      "description": "현재 학습 패턴과 습관을 알려주세요",
+      "estimated_time_minutes": [5, 7],
+      "fatigue": "heavy",
+      "platforms": ["web"],
+      "skippable": true,
+      "questions": [
+        {
+          "id": "D1",
+          "type": "weekly_schedule",
+          "label": "일주일 학습 스케줄",
+          "instruction": "요일별로 학원 수업 / 학원 과제 / 자기주도 학습을 과목명·시간과 함께 입력해주세요",
+          "required": true,
+          "days": ["월", "화", "수", "목", "금", "토", "일"],
+          "categories": [
+            { "key": "academy_class", "label": "학원 수업" },
+            { "key": "academy_homework", "label": "학원 과제" },
+            { "key": "self_study", "label": "자기주도 학습" }
+          ],
+          "fields_per_entry": [
+            { "name": "subject", "type": "select", "label": "과목", "options": ["국어", "영어", "수학", "사회", "과학", "기타"] },
+            { "name": "hours", "type": "number", "label": "시간", "min": 0, "max": 24, "step": 0.5 }
+          ],
+          "auto_calculations": [
+            "주간 총 학습 시간",
+            "학원/과제/자기주도 비율",
+            "과목별 학습 시간",
+            "전체 자기주도 비율",
+            "과목별 자기주도 비율",
+            "과목 밸런스 지수"
+          ]
+        },
+        {
+          "id": "D2",
+          "type": "composite",
+          "label": "학습 계획 및 실행력",
+          "required": true,
+          "fields": [
+            {
+              "name": "plan_execution",
+              "type": "slider",
+              "label": "학습 계획 수립/실행 정도",
+              "min": 1,
+              "max": 10,
+              "step": 1
+            },
+            {
+              "name": "test_prep_start",
+              "type": "radio",
+              "label": "시험 준비 시작 시점",
+              "options": [
+                { "value": "1_2일전", "label": "1~2일 전" },
+                { "value": "3_5일전", "label": "3~5일 전" },
+                { "value": "1주전", "label": "1주 전" },
+                { "value": "2주이상전", "label": "2주 이상 전" },
+                { "value": "상시학습", "label": "상시 학습" }
+              ]
+            },
+            {
+              "name": "subject_plan_detail",
+              "type": "radio",
+              "label": "시험 기간 과목별 계획표 작성",
+              "options": [
+                { "value": "안함", "label": "안 함" },
+                { "value": "대략적", "label": "대략적" },
+                { "value": "구체적", "label": "구체적" },
+                { "value": "매우구체적", "label": "매우 구체적" }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "D3",
+          "type": "composite",
+          "label": "오답 관리 습관",
+          "required": true,
+          "fields": [
+            {
+              "name": "method",
+              "type": "checkboxes",
+              "label": "틀린 문제를 어떻게 정리하나요? (복수 선택)",
+              "options": [
+                { "value": "안함", "label": "안 함" },
+                { "value": "문제집표시", "label": "문제집에 표시·메모" },
+                { "value": "별도노트", "label": "별도 노트" },
+                { "value": "태블릿앱", "label": "태블릿·앱" },
+                { "value": "번호체크재풀이", "label": "번호 체크 후 재풀이" }
+              ]
+            },
+            {
+              "name": "review_frequency",
+              "type": "radio",
+              "label": "정리한 오답을 다시 확인하나요?",
+              "options": [
+                { "value": "거의안함", "label": "거의 안 함" },
+                { "value": "시험직전만", "label": "시험 직전만" },
+                { "value": "주1회", "label": "주 1회" },
+                { "value": "완전풀때까지", "label": "완전히 풀 때까지 반복" }
+              ]
+            },
+            {
+              "name": "review_method",
+              "type": "checkboxes",
+              "label": "복습 시 주로 어떻게 하나요? (복수 선택)",
+              "options": [
+                { "value": "답풀이확인", "label": "답·풀이만 확인" },
+                { "value": "원인분석", "label": "원인 분석" },
+                { "value": "개념재확인", "label": "개념 재확인" },
+                { "value": "유사문제풀이", "label": "유사 문제 추가 풀이" }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "D4",
+          "type": "checkboxes",
+          "label": "모르는 문제 해결 방법 (복수 선택)",
+          "required": true,
+          "options": [
+            { "value": "혼자고민", "label": "혼자 끝까지 고민" },
+            { "value": "답안지확인", "label": "답안지 확인" },
+            { "value": "개념서재확인", "label": "개념서·교과서 재확인" },
+            { "value": "인터넷유튜브", "label": "인터넷·유튜브" },
+            { "value": "AI도구", "label": "AI 도구" },
+            { "value": "학원과외선생님", "label": "학원·과외 선생님" },
+            { "value": "학교선생님", "label": "학교 선생님" },
+            { "value": "친구", "label": "친구" },
+            { "value": "부모님", "label": "부모님" },
+            { "value": "그냥넘어감", "label": "그냥 넘어감" }
+          ]
+        },
+        {
+          "id": "D5",
+          "type": "radio",
+          "label": "집중력이 가장 좋은 시간대",
+          "required": true,
+          "options": [
+            { "value": "아침", "label": "아침" },
+            { "value": "오후", "label": "오후" },
+            { "value": "저녁", "label": "저녁" },
+            { "value": "밤", "label": "밤" },
+            { "value": "일정하지않음", "label": "일정하지 않음" }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "E",
+      "order": 5,
+      "title": "과목별 고등 준비율",
+      "description": "수학·영어·국어·과학 각 과목의 학습 현황을 자가진단해주세요",
+      "estimated_time_minutes": [10, 15],
+      "fatigue": "heavy",
+      "platforms": ["web"],
+      "skippable": true,
+      "questions": [
+        {
+          "id": "E1",
+          "type": "subject_section",
+          "label": "수학 학습 현황",
+          "subject": "수학",
+          "subsections": [
+            {
+              "key": "basic_skills",
+              "label": "중학 수학 기초 역량 점검",
+              "type": "radio_grid",
+              "scale": [
+                { "value": "어려움", "label": "자주 실수함 / 어려움" },
+                { "value": "보통", "label": "보통" },
+                { "value": "자신있음", "label": "자신 있음" }
+              ],
+              "items": [
+                "분수·소수 연산을 빠르고 정확하게 할 수 있나요?",
+                "다항식 전개·인수분해를 자유롭게 할 수 있나요?",
+                "이차방정식·이차함수를 능숙하게 다룰 수 있나요?",
+                "문장으로 된 수학 문제를 식으로 전환하는 데 어려움이 있나요?"
+              ]
+            },
+            {
+              "key": "advance_progress",
+              "label": "과목별 선행 진도 (회독 수)",
+              "type": "select_grid",
+              "options": [
+                { "value": "0", "label": "0회독" },
+                { "value": "1", "label": "1회독" },
+                { "value": "2", "label": "2회독" },
+                { "value": "3+", "label": "3회독 이상" }
+              ],
+              "items": ["공통수학1", "공통수학2", "미적분1", "확률과통계", "미적분2", "기하"]
+            },
+            {
+              "key": "problem_level",
+              "label": "과목별 문제 풀이 레벨 (1회독 이상 과목만)",
+              "type": "level_accuracy",
+              "instruction": "각 레벨별로 정답률(%)을 입력해주세요",
+              "levels": [
+                { "key": "low", "label": "하", "examples": "개념원리, 수학의 정석(기본), 라이트쎈" },
+                { "key": "mid", "label": "중", "examples": "수학의 정석(실력), 쎈, RPM" },
+                { "key": "high", "label": "상", "examples": "블랙라벨, 일품, 바이블" },
+                { "key": "top", "label": "최상", "examples": "에이급, 최상위수학" }
+              ],
+              "field": { "type": "number", "min": 0, "max": 100, "unit": "%" }
+            }
+          ]
+        },
+        {
+          "id": "E2",
+          "type": "subject_section",
+          "label": "영어 학습 현황 (역량 기반)",
+          "subject": "영어",
+          "subsections": [
+            {
+              "key": "vocabulary",
+              "label": "① 어휘력",
+              "type": "composite",
+              "fields": [
+                {
+                  "name": "level",
+                  "type": "radio",
+                  "label": "현재 영단어 학습 수준",
+                  "options": [
+                    { "value": "중학필수", "label": "중학 필수 어휘 수준" },
+                    { "value": "고등기본중", "label": "고등 기본 어휘 학습 중" },
+                    { "value": "고등필수대부분", "label": "고등 필수 어휘 대부분 학습" }
+                  ]
+                },
+                {
+                  "name": "highschool_vocab_book",
+                  "type": "composite",
+                  "label": "고등 영단어장 학습 여부",
+                  "fields": [
+                    {
+                      "name": "status",
+                      "type": "radio",
+                      "options": [
+                        { "value": "없음", "label": "없음" },
+                        { "value": "학습중", "label": "학습 중" },
+                        { "value": "1회독완료", "label": "1회독 이상 완료" }
+                      ]
+                    },
+                    {
+                      "name": "book_name",
+                      "type": "text",
+                      "label": "교재명 (학습 중 또는 완료 시)",
+                      "show_when": { "field": "status", "in": ["학습중", "1회독완료"] }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "key": "reading",
+              "label": "② 독해력",
+              "type": "radio_grid",
+              "scale": [
+                { "value": "어려움", "label": "어려움" },
+                { "value": "보통", "label": "보통" },
+                { "value": "자신있음", "label": "자신 있음" }
+              ],
+              "items": [
+                "처음 보는 200단어 이상 영어 지문의 주제 파악",
+                "복잡한 문장(분사구문, 도치, 관계사 중첩) 해석",
+                "수능형 문제 유형(빈칸추론, 순서배열, 요약문) 연습 경험"
+              ]
+            },
+            {
+              "key": "grammar",
+              "label": "③ 문법(어법)",
+              "type": "radio_grid",
+              "scale": [
+                { "value": "어려움", "label": "어려움" },
+                { "value": "보통", "label": "보통" },
+                { "value": "자신있음", "label": "자신 있음" }
+              ],
+              "items": [
+                "중학 영문법 정리 상태",
+                "고등 영문법 선행 여부",
+                "지문 속 어법 판단 문제 풀이"
+              ]
+            },
+            {
+              "key": "writing",
+              "label": "④ 영작 (서술형 대비)",
+              "type": "composite",
+              "fields": [
+                {
+                  "name": "level",
+                  "type": "radio",
+                  "label": "한글→영어 영작 수준",
+                  "options": [
+                    { "value": "단문", "label": "단문만 가능" },
+                    { "value": "중문", "label": "중문 수준" },
+                    { "value": "복문", "label": "복문도 가능" }
+                  ]
+                },
+                {
+                  "name": "conditional_writing",
+                  "type": "radio",
+                  "label": "조건 영작 연습 경험",
+                  "options": [
+                    { "value": "없음", "label": "없음" },
+                    { "value": "조금", "label": "조금 해봄" },
+                    { "value": "꾸준히", "label": "꾸준히 연습 중" }
+                  ]
+                }
+              ]
+            },
+            {
+              "key": "mock_exam",
+              "label": "⑤ 모의고사 경험",
+              "type": "mock_exam_grid",
+              "instruction": "응시한 모의고사가 있다면 학년별로 입력해주세요 (없음 체크 가능)",
+              "grades": ["고1", "고2", "고3"],
+              "fields": [
+                { "name": "year_month", "type": "text", "label": "년도/월", "placeholder": "예: 2025년 3월" },
+                { "name": "rank", "type": "select", "label": "등급", "options": ["1", "2", "3", "4", "5", "6", "7", "8", "9"] }
+              ],
+              "none_option": true
+            },
+            {
+              "key": "listening",
+              "label": "⑥ 듣기",
+              "type": "composite",
+              "fields": [
+                {
+                  "name": "experience",
+                  "type": "radio",
+                  "label": "수능 영어 듣기 문제 경험",
+                  "options": [
+                    { "value": "없음", "label": "없음" },
+                    { "value": "있음", "label": "풀어봄" }
+                  ]
+                },
+                {
+                  "name": "accuracy",
+                  "type": "number",
+                  "label": "맞힌 비율 (%)",
+                  "min": 0,
+                  "max": 100,
+                  "show_when": { "field": "experience", "equals": "있음" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "E3",
+          "type": "subject_section",
+          "label": "국어 학습 현황 (역량 기반)",
+          "subject": "국어",
+          "subsections": [
+            {
+              "key": "literature",
+              "label": "① 문학 역량",
+              "type": "radio_grid",
+              "scale": [
+                { "value": "어려움", "label": "어려움 / 모름" },
+                { "value": "보통", "label": "보통" },
+                { "value": "자신있음", "label": "자신 있음" }
+              ],
+              "items": [
+                "문학 개념어 활용 분석 능력",
+                "처음 보는 현대시 — 주제·표현기법 파악",
+                "처음 보는 현대소설 — 시점·갈등구조 파악",
+                "고전시가 의미 파악",
+                "고전소설 문체 읽기"
+              ]
+            },
+            {
+              "key": "non_fiction",
+              "label": "② 독서(비문학) 역량",
+              "type": "composite",
+              "fields": [
+                {
+                  "name": "long_text",
+                  "type": "radio",
+                  "label": "긴 글(1,500자 이상) 핵심·구조 파악",
+                  "options": [
+                    { "value": "어려움", "label": "어려움" },
+                    { "value": "보통", "label": "보통" },
+                    { "value": "자신있음", "label": "자신 있음" }
+                  ]
+                },
+                {
+                  "name": "term_inference",
+                  "type": "radio",
+                  "label": "전문 용어 문맥 추론",
+                  "options": [
+                    { "value": "어려움", "label": "어려움" },
+                    { "value": "보통", "label": "보통" },
+                    { "value": "자신있음", "label": "자신 있음" }
+                  ]
+                },
+                {
+                  "name": "difficult_fields",
+                  "type": "checkboxes",
+                  "label": "읽기 어려운 분야 (복수 선택)",
+                  "options": [
+                    { "value": "인문", "label": "인문" },
+                    { "value": "사회경제", "label": "사회·경제" },
+                    { "value": "과학", "label": "과학" },
+                    { "value": "기술공학", "label": "기술·공학" },
+                    { "value": "예술", "label": "예술" },
+                    { "value": "없음", "label": "없음", "exclusive": true }
+                  ]
+                }
+              ]
+            },
+            {
+              "key": "grammar_vocab",
+              "label": "③ 문법·어휘",
+              "type": "composite",
+              "fields": [
+                {
+                  "name": "middle_grammar",
+                  "type": "radio",
+                  "label": "중학 문법 정리 상태",
+                  "options": [
+                    { "value": "거의모름", "label": "거의 모름" },
+                    { "value": "정리안됨", "label": "배웠지만 정리 안 됨" },
+                    { "value": "체계적정리", "label": "체계적으로 정리됨" }
+                  ]
+                },
+                {
+                  "name": "high_grammar",
+                  "type": "radio",
+                  "label": "고등 문법 선행",
+                  "options": [
+                    { "value": "안함", "label": "안 함" },
+                    { "value": "학습중", "label": "학습 중" },
+                    { "value": "완료", "label": "학습 완료" }
+                  ]
+                },
+                {
+                  "name": "hanja_terms",
+                  "type": "radio",
+                  "label": "수능 한자어/전문 용어 학습",
+                  "options": [
+                    { "value": "안함", "label": "안 함" },
+                    { "value": "학습중", "label": "학습 중" },
+                    { "value": "완료", "label": "학습 완료" }
+                  ]
+                },
+                {
+                  "name": "vocab_habit",
+                  "type": "radio",
+                  "label": "모르는 단어 찾아보는 습관",
+                  "options": [
+                    { "value": "없음", "label": "없음" },
+                    { "value": "가끔", "label": "가끔" },
+                    { "value": "꾸준히", "label": "꾸준히" }
+                  ]
+                }
+              ]
+            },
+            {
+              "key": "mock_exam",
+              "label": "④ 모의고사 경험",
+              "type": "mock_exam_grid",
+              "instruction": "응시한 모의고사가 있다면 학년별로 입력해주세요 (없음 체크 가능)",
+              "grades": ["고1", "고2", "고3"],
+              "fields": [
+                { "name": "year_month", "type": "text", "label": "년도/월", "placeholder": "예: 2025년 3월" },
+                { "name": "rank", "type": "select", "label": "등급", "options": ["1", "2", "3", "4", "5", "6", "7", "8", "9"] }
+              ],
+              "none_option": true
+            },
+            {
+              "key": "reading_habit",
+              "label": "⑤ 독서 습관",
+              "type": "composite",
+              "fields": [
+                {
+                  "name": "monthly_books",
+                  "type": "radio",
+                  "label": "월 평균 독서량",
+                  "options": [
+                    { "value": "0권", "label": "0권" },
+                    { "value": "1_2권", "label": "1~2권" },
+                    { "value": "3_4권", "label": "3~4권" },
+                    { "value": "5권이상", "label": "5권 이상" }
+                  ]
+                },
+                {
+                  "name": "fields",
+                  "type": "checkboxes",
+                  "label": "주로 읽는 분야 (복수)",
+                  "options": [
+                    { "value": "문학", "label": "문학" },
+                    { "value": "인문사회", "label": "인문·사회" },
+                    { "value": "과학기술", "label": "과학·기술" },
+                    { "value": "자기계발", "label": "자기계발" },
+                    { "value": "기타", "label": "기타" }
+                  ]
+                },
+                {
+                  "name": "newspaper",
+                  "type": "radio",
+                  "label": "신문·칼럼 읽기 습관",
+                  "options": [
+                    { "value": "안읽음", "label": "안 읽음" },
+                    { "value": "가끔", "label": "가끔" },
+                    { "value": "주1_2회이상", "label": "주 1~2회 이상" }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "E4",
+          "type": "subject_section",
+          "label": "과학 학습 현황",
+          "subject": "과학",
+          "subsections": [
+            {
+              "key": "basic_skills",
+              "label": "① 중학 과학 기초 역량",
+              "type": "radio_grid",
+              "scale": [
+                { "value": "어려움", "label": "어려움" },
+                { "value": "보통", "label": "보통" },
+                { "value": "자신있음", "label": "자신 있음" }
+              ],
+              "items": [
+                "물리 — 힘과 운동, 에너지 전환, 전기/자기",
+                "화학 — 원소/화합물, 화학반응식, 주기율표",
+                "생명과학 — 세포, 유전·진화, 소화·호흡·순환",
+                "지구과학 — 지구 내부, 대기/해양, 천체 운동"
+              ]
+            },
+            {
+              "key": "advance_progress",
+              "label": "② 고등 과학 선행 현황",
+              "type": "subject_progress_grid",
+              "subjects": ["통합과학1", "통합과학2", "물리학", "화학", "생명과학", "지구과학"],
+              "fields": [
+                {
+                  "name": "study_status",
+                  "type": "radio",
+                  "label": "학습 여부",
+                  "options": [
+                    { "value": "안함", "label": "안 함" },
+                    { "value": "진행중", "label": "진행 중" },
+                    { "value": "1회독", "label": "1회독" },
+                    { "value": "2회독이상", "label": "2회독 이상" }
+                  ]
+                },
+                {
+                  "name": "study_level",
+                  "type": "radio",
+                  "label": "학습 수준 (진행 중 이상)",
+                  "options": [
+                    { "value": "개념만", "label": "개념만 읽음" },
+                    { "value": "문제집까지", "label": "문제집까지 풀어봄" }
+                  ],
+                  "show_when": { "field": "study_status", "in": ["진행중", "1회독", "2회독이상"] }
+                }
+              ]
+            },
+            {
+              "key": "science_skills",
+              "label": "③ 과학 학습 역량",
+              "type": "radio_grid",
+              "scale": [
+                { "value": "어려움", "label": "어려움" },
+                { "value": "보통", "label": "보통" },
+                { "value": "자신있음", "label": "자신 있음" }
+              ],
+              "items": [
+                "실험 데이터·그래프 해석",
+                "과학 공식 활용 계산 (물리·화학)",
+                "과학에서 수학적 사고(비례, 그래프)"
+              ]
+            },
+            {
+              "key": "elective_pick",
+              "label": "④ 희망 선택 과목",
+              "type": "checkboxes",
+              "instruction": "고2 선택 희망 과학 과목 (복수 선택)",
+              "options": [
+                { "value": "물리학", "label": "물리학" },
+                { "value": "화학", "label": "화학" },
+                { "value": "생명과학", "label": "생명과학" },
+                { "value": "지구과학", "label": "지구과학" },
+                { "value": "아직모름", "label": "아직 모름", "exclusive": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "E5",
+          "type": "textarea",
+          "label": "자유학기제 활동 중 의미 있었던 활동",
+          "instruction": "기억에 남는 활동이나 배운 점을 자유롭게 적어주세요",
+          "required": false,
+          "max_length": 1000,
+          "rows": 5
+        }
+      ]
+    },
+
+    {
+      "id": "F",
+      "order": 6,
+      "title": "비교과 & 역량",
+      "description": "중학교 시기의 활동과 강점을 알려주세요",
+      "estimated_time_minutes": [3, 5],
+      "fatigue": "light",
+      "platforms": ["web", "mobile"],
+      "skippable": true,
+      "questions": [
+        {
+          "id": "F1",
+          "type": "text_list",
+          "label": "중학교 때 참여한 동아리 활동",
+          "required": false,
+          "max_items": 10,
+          "placeholder": "예: 과학 탐구 동아리"
+        },
+        {
+          "id": "F2",
+          "type": "text_list",
+          "label": "교내 대회/행사 수상 경험",
+          "required": false,
+          "max_items": 10,
+          "placeholder": "예: 2024년 교내 수학경시대회 은상"
+        },
+        {
+          "id": "F3",
+          "type": "radio",
+          "label": "봉사활동 경험 및 시간",
+          "required": true,
+          "options": [
+            { "value": "없음", "label": "없음" },
+            { "value": "의무만", "label": "의무만" },
+            { "value": "자발적참여", "label": "자발적 참여 있음" }
+          ]
+        },
+        {
+          "id": "F4",
+          "type": "composite",
+          "label": "학급 임원/학생회 경험",
+          "required": true,
+          "fields": [
+            {
+              "name": "has_experience",
+              "type": "radio",
+              "label": "경험 유무",
+              "options": [
+                { "value": "있음", "label": "있음" },
+                { "value": "없음", "label": "없음" }
+              ]
+            },
+            {
+              "name": "role",
+              "type": "text",
+              "label": "역할",
+              "placeholder": "예: 학급 반장, 학생회 부회장",
+              "show_when": { "field": "has_experience", "equals": "있음" }
+            }
+          ]
+        },
+        {
+          "id": "F5",
+          "type": "text_list",
+          "label": "독서 외 자기개발 활동",
+          "instruction": "코딩, 악기, 운동 등",
+          "required": false,
+          "max_items": 10,
+          "placeholder": "예: 피아노 5년"
+        },
+        {
+          "id": "F6",
+          "type": "rank",
+          "label": "자신의 강점 역량 (상위 3개)",
+          "required": true,
+          "max_picks": 3,
+          "options": [
+            { "value": "리더십", "label": "리더십" },
+            { "value": "협업", "label": "협업" },
+            { "value": "분석력", "label": "분석력" },
+            { "value": "창의성", "label": "창의성" },
+            { "value": "의사소통", "label": "의사소통" },
+            { "value": "끈기", "label": "끈기" },
+            { "value": "자기관리", "label": "자기관리" },
+            { "value": "문제해결", "label": "문제해결" },
+            { "value": "공감능력", "label": "공감능력" }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "G",
+      "order": 7,
+      "title": "학부모 관점 (선택)",
+      "description": "학부모님께서 직접 작성해주세요. 학생만 작성해도 무방합니다.",
+      "estimated_time_minutes": [3, 5],
+      "fatigue": "light",
+      "platforms": ["web", "mobile"],
+      "skippable": true,
+      "respondent": "parent",
+      "questions": [
+        {
+          "id": "G1",
+          "type": "textarea",
+          "label": "자녀의 고등학교 선택에서 가장 걱정되는 점",
+          "required": false,
+          "max_length": 1000,
+          "rows": 4
+        },
+        {
+          "id": "G2",
+          "type": "radio",
+          "label": "자녀의 학습 상황을 어느 정도 파악하고 계신가요?",
+          "required": false,
+          "options": [
+            { "value": "거의모름", "label": "거의 모름" },
+            { "value": "대략", "label": "대략 알고 있음" },
+            { "value": "구체적", "label": "구체적으로 파악" }
+          ]
+        },
+        {
+          "id": "G3",
+          "type": "radio",
+          "label": "자녀와 학습·진로에 대해 대화를 자주 하시나요?",
+          "required": false,
+          "options": [
+            { "value": "거의안함", "label": "거의 안 함" },
+            { "value": "가끔", "label": "가끔" },
+            { "value": "자주", "label": "자주" }
+          ]
+        },
+        {
+          "id": "G4",
+          "type": "checkboxes",
+          "label": "고등학교 진학 후 자녀의 학습 관리 계획 (복수 선택)",
+          "required": false,
+          "options": [
+            { "value": "자녀에게맡김", "label": "자녀에게 맡김" },
+            { "value": "학원에맡김", "label": "학원에 맡김" },
+            { "value": "직접챙김", "label": "직접 챙길 예정" },
+            { "value": "전문컨설팅", "label": "전문 컨설팅 활용" }
+          ]
+        },
+        {
+          "id": "G5",
+          "type": "radio",
+          "label": "고등학교 진학 후 학원/과외 계획",
+          "required": false,
+          "options": [
+            { "value": "현행유지", "label": "현행 유지" },
+            { "value": "확대", "label": "확대" },
+            { "value": "축소", "label": "축소" },
+            { "value": "자기주도전환", "label": "자기주도 전환" }
+          ]
+        },
+        {
+          "id": "G6",
+          "type": "textarea",
+          "label": "상담에서 가장 알고 싶은 것",
+          "required": false,
+          "max_length": 1000,
+          "rows": 4
+        }
+      ]
+    }
+  ]
+}
