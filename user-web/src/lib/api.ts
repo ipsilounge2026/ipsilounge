@@ -272,3 +272,84 @@ export async function getUniversities(): Promise<{ year: number | null; universi
 export async function getUniversityMajors(university: string): Promise<{ year: number | null; university: string; majors: string[] }> {
   return request(`/api/universities/majors?university=${encodeURIComponent(university)}`);
 }
+
+// --- 사전 상담 설문 (Consultation Survey) ---
+export async function getSurveySchema(surveyType: string) {
+  return request(`/api/consultation-surveys/schema/${surveyType}`);
+}
+
+export async function getSurveySuggest(surveyType: string) {
+  return request(`/api/consultation-surveys/suggest/${surveyType}`);
+}
+
+export async function createSurvey(data: {
+  survey_type: string;
+  timing?: string | null;
+  mode?: string | null;
+  booking_id?: string | null;
+  started_platform?: string;
+}) {
+  return request("/api/consultation-surveys", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function listMySurveys(params?: { survey_type?: string; status?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.survey_type) qs.set("survey_type", params.survey_type);
+  if (params?.status) qs.set("status", params.status);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/api/consultation-surveys${suffix}`);
+}
+
+export async function getSurvey(id: string) {
+  return request(`/api/consultation-surveys/${id}`);
+}
+
+export async function patchSurvey(
+  id: string,
+  data: {
+    answers?: Record<string, any>;
+    category_status?: Record<string, string>;
+    last_category?: string;
+    last_question?: string;
+    last_edited_platform?: string;
+    note?: string;
+  }
+) {
+  return request(`/api/consultation-surveys/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function submitSurvey(id: string) {
+  return request(`/api/consultation-surveys/${id}/submit`, {
+    method: "POST",
+    body: JSON.stringify({ confirm: true }),
+  });
+}
+
+export async function issueSurveyResumeToken(
+  id: string,
+  data: { expires_in_hours?: number; send_email?: boolean }
+) {
+  return request(`/api/consultation-surveys/${id}/resume-token`, {
+    method: "POST",
+    body: JSON.stringify({
+      expires_in_hours: data.expires_in_hours ?? 72,
+      send_email: data.send_email ?? false,
+    }),
+  });
+}
+
+// 토큰 기반 이어쓰기 (인증 불필요)
+export async function getSurveyByResumeToken(token: string) {
+  const res = await fetch(`${API_BASE}/api/consultation-surveys/resume?token=${encodeURIComponent(token)}`);
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: "이어쓰기 토큰이 유효하지 않습니다" }));
+    throw new Error(error.detail || "이어쓰기 토큰이 유효하지 않습니다");
+  }
+  return res.json();
+}
