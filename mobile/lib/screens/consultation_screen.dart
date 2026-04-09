@@ -416,7 +416,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () => Navigator.pushNamed(context, '/analysis'),
-                  child: const Text('내 분석 목록에서 파일 업로드'),
+                  child: const Text('내 라운지 목록에서 파일 업로드'),
                 ),
               ),
             ] else ...[

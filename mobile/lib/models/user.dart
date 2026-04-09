@@ -10,6 +10,7 @@ class User {
   final String? schoolName;
   final int? grade;
   final String? branchName;
+  final bool isAcademyStudent;
   final bool isActive;
   final String createdAt;
 
@@ -25,6 +26,7 @@ class User {
     this.schoolName,
     this.grade,
     this.branchName,
+    this.isAcademyStudent = false,
     this.isActive = true,
     required this.createdAt,
   });
@@ -42,6 +44,7 @@ class User {
       schoolName: json['school_name'],
       grade: json['grade'],
       branchName: json['branch_name'],
+      isAcademyStudent: json['is_academy_student'] ?? false,
       isActive: json['is_active'] ?? true,
       createdAt: json['created_at'],
     );

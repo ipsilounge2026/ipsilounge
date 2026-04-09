@@ -26,6 +26,7 @@ class AuthService {
     String? studentName,
     String? studentBirth,
     String? branchName,
+    bool isAcademyStudent = false,
   }) async {
     final body = <String, dynamic>{
       'email': email,
@@ -33,6 +34,7 @@ class AuthService {
       'name': name,
       'phone': phone,
       'member_type': memberType,
+      'is_academy_student': isAcademyStudent,
     };
 
     if (birthDate != null && birthDate.isNotEmpty) body['birth_date'] = birthDate;

@@ -9,6 +9,11 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
+const _branchOptions = [
+  '경복궁점', '광화문점', '구리점', '대치점', '대흥점',
+  '마포점', '분당점', '은평점', '중계점', '대치스터디센터점',
+];
+
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
@@ -18,7 +23,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneCtrl = TextEditingController();
   final _schoolCtrl = TextEditingController();
   final _studentNameCtrl = TextEditingController();
-  final _branchNameCtrl = TextEditingController();
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -27,6 +31,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _birthDate;
   String? _studentBirth;
   int? _grade;
+  String? _branchName; // branch_manager: 담당 지점 / student·parent: 재원 지점
+  bool _isAcademyStudent = false;
 
   // School search
   List<Map<String, dynamic>> _schoolResults = [];
@@ -69,7 +75,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _phoneCtrl.dispose();
     _schoolCtrl.dispose();
     _studentNameCtrl.dispose();
-    _branchNameCtrl.dispose();
     _schoolFocusNode.dispose();
     _searchTimer?.cancel();
     _removeOverlay();
@@ -227,13 +232,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
     }
-    if (_memberType == 'branch_manager' && _branchNameCtrl.text.trim().isEmpty) {
-      setState(() => _errorMessage = '지점명을 입력해주세요');
+    if (_memberType == 'branch_manager' && (_branchName == null || _branchName!.isEmpty)) {
+      setState(() => _errorMessage = '담당 지점을 선택해주세요');
+      return;
+    }
+    if ((_memberType == 'student' || _memberType == 'parent') &&
+        _isAcademyStudent &&
+        (_branchName == null || _branchName!.isEmpty)) {
+      setState(() => _errorMessage = '재원생이시면 재원 지점을 선택해주세요');
       return;
     }
 
     setState(() { _isLoading = true; _errorMessage = null; });
     try {
+      // 지점명 결정: branch_manager 는 담당 지점, 학생/학부모는 재원생일 때만 지점
+      String? branchToSend;
+      if (_memberType == 'branch_manager') {
+        branchToSend = _branchName;
+      } else if (_isAcademyStudent) {
+        branchToSend = _branchName;
+      }
+
       await AuthService.register(
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
@@ -245,7 +264,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         grade: _grade,
         studentName: _memberType == 'parent' ? _studentNameCtrl.text.trim() : null,
         studentBirth: _memberType == 'parent' ? _studentBirth : null,
-        branchName: _memberType == 'branch_manager' ? _branchNameCtrl.text.trim() : null,
+        branchName: branchToSend,
+        isAcademyStudent: (_memberType != 'branch_manager') && _isAcademyStudent,
       );
       if (mounted) {
         final msg = _memberType == 'branch_manager'
@@ -471,6 +491,63 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           onChanged: (v) => setState(() => _grade = v),
                           decoration: const InputDecoration(),
                         ),
+                        const SizedBox(height: 12),
+
+                        // 재원생 여부
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              _isAcademyStudent = !_isAcademyStudent;
+                              if (!_isAcademyStudent) _branchName = null;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 18, height: 18,
+                                  child: Checkbox(
+                                    value: _isAcademyStudent,
+                                    onChanged: (v) {
+                                      setState(() {
+                                        _isAcademyStudent = v ?? false;
+                                        if (!_isAcademyStudent) _branchName = null;
+                                      });
+                                    },
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _memberType == 'parent'
+                                      ? '자녀가 입시라운지 재원생입니다'
+                                      : '입시라운지 재원생입니다',
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // 재원 지점 (재원생 선택 시만)
+                        if (_isAcademyStudent) ...[
+                          const SizedBox(height: 10),
+                          _buildLabel('재원 지점'),
+                          DropdownButtonFormField<String>(
+                            value: _branchName,
+                            items: [
+                              const DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('재원 지점을 선택해주세요'),
+                              ),
+                              ..._branchOptions.map((b) => DropdownMenuItem<String>(value: b, child: Text(b))),
+                            ],
+                            onChanged: (v) => setState(() => _branchName = v),
+                            decoration: const InputDecoration(),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -492,10 +569,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const Text('지점 담당자 정보',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF9A3412))),
                         const SizedBox(height: 12),
-                        _buildLabel('지점명'),
-                        TextFormField(
-                          controller: _branchNameCtrl,
-                          decoration: const InputDecoration(hintText: '예: 강남점'),
+                        _buildLabel('담당 지점'),
+                        DropdownButtonFormField<String>(
+                          value: _branchName,
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text('담당 지점을 선택해주세요'),
+                            ),
+                            ..._branchOptions.map((b) => DropdownMenuItem<String>(value: b, child: Text(b))),
+                          ],
+                          onChanged: (v) => setState(() => _branchName = v),
+                          decoration: const InputDecoration(),
                         ),
                         const SizedBox(height: 8),
                         const Text(
@@ -547,7 +632,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final selected = _memberType == type;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _memberType = type),
+        onTap: () => setState(() {
+          _memberType = type;
+          // 회원 유형 변경 시 지점 및 재원생 플래그 초기화
+          _branchName = null;
+          _isAcademyStudent = false;
+        }),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(

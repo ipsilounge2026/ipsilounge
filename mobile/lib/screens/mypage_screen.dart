@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/consultation.dart';
 import '../services/consultation_service.dart';
+import '../services/user_service.dart';
 
 const _roleLabels = {
   'student': '학생',
@@ -20,6 +21,11 @@ const _roleColors = {
   'counselor': Color(0xFF10B981),
 };
 
+const _branchOptions = [
+  '경복궁점', '광화문점', '구리점', '대치점', '대흥점',
+  '마포점', '분당점', '은평점', '중계점', '대치스터디센터점',
+];
+
 class MypageScreen extends StatefulWidget {
   const MypageScreen({super.key});
 
@@ -32,7 +38,12 @@ class _MypageScreenState extends State<MypageScreen> {
   late TextEditingController _nameCtrl;
   late TextEditingController _phoneCtrl;
   String? _message;
+  bool _isError = false;
   bool _isSaving = false;
+
+  // 재원생/지점 편집 상태
+  bool _editIsAcademyStudent = false;
+  String? _editBranchName;
 
   // 담당자 관련
   bool _isAssigned = false;
@@ -45,6 +56,8 @@ class _MypageScreenState extends State<MypageScreen> {
     final user = context.read<AuthProvider>().user;
     _nameCtrl = TextEditingController(text: user?.name ?? '');
     _phoneCtrl = TextEditingController(text: user?.phone ?? '');
+    _editIsAcademyStudent = user?.isAcademyStudent ?? false;
+    _editBranchName = user?.branchName;
 
     final memberType = user?.memberType ?? 'student';
     if (memberType != 'branch_manager') {
@@ -77,17 +90,50 @@ class _MypageScreenState extends State<MypageScreen> {
   }
 
   Future<void> _save() async {
-    setState(() { _isSaving = true; _message = null; });
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+
+    final isBranchManager = user.memberType == 'branch_manager';
+
+    // 학생/학부모: 재원생이면 지점 필수
+    if (!isBranchManager && _editIsAcademyStudent &&
+        (_editBranchName == null || _editBranchName!.isEmpty)) {
+      setState(() {
+        _message = '재원생이시면 재원 지점을 선택해주세요';
+        _isError = true;
+      });
+      return;
+    }
+
+    setState(() { _isSaving = true; _message = null; _isError = false; });
     try {
+      // 비재원생으로 바꾸면 지점도 함께 지움
+      final shouldClearBranch = !isBranchManager && !_editIsAcademyStudent;
+
+      await UserService.updateMe(
+        user.name, // 이름은 수정 불가
+        _phoneCtrl.text.trim(),
+        branchName: isBranchManager
+            ? null // branch_manager 는 마이페이지에서 담당 지점 변경 불가
+            : (_editIsAcademyStudent ? _editBranchName : null),
+        clearBranch: shouldClearBranch,
+        isAcademyStudent: isBranchManager ? null : _editIsAcademyStudent,
+      );
       await context.read<AuthProvider>().refreshUser();
-      // Using direct API call for update
-      final authProvider = context.read<AuthProvider>();
-      // Simple save via provider refresh
-      setState(() { _editing = false; _message = '정보가 수정되었습니다'; });
+      if (!mounted) return;
+      setState(() {
+        _editing = false;
+        _message = '정보가 수정되었습니다';
+        _isError = false;
+      });
     } catch (e) {
-      setState(() => _message = e.toString());
+      if (!mounted) return;
+      setState(() {
+        _message = e.toString();
+        _isError = true;
+      });
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -209,7 +255,14 @@ class _MypageScreenState extends State<MypageScreen> {
         actions: [
           if (!_editing)
             TextButton(
-              onPressed: () => setState(() => _editing = true),
+              onPressed: () => setState(() {
+                _editing = true;
+                _message = null;
+                _isError = false;
+                // 편집 진입 시 현재 유저 값으로 초기화
+                _editIsAcademyStudent = user.isAcademyStudent;
+                _editBranchName = user.branchName;
+              }),
               child: const Text('수정', style: TextStyle(color: Color(0xFF3B82F6))),
             ),
         ],
@@ -270,8 +323,17 @@ class _MypageScreenState extends State<MypageScreen> {
             Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFFD1FAE5), borderRadius: BorderRadius.circular(8)),
-              child: Text(_message!, style: const TextStyle(color: Color(0xFF065F46), fontSize: 13)),
+              decoration: BoxDecoration(
+                color: _isError ? const Color(0xFFFEE2E2) : const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _message!,
+                style: TextStyle(
+                  color: _isError ? const Color(0xFF991B1B) : const Color(0xFF065F46),
+                  fontSize: 13,
+                ),
+              ),
             ),
 
           // 회원 정보 카드
@@ -305,6 +367,89 @@ class _MypageScreenState extends State<MypageScreen> {
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(hintText: '010-0000-0000'),
                   ),
+                  // 지점 담당자: 담당 지점 표시 (읽기 전용)
+                  if (isBranchManager) ...[
+                    const SizedBox(height: 12),
+                    _buildLabel('담당 지점'),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            user.branchName ?? '-',
+                            style: const TextStyle(fontSize: 14, color: Color(0xFF374151)),
+                          ),
+                          const Spacer(),
+                          const Text(
+                            '변경은 관리자에게 문의',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  // 학생/학부모: 재원생 + 재원 지점 편집
+                  if (!isBranchManager) ...[
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _editIsAcademyStudent = !_editIsAcademyStudent;
+                          if (!_editIsAcademyStudent) _editBranchName = null;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 18, height: 18,
+                              child: Checkbox(
+                                value: _editIsAcademyStudent,
+                                onChanged: (v) {
+                                  setState(() {
+                                    _editIsAcademyStudent = v ?? false;
+                                    if (!_editIsAcademyStudent) _editBranchName = null;
+                                  });
+                                },
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              user.memberType == 'parent'
+                                  ? '자녀가 입시라운지 재원생입니다'
+                                  : '입시라운지 재원생입니다',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (_editIsAcademyStudent) ...[
+                      const SizedBox(height: 10),
+                      _buildLabel('재원 지점'),
+                      DropdownButtonFormField<String>(
+                        value: _editBranchName,
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('재원 지점을 선택해주세요'),
+                          ),
+                          ..._branchOptions.map((b) =>
+                              DropdownMenuItem<String>(value: b, child: Text(b))),
+                        ],
+                        onChanged: (v) => setState(() => _editBranchName = v),
+                        decoration: const InputDecoration(),
+                      ),
+                    ],
+                  ],
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -321,6 +466,10 @@ class _MypageScreenState extends State<MypageScreen> {
                             _editing = false;
                             _nameCtrl.text = user.name;
                             _phoneCtrl.text = user.phone ?? '';
+                            _editIsAcademyStudent = user.isAcademyStudent;
+                            _editBranchName = user.branchName;
+                            _message = null;
+                            _isError = false;
                           });
                         },
                         child: const Text('취소'),
@@ -335,6 +484,23 @@ class _MypageScreenState extends State<MypageScreen> {
                   _infoRow('연락처', user.phone ?? '-'),
                   const Divider(height: 24),
                   _infoRow('가입일', _formatDate(user.createdAt)),
+                  // 지점 담당자: 담당 지점 표시
+                  if (isBranchManager) ...[
+                    const Divider(height: 24),
+                    _branchChipRow(
+                      '담당 지점',
+                      user.branchName ?? '-',
+                      bgColor: const Color(0xFFFFF7ED),
+                      textColor: const Color(0xFF9A3412),
+                      borderColor: const Color(0xFFFED7AA),
+                      icon: Icons.apartment_outlined,
+                    ),
+                  ],
+                  // 학생/학부모: 재원 여부 + 재원 지점
+                  if (!isBranchManager) ...[
+                    const Divider(height: 24),
+                    _academyStatusRow(user.isAcademyStudent, user.branchName),
+                  ],
                 ],
               ],
             ),
@@ -417,7 +583,7 @@ class _MypageScreenState extends State<MypageScreen> {
                     children: [
                       _quickMenuItem(Icons.description_outlined, '상담 기록 보기', '/consultation/notes'),
                       _quickMenuItem(Icons.calendar_today, '예약 현황', '/consultation/my'),
-                      _quickMenuItem(Icons.analytics_outlined, '분석 내역', '/analysis'),
+                      _quickMenuItem(Icons.analytics_outlined, '라운지 내역', '/analysis'),
                       _quickMenuItem(Icons.emoji_events_outlined, '합격 사례', '/admission-cases'),
                     ],
                   ),
@@ -495,6 +661,107 @@ class _MypageScreenState extends State<MypageScreen> {
       Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
     ],
   );
+
+  Widget _branchChipRow(
+    String label,
+    String branch, {
+    required Color bgColor,
+    required Color textColor,
+    required Color borderColor,
+    required IconData icon,
+  }) =>
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 13, color: textColor),
+                const SizedBox(width: 4),
+                Text(
+                  branch,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+
+  Widget _academyStatusRow(bool isAcademyStudent, String? branchName) {
+    if (!isAcademyStudent) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: const [
+          Text('재원 여부', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+          Text('비재원생', style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF))),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('재원 여부', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+        ),
+        Flexible(
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1FAE5),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF6EE7B7)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 13, color: Color(0xFF065F46)),
+                    SizedBox(width: 4),
+                    Text('재원생',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF065F46))),
+                  ],
+                ),
+              ),
+              if (branchName != null && branchName.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDBEAFE),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF93C5FD)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.apartment_outlined, size: 13, color: Color(0xFF1E40AF)),
+                      const SizedBox(width: 4),
+                      Text(branchName,
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF))),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _menuItem(IconData icon, String label, {Color? color, required VoidCallback onTap}) {
     return GestureDetector(

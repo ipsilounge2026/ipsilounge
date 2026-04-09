@@ -8,6 +8,10 @@ class UserService {
     return User.fromJson(res);
   }
 
+  /// 내 정보 수정
+  ///
+  /// 주의: `branchName` 을 `null` 로 명시해도 전송되지 않음 (sentinel 방식 미사용).
+  /// 지점을 지우려면 `clearBranch: true` 를 사용할 것.
   static Future<User> updateMe(String name, String? phone, {
     String? birthDate,
     String? schoolName,
@@ -15,6 +19,8 @@ class UserService {
     String? studentName,
     String? studentBirth,
     String? branchName,
+    bool clearBranch = false,
+    bool? isAcademyStudent,
   }) async {
     final body = <String, dynamic>{
       'name': name,
@@ -24,8 +30,15 @@ class UserService {
       if (grade != null) 'grade': grade,
       if (studentName != null) 'student_name': studentName,
       if (studentBirth != null) 'student_birth': studentBirth,
-      if (branchName != null) 'branch_name': branchName,
     };
+    if (clearBranch) {
+      body['branch_name'] = null;
+    } else if (branchName != null) {
+      body['branch_name'] = branchName;
+    }
+    if (isAcademyStudent != null) {
+      body['is_academy_student'] = isAcademyStudent;
+    }
     final res = await ApiService.put('/users/me', body);
     return User.fromJson(res);
   }

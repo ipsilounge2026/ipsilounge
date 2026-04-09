@@ -4,7 +4,11 @@ import '../models/analysis_order.dart';
 import '../widgets/status_badge.dart';
 
 class AnalysisListScreen extends StatefulWidget {
-  const AnalysisListScreen({super.key});
+  /// 특정 서비스 타입만 표시 (null 이면 전체).
+  /// 허용 값: '학생부라운지' | '학종라운지'
+  final String? serviceType;
+
+  const AnalysisListScreen({super.key, this.serviceType});
 
   @override
   State<AnalysisListScreen> createState() => _AnalysisListScreenState();
@@ -30,11 +34,41 @@ class _AnalysisListScreenState extends State<AnalysisListScreen> {
     }
   }
 
+  List<AnalysisOrder> get _filteredOrders {
+    if (widget.serviceType == null) return _orders;
+    return _orders.where((o) => o.serviceType == widget.serviceType).toList();
+  }
+
+  String get _titleLabel {
+    switch (widget.serviceType) {
+      case '학생부라운지':
+        return '학생부 라운지';
+      case '학종라운지':
+        return '학종 라운지';
+      default:
+        return '라운지';
+    }
+  }
+
+  String get _emptyLabel {
+    switch (widget.serviceType) {
+      case '학생부라운지':
+        return '학생부 라운지 신청 내역이 없습니다';
+      case '학종라운지':
+        return '학종 라운지 신청 내역이 없습니다';
+      default:
+        return '신청 내역이 없습니다';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final filtered = _filteredOrders;
+    final showSingleType = widget.serviceType != null;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('분석 라운지'),
+        title: Text(_titleLabel),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -45,58 +79,89 @@ class _AnalysisListScreenState extends State<AnalysisListScreen> {
                   // 신청 버튼 영역
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.description_outlined, size: 18),
-                            label: const Text('학생부 라운지 신청'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF3B82F6),
-                              side: const BorderSide(color: Color(0xFF3B82F6)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            onPressed: () async {
-                              await Navigator.pushNamed(context, '/analysis/apply', arguments: '학생부라운지');
-                              _loadOrders();
-                            },
+                    child: showSingleType
+                        ? SizedBox(
+                            width: double.infinity,
+                            child: widget.serviceType == '학종라운지'
+                                ? OutlinedButton.icon(
+                                    icon: const Icon(Icons.school_outlined, size: 18),
+                                    label: const Text('학종 라운지 신청'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF22C55E),
+                                      side: const BorderSide(color: Color(0xFF22C55E)),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                    onPressed: () async {
+                                      await Navigator.pushNamed(context, '/analysis/apply', arguments: '학종라운지');
+                                      _loadOrders();
+                                    },
+                                  )
+                                : OutlinedButton.icon(
+                                    icon: const Icon(Icons.description_outlined, size: 18),
+                                    label: const Text('학생부 라운지 신청'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF3B82F6),
+                                      side: const BorderSide(color: Color(0xFF3B82F6)),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                    onPressed: () async {
+                                      await Navigator.pushNamed(context, '/analysis/apply', arguments: '학생부라운지');
+                                      _loadOrders();
+                                    },
+                                  ),
+                          )
+                        : Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.description_outlined, size: 18),
+                                  label: const Text('학생부 라운지 신청'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF3B82F6),
+                                    side: const BorderSide(color: Color(0xFF3B82F6)),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                  onPressed: () async {
+                                    await Navigator.pushNamed(context, '/analysis/apply', arguments: '학생부라운지');
+                                    _loadOrders();
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.school_outlined, size: 18),
+                                  label: const Text('학종 라운지 신청'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF22C55E),
+                                    side: const BorderSide(color: Color(0xFF22C55E)),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                  onPressed: () async {
+                                    await Navigator.pushNamed(context, '/analysis/apply', arguments: '학종라운지');
+                                    _loadOrders();
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.school_outlined, size: 18),
-                            label: const Text('학종 라운지 신청'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF22C55E),
-                              side: const BorderSide(color: Color(0xFF22C55E)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            onPressed: () async {
-                              await Navigator.pushNamed(context, '/analysis/apply', arguments: '학종라운지');
-                              _loadOrders();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                   // 목록
                   Expanded(
-                    child: _orders.isEmpty
+                    child: filtered.isEmpty
                         ? ListView(
                             children: [
                               SizedBox(
                                 height: MediaQuery.of(context).size.height * 0.4,
-                                child: const Column(
+                                child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.description_outlined,
+                                    const Icon(Icons.description_outlined,
                                         size: 56, color: Color(0xFFD1D5DB)),
-                                    SizedBox(height: 16),
+                                    const SizedBox(height: 16),
                                     Text(
-                                      '분석 요청 내역이 없습니다',
-                                      style: TextStyle(color: Color(0xFF6B7280)),
+                                      _emptyLabel,
+                                      style: const TextStyle(color: Color(0xFF6B7280)),
                                     ),
                                   ],
                                 ),
@@ -105,9 +170,9 @@ class _AnalysisListScreenState extends State<AnalysisListScreen> {
                           )
                         : ListView.builder(
                             padding: const EdgeInsets.all(16),
-                            itemCount: _orders.length,
+                            itemCount: filtered.length,
                             itemBuilder: (context, i) {
-                              final o = _orders[i];
+                              final o = filtered[i];
                               return GestureDetector(
                                 onTap: () async {
                                   await Navigator.pushNamed(
