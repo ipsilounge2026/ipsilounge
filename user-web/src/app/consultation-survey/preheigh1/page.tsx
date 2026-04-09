@@ -112,9 +112,6 @@ export default function Preheigh1SurveyPage() {
               <button onClick={() => router.push("/mypage")} className="btn btn-primary">
                 마이페이지로
               </button>
-              <button onClick={() => router.push("/consultation")} className="btn btn-outline">
-                상담 예약하기
-              </button>
             </div>
           </div>
         )}
