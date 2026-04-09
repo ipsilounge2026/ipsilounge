@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getAvailableSlots, getCounselors, bookConsultation, checkConsultationEligible, checkBookingCooldown } from "@/lib/api";
+import { getAvailableSlots, getCounselors, bookConsultation, checkConsultationEligible, checkBookingCooldown, listMySurveys } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 interface Counselor {
@@ -48,6 +48,10 @@ export default function ConsultationPage() {
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [checkingEligibility, setCheckingEligibility] = useState(false);
 
+  // 사전 조사 상태 (학습 상담 전용)
+  // null: 확인 중 / "none": 미시작 / "draft": 작성중(미완료) / "submitted": 제출완료
+  const [surveyStatus, setSurveyStatus] = useState<"none" | "draft" | "submitted" | null>(null);
+
   // 예약 UI 관련
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -89,9 +93,28 @@ export default function ConsultationPage() {
       } finally {
         setCheckingEligibility(false);
       }
-    } else {
-      // 학습/심리/기타 → 사전조사 페이지로
+    } else if (typeValue === "학습상담") {
+      // 학습 상담 → 사전 조사 상태 확인 후 분기
       setStep("survey");
+      setSurveyStatus(null);
+      try {
+        const list = await listMySurveys({ survey_type: "preheigh1" });
+        const items = (list?.items || []) as Array<{ id: string; status: string }>;
+        if (items.some((s) => s.status === "submitted")) {
+          setSurveyStatus("submitted");
+        } else if (items.length > 0) {
+          setSurveyStatus("draft");
+        } else {
+          setSurveyStatus("none");
+        }
+      } catch {
+        setSurveyStatus("none");
+      }
+    } else {
+      // 심리/기타 → 전용 사전 조사 추후 추가 예정. 현재는 바로 예약 단계로 진입
+      setStep("booking");
+      loadCounselors();
+      checkBookingCooldown().then(setBookingCooldown).catch(() => {});
     }
   };
 
@@ -170,6 +193,7 @@ export default function ConsultationPage() {
     setStep("type");
     setSelectedType(null);
     setEligibility(null);
+    setSurveyStatus(null);
     setSelectedCounselor(null);
     setSelectedDate(null);
     setSelectedSlot(null);
@@ -286,80 +310,122 @@ export default function ConsultationPage() {
           </div>
         )}
 
-        {/* Step 2c: 사전 조사 (학습/심리/기타) */}
+        {/* Step 2c: 학습 상담 사전 조사 게이트 */}
         {step === "survey" && (
           <div className="card" style={{ padding: 40 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
               <button onClick={handleBack} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#6B7280" }}>←</button>
-              <h2 style={{ fontSize: 16, margin: 0 }}>{selectedTypeLabel} - 사전 조사</h2>
-            </div>
-            <div style={{
-              padding: 20,
-              borderRadius: 8,
-              backgroundColor: "#EFF6FF",
-              border: "1px solid #BFDBFE",
-              marginBottom: 20,
-            }}>
-              <p style={{ fontSize: 14, color: "#1E40AF", margin: 0, lineHeight: 1.7 }}>
-                상담의 질을 높이기 위해 학습 현황·생활 패턴 등을 미리 작성하는 사전 조사가 있습니다.<br />
-                작성 후 자동 저장되며, 중간에 종료해도 이어쓰기가 가능합니다.
-              </p>
+              <h2 style={{ fontSize: 16, margin: 0 }}>학습 상담 - 사전 조사</h2>
             </div>
 
-            <div style={{
-              padding: 20,
-              borderRadius: 8,
-              border: "1px solid #E5E7EB",
-              marginBottom: 16,
-            }}>
-              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>예비 고1 (중3) 학생용</div>
-              <p style={{ fontSize: 12, color: "#6B7280", margin: "0 0 12px 0", lineHeight: 1.6 }}>
-                중학교 성적, 학습 습관, 과목별 준비도 등 7개 카테고리.<br />
-                예상 소요 30~40분 (PC/태블릿 권장)
-              </p>
-              <button
-                onClick={() => router.push("/consultation-survey/preheigh1")}
-                className="btn btn-primary btn-block"
-              >
-                예비 고1 사전 조사 작성하기 →
-              </button>
-            </div>
+            {surveyStatus === null && (
+              <div style={{ textAlign: "center", padding: 40 }}>
+                <p style={{ color: "#6B7280" }}>사전 조사 작성 상태를 확인하고 있습니다...</p>
+              </div>
+            )}
 
-            <div style={{
-              padding: 20,
-              borderRadius: 8,
-              border: "1px solid #E5E7EB",
-              marginBottom: 20,
-              opacity: 0.6,
-            }}>
-              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>고등학생용</div>
-              <p style={{ fontSize: 12, color: "#6B7280", margin: "0 0 12px 0", lineHeight: 1.6 }}>
-                내신, 모의고사, 학생부 활동 등 고등학생 맞춤 사전 조사 (준비 중)
-              </p>
-              <button disabled className="btn btn-outline btn-block" style={{ cursor: "not-allowed" }}>
-                준비 중
-              </button>
-            </div>
+            {surveyStatus === "submitted" && (
+              <>
+                <div style={{
+                  padding: 20,
+                  borderRadius: 8,
+                  backgroundColor: "#F0FDF4",
+                  border: "1px solid #BBF7D0",
+                  marginBottom: 20,
+                  textAlign: "center",
+                }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+                  <p style={{ fontSize: 15, color: "#166534", margin: 0, fontWeight: 600 }}>
+                    사전 조사 작성이 완료되어 있습니다
+                  </p>
+                  <p style={{ fontSize: 12, color: "#166534", marginTop: 6, lineHeight: 1.6 }}>
+                    상담 예약을 진행하실 수 있습니다.
+                  </p>
+                </div>
+                <button onClick={handleSurveyComplete} className="btn btn-primary btn-block btn-lg">
+                  예약 진행하기
+                </button>
+                <div style={{ marginTop: 12, textAlign: "center" }}>
+                  <button
+                    onClick={() => router.push("/consultation-survey/preheigh1")}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      fontSize: 13,
+                      color: "#6B7280",
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                    }}
+                  >
+                    사전 조사 답변 수정하기
+                  </button>
+                </div>
+              </>
+            )}
 
-            <div style={{
-              borderTop: "1px solid #E5E7EB",
-              paddingTop: 16,
-              textAlign: "center",
-            }}>
-              <button
-                onClick={handleSurveyComplete}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: 13,
-                  color: "#6B7280",
-                  textDecoration: "underline",
-                  cursor: "pointer",
-                }}
-              >
-                사전 조사 없이 예약만 진행하기
-              </button>
-            </div>
+            {surveyStatus === "draft" && (
+              <>
+                <div style={{
+                  padding: 20,
+                  borderRadius: 8,
+                  backgroundColor: "#FEF3C7",
+                  border: "1px solid #FDE68A",
+                  marginBottom: 20,
+                }}>
+                  <div style={{ fontSize: 28, marginBottom: 8, textAlign: "center" }}>⚠️</div>
+                  <p style={{ fontSize: 15, color: "#92400E", margin: 0, fontWeight: 600, textAlign: "center" }}>
+                    사전 조사가 미완료 상태입니다
+                  </p>
+                  <p style={{ fontSize: 13, color: "#92400E", marginTop: 10, lineHeight: 1.6, textAlign: "center" }}>
+                    학습 상담은 사전 조사를 모두 작성한 뒤<br />
+                    예약하실 수 있습니다.
+                  </p>
+                </div>
+                <button
+                  onClick={() => router.push("/consultation-survey/preheigh1")}
+                  className="btn btn-primary btn-block btn-lg"
+                >
+                  이어서 작성하기 →
+                </button>
+              </>
+            )}
+
+            {surveyStatus === "none" && (
+              <>
+                <div style={{
+                  padding: 20,
+                  borderRadius: 8,
+                  backgroundColor: "#EFF6FF",
+                  border: "1px solid #BFDBFE",
+                  marginBottom: 20,
+                }}>
+                  <p style={{ fontSize: 14, color: "#1E40AF", margin: 0, lineHeight: 1.7 }}>
+                    학습 상담의 질을 높이기 위해 학습 현황·생활 패턴 등을 미리 작성하는 <strong>사전 조사</strong>가 필요합니다.<br />
+                    작성 후 자동 저장되며, 중간에 종료해도 이어쓰기가 가능합니다.
+                  </p>
+                </div>
+                <div style={{
+                  padding: 16,
+                  borderRadius: 8,
+                  border: "1px solid #E5E7EB",
+                  marginBottom: 20,
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>예비 고1 (중3) 학생용</div>
+                  <p style={{ fontSize: 12, color: "#6B7280", margin: 0, lineHeight: 1.6 }}>
+                    중학교 성적, 학습 습관, 과목별 준비도 등 7개 카테고리 · 예상 소요 30~40분 (PC/태블릿 권장)
+                  </p>
+                </div>
+                <button
+                  onClick={() => router.push("/consultation-survey/preheigh1")}
+                  className="btn btn-primary btn-block btn-lg"
+                >
+                  사전 조사 시작하기 →
+                </button>
+                <p style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginTop: 12 }}>
+                  ※ 고등학생용 사전 조사는 별도로 준비 중입니다
+                </p>
+              </>
+            )}
           </div>
         )}
 

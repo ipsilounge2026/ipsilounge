@@ -41,6 +41,50 @@ function detectIsMobile(): boolean {
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 }
 
+// ===== 검증 유틸 =====
+function isEmptyValue(v: any): boolean {
+  if (v === null || v === undefined) return true;
+  if (typeof v === "string") return v.trim() === "";
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === "object") return Object.keys(v).length === 0;
+  return false;
+}
+
+/**
+ * 카테고리 내 모든 필수 항목 중 미응답 항목의 라벨을 수집한다.
+ * - show_when을 평가해서 보이지 않는 질문은 건너뜀
+ * - composite는 내부 필드의 required도 확인
+ */
+function collectMissingRequired(category: any, categoryAnswers: Record<string, any>): string[] {
+  const missing: string[] = [];
+  for (const q of category.questions || []) {
+    if (q.show_when && !evaluateShowWhen(q.show_when, categoryAnswers)) continue;
+
+    // composite는 자식 필드까지 확인
+    if (q.type === "composite" && Array.isArray(q.fields)) {
+      const innerValue =
+        categoryAnswers[q.id] && typeof categoryAnswers[q.id] === "object"
+          ? categoryAnswers[q.id]
+          : {};
+      for (const f of q.fields) {
+        if (f.show_when && !evaluateShowWhen(f.show_when, innerValue)) continue;
+        if (!f.required) continue;
+        if (isEmptyValue(innerValue[f.name])) {
+          missing.push(`${q.label || q.id} - ${f.label || f.name}`);
+        }
+      }
+      continue;
+    }
+
+    // 일반 질문
+    if (!q.required) continue;
+    if (isEmptyValue(categoryAnswers[q.id])) {
+      missing.push(q.label || q.id);
+    }
+  }
+  return missing;
+}
+
 export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
   const [answers, setAnswers] = useState<Record<string, any>>(survey.answers || {});
   const [categoryStatus, setCategoryStatus] = useState<Record<string, CategoryStatus>>(
@@ -146,6 +190,17 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
   };
 
   const handleNext = async () => {
+    // 현재 카테고리의 미응답 필수 항목 차단
+    const currentAnswers = answers[currentCategory.id] || {};
+    const missing = collectMissingRequired(currentCategory, currentAnswers);
+    if (missing.length > 0) {
+      alert(
+        `다음 필수 항목을 입력해주세요:\n\n` +
+          missing.map((m) => `• ${m}`).join("\n") +
+          `\n\n작성 후 다시 진행하거나, "나중에 입력" 버튼을 누르면 이 카테고리를 건너뛸 수 있습니다.`
+      );
+      return;
+    }
     await markCategoryStatus("completed");
     if (currentIdx < totalCategories - 1) {
       goToCategory(currentIdx + 1);
@@ -160,14 +215,28 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
   };
 
   const handleSubmit = async () => {
-    // 미완료 체크
-    const incomplete = schema.categories.filter((c) => {
-      const s = categoryStatus[c.id];
-      return s !== "completed" && s !== "skipped";
-    });
-    if (incomplete.length > 0) {
-      const titles = incomplete.map((c) => `${c.id} ${c.title}`).join(", ");
-      if (!confirm(`다음 카테고리가 미완료 상태입니다: ${titles}\n그래도 제출하시겠습니까?`)) return;
+    // 모든 비-skipped 카테고리에서 미응답 필수 항목 검사
+    const missingByCategory: Array<{ id: string; title: string; items: string[] }> = [];
+    for (const cat of schema.categories) {
+      if (categoryStatus[cat.id] === "skipped") continue;
+      const catAnswers = answers[cat.id] || {};
+      const missing = collectMissingRequired(cat, catAnswers);
+      if (missing.length > 0) {
+        missingByCategory.push({ id: cat.id, title: cat.title, items: missing });
+      }
+    }
+
+    if (missingByCategory.length > 0) {
+      const msg = missingByCategory
+        .map((c) => `[${c.id}. ${c.title}]\n${c.items.map((i) => `  • ${i}`).join("\n")}`)
+        .join("\n\n");
+      alert(
+        `아래 필수 항목이 미응답 상태입니다.\n작성을 완료한 후 다시 제출해주세요.\n\n` + msg
+      );
+      // 첫 번째 미응답 카테고리로 이동
+      const firstIdx = schema.categories.findIndex((c) => c.id === missingByCategory[0].id);
+      if (firstIdx >= 0) goToCategory(firstIdx);
+      return;
     }
 
     try {
@@ -217,27 +286,32 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
         </div>
       </div>
 
-      {/* 카테고리 네비 (탭) */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+      {/* 카테고리 네비 (위치 표시 전용 — 클릭 이동 불가. 이동은 "저장 후 다음" / "나중에 입력" / "이전" 버튼으로만) */}
+      <div
+        style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}
+        role="tablist"
+        aria-label="카테고리 진행 상태"
+      >
         {schema.categories.map((c, idx) => {
           const s = categoryStatus[c.id] || "not_started";
           const active = idx === currentIdx;
           return (
-            <button
+            <div
               key={c.id}
-              type="button"
-              onClick={() => goToCategory(idx)}
+              role="tab"
+              aria-selected={active}
               style={{
                 padding: "8px 14px",
                 border: `1px solid ${active ? "var(--primary)" : "var(--gray-300)"}`,
                 borderRadius: 8,
                 background: active ? "var(--primary)" : "white",
                 color: active ? "white" : "var(--gray-700)",
-                cursor: "pointer",
+                cursor: "default",
                 fontSize: 12,
                 fontWeight: active ? 700 : 500,
                 whiteSpace: "nowrap",
                 position: "relative",
+                userSelect: "none",
               }}
             >
               {c.id}. {c.title}
@@ -253,7 +327,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
                   ●
                 </span>
               )}
-            </button>
+            </div>
           );
         })}
       </div>
