@@ -294,21 +294,72 @@ export default function ConsultationPage() {
               <h2 style={{ fontSize: 16, margin: 0 }}>{selectedTypeLabel} - 사전 조사</h2>
             </div>
             <div style={{
-              padding: 24,
+              padding: 20,
               borderRadius: 8,
-              backgroundColor: "#F9FAFB",
-              border: "1px solid #E5E7EB",
-              textAlign: "center",
+              backgroundColor: "#EFF6FF",
+              border: "1px solid #BFDBFE",
               marginBottom: 20,
             }}>
-              <p style={{ fontSize: 14, color: "#6B7280", margin: 0, lineHeight: 1.8 }}>
-                사전 조사 페이지는 준비 중입니다.<br />
-                아래 버튼을 눌러 바로 예약을 진행해주세요.
+              <p style={{ fontSize: 14, color: "#1E40AF", margin: 0, lineHeight: 1.7 }}>
+                상담의 질을 높이기 위해 학습 현황·생활 패턴 등을 미리 작성하는 사전 조사가 있습니다.<br />
+                작성 후 자동 저장되며, 중간에 종료해도 이어쓰기가 가능합니다.
               </p>
             </div>
-            <button onClick={handleSurveyComplete} className="btn btn-primary btn-block btn-lg">
-              예약 진행하기
-            </button>
+
+            <div style={{
+              padding: 20,
+              borderRadius: 8,
+              border: "1px solid #E5E7EB",
+              marginBottom: 16,
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>예비 고1 (중3) 학생용</div>
+              <p style={{ fontSize: 12, color: "#6B7280", margin: "0 0 12px 0", lineHeight: 1.6 }}>
+                중학교 성적, 학습 습관, 과목별 준비도 등 7개 카테고리.<br />
+                예상 소요 30~40분 (PC/태블릿 권장)
+              </p>
+              <button
+                onClick={() => router.push("/consultation-survey/preheigh1")}
+                className="btn btn-primary btn-block"
+              >
+                예비 고1 사전 조사 작성하기 →
+              </button>
+            </div>
+
+            <div style={{
+              padding: 20,
+              borderRadius: 8,
+              border: "1px solid #E5E7EB",
+              marginBottom: 20,
+              opacity: 0.6,
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>고등학생용</div>
+              <p style={{ fontSize: 12, color: "#6B7280", margin: "0 0 12px 0", lineHeight: 1.6 }}>
+                내신, 모의고사, 학생부 활동 등 고등학생 맞춤 사전 조사 (준비 중)
+              </p>
+              <button disabled className="btn btn-outline btn-block" style={{ cursor: "not-allowed" }}>
+                준비 중
+              </button>
+            </div>
+
+            <div style={{
+              borderTop: "1px solid #E5E7EB",
+              paddingTop: 16,
+              textAlign: "center",
+            }}>
+              <button
+                onClick={handleSurveyComplete}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: 13,
+                  color: "#6B7280",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                }}
+              >
+                사전 조사 없이 예약만 진행하기
+              </button>
+            </div>
           </div>
         )}
 
