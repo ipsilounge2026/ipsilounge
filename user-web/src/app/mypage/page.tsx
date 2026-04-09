@@ -13,8 +13,15 @@ interface User {
   name: string;
   phone: string | null;
   member_type: string;
+  branch_name: string | null;
+  is_academy_student: boolean;
   created_at: string;
 }
+
+const BRANCH_OPTIONS = [
+  "경복궁점", "광화문점", "구리점", "대치점", "대흥점",
+  "마포점", "분당점", "은평점", "중계점", "대치스터디센터점",
+];
 
 interface NotificationItem {
   id: string;
@@ -56,6 +63,8 @@ export default function MyPage() {
   const [user, setUser] = useState<User | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [isAcademyStudent, setIsAcademyStudent] = useState(false);
+  const [branchName, setBranchName] = useState("");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [seminarReservations, setSeminarReservations] = useState<any[]>([]);
   const [message, setMessage] = useState("");
@@ -85,7 +94,13 @@ export default function MyPage() {
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
-    getMe().then((u) => { setUser(u); setName(u.name); setPhone(u.phone || ""); }).catch(() => {});
+    getMe().then((u) => {
+      setUser(u);
+      setName(u.name);
+      setPhone(u.phone || "");
+      setIsAcademyStudent(u.is_academy_student || false);
+      setBranchName(u.branch_name || "");
+    }).catch(() => {});
     if (memberType === "branch_manager") {
       getMySeminarReservations().then((res) => setSeminarReservations(res.items || [])).catch(() => {});
     } else {
@@ -100,8 +115,24 @@ export default function MyPage() {
 
   const handleSave = async () => {
     try {
-      const updated = await updateMe({ name, phone: phone || undefined });
+      const payload: Record<string, any> = { name, phone: phone || undefined };
+      // 학생/학부모: 재원생 여부 + 지점 저장 (지점 담당자는 지점 수정 불가)
+      if (memberType !== "branch_manager") {
+        payload.is_academy_student = isAcademyStudent;
+        if (isAcademyStudent) {
+          if (!branchName) {
+            setMessage("재원생이시면 지점을 선택해주세요");
+            return;
+          }
+          payload.branch_name = branchName;
+        } else {
+          payload.branch_name = null;
+        }
+      }
+      const updated = await updateMe(payload);
       setUser(updated);
+      setIsAcademyStudent(updated.is_academy_student || false);
+      setBranchName(updated.branch_name || "");
       setEditing(false);
       setMessage("정보가 수정되었습니다");
     } catch (err: any) {
@@ -260,9 +291,63 @@ export default function MyPage() {
                 <label>연락처</label>
                 <input type="tel" className="form-control" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
+
+              {/* 지점 담당자: 담당 지점 표시 (수정 불가, 관리자 문의) */}
+              {memberType === "branch_manager" && (
+                <div className="form-group">
+                  <label>담당 지점</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={user.branch_name || ""}
+                    disabled
+                    style={{ background: "#F3F4F6", color: "#6B7280", cursor: "not-allowed" }}
+                  />
+                  <span style={{ fontSize: 12, color: "#9CA3AF" }}>담당 지점 변경은 관리자에게 문의해주세요</span>
+                </div>
+              )}
+
+              {/* 학생/학부모: 재원생 여부 + 지점 선택 */}
+              {memberType !== "branch_manager" && (
+                <>
+                  <div className="form-group">
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={isAcademyStudent}
+                        onChange={(e) => setIsAcademyStudent(e.target.checked)}
+                        style={{ width: 16, height: 16, accentColor: "#2563eb" }}
+                      />
+                      <span>입시라운지 재원생입니다</span>
+                    </label>
+                  </div>
+                  {isAcademyStudent && (
+                    <div className="form-group">
+                      <label>재원 지점</label>
+                      <select
+                        className="form-control"
+                        value={branchName}
+                        onChange={(e) => setBranchName(e.target.value)}
+                      >
+                        <option value="">지점을 선택해주세요</option>
+                        {BRANCH_OPTIONS.map((b) => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn btn-primary" onClick={handleSave}>저장</button>
-                <button className="btn btn-outline" onClick={() => { setEditing(false); setName(user.name); setPhone(user.phone || ""); }}>취소</button>
+                <button className="btn btn-outline" onClick={() => {
+                  setEditing(false);
+                  setName(user.name);
+                  setPhone(user.phone || "");
+                  setIsAcademyStudent(user.is_academy_student || false);
+                  setBranchName(user.branch_name || "");
+                }}>취소</button>
               </div>
             </>
           ) : (
@@ -284,6 +369,65 @@ export default function MyPage() {
                   <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>가입일</div>
                   <div>{new Date(user.created_at).toLocaleDateString("ko-KR")}</div>
                 </div>
+
+                {/* 지점 담당자: 담당 지점 */}
+                {memberType === "branch_manager" && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>담당 지점</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{
+                        padding: "3px 10px",
+                        borderRadius: 6,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#9A3412",
+                        background: "#FFF7ED",
+                        border: "1px solid #FED7AA",
+                      }}>
+                        🏢 {user.branch_name || "-"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 학생/학부모: 재원생 여부 + 재원 지점 */}
+                {memberType !== "branch_manager" && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>재원 여부</div>
+                    {user.is_academy_student ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{
+                          padding: "3px 10px",
+                          borderRadius: 6,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "#065F46",
+                          background: "#D1FAE5",
+                          border: "1px solid #6EE7B7",
+                        }}>
+                          ✓ 재원생
+                        </span>
+                        {user.branch_name && (
+                          <span style={{
+                            padding: "3px 10px",
+                            borderRadius: 6,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "#1E40AF",
+                            background: "#DBEAFE",
+                            border: "1px solid #93C5FD",
+                          }}>
+                            🏢 {user.branch_name}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 14, color: "#9CA3AF" }}>
+                        비재원생
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 담당자 정보 (학생/학부모만) */}

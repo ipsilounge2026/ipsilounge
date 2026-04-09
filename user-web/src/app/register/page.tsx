@@ -30,8 +30,10 @@ export default function RegisterPage() {
     // parent only
     student_name: "",
     student_birth: "",
-    // branch_manager only
+    // branch_manager only / student·parent: 재원 지점
     branch_name: "",
+    // student/parent: 재원생 여부
+    is_academy_student: false,
   });
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
@@ -136,6 +138,10 @@ export default function RegisterPage() {
       if (!form.birth_date) { setError("생년월일을 입력해주세요"); return; }
       if (!form.school_name || !schoolSelected) { setError("재학 학교를 검색하여 선택해주세요"); return; }
       if (!form.grade) { setError("학년을 선택해주세요"); return; }
+      if (form.is_academy_student && !form.branch_name) {
+        setError("재원생이시면 재원 지점을 선택해주세요");
+        return;
+      }
     }
     if (form.member_type === "parent") {
       if (!form.student_name) { setError("자녀 이름을 입력해주세요"); return; }
@@ -160,6 +166,10 @@ export default function RegisterPage() {
         if (form.birth_date) payload.birth_date = form.birth_date;
         if (form.school_name) payload.school_name = form.school_name;
         if (form.grade) payload.grade = Number(form.grade);
+        payload.is_academy_student = form.is_academy_student;
+        if (form.is_academy_student && form.branch_name) {
+          payload.branch_name = form.branch_name;
+        }
       }
       if (form.member_type === "parent") {
         payload.student_name = form.student_name || undefined;
@@ -187,6 +197,7 @@ export default function RegisterPage() {
   };
 
   const update = (field: string, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
+  const updateBool = (field: string, value: boolean) => setForm((prev) => ({ ...prev, [field]: value }));
 
   const memberTypes = [
     { key: "student", label: "학생" },
@@ -212,7 +223,13 @@ export default function RegisterPage() {
                 <button
                   key={key}
                   type="button"
-                  onClick={() => update("member_type", key)}
+                  onClick={() => setForm((prev) => ({
+                    ...prev,
+                    member_type: key,
+                    // 회원 유형 변경 시 지점 및 재원생 플래그 초기화
+                    branch_name: "",
+                    is_academy_student: false,
+                  }))}
                   style={{
                     flex: 1,
                     padding: "12px 8px",
@@ -355,7 +372,7 @@ export default function RegisterPage() {
               </div>
 
               {/* 학년 */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
+              <div className="form-group" style={{ marginBottom: 12 }}>
                 <label>{form.member_type === "parent" ? "자녀 학년" : "학년"}</label>
                 <select className="form-control" value={form.grade}
                   onChange={(e) => update("grade", e.target.value)}>
@@ -365,6 +382,40 @@ export default function RegisterPage() {
                   <option value="3">3학년</option>
                 </select>
               </div>
+
+              {/* 재원생 여부 */}
+              <div className="form-group" style={{ marginBottom: form.is_academy_student ? 12 : 0 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontWeight: 500 }}>
+                  <input
+                    type="checkbox"
+                    checked={form.is_academy_student}
+                    onChange={(e) => updateBool("is_academy_student", e.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: "#2563eb" }}
+                  />
+                  <span>{form.member_type === "parent" ? "자녀가 입시라운지 재원생입니다" : "입시라운지 재원생입니다"}</span>
+                </label>
+              </div>
+
+              {/* 재원 지점 (재원생 선택 시만) */}
+              {form.is_academy_student && (
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>재원 지점</label>
+                  <select className="form-control" value={form.branch_name}
+                    onChange={(e) => update("branch_name", e.target.value)} required>
+                    <option value="">재원 지점을 선택해주세요</option>
+                    <option value="경복궁점">경복궁점</option>
+                    <option value="광화문점">광화문점</option>
+                    <option value="구리점">구리점</option>
+                    <option value="대치점">대치점</option>
+                    <option value="대흥점">대흥점</option>
+                    <option value="마포점">마포점</option>
+                    <option value="분당점">분당점</option>
+                    <option value="은평점">은평점</option>
+                    <option value="중계점">중계점</option>
+                    <option value="대치스터디센터점">대치스터디센터점</option>
+                  </select>
+                </div>
+              )}
             </div>
           )}
 

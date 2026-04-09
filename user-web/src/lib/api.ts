@@ -93,7 +93,8 @@ export async function updateMe(data: {
   birth_date?: string;
   school_name?: string;
   grade?: number;
-  branch_name?: string;
+  branch_name?: string | null;
+  is_academy_student?: boolean;
 }) {
   return request("/api/users/me", { method: "PUT", body: JSON.stringify(data) });
 }
