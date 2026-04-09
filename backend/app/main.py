@@ -152,6 +152,9 @@ async def startup():
             if "branch_name" not in user_columns:
                 connection.execute(text("ALTER TABLE users ADD COLUMN branch_name VARCHAR(100)"))
                 logger.info("users 테이블에 branch_name 컬럼 추가 완료")
+            if "is_academy_student" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN is_academy_student BOOLEAN DEFAULT FALSE NOT NULL"))
+                logger.info("users 테이블에 is_academy_student 컬럼 추가 완료")
             if "grade_year" not in user_columns:
                 connection.execute(text("ALTER TABLE users ADD COLUMN grade_year INTEGER"))
                 logger.info("users 테이블에 grade_year 컬럼 추가 완료")

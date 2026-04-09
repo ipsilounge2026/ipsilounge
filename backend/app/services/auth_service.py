@@ -37,6 +37,7 @@ async def register_user(data: UserRegister, db: AsyncSession) -> User:
         grade=data.grade,
         grade_year=date_type.today().year if data.grade is not None else None,
         branch_name=data.branch_name,
+        is_academy_student=data.is_academy_student,
         is_active=is_active,
     )
     db.add(user)

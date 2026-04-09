@@ -23,7 +23,8 @@ class User(Base):
     school_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     grade: Mapped[int | None] = mapped_column(Integer, nullable=True)
     grade_year: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 학년 설정 연도 (자동 진급 계산용)
-    branch_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    branch_name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # branch_manager: 담당 지점 / student·parent: 재원생 지점
+    is_academy_student: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # 학생/학부모: 재원생 여부
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

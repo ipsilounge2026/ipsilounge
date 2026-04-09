@@ -40,6 +40,15 @@ async def update_me(
         user.grade_year = date_type.today().year
     if data.branch_name is not None:
         user.branch_name = data.branch_name
+    if data.is_academy_student is not None:
+        # 지점 담당자는 재원생 플래그 강제 False
+        if user.member_type == "branch_manager":
+            user.is_academy_student = False
+        else:
+            user.is_academy_student = data.is_academy_student
+            # 재원생 해제 시 branch_name 도 자동 해제 (지점 담당자가 아닌 경우)
+            if not data.is_academy_student and data.branch_name is None:
+                user.branch_name = None
     await db.commit()
     await db.refresh(user)
     return user
