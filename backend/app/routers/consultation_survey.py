@@ -288,18 +288,64 @@ async def create_survey(
     if existing is not None:
         return SurveyCreateResponse.model_validate(existing)
 
+    # 예비고1 → 고1 자동 데이터 연계
+    # high T1 설문 생성 시, 동일 사용자의 preheigh1 submitted 설문이 있으면 자동 매핑
+    prefill_answers = {}
+    prefill_category_status = {}
+    source_survey_id = None
+    preserved_data = None
+
+    if data.survey_type == "high" and raw_timing == "T1":
+        preheigh1_q = (
+            select(ConsultationSurvey)
+            .where(
+                ConsultationSurvey.user_id == owner_id,
+                ConsultationSurvey.survey_type == "preheigh1",
+                ConsultationSurvey.status == "submitted",
+            )
+            .order_by(ConsultationSurvey.submitted_at.desc())
+            .limit(1)
+        )
+        preheigh1_result = await db.execute(preheigh1_q)
+        preheigh1_survey = preheigh1_result.scalar_one_or_none()
+
+        if preheigh1_survey:
+            # 카테고리 매핑 (예비고1 → 고등학교 T1)
+            _MAP = {"A": "A", "B": "E", "D": "D", "G": "F"}
+            src = preheigh1_survey.answers or {}
+            for src_cat, dst_cat in _MAP.items():
+                if src_cat in src:
+                    prefill_answers[dst_cat] = src[src_cat]
+                    prefill_category_status[dst_cat] = "in_progress"
+
+            # 보존 데이터 (비교 상담용)
+            preserved_data = {
+                "converted_at": datetime.utcnow().isoformat(),
+                "source_survey_type": "preheigh1",
+                "auto_converted": True,
+            }
+            for keep_cat in ["E", "C", "F"]:
+                if keep_cat in src:
+                    preserved_data[f"preheigh1_{keep_cat}"] = src[keep_cat]
+
+            source_survey_id = preheigh1_survey.id
+            if raw_mode == "full":
+                raw_mode = "delta"  # preheigh1 데이터가 사전 입력되므로 delta
+
     survey = ConsultationSurvey(
         user_id=owner_id,
         survey_type=data.survey_type,
         timing=raw_timing,
         mode=raw_mode,
-        answers={},
-        category_status={},
+        answers=prefill_answers,
+        category_status=prefill_category_status,
         status="draft",
         started_platform=data.started_platform,
         last_edited_platform=data.started_platform,
         schema_version=get_schema_version(data.survey_type),
         booking_id=data.booking_id,
+        source_survey_id=source_survey_id,
+        preserved_data=preserved_data,
     )
     db.add(survey)
     await db.commit()
