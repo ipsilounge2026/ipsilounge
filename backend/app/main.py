@@ -171,6 +171,13 @@ async def startup():
                 connection.execute(text("UPDATE users SET grade_year = EXTRACT(YEAR FROM CURRENT_DATE) WHERE grade IS NOT NULL AND grade_year IS NULL"))
                 logger.info("기존 사용자 grade_year 초기값 설정 완료")
 
+            # consultation_surveys 테이블에 admin_memo 컬럼 추가
+            if inspector.has_table("consultation_surveys"):
+                survey_columns = [c["name"] for c in inspector.get_columns("consultation_surveys")]
+                if "admin_memo" not in survey_columns:
+                    connection.execute(text("ALTER TABLE consultation_surveys ADD COLUMN admin_memo TEXT"))
+                    logger.info("consultation_surveys 테이블에 admin_memo 컬럼 추가 완료")
+
             # consultation_bookings 테이블에 cancel_reason 컬럼 추가
             if inspector.has_table("consultation_bookings"):
                 booking_columns = [c["name"] for c in inspector.get_columns("consultation_bookings")]

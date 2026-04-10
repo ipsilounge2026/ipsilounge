@@ -126,6 +126,7 @@ class SurveyResponse(BaseModel):
 class SurveyListItem(BaseModel):
     """설문 목록 아이템 (요약 정보)"""
     id: uuid.UUID
+    user_id: uuid.UUID
     survey_type: str
     timing: str | None
     mode: str

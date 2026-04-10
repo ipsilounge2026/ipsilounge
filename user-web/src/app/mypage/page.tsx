@@ -85,7 +85,7 @@ export default function MyPage() {
   const [actionLoading, setActionLoading] = useState(false);
 
   // 사전 조사 관련
-  const [surveys, setSurveys] = useState<Array<{ id: string; survey_type: string; timing: string | null; status: string; updated_at: string }>>([]);
+  const [surveys, setSurveys] = useState<Array<{ id: string; user_id: string; survey_type: string; timing: string | null; status: string; updated_at: string }>>([]);
 
   // 담당자 관련
   const [myCounselor, setMyCounselor] = useState<CounselorInfo | null>(null);
@@ -746,7 +746,7 @@ export default function MyPage() {
                           <a href={href} style={{ color: "var(--primary)", fontSize: 13, textDecoration: "none" }}>
                             {s.status === "submitted" ? "수정" : "이어쓰기"} →
                           </a>
-                          {s.status === "draft" && (
+                          {s.status === "draft" && user && s.user_id === user.id && (
                             <button
                               onClick={async () => {
                                 if (!confirm("이 설문을 삭제하시겠습니까?")) return;

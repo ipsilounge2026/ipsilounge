@@ -17,6 +17,7 @@ interface SurveyItem {
   timing: string | null;
   mode: string;
   status: string;
+  has_admin_memo: boolean;
   created_at: string;
   updated_at: string;
   submitted_at: string | null;
@@ -108,6 +109,7 @@ export default function SurveysPage() {
                 <th>유형</th>
                 <th>시점</th>
                 <th>상태</th>
+                <th>메모</th>
                 <th>생성일</th>
                 <th>제출일</th>
                 <th></th>
@@ -116,7 +118,7 @@ export default function SurveysPage() {
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
+                  <td colSpan={9} style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
                     설문이 없습니다
                   </td>
                 </tr>
@@ -150,6 +152,11 @@ export default function SurveysPage() {
                     }}>
                       {statusLabel[s.status] || s.status}
                     </span>
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    {s.has_admin_memo && (
+                      <span style={{ fontSize: 14 }} title="상담사 메모 있음">📝</span>
+                    )}
                   </td>
                   <td style={{ fontSize: 13 }}>{new Date(s.created_at).toLocaleDateString("ko-KR")}</td>
                   <td style={{ fontSize: 13 }}>

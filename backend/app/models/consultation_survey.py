@@ -83,6 +83,9 @@ class ConsultationSurvey(Base):
     # 메모 (학생용 자유 메모, 상담사에게 전달)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # 상담사 메모 (관리자/상담사 전용)
+    admin_memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

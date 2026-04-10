@@ -1,13 +1,18 @@
 """
-관리자용 사전 상담 설문 조회 API
+관리자용 사전 상담 설문 API
 
 - 설문 목록 조회 (필터: survey_type, status, 검색)
 - 설문 상세 조회 (답변 + 스키마 포함)
+- 자동 계산 (내신 추이, 모의고사 추이, 학습시간 분석)
+- Delta diff (이전 상담 대비 변경점)
+- 상담사 메모 CRUD
 """
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +24,8 @@ from app.utils.dependencies import get_current_admin
 
 router = APIRouter(prefix="/api/admin/surveys", tags=["관리자-사전설문"])
 
+
+# ---- 설문 목록 ----
 
 @router.get("")
 async def list_surveys(
@@ -41,11 +48,9 @@ async def list_surveys(
         pattern = f"%{search}%"
         base = base.where((User.name.ilike(pattern)) | (User.email.ilike(pattern)))
 
-    # total
     count_q = select(func.count()).select_from(base.subquery())
     total = (await db.execute(count_q)).scalar() or 0
 
-    # items
     q = (
         base.order_by(ConsultationSurvey.updated_at.desc())
         .offset((page - 1) * size)
@@ -53,7 +58,6 @@ async def list_surveys(
     )
     rows = (await db.execute(q)).scalars().all()
 
-    # user info cache
     user_ids = list({r.user_id for r in rows})
     users_map: dict[uuid.UUID, User] = {}
     if user_ids:
@@ -74,6 +78,7 @@ async def list_surveys(
             "timing": s.timing,
             "mode": s.mode,
             "status": s.status,
+            "has_admin_memo": bool(s.admin_memo),
             "created_at": s.created_at.isoformat(),
             "updated_at": s.updated_at.isoformat(),
             "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
@@ -82,13 +87,15 @@ async def list_surveys(
     return {"items": items, "total": total}
 
 
+# ---- 설문 상세 ----
+
 @router.get("/{survey_id}")
 async def get_survey_detail(
     survey_id: uuid.UUID,
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """설문 상세 조회 (관리자용) - 답변 데이터 + 스키마 포함"""
+    """설문 상세 조회 (관리자용) - 답변 + 스키마 + 자동 계산 + 메모"""
     result = await db.execute(
         select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
     )
@@ -96,16 +103,17 @@ async def get_survey_detail(
     if not survey:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
 
-    # user info
     uresult = await db.execute(select(User).where(User.id == survey.user_id))
     user = uresult.scalar_one_or_none()
 
-    # schema
     from app.surveys.schema_loader import load_schema
     try:
         schema = load_schema(survey.survey_type)
     except Exception:
         schema = None
+
+    # 자동 계산
+    computed = _compute_stats(survey.survey_type, survey.answers)
 
     return {
         "id": str(survey.id),
@@ -126,8 +134,463 @@ async def get_survey_detail(
         "schema_version": survey.schema_version,
         "booking_id": str(survey.booking_id) if survey.booking_id else None,
         "note": survey.note,
+        "admin_memo": survey.admin_memo,
         "created_at": survey.created_at.isoformat(),
         "updated_at": survey.updated_at.isoformat(),
         "submitted_at": survey.submitted_at.isoformat() if survey.submitted_at else None,
         "schema": schema,
+        "computed": computed,
     }
+
+
+# ---- 자동 계산 (별도 엔드포인트) ----
+
+@router.get("/{survey_id}/computed")
+async def get_computed_stats(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """설문 답변 기반 자동 계산 결과"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    return _compute_stats(survey.survey_type, survey.answers)
+
+
+# ---- Delta Diff ----
+
+@router.get("/{survey_id}/delta")
+async def get_delta_diff(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """이전 설문 대비 변경점 (같은 user + survey_type, 시간순 비교)"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    current = result.scalar_one_or_none()
+    if not current:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    # 같은 사용자의 같은 타입 이전 설문 찾기
+    prev_q = (
+        select(ConsultationSurvey)
+        .where(
+            ConsultationSurvey.user_id == current.user_id,
+            ConsultationSurvey.survey_type == current.survey_type,
+            ConsultationSurvey.id != current.id,
+            ConsultationSurvey.created_at < current.created_at,
+        )
+        .order_by(ConsultationSurvey.created_at.desc())
+        .limit(1)
+    )
+    prev_result = await db.execute(prev_q)
+    previous = prev_result.scalar_one_or_none()
+
+    if not previous:
+        return {"has_previous": False, "diff": {}, "summary": "이전 설문이 없습니다."}
+
+    diff = _compute_delta(previous.answers, current.answers)
+
+    return {
+        "has_previous": True,
+        "previous_id": str(previous.id),
+        "previous_timing": previous.timing,
+        "previous_submitted_at": previous.submitted_at.isoformat() if previous.submitted_at else None,
+        "diff": diff,
+        "summary": _summarize_delta(diff),
+    }
+
+
+# ---- 상담사 메모 ----
+
+class MemoRequest(BaseModel):
+    admin_memo: str
+
+
+@router.put("/{survey_id}/memo")
+async def update_memo(
+    survey_id: uuid.UUID,
+    data: MemoRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담사 메모 저장/수정"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    survey.admin_memo = data.admin_memo
+    await db.commit()
+    return {"ok": True, "admin_memo": survey.admin_memo}
+
+
+@router.delete("/{survey_id}/memo")
+async def delete_memo(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담사 메모 삭제"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    survey.admin_memo = None
+    await db.commit()
+    return {"ok": True}
+
+
+# ============================================================
+# 자동 계산 헬퍼
+# ============================================================
+
+def _safe_float(v: Any) -> float | None:
+    """값을 float로 변환. 실패 시 None."""
+    if v is None or v == "":
+        return None
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        return None
+
+
+def _compute_stats(survey_type: str, answers: dict) -> dict:
+    """답변 데이터에서 자동 계산 통계 생성."""
+    if survey_type == "high":
+        return _compute_high(answers)
+    elif survey_type == "preheigh1":
+        return _compute_preheigh1(answers)
+    return {}
+
+
+def _compute_high(answers: dict) -> dict:
+    """고등학생 설문 자동 계산."""
+    result: dict[str, Any] = {}
+
+    # --- 내신 추이 (카테고리 B: B1~B4) ---
+    cat_b = answers.get("B", {})
+    semesters = ["B1", "B2", "B3", "B4"]
+    semester_labels = ["고1-1", "고1-2", "고2-1", "고2-2"]
+    subjects = ["ko", "en", "ma", "sc1", "sc2", "so"]
+    subject_names = {"ko": "국어", "en": "영어", "ma": "수학", "sc1": "탐구1", "sc2": "탐구2", "so": "사회"}
+
+    grade_trend: list[dict] = []
+    subject_trends: dict[str, list] = {s: [] for s in subjects}
+    grade_dist: list[dict] = []
+
+    for i, sem_key in enumerate(semesters):
+        sem_data = cat_b.get(sem_key)
+        if not sem_data or not isinstance(sem_data, dict):
+            continue
+
+        sem_grades = []
+        dist = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        for subj in subjects:
+            subj_data = sem_data.get(subj, {})
+            if not isinstance(subj_data, dict):
+                continue
+            grade = _safe_float(subj_data.get("rank_grade"))
+            if grade is not None:
+                sem_grades.append(grade)
+                g = min(5, max(1, round(grade)))
+                dist[g] = dist.get(g, 0) + 1
+                subject_trends[subj].append({"semester": semester_labels[i], "grade": grade})
+
+        if sem_grades:
+            avg = round(sum(sem_grades) / len(sem_grades), 2)
+            grade_trend.append({"semester": semester_labels[i], "avg_grade": avg, "subject_count": len(sem_grades)})
+            grade_dist.append({"semester": semester_labels[i], **dist})
+
+    # 추이 판정
+    trend_badge = _detect_trend([p["avg_grade"] for p in grade_trend], lower_is_better=True)
+
+    result["grade_trend"] = {
+        "data": grade_trend,
+        "trend_badge": trend_badge,
+        "subject_trends": {
+            subject_names.get(k, k): v for k, v in subject_trends.items() if v
+        },
+        "grade_distribution": grade_dist,
+    }
+
+    # --- 모의고사 추이 (카테고리 C: C1) ---
+    cat_c = answers.get("C", {})
+    mock_data = cat_c.get("C1")
+    if mock_data and isinstance(mock_data, dict):
+        areas = ["korean", "math", "english", "inquiry1", "inquiry2"]
+        area_names = {"korean": "국어", "math": "수학", "english": "영어", "inquiry1": "탐구1", "inquiry2": "탐구2"}
+        mock_trends: dict[str, list] = {a: [] for a in areas}
+        avg_trend: list[dict] = []
+
+        for session_key, session in mock_data.items():
+            if not isinstance(session, dict):
+                continue
+            session_grades = []
+            for area in areas:
+                area_data = session.get(area, {})
+                if not isinstance(area_data, dict):
+                    continue
+                rank = _safe_float(area_data.get("rank"))
+                if rank is not None:
+                    mock_trends[area].append({"session": session_key, "rank": rank})
+                    session_grades.append(rank)
+            if session_grades:
+                avg_trend.append({"session": session_key, "avg_rank": round(sum(session_grades) / len(session_grades), 2)})
+
+        mock_badge = _detect_trend([p["avg_rank"] for p in avg_trend], lower_is_better=True)
+
+        # 취약 영역 감지
+        weak_areas = []
+        if avg_trend:
+            overall_avg = sum(p["avg_rank"] for p in avg_trend) / len(avg_trend)
+            for area, data in mock_trends.items():
+                if data:
+                    area_avg = sum(d["rank"] for d in data) / len(data)
+                    if area_avg > overall_avg + 1.5:
+                        weak_areas.append({"area": area_names.get(area, area), "avg_rank": round(area_avg, 2), "gap": round(area_avg - overall_avg, 2)})
+
+        result["mock_trend"] = {
+            "avg_trend": avg_trend,
+            "trend_badge": mock_badge,
+            "area_trends": {area_names.get(k, k): v for k, v in mock_trends.items() if v},
+            "weak_areas": weak_areas,
+        }
+
+    # --- 학습 시간 분석 (카테고리 D: D1) ---
+    result["study_analysis"] = _compute_study_analysis(answers.get("D", {}))
+
+    return result
+
+
+def _compute_preheigh1(answers: dict) -> dict:
+    """예비고1 설문 자동 계산."""
+    result: dict[str, Any] = {}
+
+    # --- 중학교 성적 추이 (카테고리 C: C1~C6) ---
+    cat_c = answers.get("C", {})
+    semesters = ["C1", "C2", "C3", "C4", "C5", "C6"]
+    semester_labels = ["중1-1", "중1-2", "중2-1", "중2-2", "중3-1", "중3-2"]
+    subjects = ["ko", "en", "ma", "so", "sc"]
+    subject_names = {"ko": "국어", "en": "영어", "ma": "수학", "so": "사회", "sc": "과학"}
+
+    score_trend: list[dict] = []
+    subject_trends: dict[str, list] = {s: [] for s in subjects}
+
+    for i, sem_key in enumerate(semesters):
+        sem_data = cat_c.get(sem_key)
+        if not sem_data or not isinstance(sem_data, dict):
+            continue
+
+        sem_scores = []
+        for subj in subjects:
+            subj_data = sem_data.get(subj, {})
+            if not isinstance(subj_data, dict):
+                continue
+            raw = _safe_float(subj_data.get("raw_score"))
+            if raw is not None:
+                sem_scores.append(raw)
+                avg = _safe_float(subj_data.get("subject_avg"))
+                subject_trends[subj].append({
+                    "semester": semester_labels[i],
+                    "raw_score": raw,
+                    "subject_avg": avg,
+                    "diff": round(raw - avg, 1) if avg is not None else None,
+                })
+
+        if sem_scores:
+            score_trend.append({
+                "semester": semester_labels[i],
+                "avg_score": round(sum(sem_scores) / len(sem_scores), 1),
+                "subject_count": len(sem_scores),
+            })
+
+    trend_badge = _detect_trend([p["avg_score"] for p in score_trend], lower_is_better=False)
+
+    result["grade_trend"] = {
+        "data": score_trend,
+        "trend_badge": trend_badge,
+        "subject_trends": {subject_names.get(k, k): v for k, v in subject_trends.items() if v},
+    }
+
+    # --- 학습 시간 분석 (카테고리 D: D1) ---
+    result["study_analysis"] = _compute_study_analysis(answers.get("D", {}))
+
+    return result
+
+
+def _compute_study_analysis(cat_d: dict) -> dict:
+    """학습 스케줄 분석 (preheigh1/high 공통)."""
+    d1 = cat_d.get("D1")
+    if not d1:
+        return {}
+
+    # D1이 composite인 경우 schedule 필드에 있을 수 있음
+    schedule = d1 if isinstance(d1, list) else d1.get("schedule") if isinstance(d1, dict) else None
+    if not schedule or not isinstance(schedule, list):
+        return {}
+
+    total_hours = 0.0
+    by_subject: dict[str, float] = {}
+    by_type: dict[str, float] = {}  # 학원/과제/자기주도
+
+    for entry in schedule:
+        if not isinstance(entry, dict):
+            continue
+        hours = _safe_float(entry.get("hours"))
+        if hours is None:
+            continue
+        total_hours += hours
+        subj = entry.get("subject", "기타")
+        by_subject[subj] = by_subject.get(subj, 0) + hours
+        etype = entry.get("type", "자기주도")
+        by_type[etype] = by_type.get(etype, 0) + hours
+
+    if total_hours == 0:
+        return {}
+
+    self_study = by_type.get("자기주도", 0)
+    return {
+        "total_weekly_hours": round(total_hours, 1),
+        "by_subject": {k: round(v, 1) for k, v in sorted(by_subject.items(), key=lambda x: -x[1])},
+        "by_type": {k: round(v, 1) for k, v in by_type.items()},
+        "self_study_ratio": round(self_study / total_hours * 100, 1) if total_hours else 0,
+        "subject_balance": _calc_balance_index(list(by_subject.values())),
+    }
+
+
+def _calc_balance_index(values: list[float]) -> float:
+    """과목 밸런스 지수 (0~100, 높을수록 균등)."""
+    if not values or len(values) < 2:
+        return 100.0
+    avg = sum(values) / len(values)
+    if avg == 0:
+        return 100.0
+    variance = sum((v - avg) ** 2 for v in values) / len(values)
+    cv = (variance ** 0.5) / avg  # coefficient of variation
+    return round(max(0, 100 - cv * 100), 1)
+
+
+def _detect_trend(values: list[float], lower_is_better: bool = False) -> str:
+    """추이 판정: 상승/하락/유지/등락/V자반등/역V자."""
+    if len(values) < 2:
+        return "데이터부족"
+
+    diffs = [values[i + 1] - values[i] for i in range(len(values) - 1)]
+    threshold = 0.3 if lower_is_better else 3.0  # 등급 0.3 / 점수 3점
+
+    ups = sum(1 for d in diffs if d > threshold)
+    downs = sum(1 for d in diffs if d < -threshold)
+    total = len(diffs)
+
+    if lower_is_better:
+        ups, downs = downs, ups  # 등급은 낮을수록 좋음
+
+    if len(values) >= 3:
+        # V자 반등: 하락 후 상승
+        mid = len(values) // 2
+        first_half = values[:mid + 1]
+        second_half = values[mid:]
+        if lower_is_better:
+            if max(first_half) > max(second_half) and first_half[-1] > first_half[0] and second_half[-1] < second_half[0]:
+                return "V자반등"
+            if min(first_half) < min(second_half) and first_half[-1] < first_half[0] and second_half[-1] > second_half[0]:
+                return "역V자"
+        else:
+            if min(first_half) < min(second_half) and first_half[-1] < first_half[0] and second_half[-1] > second_half[0]:
+                return "V자반등"
+            if max(first_half) > max(second_half) and first_half[-1] > first_half[0] and second_half[-1] < second_half[0]:
+                return "역V자"
+
+    if ups > 0 and downs == 0:
+        return "상승"
+    elif downs > 0 and ups == 0:
+        return "하락"
+    elif ups == 0 and downs == 0:
+        return "유지"
+    else:
+        return "등락"
+
+
+# ============================================================
+# Delta Diff 헬퍼
+# ============================================================
+
+def _compute_delta(prev_answers: dict, curr_answers: dict) -> dict:
+    """카테고리별 변경점 계산."""
+    diff: dict[str, dict] = {}
+
+    all_cats = set(prev_answers.keys()) | set(curr_answers.keys())
+    for cat_id in sorted(all_cats):
+        prev_cat = prev_answers.get(cat_id, {})
+        curr_cat = curr_answers.get(cat_id, {})
+        if not isinstance(prev_cat, dict):
+            prev_cat = {}
+        if not isinstance(curr_cat, dict):
+            curr_cat = {}
+
+        cat_diff: dict[str, dict] = {}
+        all_qs = set(prev_cat.keys()) | set(curr_cat.keys())
+        for q_id in sorted(all_qs):
+            prev_val = prev_cat.get(q_id)
+            curr_val = curr_cat.get(q_id)
+            if prev_val != curr_val:
+                cat_diff[q_id] = {
+                    "prev": prev_val,
+                    "curr": curr_val,
+                    "change_type": _classify_change(prev_val, curr_val),
+                }
+
+        if cat_diff:
+            diff[cat_id] = cat_diff
+
+    return diff
+
+
+def _classify_change(prev: Any, curr: Any) -> str:
+    """변경 유형 분류."""
+    if prev is None:
+        return "added"
+    if curr is None:
+        return "removed"
+    if isinstance(prev, (int, float)) and isinstance(curr, (int, float)):
+        if curr > prev:
+            return "increased"
+        elif curr < prev:
+            return "decreased"
+    return "modified"
+
+
+def _summarize_delta(diff: dict) -> str:
+    """Delta 변경 요약 텍스트 생성."""
+    if not diff:
+        return "변경 사항이 없습니다."
+
+    total_changes = sum(len(questions) for questions in diff.values())
+    cat_count = len(diff)
+    added = sum(1 for cat in diff.values() for q in cat.values() if q.get("change_type") == "added")
+    modified = sum(1 for cat in diff.values() for q in cat.values() if q.get("change_type") in ("modified", "increased", "decreased"))
+    removed = sum(1 for cat in diff.values() for q in cat.values() if q.get("change_type") == "removed")
+
+    parts = []
+    parts.append(f"{cat_count}개 카테고리에서 총 {total_changes}개 항목 변경")
+    if added:
+        parts.append(f"신규 {added}개")
+    if modified:
+        parts.append(f"수정 {modified}개")
+    if removed:
+        parts.append(f"삭제 {removed}개")
+
+    return " / ".join(parts)

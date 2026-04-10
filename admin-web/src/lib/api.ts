@@ -428,6 +428,25 @@ export async function getSurveyDetail(id: string) {
   return request(`/api/admin/surveys/${id}`);
 }
 
+export async function getSurveyComputed(id: string) {
+  return request(`/api/admin/surveys/${id}/computed`);
+}
+
+export async function getSurveyDelta(id: string) {
+  return request(`/api/admin/surveys/${id}/delta`);
+}
+
+export async function updateSurveyMemo(id: string, adminMemo: string) {
+  return request(`/api/admin/surveys/${id}/memo`, {
+    method: "PUT",
+    body: JSON.stringify({ admin_memo: adminMemo }),
+  });
+}
+
+export async function deleteSurveyMemo(id: string) {
+  return request(`/api/admin/surveys/${id}/memo`, { method: "DELETE" });
+}
+
 // --- 공지사항 관리 ---
 export async function getNotices(page = 1, targetAudience?: string, isActive?: boolean) {
   const params = new URLSearchParams({ page: String(page), size: "20" });

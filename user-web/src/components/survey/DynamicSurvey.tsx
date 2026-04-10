@@ -92,20 +92,19 @@ function collectMissingRequired(category: any, categoryAnswers: Record<string, a
 export default function DynamicSurvey({ schema, survey, onSubmitted, memberType, isParentEditing }: Props) {
   // 카테고리 필터링:
   // - 학생: respondent="parent" 카테고리 숨김
-  // - 학부모가 자녀 설문 편집: respondent="parent" 카테고리만 표시
+  // - 학부모가 자녀 설문 편집: 전체 카테고리 표시 (학부모 카테고리만 편집, 나머지 읽기전용)
   // - 본인 설문 (학부모 자신이 owner): 전체 카테고리 표시
   const visibleCategories = useMemo(() => {
-    if (isParentEditing) {
-      // 학부모가 자녀 설문 → 학부모 전용 카테고리만
-      return schema.categories.filter((c) => c.respondent === "parent");
-    }
     if (memberType === "student") {
       // 학생 → 학부모 전용 카테고리 숨김
       return schema.categories.filter((c) => c.respondent !== "parent");
     }
-    // 기본 (학부모 본인 설문 등): 전체 표시
+    // 학부모 (자녀 편집 포함) + 기타: 전체 카테고리 표시
     return schema.categories;
-  }, [schema.categories, memberType, isParentEditing]);
+  }, [schema.categories, memberType]);
+
+  // 학부모가 자녀 설문 편집 시, 현재 카테고리가 읽기 전용인지 판별
+  const isCurrentReadOnly = isParentEditing && currentCategory?.respondent !== "parent";
 
   const [answers, setAnswers] = useState<Record<string, any>>(survey.answers || {});
   const [categoryStatus, setCategoryStatus] = useState<Record<string, CategoryStatus>>(
@@ -264,6 +263,9 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
     const issues: Issue[] = [];
 
     for (const cat of visibleCategories) {
+      // 학부모가 자녀 설문 편집 시, 학생 전용 카테고리는 검증 건너뜀 (읽기 전용이므로)
+      if (isParentEditing && cat.respondent !== "parent") continue;
+
       const status = categoryStatus[cat.id] || "not_started";
       const catAnswers = answers[cat.id] || {};
       const missing = collectMissingRequired(cat, catAnswers);
@@ -450,6 +452,16 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
           )}
         </div>
 
+        {/* 읽기 전용 안내 (학부모가 자녀의 학생 카테고리를 볼 때) */}
+        {isCurrentReadOnly && (
+          <div style={{
+            padding: "10px 14px", marginBottom: 16, background: "#EFF6FF",
+            border: "1px solid #BFDBFE", borderRadius: 8, fontSize: 13, color: "#1E40AF",
+          }}>
+            이 카테고리는 학생이 작성하는 항목입니다. 내용 확인만 가능합니다.
+          </div>
+        )}
+
         {/* 모바일 + 무거운 카테고리 안내 */}
         {blockMobile ? (
           <MobileWebOnlyNotice
@@ -461,6 +473,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
             category={currentCategory}
             answers={answers[currentCategory.id] || {}}
             onChange={updateAnswer}
+            readOnly={isCurrentReadOnly}
           />
         )}
 
@@ -478,25 +491,47 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
             </button>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {currentCategory.skippable && (
-              <button type="button" onClick={handleSkip} className="btn btn-outline">
-                나중에 입력
-              </button>
-            )}
-            {currentIdx < totalCategories - 1 ? (
-              <button type="button" onClick={handleNext} className="btn btn-primary">
-                저장 후 다음 →
-              </button>
+            {isCurrentReadOnly ? (
+              /* 읽기 전용 카테고리: 저장 없이 이동만 */
+              currentIdx < totalCategories - 1 ? (
+                <button type="button" onClick={() => goToCategory(currentIdx + 1)} className="btn btn-primary">
+                  다음 →
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="btn btn-primary"
+                  style={{ opacity: submitting ? 0.6 : 1 }}
+                >
+                  {submitting ? "제출 중..." : "최종 제출"}
+                </button>
+              )
             ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="btn btn-primary"
-                style={{ opacity: submitting ? 0.6 : 1 }}
-              >
-                {submitting ? "제출 중..." : "최종 제출"}
-              </button>
+              /* 편집 가능 카테고리: 기존 동작 */
+              <>
+                {currentCategory.skippable && (
+                  <button type="button" onClick={handleSkip} className="btn btn-outline">
+                    나중에 입력
+                  </button>
+                )}
+                {currentIdx < totalCategories - 1 ? (
+                  <button type="button" onClick={handleNext} className="btn btn-primary">
+                    저장 후 다음 →
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    className="btn btn-primary"
+                    style={{ opacity: submitting ? 0.6 : 1 }}
+                  >
+                    {submitting ? "제출 중..." : "최종 제출"}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -517,13 +552,15 @@ function CategoryQuestions({
   category,
   answers,
   onChange,
+  readOnly,
 }: {
   category: Category;
   answers: Record<string, any>;
   onChange: (id: string, v: any) => void;
+  readOnly?: boolean;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, ...(readOnly ? { opacity: 0.7, pointerEvents: "none" } : {}) }}>
       {category.questions.map((q: any) => {
         if (!evaluateShowWhen(q.show_when, answers)) return null;
         return (
