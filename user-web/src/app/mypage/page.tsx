@@ -743,6 +743,14 @@ export default function MyPage() {
                           }}>
                             {statusLabel}
                           </span>
+                          {s.status === "submitted" && (
+                            <a href={`/consultation-survey/report/${s.id}`} style={{
+                              color: "#fff", fontSize: 12, textDecoration: "none", fontWeight: 600,
+                              background: "var(--primary)", padding: "4px 12px", borderRadius: 16,
+                            }}>
+                              리포트
+                            </a>
+                          )}
                           <a href={href} style={{ color: "var(--primary)", fontSize: 13, textDecoration: "none" }}>
                             {s.status === "submitted" ? "수정" : "이어쓰기"} →
                           </a>

@@ -1390,6 +1390,8 @@ def compute_preheigh1_radar_scores(answers: dict) -> dict:
     avg = (academic["total"] + study["total"] + prep["total"] + career["total"] + extra["total"]) / 5
     overall_grade = _grade_label(avg)
 
+    roadmap = _generate_preheigh1_roadmap(academic, study, prep, career, extra)
+
     return {
         "radar": radar,
         "overall_score": round(avg, 1),
@@ -1399,4 +1401,149 @@ def compute_preheigh1_radar_scores(answers: dict) -> dict:
         "prep": prep,
         "career": career,
         "extracurricular": extra,
+        "roadmap": roadmap,
     }
+
+
+# ============================================================
+# 예비고1 로드맵 자동 초안 생성
+# ============================================================
+
+_ROADMAP_ITEMS: dict[str, list[dict]] = {
+    "academic": [
+        {"condition": lambda d: d["total"] < 55, "priority": "상",
+         "title": "기초 학력 보강",
+         "desc": "중학 주요과목(국·영·수) 기초 개념을 다시 정리하고, 취약 단원 집중 복습이 필요합니다.",
+         "period": "입학 전 ~ 고1 1학기"},
+        {"condition": lambda d: d["total"] < 75, "priority": "중",
+         "title": "성적 균형 맞추기",
+         "desc": "과목 간 편차가 큰 경우, 약한 과목에 주당 2~3시간 추가 학습을 배분하세요.",
+         "period": "입학 전 ~ 고1 1학기"},
+        {"condition": lambda d: d["total"] >= 75, "priority": "하",
+         "title": "심화 학습 도전",
+         "desc": "기초가 탄탄하므로, 고등 선행보다는 사고력·서술형 문제 풀이로 깊이를 더하세요.",
+         "period": "입학 전"},
+    ],
+    "study": [
+        {"condition": lambda d: d["total"] < 55, "priority": "상",
+         "title": "자기주도 학습 습관 만들기",
+         "desc": "매일 정해진 시간에 스스로 공부하는 루틴을 만드세요. 처음엔 30분부터 시작해 점진적으로 늘려갑니다.",
+         "period": "즉시 ~ 입학 전"},
+        {"condition": lambda d: d["total"] < 75, "priority": "중",
+         "title": "학습 계획 수립·실행력 강화",
+         "desc": "주간 학습 계획표를 작성하고 매주 실행률을 점검하세요. 오답노트 습관화가 핵심입니다.",
+         "period": "입학 전 ~ 고1 1학기"},
+        {"condition": lambda d: d["total"] >= 75, "priority": "하",
+         "title": "효율적 학습 전략 최적화",
+         "desc": "학습 시간 대비 효율을 높이는 전략(예: 시간 블록법, 간격 반복)을 적용해 보세요.",
+         "period": "고1 1학기"},
+    ],
+    "prep": [
+        {"condition": lambda d: _detail_score(d, "수학_선행도") < 15, "priority": "상",
+         "title": "수학 선행 보강 (최우선)",
+         "desc": "고등 수학(상)의 기초 단원(다항식, 방정식, 부등식)을 입학 전에 1회독 완료하세요.",
+         "period": "즉시 ~ 입학 전"},
+        {"condition": lambda d: _detail_score(d, "영어_역량") < 13, "priority": "상",
+         "title": "영어 기초 역량 보강",
+         "desc": "고등 필수 어휘 암기 + 중장문 독해 훈련을 매일 30분 이상 실시하세요.",
+         "period": "즉시 ~ 입학 전"},
+        {"condition": lambda d: _detail_score(d, "국어_역량") < 13, "priority": "중",
+         "title": "국어 독해·문법 기초 다지기",
+         "desc": "비문학 지문 독해 연습과 기본 문법 개념 정리가 필요합니다.",
+         "period": "입학 전 ~ 고1 1학기"},
+        {"condition": lambda d: d["total"] >= 75, "priority": "하",
+         "title": "선행 심화 및 내신 대비",
+         "desc": "기본 선행이 잘 되어 있으므로, 학교별 기출 유형 분석과 서술형 대비에 집중하세요.",
+         "period": "고1 1학기"},
+    ],
+    "career": [
+        {"condition": lambda d: d["total"] < 55, "priority": "상",
+         "title": "진로 탐색 시작하기",
+         "desc": "관심 분야 3~5개를 정하고 관련 직업·학과를 조사해 보세요. 진로 심리검사도 추천합니다.",
+         "period": "즉시 ~ 고1 1학기"},
+        {"condition": lambda d: d["total"] < 75, "priority": "중",
+         "title": "진로 방향 구체화",
+         "desc": "관심 학과의 교육과정과 졸업 후 진로를 조사하고, 고교 선택과목 로드맵과 연결하세요.",
+         "period": "입학 전 ~ 고1 1학기"},
+        {"condition": lambda d: d["total"] >= 75, "priority": "하",
+         "title": "진로 활동 계획 수립",
+         "desc": "진로 방향이 뚜렷하므로, 고1부터 세특·창체에 연결할 수 있는 활동 계획을 세우세요.",
+         "period": "고1 1학기"},
+    ],
+    "extracurricular": [
+        {"condition": lambda d: d["total"] < 55, "priority": "중",
+         "title": "비교과 활동 경험 넓히기",
+         "desc": "동아리, 봉사, 리더십 경험 중 1~2가지를 시작하세요. 고교 입학 후 창체 활동의 기반이 됩니다.",
+         "period": "입학 전 ~ 고1 1학기"},
+        {"condition": lambda d: d["total"] < 75, "priority": "중",
+         "title": "비교과 활동 심화·연결",
+         "desc": "기존 활동을 진로와 연결하고, 활동의 깊이를 더할 수 있는 프로젝트를 기획해 보세요.",
+         "period": "고1 1학기"},
+        {"condition": lambda d: d["total"] >= 75, "priority": "하",
+         "title": "비교과 포트폴리오 전략",
+         "desc": "활동 경험이 풍부하므로, 학생부 기재에 유리한 활동 중심으로 전략적으로 선택·집중하세요.",
+         "period": "고1 1학기"},
+    ],
+}
+
+
+def _detail_score(data: dict, key: str) -> float:
+    """details 딕셔너리에서 특정 항목의 score를 안전하게 추출."""
+    details = data.get("details", {})
+    item = details.get(key, {})
+    return item.get("score", 0) if isinstance(item, dict) else 0
+
+
+def _generate_preheigh1_roadmap(
+    academic: dict, study: dict, prep: dict, career: dict, extra: dict,
+) -> dict:
+    """5축 점수 기반 로드맵 자동 초안 생성."""
+    area_data = {
+        "academic": academic,
+        "study": study,
+        "prep": prep,
+        "career": career,
+        "extracurricular": extra,
+    }
+    area_labels = {
+        "academic": "학업기초력",
+        "study": "학습습관·자기주도력",
+        "prep": "교과선행도",
+        "career": "진로방향성",
+        "extracurricular": "비교과역량",
+    }
+
+    items: list[dict] = []
+    for area_key, candidates in _ROADMAP_ITEMS.items():
+        data = area_data[area_key]
+        for cand in candidates:
+            if cand["condition"](data):
+                items.append({
+                    "area": area_labels[area_key],
+                    "area_key": area_key,
+                    "priority": cand["priority"],
+                    "title": cand["title"],
+                    "description": cand["desc"],
+                    "period": cand["period"],
+                    "current_score": data["total"],
+                    "current_grade": data["grade"],
+                })
+                break  # 각 영역에서 가장 먼저 매칭되는 항목 1개만
+
+    # 우선순위 정렬: 상 > 중 > 하
+    priority_order = {"상": 0, "중": 1, "하": 2}
+    items.sort(key=lambda x: priority_order.get(x["priority"], 9))
+
+    return {
+        "items": items,
+        "summary": _roadmap_summary(items),
+    }
+
+
+def _roadmap_summary(items: list[dict]) -> str:
+    """로드맵 한 줄 요약 생성."""
+    high_priority = [it for it in items if it["priority"] == "상"]
+    if not high_priority:
+        return "전체적으로 양호한 수준입니다. 세부 항목별 심화 전략을 참고하세요."
+    names = ", ".join(it["title"] for it in high_priority[:3])
+    return f"우선 보강 영역: {names}. 입학 전 집중적인 준비가 필요합니다."

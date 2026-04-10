@@ -66,6 +66,13 @@ class SurveyService {
     await ApiService.post('/consultation-surveys/$id/submit', {'confirm': true});
   }
 
+  /// 분석 결과 (레이더 점수) 조회
+  static Future<Map<String, dynamic>> getComputed(String id) async {
+    return Map<String, dynamic>.from(
+      await ApiService.get('/consultation-surveys/$id/computed'),
+    );
+  }
+
   /// 삭제 (draft만)
   static Future<void> delete(String id) async {
     await ApiService.delete('/consultation-surveys/$id');

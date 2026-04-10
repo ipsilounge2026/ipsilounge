@@ -7,6 +7,7 @@ import '../services/survey_service.dart';
 import '../services/user_service.dart';
 import 'analysis_list_screen.dart';
 import 'survey_screen.dart';
+import 'survey_report_screen.dart';
 
 const _roleLabels = {
   'student': '학생',
@@ -646,6 +647,29 @@ class _MypageScreenState extends State<MypageScreen> {
                                       decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(20)),
                                       child: Text(statusText, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
                                     ),
+                                    if (s['status'] == 'submitted') ...[
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: () {
+                                          Navigator.push(context, MaterialPageRoute(
+                                            builder: (_) => SurveyReportScreen(
+                                              surveyId: s['id'],
+                                              surveyType: s['survey_type'],
+                                            ),
+                                          ));
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF4472C4),
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: const Text('리포트', style: TextStyle(
+                                            color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600,
+                                          )),
+                                        ),
+                                      ),
+                                    ],
                                     if (s['status'] == 'draft') ...[
                                       const SizedBox(width: 8),
                                       GestureDetector(
