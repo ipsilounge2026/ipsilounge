@@ -24,6 +24,7 @@ from app.routers import (
     consultation,
     consultation_notes,
     consultation_survey,
+    family,
     payment,
     users,
     admission_cases,
@@ -85,6 +86,7 @@ app.include_router(admin_consultation_notes.router)
 app.include_router(admin_admission_cases.router)
 app.include_router(consultation_notes.router)
 app.include_router(consultation_survey.router)
+app.include_router(family.router)
 app.include_router(admission_cases.router)
 app.include_router(schools.router)
 app.include_router(seminar.router)
@@ -117,6 +119,8 @@ async def startup():
         seminar_mail_log,
         notice as notice_model,
         counselor_change_request,
+        family_link,
+        family_invite,
     )
 
     async with engine.begin() as conn:

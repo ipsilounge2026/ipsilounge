@@ -37,3 +37,19 @@ class User(Base):
     consultation_notes = relationship("ConsultationNote", back_populates="user")
     consultation_surveys = relationship("ConsultationSurvey", back_populates="user", cascade="all, delete-orphan")
     seminar_reservations = relationship("SeminarReservation", back_populates="user")
+
+    # 가족 연결 (학부모 ↔ 학생, 다대다)
+    # parent 입장에서 본 자녀 연결 목록
+    child_links = relationship(
+        "FamilyLink",
+        foreign_keys="FamilyLink.parent_user_id",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
+    # student 입장에서 본 학부모 연결 목록
+    parent_links = relationship(
+        "FamilyLink",
+        foreign_keys="FamilyLink.child_user_id",
+        back_populates="child",
+        cascade="all, delete-orphan",
+    )
