@@ -1,10 +1,9 @@
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.admin import Admin
@@ -30,17 +29,8 @@ class NoteCreate(BaseModel):
     is_visible_to_user: bool = False
 
 
-class NoteUpdate(BaseModel):
-    category: ConsultationCategory | None = None
-    consultation_date: date | None = None
-    student_grade: StudentStatus | None = None
-    goals: str | None = None
-    main_content: str | None = None
-    advice_given: str | None = None
-    next_steps: str | None = None
-    next_topic: str | None = None
-    admin_private_notes: str | None = None
-    is_visible_to_user: bool | None = None
+class AddendumCreate(BaseModel):
+    content: str
 
 
 def _note_to_dict(note: ConsultationNote) -> dict:
@@ -59,8 +49,8 @@ def _note_to_dict(note: ConsultationNote) -> dict:
         "next_topic": note.next_topic,
         "admin_private_notes": note.admin_private_notes,
         "is_visible_to_user": note.is_visible_to_user,
+        "addenda": note.addenda or [],
         "created_at": note.created_at.isoformat(),
-        "updated_at": note.updated_at.isoformat(),
     }
 
 
@@ -122,7 +112,7 @@ async def create_note(
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ):
-    """상담 기록 작성"""
+    """상담 기록 작성 (최초 1회, 이후 수정 불가)"""
     note = ConsultationNote(
         user_id=data.user_id,
         booking_id=data.booking_id,
@@ -144,39 +134,51 @@ async def create_note(
     return _note_to_dict(note)
 
 
-@router.put("/{note_id}")
-async def update_note(
+@router.post("/{note_id}/addenda")
+async def add_addendum(
     note_id: str,
-    data: NoteUpdate,
+    data: AddendumCreate,
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ):
-    """상담 기록 수정"""
+    """상담 기록에 추가 기록 작성 (append-only, 기존 내용 수정/삭제 불가)"""
     result = await db.execute(select(ConsultationNote).where(ConsultationNote.id == note_id))
     note = result.scalar_one_or_none()
     if not note:
         raise HTTPException(status_code=404, detail="상담 기록을 찾을 수 없습니다.")
 
-    for field, value in data.model_dump(exclude_none=True).items():
-        setattr(note, field, value)
+    if not data.content.strip():
+        raise HTTPException(status_code=400, detail="추가 기록 내용을 입력하세요.")
+
+    entry = {
+        "content": data.content.strip(),
+        "admin_id": str(current_admin.id),
+        "admin_name": current_admin.name,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+
+    existing = list(note.addenda) if note.addenda else []
+    existing.append(entry)
+    note.addenda = existing
 
     await db.commit()
     await db.refresh(note)
     return _note_to_dict(note)
 
 
-@router.delete("/{note_id}")
-async def delete_note(
+@router.patch("/{note_id}/visibility")
+async def toggle_visibility(
     note_id: str,
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ):
-    """상담 기록 삭제"""
+    """학생 공개/비공개 토글 (상담 내용 수정이 아닌 공개 설정만 변경)"""
     result = await db.execute(select(ConsultationNote).where(ConsultationNote.id == note_id))
     note = result.scalar_one_or_none()
     if not note:
         raise HTTPException(status_code=404, detail="상담 기록을 찾을 수 없습니다.")
 
-    await db.delete(note)
+    note.is_visible_to_user = not note.is_visible_to_user
     await db.commit()
-    return {"message": "삭제 완료"}
+    await db.refresh(note)
+    return {"is_visible_to_user": note.is_visible_to_user}

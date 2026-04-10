@@ -43,6 +43,10 @@ async def get_my_notes(
             "advice_given": n.advice_given,
             "next_steps": n.next_steps,
             "next_topic": n.next_topic,
+            "addenda": [
+                {"content": a["content"], "created_at": a["created_at"]}
+                for a in (n.addenda or [])
+            ],
             # admin_private_notes 는 미노출
         }
         for n in notes

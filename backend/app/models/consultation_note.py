@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Text, Boolean, DateTime, Date, ForeignKey, Enum as SAEnum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -51,8 +51,11 @@ class ConsultationNote(Base):
     # 학생 공개 여부
     is_visible_to_user = Column(Boolean, default=False)
 
+    # 추가 기록 (append-only, 수정/삭제 불가)
+    # [{content, admin_id, admin_name, created_at}, ...]
+    addenda = Column(JSONB, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="consultation_notes")
     booking = relationship("ConsultationBooking", back_populates="note")

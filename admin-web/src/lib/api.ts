@@ -316,12 +316,12 @@ export async function createConsultationNote(data: {
   return request("/api/admin/consultation-notes", { method: "POST", body: JSON.stringify(data) });
 }
 
-export async function updateConsultationNote(id: string, data: Record<string, any>) {
-  return request(`/api/admin/consultation-notes/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export async function addConsultationNoteAddendum(id: string, content: string) {
+  return request(`/api/admin/consultation-notes/${id}/addenda`, { method: "POST", body: JSON.stringify({ content }) });
 }
 
-export async function deleteConsultationNote(id: string) {
-  return request(`/api/admin/consultation-notes/${id}`, { method: "DELETE" });
+export async function toggleConsultationNoteVisibility(id: string) {
+  return request(`/api/admin/consultation-notes/${id}/visibility`, { method: "PATCH" });
 }
 
 // --- 설명회 관리 ---
