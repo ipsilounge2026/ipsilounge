@@ -215,42 +215,60 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
   };
 
   const handleSubmit = async () => {
-    // (1) 모든 카테고리를 "나중에 입력"으로 건너뛴 채 제출하는 것을 차단
-    //     — 최소 1개 이상의 카테고리가 실제로 completed 상태여야 제출 가능
-    const completedCategoryCount = schema.categories.filter(
-      (c) => categoryStatus[c.id] === "completed"
-    ).length;
-    if (completedCategoryCount === 0) {
-      alert(
-        "사전 조사를 한 카테고리도 작성하지 않으셨습니다.\n" +
-          "최소 1개 이상의 카테고리를 직접 작성한 뒤 제출해주세요.\n\n" +
-          '("나중에 입력"으로 모든 카테고리를 건너뛴 상태로는 제출이 불가합니다.)'
-      );
-      // 첫 번째 카테고리로 이동
-      goToCategory(0);
-      return;
-    }
+    // 제출 시점에는 스킵/미응답 카테고리가 모두 없어야 한다.
+    // - "나중에 입력"으로 건너뛴(skipped) 카테고리: 모바일↔웹 작성 분리를 위한 임시 상태이므로 최종 제출 시에는 모두 작성 완료되어야 함
+    // - 미작성(not_started) 카테고리: 한 번도 손대지 않은 상태
+    // - 작성 중(in_progress) 카테고리: 일부만 입력했고 완료 처리되지 않은 상태
+    // - 필수 항목 누락: completed 처리되지 않았더라도 누락된 필수 항목 안내
+    type Issue = { id: string; title: string; reason: string; items?: string[] };
+    const issues: Issue[] = [];
 
-    // (2) 모든 비-skipped 카테고리에서 미응답 필수 항목 검사
-    const missingByCategory: Array<{ id: string; title: string; items: string[] }> = [];
     for (const cat of schema.categories) {
-      if (categoryStatus[cat.id] === "skipped") continue;
+      const status = categoryStatus[cat.id] || "not_started";
       const catAnswers = answers[cat.id] || {};
       const missing = collectMissingRequired(cat, catAnswers);
+
+      if (status === "skipped") {
+        issues.push({ id: cat.id, title: cat.title, reason: "건너뜀(나중에 입력) 상태" });
+        continue;
+      }
+      if (status === "not_started") {
+        issues.push({ id: cat.id, title: cat.title, reason: "작성 시작 전" });
+        continue;
+      }
       if (missing.length > 0) {
-        missingByCategory.push({ id: cat.id, title: cat.title, items: missing });
+        issues.push({
+          id: cat.id,
+          title: cat.title,
+          reason: status === "in_progress" ? "작성 중 — 필수 항목 누락" : "필수 항목 누락",
+          items: missing,
+        });
+        continue;
+      }
+      if (status === "in_progress") {
+        // 필수 항목은 다 채웠지만 "저장 후 다음"을 누르지 않아 completed로 마킹되지 않은 케이스
+        issues.push({ id: cat.id, title: cat.title, reason: '"저장 후 다음" 미클릭 — 완료 처리 필요' });
+        continue;
       }
     }
 
-    if (missingByCategory.length > 0) {
-      const msg = missingByCategory
-        .map((c) => `[${c.id}. ${c.title}]\n${c.items.map((i) => `  • ${i}`).join("\n")}`)
+    if (issues.length > 0) {
+      const msg = issues
+        .map((c) => {
+          const head = `[${c.id}. ${c.title}] ${c.reason}`;
+          if (c.items && c.items.length > 0) {
+            return head + "\n" + c.items.map((i) => `  • ${i}`).join("\n");
+          }
+          return head;
+        })
         .join("\n\n");
       alert(
-        `아래 필수 항목이 미응답 상태입니다.\n작성을 완료한 후 다시 제출해주세요.\n\n` + msg
+        "아직 작성이 완료되지 않은 항목이 있어 제출할 수 없습니다.\n" +
+          "아래 항목을 모두 작성한 뒤 다시 제출해주세요.\n\n" +
+          msg
       );
-      // 첫 번째 미응답 카테고리로 이동
-      const firstIdx = schema.categories.findIndex((c) => c.id === missingByCategory[0].id);
+      // 첫 번째 미완료 카테고리로 이동
+      const firstIdx = schema.categories.findIndex((c) => c.id === issues[0].id);
       if (firstIdx >= 0) goToCategory(firstIdx);
       return;
     }
