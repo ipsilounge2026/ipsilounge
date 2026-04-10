@@ -49,16 +49,17 @@ export default function Preheigh1SurveyPage() {
       const schemaData = await getSurveySchema("preheigh1");
       setSchema(schemaData);
 
-      // 2) 기존 draft 찾기
-      const list = await listMySurveys({ survey_type: "preheigh1", status: "draft" });
+      // 2) 가장 최근 사전조사 찾기 (status 무관 — 백엔드에서 updated_at desc로 정렬되어 옴)
+      //    - draft 가 있으면 그것을 이어서 작성
+      //    - submitted 만 있으면 그 데이터를 그대로 로드해서 답변 수정 가능 (재제출 시 갱신)
+      //    - 아무것도 없으면 새 draft 생성
+      const list = await listMySurveys({ survey_type: "preheigh1" });
       const items = (list?.items || []) as SurveyResponseData[];
 
       let surveyId: string;
       if (items.length > 0) {
-        // 가장 최근 draft 사용
         surveyId = items[0].id;
       } else {
-        // 새로 생성
         const created = await createSurvey({
           survey_type: "preheigh1",
           started_platform: "web",

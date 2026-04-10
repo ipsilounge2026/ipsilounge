@@ -98,14 +98,18 @@ export default function ConsultationPage() {
       setStep("survey");
       setSurveyStatus(null);
       try {
+        // 백엔드에서 updated_at desc로 정렬되어 옴 → items[0]이 가장 최근.
+        // "submitted가 하나라도 있으면 완료"가 아니라, 가장 최근 사전조사의 상태로 판단해야 한다.
+        // (예: 옛날에 빈 상태로 제출된 사전조사가 DB에 남아있고 새 draft가 생긴 경우
+        //  → 최신은 draft → "미완료" 상태로 안내해서 다시 작성하도록 유도)
         const list = await listMySurveys({ survey_type: "preheigh1" });
         const items = (list?.items || []) as Array<{ id: string; status: string }>;
-        if (items.some((s) => s.status === "submitted")) {
-          setSurveyStatus("submitted");
-        } else if (items.length > 0) {
-          setSurveyStatus("draft");
-        } else {
+        if (items.length === 0) {
           setSurveyStatus("none");
+        } else if (items[0].status === "submitted") {
+          setSurveyStatus("submitted");
+        } else {
+          setSurveyStatus("draft");
         }
       } catch {
         setSurveyStatus("none");
