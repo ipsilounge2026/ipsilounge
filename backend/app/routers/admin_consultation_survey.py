@@ -299,7 +299,10 @@ async def download_report_pdf(
     }
 
     from app.services.survey_report_service import generate_survey_report_pdf
-    pdf_bytes = generate_survey_report_pdf(survey_dict, user_info, schema, computed)
+    try:
+        pdf_bytes = generate_survey_report_pdf(survey_dict, user_info, schema, computed)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF 생성 실패: {str(e)}")
 
     student_name = user.name if user else "unknown"
     filename = f"{student_name}_survey_report.pdf"
@@ -340,9 +343,7 @@ async def get_action_plan(
     if not survey:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
 
-    # action_plan은 answers와 별도로 JSONB에 저장 (admin_memo와 유사하게 모델에 추가)
-    plan = getattr(survey, "action_plan", None) or {}
-    return plan
+    return survey.action_plan or {}
 
 
 @router.put("/{survey_id}/action-plan")

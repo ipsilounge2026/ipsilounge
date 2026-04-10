@@ -38,8 +38,14 @@ def _ensure_fonts():
     b_path = FONT_DIR / "NanumSquareRoundB.ttf"
     if r_path.exists():
         pdfmetrics.registerFont(TTFont("NanumR", str(r_path)))
+    else:
+        import logging
+        logging.getLogger(__name__).warning(f"한글 폰트 없음: {r_path}")
     if b_path.exists():
         pdfmetrics.registerFont(TTFont("NanumB", str(b_path)))
+    else:
+        import logging
+        logging.getLogger(__name__).warning(f"한글 볼드 폰트 없음: {b_path}")
     _font_registered = True
 
 

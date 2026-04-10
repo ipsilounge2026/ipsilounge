@@ -21,6 +21,7 @@ interface Booking {
   type: string;
   memo: string | null;
   status: string;
+  cancel_reason: string | null;
   created_at: string;
 }
 

@@ -153,9 +153,9 @@ export default function ConsultationSessionPage() {
       await createConsultationNote({
         user_id: booking.user_id,
         booking_id: booking.id,
-        category: booking.type === "학생부분석" ? "학생부분석"
-          : booking.type === "입시전략" ? "입시전략"
-          : "공부법",
+        category: booking.type === "학생부분석" ? "analysis"
+          : booking.type === "입시전략" ? "strategy"
+          : "study_method",
         consultation_date: booking.slot_date,
         goals: noteGoals || undefined,
         main_content: noteContent,
