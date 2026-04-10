@@ -18,6 +18,8 @@ class ConsultationBooking(Base):
         UUID(as_uuid=True), ForeignKey("analysis_orders.id"), nullable=True
     )
     type: Mapped[str] = mapped_column(String(50), nullable=False)  # 학생부분석 / 입시전략 / 학습상담 / 심리상담 / 기타
+    mode: Mapped[str] = mapped_column(String(20), default="in_person")  # in_person / remote
+    meeting_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # 비대면 시 화상 링크 (Zoom/Google Meet 등)
     memo: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="requested")  # requested / confirmed / completed / cancelled
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

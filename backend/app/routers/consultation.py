@@ -9,10 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models.admin import Admin, AdminStudentAssignment
+from app.models.admin import Admin, AdminStudentAssignment, SeniorStudentAssignment
 from app.models.consultation_booking import ConsultationBooking
 from app.models.consultation_slot import ConsultationSlot
 from app.models.counselor_change_request import CounselorChangeRequest
+from app.models.senior_change_request import SeniorChangeRequest
 from app.models.user import User
 from app.schemas.consultation import (
     AvailableSlotResponse,
@@ -204,6 +205,7 @@ async def book_consultation(
         slot_id=data.slot_id,
         analysis_order_id=data.analysis_order_id,
         type=data.type,
+        mode=data.mode,
         memo=data.memo,
     )
     db.add(booking)
@@ -244,6 +246,8 @@ async def book_consultation(
         slot_start_time=slot.start_time,
         slot_end_time=slot.end_time,
         type=booking.type,
+        mode=booking.mode,
+        meeting_url=booking.meeting_url,
         memo=booking.memo,
         status=booking.status,
         cancel_reason=booking.cancel_reason,
@@ -321,6 +325,8 @@ async def get_my_bookings(
             slot_start_time=slot.start_time,
             slot_end_time=slot.end_time,
             type=booking.type,
+            mode=booking.mode,
+            meeting_url=booking.meeting_url,
             memo=booking.memo,
             status=booking.status,
             cancel_reason=booking.cancel_reason,
@@ -442,3 +448,41 @@ async def create_counselor_change_request(
     db.add(req)
     await db.commit()
     return {"message": "담당자 변경 요청이 접수되었습니다."}
+
+
+class SeniorChangeRequestCreate(BaseModel):
+    requested_senior_id: str | None = None
+    reason: str
+
+
+@router.post("/change-senior-request")
+async def create_senior_change_request(
+    data: SeniorChangeRequestCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """선배 변경 요청"""
+    existing = await db.execute(
+        select(SeniorChangeRequest).where(
+            SeniorChangeRequest.user_id == user.id,
+            SeniorChangeRequest.status == "pending",
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="이미 처리 대기 중인 선배 변경 요청이 있습니다.")
+
+    # 현재 배정된 선배 조회
+    senior_assign = await db.execute(
+        select(SeniorStudentAssignment).where(SeniorStudentAssignment.user_id == user.id)
+    )
+    current_assignment = senior_assign.scalar_one_or_none()
+
+    req = SeniorChangeRequest(
+        user_id=user.id,
+        current_senior_id=current_assignment.senior_id if current_assignment else None,
+        requested_senior_id=uuid.UUID(data.requested_senior_id) if data.requested_senior_id else None,
+        reason=data.reason,
+    )
+    db.add(req)
+    await db.commit()
+    return {"message": "선배 변경 요청이 접수되었습니다."}

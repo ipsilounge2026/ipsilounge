@@ -7,10 +7,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.admin import Admin, AdminStudentAssignment
+from app.models.admin import Admin, AdminStudentAssignment, SeniorStudentAssignment
 from app.models.analysis_order import AnalysisOrder
 from app.models.consultation_booking import ConsultationBooking
 from app.models.counselor_change_request import CounselorChangeRequest
+from app.models.senior_change_request import SeniorChangeRequest
 from app.models.user import User
 from app.utils.dependencies import get_current_admin, get_current_super_admin
 from app.utils.security import hash_password
@@ -33,12 +34,13 @@ ALL_MENUS = [
 ]
 
 
-VALID_ROLES = {"super_admin", "admin", "counselor"}
+VALID_ROLES = {"super_admin", "admin", "counselor", "senior"}
 
 ROLE_LABELS = {
     "super_admin": "최고관리자",
     "admin": "담당자",
     "counselor": "상담자",
+    "senior": "선배",
 }
 
 
@@ -501,3 +503,176 @@ async def process_change_request(
 
     await db.commit()
     return {"message": f"변경 요청이 {'승인' if data.status == 'approved' else '거절'}되었습니다."}
+
+
+# --- 학생-선배 매칭 ---
+
+
+@router.get("/senior-assignments")
+async def list_senior_assignments(
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+):
+    """학생-선배 매칭 목록"""
+    if current_admin.role == "super_admin":
+        result = await db.execute(select(SeniorStudentAssignment))
+    elif current_admin.role == "senior":
+        result = await db.execute(
+            select(SeniorStudentAssignment).where(SeniorStudentAssignment.senior_id == current_admin.id)
+        )
+    else:
+        result = await db.execute(select(SeniorStudentAssignment))
+    assignments = result.scalars().all()
+
+    items = []
+    for a in assignments:
+        senior_result = await db.execute(select(Admin).where(Admin.id == a.senior_id))
+        senior = senior_result.scalar_one_or_none()
+        user_result = await db.execute(select(User).where(User.id == a.user_id))
+        user = user_result.scalar_one_or_none()
+        items.append({
+            "id": str(a.id),
+            "senior_id": str(a.senior_id),
+            "senior_name": senior.name if senior else "",
+            "user_id": str(a.user_id),
+            "user_name": user.name if user else "",
+            "user_email": user.email if user else "",
+            "created_at": a.created_at.isoformat(),
+        })
+    return items
+
+
+@router.post("/senior-assignments")
+async def create_senior_assignment(
+    data: AssignmentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin),
+):
+    """학생-선배 매칭 생성 (super_admin 전용)"""
+    # 선배 역할 확인
+    senior_result = await db.execute(select(Admin).where(Admin.id == data.admin_id))
+    senior = senior_result.scalar_one_or_none()
+    if not senior or senior.role != "senior":
+        raise HTTPException(status_code=400, detail="선배 역할의 담당자만 매칭할 수 있습니다.")
+
+    existing = await db.execute(
+        select(SeniorStudentAssignment).where(
+            SeniorStudentAssignment.senior_id == data.admin_id,
+            SeniorStudentAssignment.user_id == data.user_id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="이미 매칭된 조합입니다.")
+
+    assignment = SeniorStudentAssignment(senior_id=data.admin_id, user_id=data.user_id)
+    db.add(assignment)
+    await db.commit()
+    return {"message": "선배 매칭 완료"}
+
+
+@router.delete("/senior-assignments/{assignment_id}")
+async def delete_senior_assignment(
+    assignment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin),
+):
+    """학생-선배 매칭 삭제 (super_admin 전용)"""
+    try:
+        aid = uuid.UUID(assignment_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="유효하지 않은 ID입니다.")
+    await db.execute(delete(SeniorStudentAssignment).where(SeniorStudentAssignment.id == aid))
+    await db.commit()
+    return {"message": "선배 매칭 해제 완료"}
+
+
+# --- 선배 변경 요청 관리 ---
+
+
+@router.get("/senior-change-requests")
+async def list_senior_change_requests(
+    status_filter: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin),
+):
+    """선배 변경 요청 목록 (super_admin 전용)"""
+    query = select(SeniorChangeRequest).order_by(SeniorChangeRequest.created_at.desc())
+    if status_filter:
+        query = query.where(SeniorChangeRequest.status == status_filter)
+    result = await db.execute(query)
+    requests = result.scalars().all()
+
+    items = []
+    for req in requests:
+        user_result = await db.execute(select(User).where(User.id == req.user_id))
+        user = user_result.scalar_one_or_none()
+
+        current_senior_name = None
+        if req.current_senior_id:
+            s_result = await db.execute(select(Admin).where(Admin.id == req.current_senior_id))
+            s = s_result.scalar_one_or_none()
+            current_senior_name = s.name if s else None
+
+        requested_senior_name = "추천 희망"
+        if req.requested_senior_id:
+            s_result = await db.execute(select(Admin).where(Admin.id == req.requested_senior_id))
+            s = s_result.scalar_one_or_none()
+            requested_senior_name = s.name if s else "알 수 없음"
+
+        items.append({
+            "id": str(req.id),
+            "user_id": str(req.user_id),
+            "user_name": user.name if user else "",
+            "user_email": user.email if user else "",
+            "current_senior_name": current_senior_name,
+            "requested_senior_name": requested_senior_name,
+            "requested_senior_id": str(req.requested_senior_id) if req.requested_senior_id else None,
+            "reason": req.reason,
+            "status": req.status,
+            "admin_memo": req.admin_memo,
+            "created_at": req.created_at.isoformat(),
+            "processed_at": req.processed_at.isoformat() if req.processed_at else None,
+        })
+    return items
+
+
+@router.put("/senior-change-requests/{request_id}")
+async def process_senior_change_request(
+    request_id: str,
+    data: ChangeRequestProcess,
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin),
+):
+    """선배 변경 요청 처리 (super_admin 전용)"""
+    try:
+        rid = uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="유효하지 않은 ID입니다.")
+
+    result = await db.execute(select(SeniorChangeRequest).where(SeniorChangeRequest.id == rid))
+    req = result.scalar_one_or_none()
+    if not req:
+        raise HTTPException(status_code=404, detail="변경 요청을 찾을 수 없습니다.")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail="이미 처리된 요청입니다.")
+
+    req.status = data.status
+    req.admin_memo = data.admin_memo
+    req.processed_at = datetime.utcnow()
+
+    if data.status == "approved":
+        new_senior_id = data.new_admin_id or (str(req.requested_senior_id) if req.requested_senior_id else None)
+        if not new_senior_id:
+            raise HTTPException(status_code=400, detail="배정할 선배를 지정해주세요.")
+
+        await db.execute(
+            delete(SeniorStudentAssignment).where(SeniorStudentAssignment.user_id == req.user_id)
+        )
+        new_assignment = SeniorStudentAssignment(
+            senior_id=uuid.UUID(new_senior_id),
+            user_id=req.user_id,
+        )
+        db.add(new_assignment)
+
+    await db.commit()
+    return {"message": f"선배 변경 요청이 {'승인' if data.status == 'approved' else '거절'}되었습니다."}

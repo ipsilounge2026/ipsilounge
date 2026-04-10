@@ -310,6 +310,8 @@ async def list_bookings(
             slot_end_time=slot.end_time,
             admin_name=admin_names.get(slot.admin_id),
             type=booking.type,
+            mode=booking.mode,
+            meeting_url=booking.meeting_url,
             memo=booking.memo,
             status=booking.status,
             cancel_reason=booking.cancel_reason,
@@ -362,6 +364,8 @@ async def get_booking_detail(
         "slot_end_time": str(slot.end_time),
         "admin_name": admin_name,
         "type": booking.type,
+        "mode": booking.mode,
+        "meeting_url": booking.meeting_url,
         "memo": booking.memo,
         "status": booking.status,
         "cancel_reason": booking.cancel_reason,
@@ -450,6 +454,33 @@ async def update_booking_status(
     return {"message": f"예약 상태가 '{data.status}'로 변경되었습니다"}
 
 
+class BookingModeUpdate(BaseModel):
+    mode: str | None = None  # in_person / remote
+    meeting_url: str | None = None
+
+
+@router.put("/bookings/{booking_id}/mode")
+async def update_booking_mode(
+    booking_id: uuid.UUID,
+    data: BookingModeUpdate,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """예약 상담 방식(대면/비대면) 및 화상 링크 수정"""
+    result = await db.execute(select(ConsultationBooking).where(ConsultationBooking.id == booking_id))
+    booking = result.scalar_one_or_none()
+    if booking is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="예약을 찾을 수 없습니다")
+
+    if data.mode is not None:
+        booking.mode = data.mode
+    if data.meeting_url is not None:
+        booking.meeting_url = data.meeting_url
+
+    await db.commit()
+    return {"message": "상담 방식이 변경되었습니다"}
+
+
 @router.post("/bookings/manual")
 async def create_manual_booking(
     data: ManualBookingRequest,
@@ -481,6 +512,8 @@ async def create_manual_booking(
         user_id=data.user_id,
         slot_id=slot.id,
         type=data.type,
+        mode=data.mode,
+        meeting_url=data.meeting_url,
         memo=data.memo,
         status="confirmed",
     )
@@ -500,6 +533,8 @@ async def create_manual_booking(
         slot_end_time=slot.end_time,
         admin_name=admin.name,
         type=booking.type,
+        mode=booking.mode,
+        meeting_url=booking.meeting_url,
         memo=booking.memo,
         status=booking.status,
         cancel_reason=booking.cancel_reason,

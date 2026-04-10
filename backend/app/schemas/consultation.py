@@ -28,6 +28,7 @@ class CounselorResponse(BaseModel):
 class BookingRequest(BaseModel):
     slot_id: uuid.UUID
     type: str  # 학생부분석 / 입시전략 / 학습상담 / 심리상담 / 기타
+    mode: str = "in_person"  # in_person / remote
     memo: str | None = None
     analysis_order_id: uuid.UUID | None = None
     owner_user_id: str | None = None  # 학부모가 자녀 대신 예약 시 자녀 user_id
@@ -39,6 +40,8 @@ class BookingResponse(BaseModel):
     slot_start_time: time
     slot_end_time: time
     type: str
+    mode: str = "in_person"
+    meeting_url: str | None = None
     memo: str | None
     status: str
     cancel_reason: str | None = None
@@ -108,6 +111,8 @@ class AdminBookingResponse(BaseModel):
     slot_end_time: time
     admin_name: str | None = None
     type: str
+    mode: str = "in_person"
+    meeting_url: str | None = None
     memo: str | None
     status: str
     cancel_reason: str | None = None
@@ -125,4 +130,6 @@ class ManualBookingRequest(BaseModel):
     start_time: time
     end_time: time
     type: str = "기타"  # 학생부분석 / 입시전략 / 학습상담 / 심리상담 / 기타
+    mode: str = "in_person"  # in_person / remote
+    meeting_url: str | None = None
     memo: str | None = None
