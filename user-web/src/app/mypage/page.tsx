@@ -703,7 +703,8 @@ export default function MyPage() {
                 {[
                   { href: "/consultation/notes", icon: "📋", label: "상담 기록 보기" },
                   { href: "/consultation/my", icon: "📅", label: "예약 현황" },
-                  { href: "/analysis", icon: "📊", label: "분석 내역" },
+                  { href: "/analysis?type=학생부라운지", icon: "📊", label: "학생부 분석 내역" },
+                  { href: "/analysis?type=학종라운지", icon: "🎯", label: "학종 분석 내역" },
                   { href: "/admission-cases", icon: "🏆", label: "합격 사례" },
                 ].map((item) => (
                   <a
