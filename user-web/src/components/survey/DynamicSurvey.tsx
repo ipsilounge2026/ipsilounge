@@ -364,7 +364,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
         </div>
       </div>
 
-      {/* 카테고리 네비 (클릭으로 이동 가능) */}
+      {/* 카테고리 네비 (학부모: 클릭 이동 가능 / 학생: 순차 진행만, 클릭 불가) */}
       <div
         style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}
         role="tablist"
@@ -373,20 +373,21 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
         {visibleCategories.map((c, idx) => {
           const s = categoryStatus[c.id] || "not_started";
           const active = idx === currentIdx;
+          const canClick = isParentEditing;
+          const Tag = canClick ? "button" : "div";
           return (
-            <button
-              type="button"
+            <Tag
+              {...(canClick ? { type: "button", onClick: () => goToCategory(idx) } : {})}
               key={c.id}
               role="tab"
               aria-selected={active}
-              onClick={() => goToCategory(idx)}
               style={{
                 padding: "8px 14px",
                 border: `1px solid ${active ? "var(--primary)" : "var(--gray-300)"}`,
                 borderRadius: 8,
                 background: active ? "var(--primary)" : "white",
                 color: active ? "white" : "var(--gray-700)",
-                cursor: "pointer",
+                cursor: canClick ? "pointer" : "default",
                 fontSize: 12,
                 fontWeight: active ? 700 : 500,
                 whiteSpace: "nowrap",
@@ -407,7 +408,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
                   ●
                 </span>
               )}
-            </button>
+            </Tag>
           );
         })}
       </div>
