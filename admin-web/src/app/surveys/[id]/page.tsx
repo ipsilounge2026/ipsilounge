@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
+import { GradeTrendChart, MockTrendChart, StudyAnalysisChart } from "@/components/SurveyCharts";
 
 interface SurveyDetail {
   id: string;
@@ -112,16 +113,6 @@ const catStatusColor: Record<string, string> = {
   in_progress: "#F59E0B",
   skipped: "#9CA3AF",
   not_started: "#D1D5DB",
-};
-
-const trendBadgeColor: Record<string, string> = {
-  상승: "#10B981",
-  하락: "#EF4444",
-  유지: "#6B7280",
-  등락: "#F59E0B",
-  V자반등: "#3B82F6",
-  역V자: "#F97316",
-  데이터부족: "#D1D5DB",
 };
 
 const changeTypeLabel: Record<string, string> = {
@@ -310,260 +301,6 @@ export default function SurveyDetailPage() {
         </div>
       );
     });
-  };
-
-  // ── Computed Stats Renderers ──
-
-  const renderBarChart = (data: { label: string; value: number }[], maxValue: number, color: string, suffix = "") => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {data.map((d) => (
-        <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ minWidth: 60, fontSize: 12, color: "#6B7280", textAlign: "right" }}>{d.label}</div>
-          <div style={{ flex: 1, background: "#F3F4F6", borderRadius: 4, height: 20, position: "relative" }}>
-            <div style={{
-              width: `${Math.min(100, (d.value / maxValue) * 100)}%`,
-              background: color, borderRadius: 4, height: "100%", minWidth: 2,
-            }} />
-          </div>
-          <div style={{ minWidth: 50, fontSize: 12, fontWeight: 600, textAlign: "right" }}>
-            {d.value}{suffix}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
-  const renderTrendBadge = (badge: string) => (
-    <span style={{
-      padding: "2px 10px", borderRadius: 12, fontSize: 12, fontWeight: 600,
-      color: "white", background: trendBadgeColor[badge] || "#6B7280",
-    }}>
-      {badge}
-    </span>
-  );
-
-  const renderGradeTrend = () => {
-    const gt = survey?.computed?.grade_trend;
-    if (!gt || !gt.data.length) return <div style={{ color: "#9CA3AF", fontSize: 13 }}>성적 데이터가 없습니다</div>;
-
-    const isHighSchool = survey?.survey_type === "high";
-    const valueKey = isHighSchool ? "avg_grade" : "avg_score";
-    const maxVal = isHighSchool ? 5 : 100;
-    const suffix = isHighSchool ? "등급" : "점";
-
-    return (
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, margin: 0 }}>{isHighSchool ? "내신 등급 추이" : "성적 추이"}</h3>
-          {renderTrendBadge(gt.trend_badge)}
-        </div>
-
-        {/* 평균 추이 차트 */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>학기별 평균</div>
-          {renderBarChart(
-            gt.data.map((d) => ({ label: d.semester, value: (d as any)[valueKey] })),
-            maxVal, "#4472C4", isHighSchool ? "등급" : "점"
-          )}
-        </div>
-
-        {/* 과목별 추이 테이블 */}
-        {Object.keys(gt.subject_trends).length > 0 && (
-          <div>
-            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>과목별 상세</div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
-                    <th style={{ textAlign: "left", padding: "6px 8px", color: "#6B7280" }}>과목</th>
-                    {gt.data.map((d) => (
-                      <th key={d.semester} style={{ textAlign: "center", padding: "6px 8px", color: "#6B7280" }}>{d.semester}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(gt.subject_trends).map(([subj, data]) => (
-                    <tr key={subj} style={{ borderBottom: "1px solid #F3F4F6" }}>
-                      <td style={{ padding: "6px 8px", fontWeight: 600 }}>{subj}</td>
-                      {gt.data.map((semData) => {
-                        const found = data.find((d) => d.semester === semData.semester);
-                        const val = found ? (isHighSchool ? found.grade : found.raw_score) : null;
-                        return (
-                          <td key={semData.semester} style={{ textAlign: "center", padding: "6px 8px" }}>
-                            {val != null ? (
-                              <span>
-                                {val}{suffix}
-                                {!isHighSchool && found?.diff != null && (
-                                  <span style={{ fontSize: 10, marginLeft: 4, color: (found.diff ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>
-                                    {(found.diff ?? 0) >= 0 ? "+" : ""}{found.diff}
-                                  </span>
-                                )}
-                              </span>
-                            ) : "-"}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* 등급 분포 (고등학생) */}
-        {isHighSchool && gt.grade_distribution && gt.grade_distribution.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>등급 분포</div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
-                    <th style={{ textAlign: "left", padding: "6px 8px", color: "#6B7280" }}>학기</th>
-                    {[1, 2, 3, 4, 5].map((g) => (
-                      <th key={g} style={{ textAlign: "center", padding: "6px 8px", color: "#6B7280" }}>{g}등급</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {gt.grade_distribution.map((row) => (
-                    <tr key={row.semester} style={{ borderBottom: "1px solid #F3F4F6" }}>
-                      <td style={{ padding: "6px 8px", fontWeight: 600 }}>{row.semester}</td>
-                      {[1, 2, 3, 4, 5].map((g) => (
-                        <td key={g} style={{ textAlign: "center", padding: "6px 8px" }}>
-                          {row[g] || 0}과목
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderMockTrend = () => {
-    const mt = survey?.computed?.mock_trend;
-    if (!mt || !mt.avg_trend.length) return null;
-
-    return (
-      <div style={{ marginTop: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, margin: 0 }}>모의고사 추이</h3>
-          {renderTrendBadge(mt.trend_badge)}
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>회차별 평균 등급</div>
-          {renderBarChart(
-            mt.avg_trend.map((d) => ({ label: d.session, value: d.avg_rank })),
-            9, "#7C3AED", "등급"
-          )}
-        </div>
-
-        {/* 영역별 추이 */}
-        {Object.keys(mt.area_trends).length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>영역별 상세</div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
-                    <th style={{ textAlign: "left", padding: "6px 8px", color: "#6B7280" }}>영역</th>
-                    {mt.avg_trend.map((d) => (
-                      <th key={d.session} style={{ textAlign: "center", padding: "6px 8px", color: "#6B7280" }}>{d.session}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(mt.area_trends).map(([area, data]) => (
-                    <tr key={area} style={{ borderBottom: "1px solid #F3F4F6" }}>
-                      <td style={{ padding: "6px 8px", fontWeight: 600 }}>{area}</td>
-                      {mt.avg_trend.map((semData) => {
-                        const found = data.find((d) => d.session === semData.session);
-                        return (
-                          <td key={semData.session} style={{ textAlign: "center", padding: "6px 8px" }}>
-                            {found ? `${found.rank}등급` : "-"}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* 취약 영역 */}
-        {mt.weak_areas.length > 0 && (
-          <div style={{ padding: 12, background: "#FEF2F2", borderRadius: 6 }}>
-            <div style={{ fontSize: 12, color: "#991B1B", fontWeight: 600, marginBottom: 6 }}>취약 영역</div>
-            {mt.weak_areas.map((w) => (
-              <div key={w.area} style={{ fontSize: 12, color: "#7F1D1D" }}>
-                {w.area}: 평균 {w.avg_rank}등급 (전체 평균 대비 +{w.gap})
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderStudyAnalysis = () => {
-    const sa = survey?.computed?.study_analysis;
-    if (!sa || !sa.total_weekly_hours) return null;
-
-    const maxSubjHours = Math.max(...Object.values(sa.by_subject), 1);
-
-    return (
-      <div style={{ marginTop: 24 }}>
-        <h3 style={{ fontSize: 15, marginBottom: 16 }}>학습 시간 분석</h3>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 16 }}>
-          <div style={{ padding: 12, background: "#EFF6FF", borderRadius: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: "#3B82F6" }}>주간 총 학습시간</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "#1E40AF" }}>{sa.total_weekly_hours}h</div>
-          </div>
-          <div style={{ padding: 12, background: "#F0FDF4", borderRadius: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: "#10B981" }}>자기주도 비율</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "#166534" }}>{sa.self_study_ratio}%</div>
-          </div>
-          <div style={{ padding: 12, background: "#FDF4FF", borderRadius: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: "#A855F7" }}>과목 밸런스</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "#7C3AED" }}>{sa.subject_balance}</div>
-          </div>
-        </div>
-
-        {/* 과목별 시간 */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>과목별 학습 시간</div>
-          {renderBarChart(
-            Object.entries(sa.by_subject).map(([k, v]) => ({ label: k, value: v })),
-            maxSubjHours, "#4472C4", "h"
-          )}
-        </div>
-
-        {/* 유형별 시간 */}
-        <div>
-          <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>유형별 학습 시간</div>
-          <div style={{ display: "flex", gap: 16 }}>
-            {Object.entries(sa.by_type).map(([type, hours]) => (
-              <div key={type} style={{ fontSize: 13 }}>
-                <span style={{ color: "#6B7280" }}>{type}: </span>
-                <span style={{ fontWeight: 600 }}>{hours}h</span>
-                <span style={{ fontSize: 11, color: "#9CA3AF", marginLeft: 4 }}>
-                  ({Math.round((hours / sa.total_weekly_hours) * 100)}%)
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
   };
 
   // ── Delta Diff Renderer ──
@@ -922,9 +659,9 @@ export default function SurveyDetailPage() {
           <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
             {survey.computed && (survey.computed.grade_trend || survey.computed.mock_trend || survey.computed.study_analysis) ? (
               <>
-                {renderGradeTrend()}
-                {renderMockTrend()}
-                {renderStudyAnalysis()}
+                <GradeTrendChart computed={survey.computed} surveyType={survey.survey_type} />
+                <MockTrendChart computed={survey.computed} />
+                <StudyAnalysisChart computed={survey.computed} />
               </>
             ) : (
               <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
