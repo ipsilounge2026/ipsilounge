@@ -103,9 +103,6 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
     return schema.categories;
   }, [schema.categories, memberType]);
 
-  // 학부모가 자녀 설문 편집 시, 현재 카테고리가 읽기 전용인지 판별
-  const isCurrentReadOnly = isParentEditing && currentCategory?.respondent !== "parent";
-
   const [answers, setAnswers] = useState<Record<string, any>>(survey.answers || {});
   const [categoryStatus, setCategoryStatus] = useState<Record<string, CategoryStatus>>(
     (survey.category_status as Record<string, CategoryStatus>) || {}
@@ -128,6 +125,9 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
 
   const currentCategory = visibleCategories[currentIdx];
   const totalCategories = visibleCategories.length;
+
+  // 학부모가 자녀 설문 편집 시, 현재 카테고리가 읽기 전용인지 판별
+  const isCurrentReadOnly = isParentEditing && currentCategory?.respondent !== "parent";
 
   // 자동 저장 (디바운스)
   const saveTimer = useRef<NodeJS.Timeout | null>(null);
