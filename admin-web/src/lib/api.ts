@@ -183,6 +183,8 @@ export async function createManualBooking(data: {
   end_time: string;
   type: string;
   memo?: string;
+  mode?: string;
+  meeting_url?: string;
 }) {
   return request("/api/admin/consultation/bookings/manual", {
     method: "POST",
@@ -289,6 +291,27 @@ export async function getChangeRequests(status?: string) {
 
 export async function processChangeRequest(requestId: string, data: { status: string; new_admin_id?: string | null; admin_memo?: string }) {
   return request(`/api/admin/admins/change-requests/${requestId}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+// --- 선배 매칭 ---
+export async function getSeniorAssignments() {
+  return request("/api/admin/admins/senior-assignments");
+}
+
+export async function createSeniorAssignment(adminId: string, userId: string) {
+  return request("/api/admin/admins/senior-assignments", { method: "POST", body: JSON.stringify({ admin_id: adminId, user_id: userId }) });
+}
+
+export async function deleteSeniorAssignment(id: string) {
+  return request(`/api/admin/admins/senior-assignments/${id}`, { method: "DELETE" });
+}
+
+// --- 상담 방식 (대면/비대면) ---
+export async function updateBookingMode(bookingId: string, mode?: string, meetingUrl?: string) {
+  return request(`/api/admin/consultation/bookings/${bookingId}/mode`, {
+    method: "PUT",
+    body: JSON.stringify({ mode: mode || null, meeting_url: meetingUrl || null }),
+  });
 }
 
 // --- 상담 기록 ---

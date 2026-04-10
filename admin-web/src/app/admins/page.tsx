@@ -34,12 +34,14 @@ const ROLE_LABELS: Record<string, string> = {
   super_admin: "최고관리자",
   admin: "담당자",
   counselor: "상담자",
+  senior: "선배",
 };
 
 const ROLE_BADGE_CLASS: Record<string, string> = {
   super_admin: "badge-completed",
   admin: "badge-processing",
   counselor: "badge-uploaded",
+  senior: "badge-requested",
 };
 
 export default function AdminsPage() {
@@ -271,12 +273,14 @@ export default function AdminsPage() {
                     <select className="form-control" value={promoteRole} onChange={e => setPromoteRole(e.target.value)}>
                       <option value="admin">담당자</option>
                       <option value="counselor">상담자</option>
+                      <option value="senior">선배</option>
                       <option value="super_admin">최고관리자</option>
                     </select>
                     <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
                       {promoteRole === "super_admin" && "모든 메뉴에 접근 가능합니다"}
                       {promoteRole === "admin" && "선택한 메뉴에만 접근 가능합니다"}
                       {promoteRole === "counselor" && "상담 관련 메뉴에 접근 가능합니다"}
+                      {promoteRole === "senior" && "매칭된 학생에게 선배 조언을 제공합니다"}
                     </p>
                   </div>
 
@@ -342,6 +346,7 @@ export default function AdminsPage() {
                       >
                         <option value="admin">담당자</option>
                         <option value="counselor">상담자</option>
+                        <option value="senior">선배</option>
                         <option value="super_admin">최고관리자</option>
                       </select>
                     ) : (

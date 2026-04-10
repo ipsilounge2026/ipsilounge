@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import StatusBadge from "@/components/StatusBadge";
-import { getBookings, updateBookingStatus, searchUsersForBooking, createManualBooking } from "@/lib/api";
+import { getBookings, updateBookingStatus, searchUsersForBooking, createManualBooking, updateBookingMode } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 interface Booking {
@@ -22,8 +22,15 @@ interface Booking {
   memo: string | null;
   status: string;
   cancel_reason: string | null;
+  mode: string | null;
+  meeting_url: string | null;
   created_at: string;
 }
+
+const MODE_LABELS: Record<string, string> = {
+  in_person: "대면",
+  remote: "비대면",
+};
 
 interface SearchedUser {
   id: string;
@@ -51,6 +58,13 @@ export default function ConsultationPage() {
   const [manualLoading, setManualLoading] = useState(false);
   const [cancelModal, setCancelModal] = useState<{ id: string; show: boolean }>({ id: "", show: false });
   const [cancelReason, setCancelReason] = useState("");
+
+  // 대면/비대면 모드 편집
+  const [modeModal, setModeModal] = useState<{ id: string; show: boolean }>({ id: "", show: false });
+  const [editMode, setEditMode] = useState("");
+  const [editMeetingUrl, setEditMeetingUrl] = useState("");
+  const [manualMode, setManualMode] = useState("");
+  const [manualMeetingUrl, setManualMeetingUrl] = useState("");
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
@@ -81,6 +95,21 @@ export default function ConsultationPage() {
     setCancelReason("");
   };
 
+  const openModeModal = (b: Booking) => {
+    setModeModal({ id: b.id, show: true });
+    setEditMode(b.mode || "");
+    setEditMeetingUrl(b.meeting_url || "");
+  };
+
+  const handleModeUpdate = async () => {
+    try {
+      await updateBookingMode(modeModal.id, editMode || undefined, editMeetingUrl || undefined);
+      setMessage("상담 방식이 변경되었습니다");
+      setModeModal({ id: "", show: false });
+      loadData();
+    } catch (err: any) { setMessage(err.message); }
+  };
+
   const handleManualUserSearch = async (q: string) => {
     setManualUserSearch(q);
     if (q.length < 1) { setManualSearchResults([]); return; }
@@ -104,6 +133,8 @@ export default function ConsultationPage() {
         end_time: manualEndTime,
         type: manualType,
         memo: manualMemo || undefined,
+        mode: manualMode || undefined,
+        meeting_url: manualMeetingUrl || undefined,
       });
       setMessage("직접 예약이 생성되었습니다.");
       setShowManualModal(false);
@@ -125,6 +156,8 @@ export default function ConsultationPage() {
     setManualEndTime("");
     setManualType("기타");
     setManualMemo("");
+    setManualMode("");
+    setManualMeetingUrl("");
   };
 
   return (
@@ -171,6 +204,7 @@ export default function ConsultationPage() {
                 <th>신청자</th>
                 <th>연락처</th>
                 <th>유형</th>
+                <th>방식</th>
                 <th>상태</th>
                 <th>메모</th>
                 <th>관리</th>
@@ -188,6 +222,33 @@ export default function ConsultationPage() {
                   </td>
                   <td>{b.user_phone || "-"}</td>
                   <td>{b.type}</td>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      {b.mode ? (
+                        <span style={{
+                          padding: "2px 8px", borderRadius: 4, fontSize: 12,
+                          background: b.mode === "in_person" ? "#DBEAFE" : "#EDE9FE",
+                          color: b.mode === "in_person" ? "#1D4ED8" : "#6D28D9",
+                        }}>
+                          {MODE_LABELS[b.mode] || b.mode}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: "#9ca3af" }}>미정</span>
+                      )}
+                      {(b.status === "requested" || b.status === "confirmed") && (
+                        <button
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#2563eb", padding: "2px 4px" }}
+                          onClick={() => openModeModal(b)}
+                          title="상담 방식 변경"
+                        >변경</button>
+                      )}
+                    </div>
+                    {b.mode === "remote" && b.meeting_url && (
+                      <a href={b.meeting_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#2563eb" }}>
+                        링크
+                      </a>
+                    )}
+                  </td>
                   <td>
                     <StatusBadge status={b.status} />
                     {b.cancel_reason && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>사유: {b.cancel_reason}</div>}
@@ -225,7 +286,7 @@ export default function ConsultationPage() {
                 </tr>
               ))}
               {bookings.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign: "center", padding: 40, color: "var(--gray-500)" }}>상담 예약이 없습니다</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: "center", padding: 40, color: "var(--gray-500)" }}>상담 예약이 없습니다</td></tr>
               )}
             </tbody>
           </table>
@@ -310,6 +371,25 @@ export default function ConsultationPage() {
                 </select>
               </div>
 
+              {/* 상담 방식 */}
+              <div className="form-group">
+                <label>상담 방식</label>
+                <select className="form-control" value={manualMode} onChange={e => setManualMode(e.target.value)}>
+                  <option value="">미정</option>
+                  <option value="in_person">대면</option>
+                  <option value="remote">비대면</option>
+                </select>
+              </div>
+
+              {manualMode === "remote" && (
+                <div className="form-group">
+                  <label>화상 회의 링크</label>
+                  <input type="url" className="form-control" value={manualMeetingUrl}
+                    onChange={e => setManualMeetingUrl(e.target.value)}
+                    placeholder="https://zoom.us/..." />
+                </div>
+              )}
+
               {/* 메모 */}
               <div className="form-group">
                 <label>메모 (선택)</label>
@@ -324,6 +404,35 @@ export default function ConsultationPage() {
                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleManualBooking} disabled={manualLoading}>
                   {manualLoading ? "생성 중..." : "예약 생성"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 상담 방식 변경 모달 */}
+        {modeModal.show && (
+          <div className="modal-overlay" onClick={() => setModeModal({ id: "", show: false })}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: 24, maxWidth: 400 }}>
+              <h3 style={{ marginBottom: 16 }}>상담 방식 변경</h3>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label>방식</label>
+                <select className="form-control" value={editMode} onChange={e => setEditMode(e.target.value)}>
+                  <option value="">미정</option>
+                  <option value="in_person">대면</option>
+                  <option value="remote">비대면</option>
+                </select>
+              </div>
+              {editMode === "remote" && (
+                <div className="form-group" style={{ marginBottom: 12 }}>
+                  <label>화상 회의 링크</label>
+                  <input type="url" className="form-control" value={editMeetingUrl}
+                    onChange={e => setEditMeetingUrl(e.target.value)}
+                    placeholder="https://zoom.us/..." />
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="btn btn-outline" onClick={() => setModeModal({ id: "", show: false })}>취소</button>
+                <button className="btn btn-primary" onClick={handleModeUpdate}>저장</button>
               </div>
             </div>
           </div>
