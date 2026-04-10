@@ -35,6 +35,29 @@ from sqlalchemy import select, delete
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.database import async_session  # noqa: E402
+
+# SQLAlchemy 매퍼가 User 의 모든 관계(AnalysisOrder, ConsultationBooking, ...)
+# 를 해석할 수 있도록, app/main.py 의 startup 과 동일하게 모든 모델을 미리 import.
+from app.models import (  # noqa: E402, F401
+    analysis_order,
+    consultation_booking,
+    consultation_slot,
+    consultation_survey as _consultation_survey_module,
+    notification,
+    payment as payment_model,
+    user,
+    password_reset_token,
+    consultation_note,
+    admission_case,
+    admission_data,
+    interview_question,
+    analysis_share,
+    seminar_schedule,
+    seminar_reservation,
+    seminar_mail_log,
+    notice as notice_model,
+    counselor_change_request,
+)
 from app.models.user import User  # noqa: E402
 from app.models.consultation_survey import ConsultationSurvey  # noqa: E402
 
