@@ -353,3 +353,44 @@ export async function getSurveyByResumeToken(token: string) {
   }
   return res.json();
 }
+
+// --- 가족 연결 (학생-학부모) ---
+export interface FamilyMemberInfo {
+  user_id: string;
+  name: string;
+  email: string;
+  member_type: string;
+  school_name: string | null;
+  grade: number | null;
+}
+
+export interface FamilyLinkItem {
+  link_id: string;
+  role: "parent" | "child"; // 호출자 입장에서 상대방의 역할
+  member: FamilyMemberInfo;
+  created_at: string;
+  can_revoke: boolean;
+}
+
+export async function createFamilyInvite(): Promise<{
+  code: string;
+  expires_at: string;
+  inviter_role: string;
+}> {
+  return request("/api/family/invite", { method: "POST" });
+}
+
+export async function connectFamilyByCode(code: string): Promise<FamilyLinkItem> {
+  return request("/api/family/connect", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
+export async function listFamilyLinks(): Promise<{ items: FamilyLinkItem[] }> {
+  return request("/api/family/links");
+}
+
+export async function revokeFamilyLink(linkId: string): Promise<{ message: string }> {
+  return request(`/api/family/links/${linkId}`, { method: "DELETE" });
+}

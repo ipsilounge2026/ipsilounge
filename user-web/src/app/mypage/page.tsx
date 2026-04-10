@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import FamilyLinkSection from "@/components/FamilyLinkSection";
 import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange } from "@/lib/api";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
@@ -690,6 +691,11 @@ export default function MyPage() {
           </div>
         ) : (
           <>
+            {/* 학생/학부모: 가족 연결 */}
+            {(memberType === "student" || memberType === "parent") && (
+              <FamilyLinkSection memberType={memberType as "student" | "parent"} />
+            )}
+
             {/* 학생/학부모: 바로가기 메뉴 */}
             <div className="card" style={{ marginBottom: 16 }}>
               <h2 style={{ fontSize: 16, marginBottom: 12 }}>빠른 메뉴</h2>
