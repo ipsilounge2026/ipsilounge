@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.consultation_note import ConsultationNote
 from app.models.user import User
 from app.utils.dependencies import get_current_user
+from app.utils.family import get_visible_owner_ids
 
 router = APIRouter(prefix="/api/consultation-notes", tags=["상담 기록 (사용자)"])
 
@@ -15,11 +16,17 @@ async def get_my_notes(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """내 상담 기록 조회 (관리자가 공개 설정한 항목만)"""
+    """내 상담 기록 조회 (관리자가 공개 설정한 항목만).
+
+    가시성 규칙:
+    - 학생: 본인 기록만
+    - 학부모: 본인 + 연결된 자녀들의 기록
+    """
+    visible_ids = await get_visible_owner_ids(current_user, db)
     result = await db.execute(
         select(ConsultationNote)
         .where(
-            ConsultationNote.user_id == current_user.id,
+            ConsultationNote.user_id.in_(visible_ids),
             ConsultationNote.is_visible_to_user == True,  # noqa: E712
         )
         .order_by(ConsultationNote.consultation_date.desc())

@@ -16,6 +16,7 @@ from app.schemas.payment import (
 )
 from app.services.payment_service import verify_google_purchase, verify_toss_payment
 from app.utils.dependencies import get_current_user
+from app.utils.family import get_visible_owner_ids
 from app.utils.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/payment", tags=["결제"])
@@ -108,10 +109,16 @@ async def get_my_payments(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 결제 내역"""
+    """내 결제 내역.
+
+    가시성 규칙:
+    - 학생: 본인 결제만
+    - 학부모: 본인 + 연결된 자녀들의 결제 (학부모가 자녀 명의로 결제한 건 포함)
+    """
+    visible_ids = await get_visible_owner_ids(user, db)
     result = await db.execute(
         select(Payment)
-        .where(Payment.user_id == user.id)
+        .where(Payment.user_id.in_(visible_ids))
         .order_by(Payment.created_at.desc())
     )
     payments = result.scalars().all()

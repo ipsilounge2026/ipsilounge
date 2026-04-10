@@ -23,6 +23,7 @@ from app.schemas.consultation import (
 )
 from app.services.consultation_service import check_slot_available
 from app.utils.dependencies import get_current_user
+from app.utils.family import get_visible_owner_ids
 
 
 async def _get_assigned_admin(user_id, db: AsyncSession):
@@ -283,11 +284,17 @@ async def get_my_bookings(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 상담 예약 목록"""
+    """내 상담 예약 목록.
+
+    가시성 규칙:
+    - 학생: 본인 예약만
+    - 학부모: 본인 + 연결된 자녀들의 예약 (가족 연결 도입 전 학부모 직접 예약분 포함)
+    """
+    visible_ids = await get_visible_owner_ids(user, db)
     result = await db.execute(
         select(ConsultationBooking, ConsultationSlot)
         .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
-        .where(ConsultationBooking.user_id == user.id)
+        .where(ConsultationBooking.user_id.in_(visible_ids))
         .order_by(ConsultationSlot.date.desc(), ConsultationSlot.start_time.desc())
     )
     rows = result.all()

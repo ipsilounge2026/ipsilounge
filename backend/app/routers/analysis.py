@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.analysis import AnalysisApplyRequest, AnalysisListResponse, AnalysisOrderResponse
 from app.services.file_service import generate_download_url, upload_file
 from app.utils.dependencies import get_current_user
+from app.utils.family import get_visible_owner_ids
 from app.utils.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/analysis", tags=["분석"])
@@ -124,16 +125,22 @@ async def list_my_analysis(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 분석 목록 조회"""
+    """내 분석 목록 조회.
+
+    가시성 규칙:
+    - 학생: 본인 신청 건만
+    - 학부모: 본인 + 연결된 자녀들의 신청 건 (가족 연결 도입 전 학부모 직접 신청분 포함)
+    """
+    visible_ids = await get_visible_owner_ids(user, db)
     result = await db.execute(
         select(AnalysisOrder)
-        .where(AnalysisOrder.user_id == user.id)
+        .where(AnalysisOrder.user_id.in_(visible_ids))
         .order_by(AnalysisOrder.created_at.desc())
     )
     orders = result.scalars().all()
 
     count_result = await db.execute(
-        select(func.count()).where(AnalysisOrder.user_id == user.id)
+        select(func.count()).where(AnalysisOrder.user_id.in_(visible_ids))
     )
     total = count_result.scalar()
 
@@ -259,8 +266,8 @@ async def get_analysis_detail(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """분석 상세 조회"""
-    order = await _get_user_order(order_id, user.id, db)
+    """분석 상세 조회 (본인 + 연결된 자녀)"""
+    order = await _get_visible_order(order_id, user, db)
     return _to_response(order)
 
 
@@ -270,8 +277,8 @@ async def download_report_excel(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """리포트 Excel 다운로드 URL"""
-    order = await _get_user_order(order_id, user.id, db)
+    """리포트 Excel 다운로드 URL (본인 + 연결된 자녀)"""
+    order = await _get_visible_order(order_id, user, db)
     if not order.report_excel_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="리포트가 아직 준비되지 않았습니다")
     url = generate_download_url(order.report_excel_url)
@@ -284,8 +291,8 @@ async def download_report_pdf(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """리포트 PDF 다운로드 URL"""
-    order = await _get_user_order(order_id, user.id, db)
+    """리포트 PDF 다운로드 URL (본인 + 연결된 자녀)"""
+    order = await _get_visible_order(order_id, user, db)
     if not order.report_pdf_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="리포트가 아직 준비되지 않았습니다")
     url = generate_download_url(order.report_pdf_url)
@@ -293,8 +300,27 @@ async def download_report_pdf(
 
 
 async def _get_user_order(order_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession) -> AnalysisOrder:
+    """본인 소유 신청 건만 조회 (mutation 용 - upload 등)."""
     result = await db.execute(
         select(AnalysisOrder).where(AnalysisOrder.id == order_id, AnalysisOrder.user_id == user_id)
+    )
+    order = result.scalar_one_or_none()
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="분석 요청을 찾을 수 없습니다")
+    return order
+
+
+async def _get_visible_order(order_id: uuid.UUID, user: User, db: AsyncSession) -> AnalysisOrder:
+    """가족 연결 가시성 기준 조회 (read-only).
+
+    학부모는 연결된 자녀의 신청 건을 함께 조회할 수 있다.
+    """
+    visible_ids = await get_visible_owner_ids(user, db)
+    result = await db.execute(
+        select(AnalysisOrder).where(
+            AnalysisOrder.id == order_id,
+            AnalysisOrder.user_id.in_(visible_ids),
+        )
     )
     order = result.scalar_one_or_none()
     if order is None:
@@ -308,17 +334,18 @@ async def compare_analysis(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """복수 분석 결과 비교 (최대 3건)"""
+    """복수 분석 결과 비교 (최대 3건, 본인 + 연결된 자녀)"""
     id_list = [uid.strip() for uid in ids.split(",") if uid.strip()]
     if len(id_list) < 2:
         raise HTTPException(status_code=400, detail="비교하려면 2건 이상 선택하세요.")
     if len(id_list) > 3:
         raise HTTPException(status_code=400, detail="최대 3건까지 비교 가능합니다.")
 
+    visible_ids = await get_visible_owner_ids(user, db)
     result = await db.execute(
         select(AnalysisOrder).where(
             AnalysisOrder.id.in_(id_list),
-            AnalysisOrder.user_id == user.id,
+            AnalysisOrder.user_id.in_(visible_ids),
         )
     )
     orders = result.scalars().all()

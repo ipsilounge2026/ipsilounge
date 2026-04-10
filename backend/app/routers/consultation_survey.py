@@ -55,6 +55,7 @@ from app.surveys.schema_loader import (
     validate_survey_params,
 )
 from app.utils.dependencies import get_current_user
+from app.utils.family import get_visible_owner_ids
 
 router = APIRouter(prefix="/api/consultation-surveys", tags=["사전상담설문"])
 
@@ -78,8 +79,32 @@ def _deep_merge_answers(existing: dict, incoming: dict) -> dict:
     return merged
 
 
+async def _get_visible_survey(survey_id: uuid.UUID, user: User, db: AsyncSession) -> ConsultationSurvey:
+    """가족 연결 가시성 기준 조회 (read-only).
+
+    학부모는 연결된 자녀의 설문을 함께 조회할 수 있다.
+    학생은 본인 설문만 조회할 수 있다.
+    Phase B 단계에서는 read 전용 — 수정/제출/삭제는 _get_owned_survey 사용.
+    """
+    visible_ids = await get_visible_owner_ids(user, db)
+    result = await db.execute(
+        select(ConsultationSurvey).where(
+            ConsultationSurvey.id == survey_id,
+            ConsultationSurvey.user_id.in_(visible_ids),
+        )
+    )
+    survey = result.scalar_one_or_none()
+    if survey is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="설문을 찾을 수 없습니다")
+    return survey
+
+
 async def _get_owned_survey(survey_id: uuid.UUID, user: User, db: AsyncSession) -> ConsultationSurvey:
-    """본인 소유 설문만 조회. 없으면 404."""
+    """본인 소유 설문만 조회 (mutation 용). 없으면 404.
+
+    수정/제출/삭제 등 쓰기 작업은 본인 소유에 한해 허용한다.
+    학부모-자녀 간 G 카테고리 분기는 Phase D 에서 별도 처리한다.
+    """
     result = await db.execute(
         select(ConsultationSurvey).where(
             ConsultationSurvey.id == survey_id,
@@ -243,8 +268,14 @@ async def list_my_surveys(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 설문 목록 (요약)"""
-    q = select(ConsultationSurvey).where(ConsultationSurvey.user_id == user.id)
+    """내 설문 목록 (요약).
+
+    가시성 규칙:
+    - 학생: 본인 설문만
+    - 학부모: 본인 + 연결된 자녀들의 설문 (가족 연결 도입 전 학부모 직접 작성분 포함)
+    """
+    visible_ids = await get_visible_owner_ids(user, db)
+    q = select(ConsultationSurvey).where(ConsultationSurvey.user_id.in_(visible_ids))
     if survey_type:
         q = q.where(ConsultationSurvey.survey_type == survey_type)
     if status_filter:
@@ -286,8 +317,8 @@ async def get_survey(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """설문 단건 조회 (본인 소유만)"""
-    survey = await _get_owned_survey(survey_id, user, db)
+    """설문 단건 조회 (본인 + 연결된 자녀)"""
+    survey = await _get_visible_survey(survey_id, user, db)
     return SurveyResponse.model_validate(survey)
 
 
