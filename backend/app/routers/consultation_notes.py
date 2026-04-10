@@ -35,14 +35,16 @@ async def get_my_notes(
     return [
         {
             "id": str(n.id),
-            "category": n.category,
+            "category": n.category if isinstance(n.category, str) else (n.category.value if hasattr(n.category, "value") else str(n.category)),
             "consultation_date": n.consultation_date.isoformat(),
-            "student_grade": n.student_grade,
+            "student_grade": n.student_grade if isinstance(n.student_grade, str) else (n.student_grade.value if hasattr(n.student_grade, "value") else n.student_grade),
+            "timing": getattr(n, "timing", None),
             "goals": n.goals,
             "main_content": n.main_content,
             "advice_given": n.advice_given,
             "next_steps": n.next_steps,
             "next_topic": n.next_topic,
+            "topic_notes": getattr(n, "topic_notes", None),
             "addenda": [
                 {"content": a["content"], "created_at": a["created_at"]}
                 for a in (n.addenda or [])

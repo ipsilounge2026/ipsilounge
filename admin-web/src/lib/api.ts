@@ -305,11 +305,13 @@ export async function createConsultationNote(data: {
   category: string;
   consultation_date: string;
   student_grade?: string;
+  timing?: string;
   goals?: string;
-  main_content: string;
+  main_content?: string;
   advice_given?: string;
   next_steps?: string;
   next_topic?: string;
+  topic_notes?: Record<string, string>;
   admin_private_notes?: string;
   is_visible_to_user: boolean;
 }) {

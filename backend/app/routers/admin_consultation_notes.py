@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.admin import Admin
-from app.models.consultation_note import ConsultationCategory, ConsultationNote, StudentStatus
+from app.models.consultation_note import ConsultationNote, CONSULTATION_CATEGORIES, STUDENT_GRADES
 from app.models.user import User
 from app.utils.dependencies import get_current_admin
 
@@ -17,14 +17,16 @@ router = APIRouter(prefix="/api/admin/consultation-notes", tags=["관리자 상�
 class NoteCreate(BaseModel):
     user_id: str
     booking_id: str | None = None
-    category: ConsultationCategory
+    category: str  # academic / record / admission / mental / other
     consultation_date: date
-    student_grade: StudentStatus | None = None
+    student_grade: str | None = None
+    timing: str | None = None  # T1 / T2 / T3 / T4 (학업 상담 전용)
     goals: str | None = None
-    main_content: str
+    main_content: str = ""
     advice_given: str | None = None
     next_steps: str | None = None
     next_topic: str | None = None
+    topic_notes: dict | None = None  # 카테고리별 주제 기록
     admin_private_notes: str | None = None
     is_visible_to_user: bool = False
 
@@ -39,14 +41,16 @@ def _note_to_dict(note: ConsultationNote) -> dict:
         "user_id": str(note.user_id),
         "booking_id": str(note.booking_id) if note.booking_id else None,
         "admin_id": str(note.admin_id) if note.admin_id else None,
-        "category": note.category,
+        "category": note.category if isinstance(note.category, str) else (note.category.value if hasattr(note.category, "value") else str(note.category)),
         "consultation_date": note.consultation_date.isoformat(),
-        "student_grade": note.student_grade,
+        "student_grade": note.student_grade if isinstance(note.student_grade, str) else (note.student_grade.value if hasattr(note.student_grade, "value") else note.student_grade),
+        "timing": note.timing if hasattr(note, "timing") else None,
         "goals": note.goals,
         "main_content": note.main_content,
         "advice_given": note.advice_given,
         "next_steps": note.next_steps,
         "next_topic": note.next_topic,
+        "topic_notes": note.topic_notes if hasattr(note, "topic_notes") else None,
         "admin_private_notes": note.admin_private_notes,
         "is_visible_to_user": note.is_visible_to_user,
         "addenda": note.addenda or [],
@@ -57,7 +61,7 @@ def _note_to_dict(note: ConsultationNote) -> dict:
 @router.get("")
 async def list_notes(
     user_id: str | None = None,
-    category: ConsultationCategory | None = None,
+    category: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ):
@@ -95,8 +99,9 @@ async def get_user_notes(
     # 카테고리별 횟수 집계
     category_count: dict = {}
     for n in notes:
-        key = n.category.value if hasattr(n.category, "value") else n.category
-        category_count[key] = category_count.get(key, 0) + 1
+        key = n.category if isinstance(n.category, str) else (n.category.value if hasattr(n.category, "value") else str(n.category))
+        label = CONSULTATION_CATEGORIES.get(key, key)
+        category_count[label] = category_count.get(label, 0) + 1
 
     return {
         "user": {"id": str(user.id), "name": user.name, "email": user.email},
@@ -113,6 +118,10 @@ async def create_note(
     current_admin: Admin = Depends(get_current_admin),
 ):
     """상담 기록 작성 (최초 1회, 이후 수정 불가)"""
+    # 카테고리 검증
+    if data.category not in CONSULTATION_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 카테고리: {data.category}")
+
     note = ConsultationNote(
         user_id=data.user_id,
         booking_id=data.booking_id,
@@ -120,11 +129,13 @@ async def create_note(
         category=data.category,
         consultation_date=data.consultation_date,
         student_grade=data.student_grade,
+        timing=data.timing,
         goals=data.goals,
-        main_content=data.main_content,
+        main_content=data.main_content or "",
         advice_given=data.advice_given,
         next_steps=data.next_steps,
         next_topic=data.next_topic,
+        topic_notes=data.topic_notes,
         admin_private_notes=data.admin_private_notes,
         is_visible_to_user=data.is_visible_to_user,
     )
