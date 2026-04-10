@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/consultation.dart';
 import '../services/consultation_service.dart';
+import '../widgets/child_selector.dart';
 
 class _ConsultationType {
   final String value;
@@ -84,6 +85,10 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   bool _canBook = false;
   String? _bookingCooldownUntil;
   String? _lastBooked;
+
+  // 자녀 선택 (학부모)
+  String? _selectedChildId;
+  bool _noChildren = false;
 
   @override
   void initState() {
@@ -233,7 +238,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     setState(() { _isLoading = true; _message = null; });
     try {
       await ConsultationService.book(
-        _selectedSlot!.id, _selectedType!.value, _memoCtrl.text.trim());
+        _selectedSlot!.id, _selectedType!.value, _memoCtrl.text.trim(),
+        ownerUserId: _selectedChildId);
       setState(() {
         _message = '상담 예약이 신청되었습니다! 확정 알림을 기다려주세요.';
         _selectedSlot = null;
@@ -510,6 +516,15 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // 자녀 선택 (학부모 전용)
+        ChildSelector(
+          selectedChildId: _selectedChildId,
+          onChanged: (id) => setState(() => _selectedChildId = id),
+          onReady: (isParent, kids) {
+            if (isParent && kids.isEmpty) setState(() => _noChildren = true);
+          },
+        ),
+
         // earliest_date 안내
         if (_earliestDate != null && _earliestDate!.compareTo(todayStr) > 0)
           Container(
@@ -828,7 +843,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                   SizedBox(
                     width: double.infinity, height: 48,
                     child: ElevatedButton(
-                      onPressed: (_isLoading || !_canBook) ? null : _book,
+                      onPressed: (_isLoading || !_canBook || _noChildren) ? null : _book,
                       child: _isLoading
                           ? const SizedBox(width: 20, height: 20,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))

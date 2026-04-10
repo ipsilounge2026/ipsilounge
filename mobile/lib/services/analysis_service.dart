@@ -20,6 +20,7 @@ class AnalysisService {
     String? targetUniversity,
     String? targetMajor,
     String? memo,
+    String? ownerUserId,
   }) async {
     final body = <String, dynamic>{'service_type': serviceType};
     if (targetUniversity != null && targetUniversity.isNotEmpty) {
@@ -30,6 +31,9 @@ class AnalysisService {
     }
     if (memo != null && memo.isNotEmpty) {
       body['memo'] = memo;
+    }
+    if (ownerUserId != null && ownerUserId.isNotEmpty) {
+      body['owner_user_id'] = ownerUserId;
     }
     return await ApiService.post('/analysis/apply', body);
   }

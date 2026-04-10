@@ -60,11 +60,12 @@ class ConsultationService {
     return items.map((e) => ConsultationSlot.fromJson(e)).toList();
   }
 
-  static Future<void> book(String slotId, String type, String? memo) async {
+  static Future<void> book(String slotId, String type, String? memo, {String? ownerUserId}) async {
     await ApiService.post('/consultation/book', {
       'slot_id': slotId,
       'type': type,
       if (memo != null && memo.isNotEmpty) 'memo': memo,
+      if (ownerUserId != null && ownerUserId.isNotEmpty) 'owner_user_id': ownerUserId,
     });
   }
 

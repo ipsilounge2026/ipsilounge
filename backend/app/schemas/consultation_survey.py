@@ -36,6 +36,7 @@ class SurveyCreateRequest(BaseModel):
     mode: str | None = Field(None, description='full|delta 또는 None/"auto"')
     booking_id: uuid.UUID | None = None
     started_platform: str = Field("web", description="web | mobile")
+    owner_user_id: str | None = Field(None, description="학부모가 자녀 대신 작성 시 자녀 user_id")
 
 
 class SurveySuggestResponse(BaseModel):

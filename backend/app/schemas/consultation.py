@@ -30,6 +30,7 @@ class BookingRequest(BaseModel):
     type: str  # 학생부분석 / 입시전략 / 학습상담 / 심리상담 / 기타
     memo: str | None = None
     analysis_order_id: uuid.UUID | None = None
+    owner_user_id: str | None = None  # 학부모가 자녀 대신 예약 시 자녀 user_id
 
 
 class BookingResponse(BaseModel):

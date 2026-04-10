@@ -23,7 +23,7 @@ from app.schemas.consultation import (
 )
 from app.services.consultation_service import check_slot_available
 from app.utils.dependencies import get_current_user
-from app.utils.family import get_visible_owner_ids
+from app.utils.family import get_visible_owner_ids, resolve_owner_id
 
 
 async def _get_assigned_admin(user_id, db: AsyncSession):
@@ -162,12 +162,14 @@ async def book_consultation(
     db: AsyncSession = Depends(get_db),
 ):
     """상담 예약 신청"""
-    # 3개월 쿨다운 확인 (실제 상담 진행일 기준)
+    owner_id = await resolve_owner_id(user, db, data.owner_user_id)
+
+    # 3개월 쿨다운 확인 (실제 상담 진행일 기준, owner 기준)
     last_booking_result = await db.execute(
         select(ConsultationBooking, ConsultationSlot)
         .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
         .where(
-            ConsultationBooking.user_id == user.id,
+            ConsultationBooking.user_id == owner_id,
             ConsultationBooking.status != "cancelled",
         )
         .order_by(ConsultationSlot.date.desc())
@@ -184,11 +186,11 @@ async def book_consultation(
 
     slot = await check_slot_available(data.slot_id, db)
 
-    # 동일 시간대 중복 예약 확인
+    # 동일 시간대 중복 예약 확인 (owner 기준)
     existing = await db.execute(
         select(ConsultationBooking).where(
             and_(
-                ConsultationBooking.user_id == user.id,
+                ConsultationBooking.user_id == owner_id,
                 ConsultationBooking.slot_id == data.slot_id,
                 ConsultationBooking.status.in_(["requested", "confirmed"]),
             )
@@ -198,7 +200,7 @@ async def book_consultation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이미 해당 시간에 예약이 있습니다")
 
     booking = ConsultationBooking(
-        user_id=user.id,
+        user_id=owner_id,
         slot_id=data.slot_id,
         analysis_order_id=data.analysis_order_id,
         type=data.type,
@@ -211,12 +213,12 @@ async def book_consultation(
     # 주 담당자가 없는 경우 → 선택한 상담자를 자동으로 주 담당자로 매칭
     if slot.admin_id:
         existing_assignment = await db.execute(
-            select(AdminStudentAssignment).where(AdminStudentAssignment.user_id == user.id)
+            select(AdminStudentAssignment).where(AdminStudentAssignment.user_id == owner_id)
         )
         if existing_assignment.scalar_one_or_none() is None:
             try:
                 admin_uuid = uuid.UUID(slot.admin_id)
-                new_assignment = AdminStudentAssignment(admin_id=admin_uuid, user_id=user.id)
+                new_assignment = AdminStudentAssignment(admin_id=admin_uuid, user_id=owner_id)
                 db.add(new_assignment)
             except ValueError:
                 pass

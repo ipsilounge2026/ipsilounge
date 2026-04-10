@@ -12,7 +12,7 @@ from app.models.user import User
 from app.schemas.analysis import AnalysisApplyRequest, AnalysisListResponse, AnalysisOrderResponse
 from app.services.file_service import generate_download_url, upload_file
 from app.utils.dependencies import get_current_user
-from app.utils.family import get_visible_owner_ids
+from app.utils.family import get_visible_owner_ids, resolve_owner_id
 from app.utils.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/analysis", tags=["분석"])
@@ -28,10 +28,12 @@ async def apply_analysis(
     if data.service_type not in ("학생부라운지", "학종라운지"):
         raise HTTPException(status_code=400, detail="service_type은 '학생부라운지' 또는 '학종라운지'여야 합니다")
 
-    # 3개월 쿨다운 확인
+    owner_id = await resolve_owner_id(user, db, data.owner_user_id)
+
+    # 3개월 쿨다운 확인 (owner 기준)
     last_order_result = await db.execute(
         select(AnalysisOrder).where(
-            AnalysisOrder.user_id == user.id,
+            AnalysisOrder.user_id == owner_id,
             AnalysisOrder.status != "cancelled",
         ).order_by(AnalysisOrder.created_at.desc())
     )
@@ -45,7 +47,7 @@ async def apply_analysis(
             )
 
     order = AnalysisOrder(
-        user_id=user.id,
+        user_id=owner_id,
         service_type=data.service_type,
         status="applied",
         target_university=data.target_university,
@@ -69,7 +71,7 @@ async def upload_school_record(
     db: AsyncSession = Depends(get_db),
 ):
     """신청 건에 학생부 파일 업로드"""
-    order = await _get_user_order(order_id, user.id, db)
+    order = await _get_visible_order(order_id, user, db)
 
     if order.status not in ("applied",):
         raise HTTPException(status_code=400, detail="파일 업로드는 '신청완료' 상태에서만 가능합니다")
@@ -96,14 +98,16 @@ async def upload_and_apply(
     target_university: str | None = Form(None),
     target_major: str | None = Form(None),
     memo: str | None = Form(None),
+    owner_user_id: str | None = Form(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """학생부 파일 업로드 + 분석 요청 (기존 호환용 - 신청과 업로드 동시)"""
+    owner_id = await resolve_owner_id(user, db, owner_user_id)
     s3_key, filename = await upload_file(file, "school-records")
 
     order = AnalysisOrder(
-        user_id=user.id,
+        user_id=owner_id,
         service_type=service_type,
         status="uploaded",
         school_record_url=s3_key,

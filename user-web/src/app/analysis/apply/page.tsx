@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SearchableSelect from "@/components/SearchableSelect";
+import ChildSelector from "@/components/ChildSelector";
 import { applyAnalysis, checkApplyCooldown, getUniversities, getUniversityMajors } from "@/lib/api";
-import { isLoggedIn } from "@/lib/auth";
+import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 function ApplyForm() {
   const router = useRouter();
@@ -23,6 +24,8 @@ function ApplyForm() {
   const [majorOptions, setMajorOptions] = useState<string[]>([]);
   const [loadingMajors, setLoadingMajors] = useState(false);
   const [dataYear, setDataYear] = useState<number | null>(null);
+  const [selectedChild, setSelectedChild] = useState<string | null>(null);
+  const [noChildren, setNoChildren] = useState(false);
 
   if (typeof window !== "undefined" && !isLoggedIn()) {
     router.push("/login");
@@ -61,6 +64,7 @@ function ApplyForm() {
         target_university: university || undefined,
         target_major: major || undefined,
         memo: memo || undefined,
+        owner_user_id: selectedChild || undefined,
       });
       router.push(`/analysis/${result.id}/upload`);
     } catch (err: any) {
@@ -94,6 +98,14 @@ function ApplyForm() {
                 : "📄 학생부 라운지: 학생부 PDF를 업로드하면 내신, 세특, 창체, 행특을 종합 분석한 리포트를 받아볼 수 있습니다."}
             </p>
           </div>
+
+          <ChildSelector
+            value={selectedChild}
+            onChange={setSelectedChild}
+            onReady={(isParent, kids) => {
+              if (isParent && kids.length === 0) setNoChildren(true);
+            }}
+          />
 
           {cooldown && !cooldown.can_apply && (
             <div style={{
@@ -148,8 +160,8 @@ function ApplyForm() {
               placeholder="분석 시 참고할 사항이 있으면 입력해주세요" />
           </div>
 
-          <button className="btn btn-primary btn-block btn-lg" onClick={handleSubmit} disabled={loading || cooldown === null || !cooldown.can_apply}>
-            {loading ? "신청 중..." : cooldown === null ? "확인 중..." : !cooldown.can_apply ? "쿨다운 기간" : "신청하기"}
+          <button className="btn btn-primary btn-block btn-lg" onClick={handleSubmit} disabled={loading || cooldown === null || !cooldown.can_apply || noChildren || (getMemberType() === "parent" && !selectedChild)}>
+            {loading ? "신청 중..." : cooldown === null ? "확인 중..." : !cooldown.can_apply ? "쿨다운 기간" : noChildren ? "자녀 연결 필요" : "신청하기"}
           </button>
 
           <p style={{ textAlign: "center", fontSize: 13, color: "var(--gray-500)", marginTop: 12 }}>

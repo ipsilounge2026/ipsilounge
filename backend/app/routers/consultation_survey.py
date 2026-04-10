@@ -55,7 +55,7 @@ from app.surveys.schema_loader import (
     validate_survey_params,
 )
 from app.utils.dependencies import get_current_user
-from app.utils.family import get_visible_owner_ids
+from app.utils.family import get_visible_owner_ids, resolve_owner_id
 
 router = APIRouter(prefix="/api/consultation-surveys", tags=["사전상담설문"])
 
@@ -200,12 +200,21 @@ async def create_survey(
     - timing이 None 또는 "auto" → 학년/날짜 기반 추정
     - mode가 None 또는 "auto" → 이전 제출 이력 기반 판정
     """
+    owner_id = await resolve_owner_id(user, db, data.owner_user_id)
+
+    # timing/mode 자동 판정에서 owner 정보가 필요하면 owner user 조회
+    if owner_id != user.id:
+        owner_result = await db.execute(select(User).where(User.id == owner_id))
+        owner_user = owner_result.scalar_one()
+    else:
+        owner_user = user
+
     raw_timing = data.timing if data.timing not in (None, "auto") else None
     raw_mode = data.mode if data.mode not in (None, "auto") else None
 
-    # 자동 판정
+    # 자동 판정 (owner 기준)
     if raw_timing is None or raw_mode is None:
-        auto_timing, auto_mode = await auto_determine_survey_params(user, data.survey_type, db)
+        auto_timing, auto_mode = await auto_determine_survey_params(owner_user, data.survey_type, db)
         if raw_timing is None:
             raw_timing = auto_timing
         if raw_mode is None:
@@ -223,9 +232,9 @@ async def create_survey(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    # 동일 조건의 draft가 이미 있으면 그 draft 반환 (중복 생성 방지)
+    # 동일 조건의 draft가 이미 있으면 그 draft 반환 (중복 생성 방지, owner 기준)
     existing_q = select(ConsultationSurvey).where(
-        ConsultationSurvey.user_id == user.id,
+        ConsultationSurvey.user_id == owner_id,
         ConsultationSurvey.survey_type == data.survey_type,
         ConsultationSurvey.status == "draft",
     )
@@ -241,7 +250,7 @@ async def create_survey(
         return SurveyCreateResponse.model_validate(existing)
 
     survey = ConsultationSurvey(
-        user_id=user.id,
+        user_id=owner_id,
         survey_type=data.survey_type,
         timing=raw_timing,
         mode=raw_mode,

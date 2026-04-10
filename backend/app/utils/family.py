@@ -60,3 +60,46 @@ async def get_linked_child_ids(parent: User, db: AsyncSession) -> list[uuid.UUID
         )
     )
     return [child_id for (child_id,) in result.all()]
+
+
+async def resolve_owner_id(
+    user: User,
+    db: AsyncSession,
+    owner_user_id: str | None = None,
+) -> uuid.UUID:
+    """신청/예약 시 owner_user_id 를 결정한다.
+
+    - 학생: 항상 본인 id (owner_user_id 무시)
+    - 학부모:
+      - owner_user_id 가 있으면 → 해당 자녀가 active 연결인지 검증 후 반환
+      - owner_user_id 가 없으면 → 연결된 자녀가 1명이면 자동 선택, 0명 or 2명+ 이면 에러
+    """
+    from fastapi import HTTPException
+
+    if user.member_type != "parent":
+        return user.id
+
+    child_ids = await get_linked_child_ids(user, db)
+
+    if owner_user_id:
+        target = uuid.UUID(owner_user_id)
+        if target not in child_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="연결되지 않은 자녀입니다. 먼저 가족 연결을 완료해주세요.",
+            )
+        return target
+
+    # owner_user_id 미지정
+    if len(child_ids) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="연결된 자녀가 없습니다. 마이페이지에서 자녀와 가족 연결을 먼저 진행해주세요.",
+        )
+    if len(child_ids) == 1:
+        return child_ids[0]
+
+    raise HTTPException(
+        status_code=400,
+        detail="자녀가 여러 명 연결되어 있습니다. 어떤 자녀를 위한 신청인지 선택해주세요.",
+    )

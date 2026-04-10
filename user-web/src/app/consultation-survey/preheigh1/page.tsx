@@ -15,7 +15,8 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import DynamicSurvey from "@/components/survey/DynamicSurvey";
-import { isLoggedIn } from "@/lib/auth";
+import ChildSelector from "@/components/ChildSelector";
+import { isLoggedIn, getMemberType } from "@/lib/auth";
 import {
   createSurvey,
   getSurvey,
@@ -28,17 +29,31 @@ export default function Preheigh1SurveyPage() {
   const router = useRouter();
   const [schema, setSchema] = useState<SurveySchema | null>(null);
   const [survey, setSurvey] = useState<SurveyResponseData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(getMemberType() !== "parent");
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [selectedChild, setSelectedChild] = useState<string | null>(null);
+  const [noChildren, setNoChildren] = useState(false);
+  const [childReady, setChildReady] = useState(false);
+  const isParent = getMemberType() === "parent";
 
   useEffect(() => {
     if (!isLoggedIn()) {
       router.push("/login?redirect=/consultation-survey/preheigh1");
       return;
     }
-    loadOrCreate();
+    // 학생은 바로 로드, 학부모는 자녀 선택 후 로드
+    if (!isParent) {
+      loadOrCreate();
+    }
   }, []);
+
+  // 학부모: 자녀 선택 후 자동 로드
+  useEffect(() => {
+    if (isParent && selectedChild && childReady) {
+      loadOrCreate();
+    }
+  }, [selectedChild, childReady]);
 
   const loadOrCreate = async () => {
     try {
@@ -63,6 +78,7 @@ export default function Preheigh1SurveyPage() {
         const created = await createSurvey({
           survey_type: "preheigh1",
           started_platform: "web",
+          owner_user_id: selectedChild || undefined,
         });
         surveyId = created.id;
       }
@@ -85,6 +101,20 @@ export default function Preheigh1SurveyPage() {
     <>
       <Navbar />
       <main className="container">
+        {isParent && !survey && !submitted && (
+          <div style={{ marginBottom: 16 }}>
+            <ChildSelector
+              value={selectedChild}
+              onChange={setSelectedChild}
+              onReady={(_, kids) => {
+                if (kids.length === 0) setNoChildren(true);
+                setChildReady(true);
+                if (!isParent) setLoading(false);
+              }}
+            />
+          </div>
+        )}
+
         {loading && (
           <div className="card" style={{ padding: 40, textAlign: "center" }}>
             <p>설문을 불러오는 중입니다...</p>

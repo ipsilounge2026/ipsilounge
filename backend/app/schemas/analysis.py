@@ -9,6 +9,7 @@ class AnalysisApplyRequest(BaseModel):
     target_university: str | None = None
     target_major: str | None = None
     memo: str | None = None
+    owner_user_id: str | None = None  # 학부모가 자녀 대신 신청 시 자녀 user_id
 
 
 class AnalysisUploadRequest(BaseModel):

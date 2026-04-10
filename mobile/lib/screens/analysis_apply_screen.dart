@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/analysis_service.dart';
+import '../widgets/child_selector.dart';
 
 class AnalysisApplyScreen extends StatefulWidget {
   const AnalysisApplyScreen({super.key});
@@ -26,6 +27,8 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
   List<String> _majors = [];
   int? _dataYear;
   bool _loadingMajors = false;
+  String? _selectedChildId;
+  bool _noChildren = false;
 
   @override
   void initState() {
@@ -101,6 +104,7 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
         targetUniversity: _university.trim(),
         targetMajor: _major.trim(),
         memo: _memoCtrl.text.trim(),
+        ownerUserId: _selectedChildId,
       );
       if (mounted) {
         final orderId = result['id'];
@@ -170,6 +174,15 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
             ),
             const SizedBox(height: 24),
 
+            // 자녀 선택 (학부모 전용)
+            ChildSelector(
+              selectedChildId: _selectedChildId,
+              onChanged: (id) => setState(() => _selectedChildId = id),
+              onReady: (isParent, kids) {
+                if (isParent && kids.isEmpty) setState(() => _noChildren = true);
+              },
+            ),
+
             // 쿨다운 배너
             if (!_canApply && _lastApplied != null && _cooldownUntil != null)
               Container(
@@ -228,7 +241,7 @@ class _AnalysisApplyScreenState extends State<AnalysisApplyScreen> {
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: (_isLoading || !_canApply) ? null : _apply,
+                onPressed: (_isLoading || !_canApply || _noChildren) ? null : _apply,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isHakjong ? const Color(0xFF22C55E) : const Color(0xFF3B82F6),
                 ),

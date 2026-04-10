@@ -6,7 +6,8 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { getAvailableSlots, getCounselors, bookConsultation, checkConsultationEligible, checkBookingCooldown, listMySurveys } from "@/lib/api";
-import { isLoggedIn } from "@/lib/auth";
+import ChildSelector from "@/components/ChildSelector";
+import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 interface Counselor {
   id: string;
@@ -65,6 +66,8 @@ export default function ConsultationPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [bookingCooldown, setBookingCooldown] = useState<{ can_book: boolean; cooldown_until: string | null; last_booked: string | null } | null>(null);
+  const [selectedChild, setSelectedChild] = useState<string | null>(null);
+  const [noChildren, setNoChildren] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
@@ -181,7 +184,7 @@ export default function ConsultationPage() {
     if (!selectedSlot || !selectedType) return;
     setLoading(true);
     try {
-      await bookConsultation({ slot_id: selectedSlot.id, type: selectedType, memo: memo || undefined });
+      await bookConsultation({ slot_id: selectedSlot.id, type: selectedType, memo: memo || undefined, owner_user_id: selectedChild || undefined });
       setMessage("상담 예약이 신청되었습니다! 확정 알림을 기다려주세요.");
       setSelectedSlot(null);
       setSelectedDate(null);
@@ -455,6 +458,14 @@ export default function ConsultationPage() {
               </button>
             </div>
 
+            <ChildSelector
+              value={selectedChild}
+              onChange={setSelectedChild}
+              onReady={(isParent, kids) => {
+                if (isParent && kids.length === 0) setNoChildren(true);
+              }}
+            />
+
             {/* earliest_date 안내 배너 */}
             {earliestDate && earliestDate > today && (
               <div style={{
@@ -644,8 +655,8 @@ export default function ConsultationPage() {
                       <textarea className="form-control" value={memo} onChange={(e) => setMemo(e.target.value)}
                         placeholder="상담 전에 궁금한 점이 있으면 입력해주세요" />
                     </div>
-                    <button className="btn btn-primary btn-block btn-lg" onClick={handleBook} disabled={loading || bookingCooldown === null || !bookingCooldown.can_book}>
-                      {loading ? "예약 중..." : bookingCooldown === null ? "확인 중..." : !bookingCooldown.can_book ? "쿨다운 기간" : "상담 예약 신청"}
+                    <button className="btn btn-primary btn-block btn-lg" onClick={handleBook} disabled={loading || bookingCooldown === null || !bookingCooldown.can_book || noChildren || (getMemberType() === "parent" && !selectedChild)}>
+                      {loading ? "예약 중..." : bookingCooldown === null ? "확인 중..." : !bookingCooldown.can_book ? "쿨다운 기간" : noChildren ? "자녀 연결 필요" : "상담 예약 신청"}
                     </button>
                   </div>
                 )}

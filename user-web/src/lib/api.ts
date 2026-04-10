@@ -109,6 +109,7 @@ export async function applyAnalysis(data: {
   target_university?: string;
   target_major?: string;
   memo?: string;
+  owner_user_id?: string;
 }) {
   return request("/api/analysis/apply", { method: "POST", body: JSON.stringify(data) });
 }
@@ -166,6 +167,7 @@ export async function bookConsultation(data: {
   type: string;
   memo?: string;
   analysis_order_id?: string;
+  owner_user_id?: string;
 }) {
   return request("/api/consultation/book", { method: "POST", body: JSON.stringify(data) });
 }
@@ -288,6 +290,7 @@ export async function createSurvey(data: {
   mode?: string | null;
   booking_id?: string | null;
   started_platform?: string;
+  owner_user_id?: string;
 }) {
   return request("/api/consultation-surveys", {
     method: "POST",
