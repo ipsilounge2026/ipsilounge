@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FamilyLinkSection from "@/components/FamilyLinkSection";
-import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange } from "@/lib/api";
+import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange, listMySurveys } from "@/lib/api";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 interface User {
@@ -84,6 +84,9 @@ export default function MyPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
+  // 사전 조사 관련
+  const [surveys, setSurveys] = useState<Array<{ id: string; survey_type: string; timing: string | null; status: string; updated_at: string }>>([]);
+
   // 담당자 관련
   const [myCounselor, setMyCounselor] = useState<CounselorInfo | null>(null);
   const [isAssigned, setIsAssigned] = useState(false);
@@ -106,6 +109,8 @@ export default function MyPage() {
       getMySeminarReservations().then((res) => setSeminarReservations(res.items || [])).catch(() => {});
     } else {
       getNotifications().then((res) => setNotifications(res.items)).catch(() => {});
+      // 사전 조사 목록
+      listMySurveys({}).then((res) => setSurveys(res.items || [])).catch(() => {});
       // 담당자 조회
       getMyCounselor().then((res) => {
         setIsAssigned(res.assigned);
@@ -694,6 +699,61 @@ export default function MyPage() {
             {/* 학생/학부모: 가족 연결 */}
             {(memberType === "student" || memberType === "parent") && (
               <FamilyLinkSection memberType={memberType as "student" | "parent"} />
+            )}
+
+            {/* 학생/학부모: 사전 조사 관리 */}
+            {surveys.length > 0 && (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <h2 style={{ fontSize: 16, margin: 0 }}>사전 조사</h2>
+                  <a href="/consultation" style={{ fontSize: 13, color: "var(--primary)", textDecoration: "none" }}>
+                    새 설문 작성 &rarr;
+                  </a>
+                </div>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {surveys.map((s) => {
+                    const typeLabel = s.survey_type === "preheigh1" ? "예비고1" : "고등학생";
+                    const timingLabel = s.timing ? ` (${s.timing})` : "";
+                    const statusLabel = s.status === "submitted" ? "제출 완료" : "작성 중";
+                    const statusColor = s.status === "submitted" ? "#16A34A" : "#F59E0B";
+                    const href = s.survey_type === "preheigh1"
+                      ? "/consultation-survey/preheigh1"
+                      : "/consultation-survey/high";
+                    return (
+                      <a
+                        key={s.id}
+                        href={href}
+                        style={{
+                          display: "flex", justifyContent: "space-between", alignItems: "center",
+                          padding: "12px 14px", borderRadius: 10,
+                          border: "1px solid var(--gray-200)",
+                          textDecoration: "none", color: "var(--gray-700)",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>
+                            {typeLabel}{timingLabel} 사전 조사
+                          </div>
+                          <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 2 }}>
+                            {new Date(s.updated_at).toLocaleDateString("ko-KR")} 수정
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{
+                            padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600,
+                            color: "#fff", background: statusColor,
+                          }}>
+                            {statusLabel}
+                          </span>
+                          <span style={{ color: "var(--primary)", fontSize: 13 }}>
+                            {s.status === "submitted" ? "수정" : "이어쓰기"} →
+                          </span>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
             {/* 학생/학부모: 바로가기 메뉴 */}

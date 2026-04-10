@@ -18,6 +18,7 @@ from app.routers import (
     admin_users,
     admin_admins,
     admin_consultation_notes,
+    admin_consultation_survey,
     admin_admission_cases,
     analysis,
     auth,
@@ -83,6 +84,7 @@ app.include_router(admin_payments.router)
 app.include_router(admin_dashboard.router)
 app.include_router(admin_admins.router)
 app.include_router(admin_consultation_notes.router)
+app.include_router(admin_consultation_survey.router)
 app.include_router(admin_admission_cases.router)
 app.include_router(consultation_notes.router)
 app.include_router(consultation_survey.router)

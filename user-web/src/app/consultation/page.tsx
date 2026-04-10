@@ -98,21 +98,28 @@ export default function ConsultationPage() {
       }
     } else if (typeValue === "학습상담") {
       // 학습 상담 → 사전 조사 상태 확인 후 분기
+      // preheigh1과 high 모두 확인하여 어느 쪽이든 설문이 있으면 인정
       setStep("survey");
       setSurveyStatus(null);
       try {
-        // 백엔드에서 updated_at desc로 정렬되어 옴 → items[0]이 가장 최근.
-        // "submitted가 하나라도 있으면 완료"가 아니라, 가장 최근 사전조사의 상태로 판단해야 한다.
-        // (예: 옛날에 빈 상태로 제출된 사전조사가 DB에 남아있고 새 draft가 생긴 경우
-        //  → 최신은 draft → "미완료" 상태로 안내해서 다시 작성하도록 유도)
-        const list = await listMySurveys({ survey_type: "preheigh1" });
-        const items = (list?.items || []) as Array<{ id: string; status: string }>;
-        if (items.length === 0) {
+        const [preList, highList] = await Promise.all([
+          listMySurveys({ survey_type: "preheigh1" }),
+          listMySurveys({ survey_type: "high" }),
+        ]);
+        const preItems = (preList?.items || []) as Array<{ id: string; status: string }>;
+        const highItems = (highList?.items || []) as Array<{ id: string; status: string }>;
+        const allItems = [...preItems, ...highItems];
+
+        if (allItems.length === 0) {
           setSurveyStatus("none");
-        } else if (items[0].status === "submitted") {
-          setSurveyStatus("submitted");
         } else {
-          setSurveyStatus("draft");
+          // submitted가 하나라도 있으면 완료
+          const hasSubmitted = allItems.some(s => s.status === "submitted");
+          if (hasSubmitted) {
+            setSurveyStatus("submitted");
+          } else {
+            setSurveyStatus("draft");
+          }
         }
       } catch {
         setSurveyStatus("none");
@@ -388,12 +395,20 @@ export default function ConsultationPage() {
                     예약하실 수 있습니다.
                   </p>
                 </div>
-                <button
-                  onClick={() => router.push("/consultation-survey/preheigh1")}
-                  className="btn btn-primary btn-block btn-lg"
-                >
-                  이어서 작성하기 →
-                </button>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <button
+                    onClick={() => router.push("/consultation-survey/preheigh1")}
+                    className="btn btn-primary btn-block"
+                  >
+                    예비 고1 설문 이어쓰기 →
+                  </button>
+                  <button
+                    onClick={() => router.push("/consultation-survey/high")}
+                    className="btn btn-outline btn-block"
+                  >
+                    고등학생 설문 이어쓰기 →
+                  </button>
+                </div>
               </>
             )}
 
@@ -411,26 +426,46 @@ export default function ConsultationPage() {
                     작성 후 자동 저장되며, 중간에 종료해도 이어쓰기가 가능합니다.
                   </p>
                 </div>
-                <div style={{
-                  padding: 16,
-                  borderRadius: 8,
-                  border: "1px solid #E5E7EB",
-                  marginBottom: 20,
-                }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>예비 고1 (중3) 학생용</div>
-                  <p style={{ fontSize: 12, color: "#6B7280", margin: 0, lineHeight: 1.6 }}>
-                    중학교 성적, 학습 습관, 과목별 준비도 등 7개 카테고리 · 예상 소요 30~40분 (PC/태블릿 권장)
-                  </p>
+                <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
+                  <div
+                    onClick={() => router.push("/consultation-survey/preheigh1")}
+                    style={{
+                      padding: 16, borderRadius: 8, border: "1px solid #E5E7EB", cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
+                    onMouseOver={e => { e.currentTarget.style.borderColor = "#3B82F6"; e.currentTarget.style.background = "#F8FAFF"; }}
+                    onMouseOut={e => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.background = ""; }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>예비 고1 (중3) 학생용</div>
+                        <p style={{ fontSize: 12, color: "#6B7280", margin: 0, lineHeight: 1.6 }}>
+                          중학교 성적, 학습 습관, 과목별 준비도 등 7개 카테고리
+                        </p>
+                      </div>
+                      <span style={{ color: "#3B82F6", fontSize: 20 }}>→</span>
+                    </div>
+                  </div>
+                  <div
+                    onClick={() => router.push("/consultation-survey/high")}
+                    style={{
+                      padding: 16, borderRadius: 8, border: "1px solid #E5E7EB", cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
+                    onMouseOver={e => { e.currentTarget.style.borderColor = "#22C55E"; e.currentTarget.style.background = "#F0FDF4"; }}
+                    onMouseOut={e => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.background = ""; }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>고등학생용 (고1~고3)</div>
+                        <p style={{ fontSize: 12, color: "#6B7280", margin: 0, lineHeight: 1.6 }}>
+                          시점별(T1~T4) 맞춤 설문 · 내신, 학습 전략, 입시 준비
+                        </p>
+                      </div>
+                      <span style={{ color: "#22C55E", fontSize: 20 }}>→</span>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  onClick={() => router.push("/consultation-survey/preheigh1")}
-                  className="btn btn-primary btn-block btn-lg"
-                >
-                  사전 조사 시작하기 →
-                </button>
-                <p style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginTop: 12 }}>
-                  ※ 고등학생용 사전 조사는 별도로 준비 중입니다
-                </p>
               </>
             )}
           </div>

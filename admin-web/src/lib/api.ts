@@ -415,6 +415,19 @@ export async function getSeminarMailLogDetail(id: string) {
   return request(`/api/admin/seminar/mail/logs/${id}`);
 }
 
+// --- 사전 상담 설문 ---
+export async function getSurveys(page = 1, surveyType?: string, status?: string, search?: string) {
+  const params = new URLSearchParams({ page: String(page), size: "20" });
+  if (surveyType) params.set("survey_type", surveyType);
+  if (status) params.set("status", status);
+  if (search) params.set("search", search);
+  return request(`/api/admin/surveys?${params}`);
+}
+
+export async function getSurveyDetail(id: string) {
+  return request(`/api/admin/surveys/${id}`);
+}
+
 // --- 공지사항 관리 ---
 export async function getNotices(page = 1, targetAudience?: string, isActive?: boolean) {
   const params = new URLSearchParams({ page: String(page), size: "20" });

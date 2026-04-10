@@ -14,12 +14,14 @@ import {
   FiLink,
   FiMic,
   FiBell,
+  FiClipboard,
 } from "react-icons/fi";
 
 const allMenuItems = [
   { key: "dashboard", href: "/", label: "대시보드", icon: FiHome },
   { key: "analysis", href: "/analysis", label: "분석 관리", icon: FiFileText },
   { key: "consultation", href: "/consultation", label: "상담 관리", icon: FiCalendar },
+  { key: "surveys", href: "/surveys", label: "사전설문 관리", icon: FiClipboard },
   { key: "users", href: "/users", label: "회원 관리", icon: FiUsers },
   { key: "payments", href: "/payments", label: "결제 현황", icon: FiDollarSign },
   { key: "admins", href: "/admins", label: "담당자 관리", icon: FiUserCheck },

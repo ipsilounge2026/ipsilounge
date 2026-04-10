@@ -22,6 +22,7 @@ ALL_MENUS = [
     {"key": "dashboard", "label": "대시보드"},
     {"key": "analysis", "label": "분석 관리"},
     {"key": "consultation", "label": "상담 관리"},
+    {"key": "surveys", "label": "사전설문 관리"},
     {"key": "users", "label": "회원 관리"},
     {"key": "payments", "label": "결제 현황"},
     {"key": "admins", "label": "담당자 관리"},

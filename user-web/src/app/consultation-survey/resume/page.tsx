@@ -40,8 +40,7 @@ function ResumeContent() {
         if (data.survey_type === "preheigh1") {
           router.replace("/consultation-survey/preheigh1");
         } else if (data.survey_type === "high") {
-          // Week 3에서 구현 예정
-          router.replace("/consultation-survey/preheigh1");
+          router.replace("/consultation-survey/high");
         }
       } catch (e: any) {
         setError(e.message || "이어쓰기에 실패했습니다");
