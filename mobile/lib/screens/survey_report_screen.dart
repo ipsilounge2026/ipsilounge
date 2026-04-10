@@ -234,7 +234,7 @@ class _RadarChartCard extends StatelessWidget {
             child: _CustomRadarChart(
               entries: entries.map((e) {
                 final val = e.value as Map<String, dynamic>;
-                return MapEntry(
+                return MapEntry<String, double>(
                   labels[e.key] ?? e.key.replaceAll('_', ' '),
                   (val['score'] ?? 0).toDouble(),
                 );
