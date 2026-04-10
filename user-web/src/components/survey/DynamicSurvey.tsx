@@ -364,7 +364,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
         </div>
       </div>
 
-      {/* 카테고리 네비 (위치 표시 전용 — 클릭 이동 불가. 이동은 "저장 후 다음" / "나중에 입력" / "이전" 버튼으로만) */}
+      {/* 카테고리 네비 (클릭으로 이동 가능) */}
       <div
         style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}
         role="tablist"
@@ -374,17 +374,19 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
           const s = categoryStatus[c.id] || "not_started";
           const active = idx === currentIdx;
           return (
-            <div
+            <button
+              type="button"
               key={c.id}
               role="tab"
               aria-selected={active}
+              onClick={() => goToCategory(idx)}
               style={{
                 padding: "8px 14px",
                 border: `1px solid ${active ? "var(--primary)" : "var(--gray-300)"}`,
                 borderRadius: 8,
                 background: active ? "var(--primary)" : "white",
                 color: active ? "white" : "var(--gray-700)",
-                cursor: "default",
+                cursor: "pointer",
                 fontSize: 12,
                 fontWeight: active ? 700 : 500,
                 whiteSpace: "nowrap",
@@ -405,7 +407,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
                   ●
                 </span>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
