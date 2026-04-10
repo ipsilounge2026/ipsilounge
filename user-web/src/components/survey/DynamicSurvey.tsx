@@ -215,7 +215,23 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
   };
 
   const handleSubmit = async () => {
-    // 모든 비-skipped 카테고리에서 미응답 필수 항목 검사
+    // (1) 모든 카테고리를 "나중에 입력"으로 건너뛴 채 제출하는 것을 차단
+    //     — 최소 1개 이상의 카테고리가 실제로 completed 상태여야 제출 가능
+    const completedCategoryCount = schema.categories.filter(
+      (c) => categoryStatus[c.id] === "completed"
+    ).length;
+    if (completedCategoryCount === 0) {
+      alert(
+        "사전 조사를 한 카테고리도 작성하지 않으셨습니다.\n" +
+          "최소 1개 이상의 카테고리를 직접 작성한 뒤 제출해주세요.\n\n" +
+          '("나중에 입력"으로 모든 카테고리를 건너뛴 상태로는 제출이 불가합니다.)'
+      );
+      // 첫 번째 카테고리로 이동
+      goToCategory(0);
+      return;
+    }
+
+    // (2) 모든 비-skipped 카테고리에서 미응답 필수 항목 검사
     const missingByCategory: Array<{ id: string; title: string; items: string[] }> = [];
     for (const cat of schema.categories) {
       if (categoryStatus[cat.id] === "skipped") continue;
