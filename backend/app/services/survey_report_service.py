@@ -317,6 +317,52 @@ def _add_computed_section(elements, styles, survey, computed):
     survey_type = survey.get("survey_type", "")
     is_high = survey_type == "high"
 
+    # ── 종합 진단 (4각형 레이더) — 고등학생만 ──
+    radar = computed.get("radar_scores")
+    if radar and is_high:
+        elements.append(Paragraph(
+            f"종합 진단: {radar['overall_grade']}등급 ({radar['overall_score']}점/100)",
+            styles["h3"],
+        ))
+
+        grade_labels = {"S": "최상위", "A": "상위", "B": "평균", "C": "보완필요", "D": "미흡"}
+        area_labels = {
+            "내신_경쟁력": "내신 경쟁력", "모의고사_역량": "모의고사 역량",
+            "학습습관_전략": "학습 습관·전략", "진로전형_전략": "진로·전형 전략",
+        }
+
+        # 영역별 점수 테이블
+        header = ["영역", "점수", "등급"]
+        rows = [header]
+        for key, val in radar.get("radar", {}).items():
+            label = area_labels.get(key, key)
+            g = val.get("grade", "?")
+            rows.append([label, f'{val["score"]}/100', f'{g} ({grade_labels.get(g, "")})'])
+        elements.append(_simple_table(rows, col_widths=[180, 80, 120]))
+        elements.append(Spacer(1, 4 * mm))
+
+        # 영역별 상세 항목
+        section_keys = [
+            ("naesin", "내신 경쟁력 상세"),
+            ("mock", "모의고사 역량 상세"),
+            ("study", "학습 습관·전략 상세"),
+            ("career", "진로·전형 전략 상세"),
+        ]
+        for sec_key, sec_label in section_keys:
+            sec = radar.get(sec_key)
+            if not sec or not sec.get("details"):
+                continue
+            elements.append(Paragraph(f"{sec_label} ({sec['grade']}등급, {sec['total']}점)", styles["h3"]))
+            d_header = ["항목", "점수", "배점"]
+            d_rows = [d_header]
+            for item_key, info in sec["details"].items():
+                item_label = item_key.replace("_", " ")
+                d_rows.append([item_label, str(info.get("score", "")), str(info.get("max", ""))])
+            elements.append(_simple_table(d_rows, col_widths=[200, 60, 60]))
+            elements.append(Spacer(1, 3 * mm))
+
+        elements.append(Spacer(1, 5 * mm))
+
     # ── 내신/성적 추이 ──
     gt = computed.get("grade_trend")
     if gt and gt.get("data"):

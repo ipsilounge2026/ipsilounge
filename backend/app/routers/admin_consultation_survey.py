@@ -117,7 +117,7 @@ async def get_survey_detail(
         schema = None
 
     # 자동 계산
-    computed = _compute_stats(survey.survey_type, survey.answers)
+    computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
 
     return {
         "id": str(survey.id),
@@ -163,7 +163,7 @@ async def get_computed_stats(
     if not survey:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
 
-    return _compute_stats(survey.survey_type, survey.answers)
+    return _compute_stats(survey.survey_type, survey.answers, survey.timing)
 
 
 # ---- Delta Diff ----
@@ -282,7 +282,7 @@ async def download_report_pdf(
     except Exception:
         schema = None
 
-    computed = _compute_stats(survey.survey_type, survey.answers)
+    computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
 
     survey_dict = {
         "survey_type": survey.survey_type,
@@ -397,10 +397,14 @@ def _safe_float(v: Any) -> float | None:
         return None
 
 
-def _compute_stats(survey_type: str, answers: dict) -> dict:
+def _compute_stats(survey_type: str, answers: dict, timing: str | None = None) -> dict:
     """답변 데이터에서 자동 계산 통계 생성."""
     if survey_type == "high":
-        return _compute_high(answers)
+        result = _compute_high(answers)
+        # 4영역 점수 산출 (기획서 V3 — 4각형 레이더)
+        from app.services.survey_scoring_service import compute_radar_scores
+        result["radar_scores"] = compute_radar_scores(answers, timing)
+        return result
     elif survey_type == "preheigh1":
         return _compute_preheigh1(answers)
     return {}

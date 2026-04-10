@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
-import { GradeTrendChart, MockTrendChart, StudyAnalysisChart } from "@/components/SurveyCharts";
+import { GradeTrendChart, MockTrendChart, StudyAnalysisChart, RadarScoreChart, RadarDetailTable } from "@/components/SurveyCharts";
 
 interface SurveyDetail {
   id: string;
@@ -754,18 +754,30 @@ export default function SurveyDetailPage() {
         )}
 
         {activeTab === "computed" && (
-          <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
-            {survey.computed && (survey.computed.grade_trend || survey.computed.mock_trend || survey.computed.study_analysis) ? (
+          <div>
+            {/* 4각형 레이더 — 종합 진단 (고등학생만) */}
+            {survey.survey_type === "high" && survey.computed?.radar_scores && (
               <>
-                <GradeTrendChart computed={survey.computed} surveyType={survey.survey_type} />
-                <MockTrendChart computed={survey.computed} />
-                <StudyAnalysisChart computed={survey.computed} />
+                <RadarScoreChart computed={survey.computed} />
+                <div style={{ marginBottom: 20 }}>
+                  <RadarDetailTable computed={survey.computed} />
+                </div>
               </>
-            ) : (
-              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
-                자동 분석할 데이터가 없습니다. 학생이 성적/학습시간 관련 항목을 작성하면 자동으로 분석됩니다.
-              </div>
             )}
+
+            <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
+              {survey.computed && (survey.computed.grade_trend || survey.computed.mock_trend || survey.computed.study_analysis) ? (
+                <>
+                  <GradeTrendChart computed={survey.computed} surveyType={survey.survey_type} />
+                  <MockTrendChart computed={survey.computed} />
+                  <StudyAnalysisChart computed={survey.computed} />
+                </>
+              ) : (
+                <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                  자동 분석할 데이터가 없습니다. 학생이 성적/학습시간 관련 항목을 작성하면 자동으로 분석됩니다.
+                </div>
+              )}
+            </div>
           </div>
         )}
 

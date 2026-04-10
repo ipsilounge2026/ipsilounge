@@ -25,6 +25,21 @@ const trendBadgeColor: Record<string, string> = {
   V자반등: "#3B82F6", 역V자: "#F97316", 데이터부족: "#D1D5DB",
 };
 
+interface RadarAreaScore {
+  score: number;
+  grade: string;
+}
+
+interface RadarScores {
+  radar: Record<string, RadarAreaScore>;
+  overall_score: number;
+  overall_grade: string;
+  naesin?: any;
+  mock?: any;
+  study?: any;
+  career?: any;
+}
+
 interface ComputedStats {
   grade_trend?: {
     data: { semester: string; avg_grade?: number; avg_score?: number; subject_count: number }[];
@@ -45,6 +60,7 @@ interface ComputedStats {
     self_study_ratio: number;
     subject_balance: number;
   };
+  radar_scores?: RadarScores;
 }
 
 function TrendBadge({ badge }: { badge: string }) {
@@ -359,4 +375,182 @@ function StatCard({ label, value, color, bg }: { label: string; value: string; c
 
 function EmptyState({ text }: { text: string }) {
   return <div style={{ color: "#9CA3AF", fontSize: 13 }}>{text}</div>;
+}
+
+// ═══════════════════════════════════════
+// 4. 종합 진단 — 4각형 레이더 차트
+// ═══════════════════════════════════════
+
+const GRADE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  S: { bg: "#EEF2FF", text: "#4338CA", border: "#A5B4FC" },
+  A: { bg: "#ECFDF5", text: "#059669", border: "#6EE7B7" },
+  B: { bg: "#FFF7ED", text: "#D97706", border: "#FCD34D" },
+  C: { bg: "#FEF2F2", text: "#DC2626", border: "#FCA5A5" },
+  D: { bg: "#F3F4F6", text: "#6B7280", border: "#D1D5DB" },
+};
+
+const RADAR_LABELS: Record<string, string> = {
+  "내신_경쟁력": "내신 경쟁력",
+  "모의고사_역량": "모의고사 역량",
+  "학습습관_전략": "학습 습관·전략",
+  "진로전형_전략": "진로·전형 전략",
+};
+
+function GradeBadge({ grade, size = "normal" }: { grade: string; size?: "normal" | "large" }) {
+  const c = GRADE_COLORS[grade] || GRADE_COLORS.D;
+  const isLarge = size === "large";
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: isLarge ? 44 : 28, height: isLarge ? 44 : 28,
+      borderRadius: isLarge ? 12 : 6, fontSize: isLarge ? 22 : 13, fontWeight: 800,
+      color: c.text, background: c.bg, border: `2px solid ${c.border}`,
+    }}>
+      {grade}
+    </span>
+  );
+}
+
+export function RadarScoreChart({ computed }: { computed: ComputedStats }) {
+  const rs = computed.radar_scores;
+  if (!rs || !rs.radar) return null;
+
+  const radarData = Object.entries(rs.radar).map(([key, val]) => ({
+    area: RADAR_LABELS[key] || key.replace(/_/g, " "),
+    score: val.score,
+    fullMark: 100,
+  }));
+
+  const areaEntries = Object.entries(rs.radar);
+
+  return (
+    <div style={{ background: "white", borderRadius: 12, border: "1px solid #E5E7EB", padding: 20, marginBottom: 20 }}>
+      {/* 헤더 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>종합 진단</h3>
+        <GradeBadge grade={rs.overall_grade} size="large" />
+        <span style={{ fontSize: 22, fontWeight: 700, color: "#1F2937" }}>{rs.overall_score}점</span>
+        <span style={{ fontSize: 13, color: "#6B7280" }}>/ 100</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        {/* 왼쪽: 레이더 차트 */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <ResponsiveContainer width="100%" height={280}>
+            <RadarChart data={radarData}>
+              <PolarGrid stroke="#E5E7EB" />
+              <PolarAngleAxis dataKey="area" tick={{ fontSize: 12, fill: "#374151" }} />
+              <PolarRadiusAxis angle={45} domain={[0, 100]} tick={{ fontSize: 10 }} />
+              <Radar
+                dataKey="score"
+                stroke="#4472C4"
+                fill="#4472C4"
+                fillOpacity={0.25}
+                strokeWidth={2}
+                dot={{ r: 4, fill: "#4472C4" }}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* 오른쪽: 영역별 점수 카드 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {areaEntries.map(([key, val]) => {
+            const c = GRADE_COLORS[val.grade] || GRADE_COLORS.D;
+            return (
+              <div key={key} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 14px", borderRadius: 8, border: `1px solid ${c.border}`, background: c.bg,
+              }}>
+                <GradeBadge grade={val.grade} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937" }}>
+                    {RADAR_LABELS[key] || key}
+                  </div>
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: c.text }}>
+                  {val.score}<span style={{ fontSize: 12, fontWeight: 400 }}>/100</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 등급 범례 */}
+      <div style={{ display: "flex", gap: 16, marginTop: 16, justifyContent: "center" }}>
+        {[
+          { g: "S", label: "90~100 최상위" },
+          { g: "A", label: "75~89 상위" },
+          { g: "B", label: "55~74 평균" },
+          { g: "C", label: "35~54 보완필요" },
+          { g: "D", label: "0~34 미흡" },
+        ].map(({ g, label }) => (
+          <div key={g} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#6B7280" }}>
+            <GradeBadge grade={g} />
+            <span>{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 영역 상세 점수 테이블
+export function RadarDetailTable({ computed }: { computed: ComputedStats }) {
+  const rs = computed.radar_scores;
+  if (!rs) return null;
+
+  const sections = [
+    { key: "naesin", label: "내신 경쟁력" },
+    { key: "mock", label: "모의고사 역량" },
+    { key: "study", label: "학습 습관·전략" },
+    { key: "career", label: "진로·전형 전략" },
+  ] as const;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      {sections.map(({ key, label }) => {
+        const data = rs[key];
+        if (!data || !data.details) return null;
+        const c = GRADE_COLORS[data.grade] || GRADE_COLORS.D;
+        return (
+          <div key={key} style={{
+            background: "white", borderRadius: 10, border: "1px solid #E5E7EB", padding: 16,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <GradeBadge grade={data.grade} />
+              <span style={{ fontWeight: 700, fontSize: 14 }}>{label}</span>
+              <span style={{ marginLeft: "auto", fontSize: 16, fontWeight: 700, color: c.text }}>
+                {data.total}점
+              </span>
+            </div>
+            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+              <tbody>
+                {Object.entries(data.details).map(([item, info]: [string, any]) => (
+                  <tr key={item} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                    <td style={{ padding: "6px 4px", color: "#374151" }}>{item.replace(/_/g, " ")}</td>
+                    <td style={{ padding: "6px 4px", textAlign: "right", fontWeight: 600 }}>
+                      {info.score}/{info.max}
+                    </td>
+                    <td style={{ padding: "6px 4px", width: 80 }}>
+                      <div style={{
+                        height: 6, borderRadius: 3, background: "#F3F4F6", overflow: "hidden",
+                      }}>
+                        <div style={{
+                          height: "100%", borderRadius: 3,
+                          width: `${(info.score / info.max) * 100}%`,
+                          background: c.text,
+                        }} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
