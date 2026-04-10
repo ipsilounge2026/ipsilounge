@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../models/consultation.dart';
 import '../services/consultation_service.dart';
 import '../services/user_service.dart';
+import 'analysis_list_screen.dart';
 
 const _roleLabels = {
   'student': '학생',
@@ -583,7 +584,8 @@ class _MypageScreenState extends State<MypageScreen> {
                     children: [
                       _quickMenuItem(Icons.description_outlined, '상담 기록 보기', '/consultation/notes'),
                       _quickMenuItem(Icons.calendar_today, '예약 현황', '/consultation/my'),
-                      _quickMenuItem(Icons.analytics_outlined, '라운지 내역', '/analysis'),
+                      _quickMenuItemWidget(Icons.analytics_outlined, '학생부 분석 내역', const AnalysisListScreen(serviceType: '학생부라운지')),
+                      _quickMenuItemWidget(Icons.track_changes, '학종 분석 내역', const AnalysisListScreen(serviceType: '학종라운지')),
                       _quickMenuItem(Icons.emoji_events_outlined, '합격 사례', '/admission-cases'),
                     ],
                   ),
@@ -631,6 +633,27 @@ class _MypageScreenState extends State<MypageScreen> {
   Widget _quickMenuItem(IconData icon, String label, String route) {
     return InkWell(
       onTap: () => Navigator.pushNamed(context, route),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: const Color(0xFF6B7280)),
+            const SizedBox(width: 6),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _quickMenuItemWidget(IconData icon, String label, Widget screen) {
+    return InkWell(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => screen)),
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
