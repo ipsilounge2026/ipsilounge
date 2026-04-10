@@ -454,7 +454,9 @@ async def update_booking_status(
     return {"message": f"예약 상태가 '{data.status}'로 변경되었습니다"}
 
 
-class BookingModeUpdate(BaseModel):
+from pydantic import BaseModel as _BaseModel
+
+class BookingModeUpdate(_BaseModel):
     mode: str | None = None  # in_person / remote
     meeting_url: str | None = None
 

@@ -123,6 +123,7 @@ async def startup():
         counselor_change_request,
         family_link,
         family_invite,
+        senior_change_request,
     )
 
     async with engine.begin() as conn:
