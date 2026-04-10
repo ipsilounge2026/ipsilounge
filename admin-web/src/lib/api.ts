@@ -480,6 +480,35 @@ export async function updateSurveyActionPlan(id: string, data: { items: any[]; n
   });
 }
 
+// --- 상담사 초안 편집 (override) ---
+export async function updateSurveyOverrides(id: string, overrides: Record<string, any>) {
+  return request(`/api/admin/surveys/${id}/overrides`, {
+    method: "PUT",
+    body: JSON.stringify({ overrides }),
+  });
+}
+
+export async function deleteSurveyOverrides(id: string) {
+  return request(`/api/admin/surveys/${id}/overrides`, { method: "DELETE" });
+}
+
+// --- 상담사 체크리스트 ---
+export async function updateSurveyChecklist(id: string, items: { content: string; checked: boolean }[]) {
+  return request(`/api/admin/surveys/${id}/checklist`, {
+    method: "PUT",
+    body: JSON.stringify({ items }),
+  });
+}
+
+export async function deleteSurveyChecklist(id: string) {
+  return request(`/api/admin/surveys/${id}/checklist`, { method: "DELETE" });
+}
+
+// --- 예비고1 → 고1 전환 ---
+export async function convertPreheigh1ToHigh(id: string) {
+  return request(`/api/admin/surveys/${id}/convert-to-high`, { method: "POST" });
+}
+
 // --- 공지사항 관리 ---
 export async function getNotices(page = 1, targetAudience?: string, isActive?: boolean) {
   const params = new URLSearchParams({ page: String(page), size: "20" });

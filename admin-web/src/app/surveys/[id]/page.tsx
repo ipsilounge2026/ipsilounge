@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan } from "@/lib/api";
+import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan, updateSurveyOverrides, deleteSurveyOverrides, updateSurveyChecklist, deleteSurveyChecklist, convertPreheigh1ToHigh } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 import { GradeTrendChart, MockTrendChart, StudyAnalysisChart, RadarScoreChart, RadarDetailTable } from "@/components/SurveyCharts";
 
@@ -27,6 +27,10 @@ interface SurveyDetail {
   booking_id: string | null;
   note: string | null;
   admin_memo: string | null;
+  counselor_overrides: Record<string, any> | null;
+  counselor_checklist: { items: { content: string; checked: boolean }[]; updated_at?: string } | null;
+  source_survey_id: string | null;
+  preserved_data: Record<string, any> | null;
   created_at: string;
   updated_at: string;
   submitted_at: string | null;
@@ -145,7 +149,7 @@ interface ActionPlan {
   updated_at?: string;
 }
 
-type TabType = "answers" | "computed" | "delta" | "memo" | "action_plan";
+type TabType = "answers" | "computed" | "delta" | "memo" | "checklist" | "action_plan";
 
 export default function SurveyDetailPage() {
   const router = useRouter();
@@ -172,6 +176,16 @@ export default function SurveyDetailPage() {
   const [actionPlanLoaded, setActionPlanLoaded] = useState(false);
   const [actionPlanSaving, setActionPlanSaving] = useState(false);
 
+  // Checklist state
+  const [checklistItems, setChecklistItems] = useState<{ content: string; checked: boolean }[]>([]);
+  const [checklistSaving, setChecklistSaving] = useState(false);
+
+  // Override state
+  const [overrideSaving, setOverrideSaving] = useState(false);
+
+  // Convert state
+  const [converting, setConverting] = useState(false);
+
   useEffect(() => {
     if (!isLoggedIn()) {
       router.push("/login");
@@ -185,6 +199,9 @@ export default function SurveyDetailPage() {
       const data = await getSurveyDetail(id);
       setSurvey(data);
       setMemoText(data.admin_memo || "");
+      if (data.counselor_checklist?.items) {
+        setChecklistItems(data.counselor_checklist.items);
+      }
       const withAnswers = new Set<string>();
       if (data.answers) {
         for (const catId of Object.keys(data.answers)) {
@@ -307,6 +324,88 @@ export default function SurveyDetailPage() {
       alert("액션 플랜 저장에 실패했습니다.");
     } finally {
       setActionPlanSaving(false);
+    }
+  };
+
+  // ── 체크리스트 핸들러 ──
+
+  const handleAddChecklistItem = () => {
+    setChecklistItems((prev) => [...prev, { content: "", checked: false }]);
+  };
+
+  const handleRemoveChecklistItem = (idx: number) => {
+    setChecklistItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveChecklist = async () => {
+    setChecklistSaving(true);
+    try {
+      const result = await updateSurveyChecklist(id, checklistItems.filter((i) => i.content.trim()));
+      setSurvey((prev) => prev ? { ...prev, counselor_checklist: result.counselor_checklist } : prev);
+    } catch {
+      alert("체크리스트 저장에 실패했습니다.");
+    } finally {
+      setChecklistSaving(false);
+    }
+  };
+
+  const handleDeleteChecklist = async () => {
+    if (!confirm("체크리스트를 삭제하시겠습니까?")) return;
+    setChecklistSaving(true);
+    try {
+      await deleteSurveyChecklist(id);
+      setChecklistItems([]);
+      setSurvey((prev) => prev ? { ...prev, counselor_checklist: null } : prev);
+    } catch {
+      alert("체크리스트 삭제에 실패했습니다.");
+    } finally {
+      setChecklistSaving(false);
+    }
+  };
+
+  // ── Override 핸들러 ──
+
+  const handleSaveOverride = async (key: string, value: any) => {
+    setOverrideSaving(true);
+    try {
+      const result = await updateSurveyOverrides(id, { [key]: value });
+      setSurvey((prev) => prev ? { ...prev, counselor_overrides: result.counselor_overrides } : prev);
+      loadSurvey(); // computed 재로드
+    } catch {
+      alert("수정 저장에 실패했습니다.");
+    } finally {
+      setOverrideSaving(false);
+    }
+  };
+
+  const handleResetOverrides = async () => {
+    if (!confirm("상담사 수정 내용을 모두 초기화하고 자동 분석 원본으로 복원하시겠습니까?")) return;
+    setOverrideSaving(true);
+    try {
+      await deleteSurveyOverrides(id);
+      setSurvey((prev) => prev ? { ...prev, counselor_overrides: null } : prev);
+      loadSurvey();
+    } catch {
+      alert("초기화에 실패했습니다.");
+    } finally {
+      setOverrideSaving(false);
+    }
+  };
+
+  // ── 고1 전환 핸들러 ──
+
+  const handleConvertToHigh = async () => {
+    if (!confirm("이 예비고1 설문을 고등학교 T1 설문으로 전환하시겠습니까?\n\n• 매핑 가능한 카테고리는 자동 사전 입력됩니다\n• 예비고1 E영역(과목별 역량 진단)은 비교 데이터로 보존됩니다\n• 학생이 추가 입력을 진행해야 합니다")) return;
+    setConverting(true);
+    try {
+      const result = await convertPreheigh1ToHigh(id);
+      alert(`전환 완료! 새 고등학교 T1 설문이 생성되었습니다.\n\n매핑된 카테고리: ${result.mapped_categories.join(", ")}\n보존된 카테고리: ${result.preserved_categories.join(", ")}`);
+      router.push(`/surveys/${result.new_survey_id}`);
+    } catch (e: any) {
+      const msg = e?.detail || "전환에 실패했습니다.";
+      alert(msg);
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -572,6 +671,7 @@ export default function SurveyDetailPage() {
     { key: "computed", label: "자동 분석" },
     { key: "delta", label: "변경 비교" },
     { key: "memo", label: `메모${survey.admin_memo ? " *" : ""}` },
+    { key: "checklist", label: `체크리스트${survey.counselor_checklist?.items?.length ? " *" : ""}` },
     { key: "action_plan", label: "액션 플랜" },
   ];
 
@@ -655,6 +755,34 @@ export default function SurveyDetailPage() {
             <div style={{ marginTop: 16, padding: 12, background: "#FFFBEB", borderRadius: 6 }}>
               <div style={{ fontSize: 12, color: "#92400E", marginBottom: 4 }}>학생 메모</div>
               <div style={{ fontSize: 13, color: "#78350F", whiteSpace: "pre-wrap" }}>{survey.note}</div>
+            </div>
+          )}
+          {survey.source_survey_id && (
+            <div style={{ marginTop: 16, padding: 12, background: "#EFF6FF", borderRadius: 6 }}>
+              <div style={{ fontSize: 12, color: "#1E40AF", marginBottom: 4 }}>예비고1에서 전환됨</div>
+              <div style={{ fontSize: 13, color: "#1E3A5F" }}>
+                원본 설문: <button onClick={() => router.push(`/surveys/${survey.source_survey_id}`)} style={{ color: "#3B82F6", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontSize: 13 }}>{survey.source_survey_id}</button>
+              </div>
+            </div>
+          )}
+          {/* 예비고1 → 고1 전환 버튼 */}
+          {survey.survey_type === "preheigh1" && survey.status === "submitted" && (
+            <div style={{ marginTop: 16, padding: 12, background: "#F0FDF4", borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#166534" }}>고1 전환</div>
+                <div style={{ fontSize: 12, color: "#15803D" }}>이 예비고1 설문을 고등학교 T1 설문으로 전환합니다</div>
+              </div>
+              <button
+                onClick={handleConvertToHigh}
+                disabled={converting}
+                style={{
+                  padding: "8px 20px", borderRadius: 6, border: "none",
+                  background: converting ? "#86EFAC" : "#22C55E", color: "white",
+                  fontSize: 13, fontWeight: 600, cursor: converting ? "default" : "pointer",
+                }}
+              >
+                {converting ? "전환 중..." : "고1 전환"}
+              </button>
             </div>
           )}
         </div>
@@ -755,6 +883,43 @@ export default function SurveyDetailPage() {
 
         {activeTab === "computed" && (
           <div>
+            {/* 상담사 수정 상태 배너 */}
+            {(survey.computed as any)?.has_overrides && (
+              <div style={{ background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 8, padding: 12, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#92400E" }}>상담사 수정 적용됨</span>
+                  <span style={{ fontSize: 12, color: "#A16207", marginLeft: 8 }}>
+                    자동 분석 초안이 상담사에 의해 수정되었습니다
+                    {(survey.computed as any)?.override_updated_at && ` (${new Date((survey.computed as any).override_updated_at).toLocaleString("ko-KR")})`}
+                  </span>
+                </div>
+                <button
+                  onClick={handleResetOverrides}
+                  disabled={overrideSaving}
+                  style={{
+                    padding: "6px 14px", borderRadius: 6, border: "1px solid #FCA5A5",
+                    background: "#FEF2F2", color: "#DC2626", fontSize: 12, cursor: "pointer",
+                  }}
+                >
+                  원본 복원
+                </button>
+              </div>
+            )}
+
+            {/* 보존 데이터 (예비고1에서 전환된 경우) */}
+            {survey.preserved_data?.preheigh1_E && (
+              <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1E40AF", marginBottom: 8 }}>예비고1 과목별 역량 진단 (비교 데이터)</div>
+                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>중학교 때 자가진단한 과목별 자신감/흥미 데이터입니다. 고등학교 실제 성적과 비교하여 상담에 활용하세요.</div>
+                <details>
+                  <summary style={{ cursor: "pointer", fontSize: 13, color: "#3B82F6" }}>상세 데이터 보기</summary>
+                  <pre style={{ fontSize: 11, marginTop: 8, overflow: "auto", maxHeight: 300, background: "#F8FAFC", padding: 12, borderRadius: 4 }}>
+                    {JSON.stringify(survey.preserved_data.preheigh1_E, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+
             {/* 4각형 레이더 — 종합 진단 (고등학생만) */}
             {survey.survey_type === "high" && survey.computed?.radar_scores && (
               <>
@@ -771,6 +936,39 @@ export default function SurveyDetailPage() {
                   <GradeTrendChart computed={survey.computed} surveyType={survey.survey_type} />
                   <MockTrendChart computed={survey.computed} />
                   <StudyAnalysisChart computed={survey.computed} />
+
+                  {/* 상담사 코멘트 편집 영역 */}
+                  <div style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>상담사 분석 코멘트</h4>
+                    <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>자동 분석 결과에 대한 상담사의 해석이나 보충 의견을 작성하세요. 이 내용은 리포트에 반영됩니다.</div>
+                    <textarea
+                      defaultValue={(survey.counselor_overrides as any)?.grade_trend_comment || ""}
+                      placeholder="성적 추이에 대한 상담사 코멘트..."
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        const prev = (survey.counselor_overrides as any)?.grade_trend_comment || "";
+                        if (val !== prev) handleSaveOverride("grade_trend_comment", val);
+                      }}
+                      style={{
+                        width: "100%", minHeight: 80, padding: 12, border: "1px solid #D1D5DB",
+                        borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", marginBottom: 12,
+                      }}
+                    />
+                    <textarea
+                      defaultValue={(survey.counselor_overrides as any)?.study_analysis_comment || ""}
+                      placeholder="학습 습관 분석에 대한 상담사 코멘트..."
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        const prev = (survey.counselor_overrides as any)?.study_analysis_comment || "";
+                        if (val !== prev) handleSaveOverride("study_analysis_comment", val);
+                      }}
+                      style={{
+                        width: "100%", minHeight: 80, padding: 12, border: "1px solid #D1D5DB",
+                        borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit",
+                      }}
+                    />
+                    {overrideSaving && <div style={{ fontSize: 12, color: "#3B82F6", marginTop: 8 }}>저장 중...</div>}
+                  </div>
                 </>
               ) : (
                 <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
@@ -784,6 +982,91 @@ export default function SurveyDetailPage() {
         {activeTab === "delta" && renderDelta()}
 
         {activeTab === "memo" && renderMemo()}
+
+        {activeTab === "checklist" && (
+          <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 15, margin: 0 }}>상담 전 체크리스트</h3>
+                <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>상담 시 확인할 포인트를 미리 정리합니다. 리포트에는 포함되지 않습니다.</div>
+              </div>
+              <button
+                onClick={handleAddChecklistItem}
+                style={{
+                  padding: "6px 14px", borderRadius: 6, border: "1px solid #3B82F6",
+                  background: "#EFF6FF", color: "#3B82F6", fontSize: 13, cursor: "pointer",
+                }}
+              >
+                + 항목 추가
+              </button>
+            </div>
+
+            {checklistItems.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                아직 등록된 체크리스트가 없습니다. &quot;+ 항목 추가&quot;를 클릭하세요.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {checklistItems.map((item, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={(e) => {
+                        setChecklistItems((prev) => prev.map((it, i) => i === idx ? { ...it, checked: e.target.checked } : it));
+                      }}
+                      style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0 }}
+                    />
+                    <input
+                      type="text"
+                      value={item.content}
+                      onChange={(e) => {
+                        setChecklistItems((prev) => prev.map((it, i) => i === idx ? { ...it, content: e.target.value } : it));
+                      }}
+                      placeholder="확인할 내용을 입력하세요"
+                      style={{
+                        flex: 1, padding: "6px 10px", border: "1px solid #D1D5DB", borderRadius: 4, fontSize: 14,
+                        textDecoration: item.checked ? "line-through" : "none",
+                        color: item.checked ? "#9CA3AF" : "#111827",
+                      }}
+                    />
+                    <button
+                      onClick={() => handleRemoveChecklistItem(idx)}
+                      style={{ padding: "4px 8px", border: "none", background: "none", color: "#EF4444", cursor: "pointer", fontSize: 16 }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              {survey.counselor_checklist && (
+                <button
+                  onClick={handleDeleteChecklist}
+                  disabled={checklistSaving}
+                  style={{
+                    padding: "8px 16px", borderRadius: 6, border: "1px solid #FCA5A5", background: "#FEF2F2",
+                    color: "#DC2626", fontSize: 13, cursor: "pointer",
+                  }}
+                >
+                  삭제
+                </button>
+              )}
+              <button
+                onClick={handleSaveChecklist}
+                disabled={checklistSaving}
+                style={{
+                  padding: "8px 24px", borderRadius: 6, border: "none", background: "#3B82F6",
+                  color: "white", fontSize: 13, cursor: "pointer", opacity: checklistSaving ? 0.5 : 1,
+                }}
+              >
+                {checklistSaving ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {activeTab === "action_plan" && (
           <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>

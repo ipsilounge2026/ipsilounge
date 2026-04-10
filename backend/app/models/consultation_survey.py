@@ -89,6 +89,27 @@ class ConsultationSurvey(Base):
     # 액션 플랜 (상담 후 실행 과제, JSONB)
     action_plan: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # --- 상담사 검토/수정 ---
+    # 자동 분석 초안 대비 상담사가 수정한 값 (점수, 코멘트 등)
+    # 예: { "radar_scores": { "overall_score": 82, ... }, "grade_trend_comment": "..." }
+    counselor_overrides: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # 상담사 체크리스트 (상담 전 확인 사항, 리포트 미포함)
+    # 예: { "items": [{"content": "...", "checked": false}], "updated_at": "..." }
+    counselor_checklist: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # --- 고1 전환 데이터 연계 ---
+    # 이 설문이 전환된 원본 설문 ID (preheigh1 → high 전환 시)
+    source_survey_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("consultation_surveys.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # 원본 설문에서 보존한 데이터 (예비고1 E영역 등, 비교 상담용)
+    # 예: { "preheigh1_E": { ... }, "preheigh1_C": { ... }, "converted_at": "..." }
+    preserved_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -99,3 +120,4 @@ class ConsultationSurvey(Base):
     # 관계
     user = relationship("User", back_populates="consultation_surveys")
     booking = relationship("ConsultationBooking")
+    source_survey = relationship("ConsultationSurvey", remote_side=[id], foreign_keys=[source_survey_id])

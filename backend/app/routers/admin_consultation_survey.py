@@ -6,6 +6,9 @@
 - 자동 계산 (내신 추이, 모의고사 추이, 학습시간 분석)
 - Delta diff (이전 상담 대비 변경점)
 - 상담사 메모 CRUD
+- 상담사 초안 편집 (점수/코멘트 override)
+- 상담사 체크리스트 CRUD
+- 예비고1 → 고1 전환 (데이터 연계)
 - PDF 리포트 다운로드
 - 액션 플랜 CRUD
 """
@@ -116,8 +119,9 @@ async def get_survey_detail(
     except Exception:
         schema = None
 
-    # 자동 계산
+    # 자동 계산 + 상담사 override 병합
     computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
+    computed = _merge_overrides(computed, survey.counselor_overrides)
 
     return {
         "id": str(survey.id),
@@ -139,6 +143,10 @@ async def get_survey_detail(
         "booking_id": str(survey.booking_id) if survey.booking_id else None,
         "note": survey.note,
         "admin_memo": survey.admin_memo,
+        "counselor_overrides": survey.counselor_overrides,
+        "counselor_checklist": survey.counselor_checklist,
+        "source_survey_id": str(survey.source_survey_id) if survey.source_survey_id else None,
+        "preserved_data": survey.preserved_data,
         "created_at": survey.created_at.isoformat(),
         "updated_at": survey.updated_at.isoformat(),
         "submitted_at": survey.submitted_at.isoformat() if survey.submitted_at else None,
@@ -155,7 +163,7 @@ async def get_computed_stats(
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """설문 답변 기반 자동 계산 결과"""
+    """설문 답변 기반 자동 계산 결과 (상담사 override 포함)"""
     result = await db.execute(
         select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
     )
@@ -163,7 +171,8 @@ async def get_computed_stats(
     if not survey:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
 
-    return _compute_stats(survey.survey_type, survey.answers, survey.timing)
+    computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
+    return _merge_overrides(computed, survey.counselor_overrides)
 
 
 # ---- Delta Diff ----
@@ -283,6 +292,7 @@ async def download_report_pdf(
         schema = None
 
     computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
+    computed = _merge_overrides(computed, survey.counselor_overrides)
 
     survey_dict = {
         "survey_type": survey.survey_type,
@@ -290,7 +300,7 @@ async def download_report_pdf(
         "mode": survey.mode,
         "status": survey.status,
         "answers": survey.answers,
-        "admin_memo": survey.admin_memo,
+        "admin_memo": None,  # 상담사 메모는 리포트에 포함하지 않음
         "submitted_at": survey.submitted_at.isoformat() if survey.submitted_at else None,
     }
     user_info = {
@@ -383,9 +393,252 @@ async def update_action_plan(
     return plan
 
 
+# ---- 상담사 초안 편집 (override) ----
+
+class OverrideRequest(BaseModel):
+    overrides: dict = Field(..., description="자동 분석 초안 대비 수정 값 (점수, 코멘트 등)")
+
+
+@router.put("/{survey_id}/overrides")
+async def update_overrides(
+    survey_id: uuid.UUID,
+    data: OverrideRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담사가 자동 분석 초안의 점수/코멘트를 수정 저장"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    # 기존 override가 있으면 병합, 없으면 새로 설정
+    existing = survey.counselor_overrides or {}
+    existing.update(data.overrides)
+    existing["_updated_at"] = datetime.utcnow().isoformat()
+    existing["_updated_by"] = str(admin.id)
+    survey.counselor_overrides = existing
+    await db.commit()
+    return {"ok": True, "counselor_overrides": survey.counselor_overrides}
+
+
+@router.delete("/{survey_id}/overrides")
+async def delete_overrides(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담사 override 초기화 (자동 분석 원본으로 복원)"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    survey.counselor_overrides = None
+    await db.commit()
+    return {"ok": True}
+
+
+# ---- 상담사 체크리스트 ----
+
+class ChecklistItem(BaseModel):
+    content: str
+    checked: bool = False
+
+
+class ChecklistRequest(BaseModel):
+    items: list[ChecklistItem]
+
+
+@router.put("/{survey_id}/checklist")
+async def update_checklist(
+    survey_id: uuid.UUID,
+    data: ChecklistRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담사 체크리스트 저장 (상담 전 확인 사항, 리포트 미포함)"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    survey.counselor_checklist = {
+        "items": [{"content": item.content, "checked": item.checked} for item in data.items],
+        "updated_at": datetime.utcnow().isoformat(),
+        "updated_by": str(admin.id),
+    }
+    await db.commit()
+    return {"ok": True, "counselor_checklist": survey.counselor_checklist}
+
+
+@router.delete("/{survey_id}/checklist")
+async def delete_checklist(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담사 체크리스트 삭제"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    survey.counselor_checklist = None
+    await db.commit()
+    return {"ok": True}
+
+
+# ---- 예비고1 → 고1 전환 ----
+
+# 예비고1 → 고등학교 T1 카테고리 매핑
+_PREHEIGH1_TO_HIGH_MAP = {
+    # 예비고1 카테고리 → 고등학교 T1 카테고리
+    "A": "A",   # 기본 정보 → 기본 정보
+    "B": "E",   # 진로 & 대입 방향성 → 진로·전형 전략
+    "D": "D",   # 학습 습관 → 학습 습관·전략
+    "G": "F",   # 학부모 관점 → 학부모 설문
+    # C (중학교 성적) → preserved_data (참고용 보존)
+    # E (과목별 역량 진단) → preserved_data (비교 데이터로 보존)
+    # F (비교과 & 역량) → preserved_data (참고용 보존)
+}
+
+
+@router.post("/{survey_id}/convert-to-high")
+async def convert_preheigh1_to_high(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """예비고1 설문을 고등학교 T1 설문으로 전환 (Delta 방식)
+
+    - 매핑 가능한 카테고리는 자동 pre-fill
+    - 예비고1 E영역(과목별 역량 진단), C(성적), F(비교과)는 preserved_data로 보존
+    - 고등학교 전용 영역(B 내신, C 모의고사)은 빈 상태로 생성
+    """
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    source = result.scalar_one_or_none()
+    if not source:
+        raise HTTPException(status_code=404, detail="원본 설문을 찾을 수 없습니다")
+
+    if source.survey_type != "preheigh1":
+        raise HTTPException(status_code=400, detail="예비고1 설문만 전환할 수 있습니다")
+
+    if source.status != "submitted":
+        raise HTTPException(status_code=400, detail="제출 완료된 설문만 전환할 수 있습니다")
+
+    # 이미 전환된 설문이 있는지 확인
+    existing = await db.execute(
+        select(ConsultationSurvey).where(
+            ConsultationSurvey.source_survey_id == source.id,
+            ConsultationSurvey.survey_type == "high",
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="이미 전환된 고등학교 설문이 존재합니다")
+
+    # 카테고리 매핑으로 answers 구성
+    src_answers = source.answers or {}
+    high_answers: dict[str, Any] = {}
+
+    for src_cat, dst_cat in _PREHEIGH1_TO_HIGH_MAP.items():
+        if src_cat in src_answers:
+            high_answers[dst_cat] = src_answers[src_cat]
+
+    # 보존 데이터 (비교 상담용)
+    preserved = {
+        "converted_at": datetime.utcnow().isoformat(),
+        "converted_by": str(admin.id),
+        "source_survey_type": "preheigh1",
+    }
+    # E영역 (과목별 역량 진단) — 중학교↔고등학교 비교 데이터
+    if "E" in src_answers:
+        preserved["preheigh1_E"] = src_answers["E"]
+    # C영역 (중학교 성적) — 참고용 보존
+    if "C" in src_answers:
+        preserved["preheigh1_C"] = src_answers["C"]
+    # F영역 (비교과 & 역량) — 참고용 보존
+    if "F" in src_answers:
+        preserved["preheigh1_F"] = src_answers["F"]
+
+    # 카테고리 상태 설정 (매핑된 카테고리는 in_progress, 신규는 not_started)
+    category_status: dict[str, str] = {}
+    for dst_cat in _PREHEIGH1_TO_HIGH_MAP.values():
+        if dst_cat in high_answers:
+            category_status[dst_cat] = "in_progress"  # 사전 입력됨, 확인 필요
+    # 고등학교 전용 영역은 not_started
+    for cat in ["B", "C"]:  # B: 내신, C: 모의고사
+        if cat not in category_status:
+            category_status[cat] = "not_started"
+
+    # 새 고등학교 T1 설문 생성
+    new_survey = ConsultationSurvey(
+        user_id=source.user_id,
+        survey_type="high",
+        timing="T1",
+        mode="delta",  # 예비고1에서 전환된 Delta 모드
+        answers=high_answers,
+        category_status=category_status,
+        status="draft",
+        started_platform="web",
+        last_edited_platform="web",
+        source_survey_id=source.id,
+        preserved_data=preserved,
+    )
+
+    db.add(new_survey)
+    await db.commit()
+    await db.refresh(new_survey)
+
+    return {
+        "ok": True,
+        "new_survey_id": str(new_survey.id),
+        "mapped_categories": list(_PREHEIGH1_TO_HIGH_MAP.values()),
+        "preserved_categories": ["E", "C", "F"],
+        "new_categories": ["B", "C"],
+        "message": "예비고1 설문이 고등학교 T1 설문으로 전환되었습니다. 학생이 추가 입력을 진행해야 합니다.",
+    }
+
+
 # ============================================================
 # 자동 계산 헬퍼
 # ============================================================
+
+def _merge_overrides(computed: dict, overrides: dict | None) -> dict:
+    """자동 계산 결과에 상담사 override를 병합.
+
+    override 키가 computed에 존재하면 해당 값을 덮어씀.
+    override에 _updated_at, _updated_by 메타 키가 있으면 has_overrides 플래그 추가.
+    """
+    if not overrides:
+        return computed
+
+    result = dict(computed)
+    has_changes = False
+
+    for key, value in overrides.items():
+        if key.startswith("_"):
+            continue  # 메타 키 제외
+        result[key] = value
+        has_changes = True
+
+    if has_changes:
+        result["has_overrides"] = True
+        result["override_updated_at"] = overrides.get("_updated_at")
+        result["override_updated_by"] = overrides.get("_updated_by")
+
+    return result
+
 
 def _safe_float(v: Any) -> float | None:
     """값을 float로 변환. 실패 시 None."""
