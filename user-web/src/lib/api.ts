@@ -36,7 +36,9 @@ async function request(path: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: "요청에 실패했습니다" }));
-    throw new Error(error.detail || "요청에 실패했습니다");
+    const err = new Error(error.detail || "요청에 실패했습니다") as any;
+    err.status = res.status;
+    throw err;
   }
 
   return res.json();
@@ -319,6 +321,7 @@ export async function patchSurvey(
     last_question?: string;
     last_edited_platform?: string;
     note?: string;
+    last_known_updated_at?: string;
   }
 ) {
   return request(`/api/consultation-surveys/${id}`, {

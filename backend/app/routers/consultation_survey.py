@@ -50,6 +50,7 @@ from app.services.survey_timing_service import (
 )
 from app.surveys.schema_loader import (
     VALID_SURVEY_TYPES,
+    get_parent_category_ids,
     get_schema_version,
     load_schema,
     validate_survey_params,
@@ -103,7 +104,6 @@ async def _get_owned_survey(survey_id: uuid.UUID, user: User, db: AsyncSession) 
     """본인 소유 설문만 조회 (mutation 용). 없으면 404.
 
     수정/제출/삭제 등 쓰기 작업은 본인 소유에 한해 허용한다.
-    학부모-자녀 간 G 카테고리 분기는 Phase D 에서 별도 처리한다.
     """
     result = await db.execute(
         select(ConsultationSurvey).where(
@@ -115,6 +115,45 @@ async def _get_owned_survey(survey_id: uuid.UUID, user: User, db: AsyncSession) 
     if survey is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="설문을 찾을 수 없습니다")
     return survey
+
+
+async def _get_writable_survey(
+    survey_id: uuid.UUID, user: User, db: AsyncSession
+) -> tuple[ConsultationSurvey, bool]:
+    """쓰기 가능한 설문 조회. (owner 본인 또는 연결된 학부모)
+
+    Returns:
+        (survey, is_parent_editing) — is_parent_editing이 True이면 학부모가 자녀 설문을 편집하는 상황.
+        학부모는 respondent="parent" 카테고리만 수정할 수 있다.
+    """
+    # 1) 본인 소유면 바로 반환
+    result = await db.execute(
+        select(ConsultationSurvey).where(
+            ConsultationSurvey.id == survey_id,
+            ConsultationSurvey.user_id == user.id,
+        )
+    )
+    survey = result.scalar_one_or_none()
+    if survey is not None:
+        return survey, False
+
+    # 2) 학부모인 경우: 연결된 자녀의 설문인지 확인
+    if user.member_type == "parent":
+        from app.utils.family import get_linked_child_ids
+
+        child_ids = await get_linked_child_ids(user, db)
+        if child_ids:
+            result = await db.execute(
+                select(ConsultationSurvey).where(
+                    ConsultationSurvey.id == survey_id,
+                    ConsultationSurvey.user_id.in_(child_ids),
+                )
+            )
+            survey = result.scalar_one_or_none()
+            if survey is not None:
+                return survey, True
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="설문을 찾을 수 없습니다")
 
 
 # ----- 스키마 조회 -----
@@ -396,8 +435,38 @@ async def patch_survey(
     - submitted 상태에서도 수정 허용 (상담사 확인 전이라면 자유롭게 수정)
     - answers는 카테고리 단위 머지
     - category_status는 키 단위 머지
+    - last_known_updated_at 전송 시 낙관적 잠금 (충돌 시 409)
+    - 학부모가 자녀 설문 편집 시 respondent="parent" 카테고리만 허용
     """
-    survey = await _get_owned_survey(survey_id, user, db)
+    survey, is_parent_editing = await _get_writable_survey(survey_id, user, db)
+
+    # 낙관적 잠금: 클라이언트가 보낸 시점과 서버 시점 비교
+    if data.last_known_updated_at is not None and survey.updated_at is not None:
+        # 1초 이내 차이는 허용 (datetime 직렬화 정밀도 차이 보정)
+        diff = abs((survey.updated_at - data.last_known_updated_at).total_seconds())
+        if diff > 1.0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="다른 기기 또는 사용자가 이 설문을 수정했습니다. 새로고침 후 다시 시도해주세요.",
+            )
+
+    # 학부모가 자녀 설문 편집: respondent="parent" 카테고리만 수정 가능
+    if is_parent_editing:
+        parent_cats = get_parent_category_ids(survey.survey_type)
+        if data.answers:
+            blocked = set(data.answers.keys()) - parent_cats
+            if blocked:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"학부모는 학부모 관점 카테고리만 수정할 수 있습니다. (허용: {sorted(parent_cats)})",
+                )
+        if data.category_status:
+            blocked = set(data.category_status.keys()) - parent_cats
+            if blocked:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"학부모는 학부모 관점 카테고리 상태만 변경할 수 있습니다.",
+                )
 
     if data.answers is not None:
         survey.answers = _deep_merge_answers(survey.answers or {}, data.answers)

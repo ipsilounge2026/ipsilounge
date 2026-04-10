@@ -81,6 +81,10 @@ class SurveyPatchRequest(BaseModel):
     last_question: str | None = None
     last_edited_platform: str | None = Field(None, description="web | mobile")
     note: str | None = None
+    last_known_updated_at: datetime | None = Field(
+        None,
+        description="낙관적 잠금: 클라이언트가 마지막으로 받은 updated_at. 서버 값과 다르면 409",
+    )
 
 
 # ----- 제출 -----

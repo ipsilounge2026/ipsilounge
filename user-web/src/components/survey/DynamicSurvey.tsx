@@ -27,6 +27,10 @@ interface Props {
   schema: SurveySchema;
   survey: SurveyResponseData;
   onSubmitted?: () => void;
+  /** 현재 로그인한 사용자의 member_type. 학부모이면 respondent="parent" 카테고리만 편집 가능. */
+  memberType?: string | null;
+  /** 학부모가 자녀 설문을 편집 중인지 (survey.user_id !== 현재 사용자) */
+  isParentEditing?: boolean;
 }
 
 const STATUS_LABEL: Record<CategoryStatus, { text: string; color: string }> = {
@@ -85,14 +89,31 @@ function collectMissingRequired(category: any, categoryAnswers: Record<string, a
   return missing;
 }
 
-export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
+export default function DynamicSurvey({ schema, survey, onSubmitted, memberType, isParentEditing }: Props) {
+  // 카테고리 필터링:
+  // - 학생: respondent="parent" 카테고리 숨김
+  // - 학부모가 자녀 설문 편집: respondent="parent" 카테고리만 표시
+  // - 본인 설문 (학부모 자신이 owner): 전체 카테고리 표시
+  const visibleCategories = useMemo(() => {
+    if (isParentEditing) {
+      // 학부모가 자녀 설문 → 학부모 전용 카테고리만
+      return schema.categories.filter((c) => c.respondent === "parent");
+    }
+    if (memberType === "student") {
+      // 학생 → 학부모 전용 카테고리 숨김
+      return schema.categories.filter((c) => c.respondent !== "parent");
+    }
+    // 기본 (학부모 본인 설문 등): 전체 표시
+    return schema.categories;
+  }, [schema.categories, memberType, isParentEditing]);
+
   const [answers, setAnswers] = useState<Record<string, any>>(survey.answers || {});
   const [categoryStatus, setCategoryStatus] = useState<Record<string, CategoryStatus>>(
     (survey.category_status as Record<string, CategoryStatus>) || {}
   );
   const [currentIdx, setCurrentIdx] = useState<number>(() => {
     if (survey.last_category) {
-      const idx = schema.categories.findIndex((c) => c.id === survey.last_category);
+      const idx = visibleCategories.findIndex((c) => c.id === survey.last_category);
       if (idx >= 0) return idx;
     }
     return 0;
@@ -101,10 +122,13 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conflictAlert, setConflictAlert] = useState(false);
   const isMobile = useMemo(() => detectIsMobile(), []);
+  // 서버에서 마지막으로 받은 updated_at (낙관적 잠금용)
+  const lastUpdatedAtRef = useRef<string>(survey.updated_at);
 
-  const currentCategory = schema.categories[currentIdx];
-  const totalCategories = schema.categories.length;
+  const currentCategory = visibleCategories[currentIdx];
+  const totalCategories = visibleCategories.length;
 
   // 자동 저장 (디바운스)
   const saveTimer = useRef<NodeJS.Timeout | null>(null);
@@ -117,17 +141,25 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
       if (payload === lastSavedRef.current) return;
       try {
         setSaving(true);
-        await patchSurvey(survey.id, {
+        const result = await patchSurvey(survey.id, {
           answers: newAnswers,
           category_status: newStatus,
           last_category: currentCategory.id,
           last_edited_platform: isMobile ? "mobile" : "web",
+          last_known_updated_at: lastUpdatedAtRef.current,
         });
         lastSavedRef.current = payload;
+        lastUpdatedAtRef.current = result.updated_at;
         setSavedAt(new Date());
         setError(null);
+        setConflictAlert(false);
       } catch (e: any) {
-        setError(e.message || "저장에 실패했습니다");
+        if (e.message?.includes("409") || e.status === 409) {
+          setConflictAlert(true);
+          setError("다른 기기 또는 사용자가 이 설문을 수정했습니다. 새로고침이 필요합니다.");
+        } else {
+          setError(e.message || "저장에 실패했습니다");
+        }
       } finally {
         setSaving(false);
       }
@@ -166,16 +198,24 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
     const newStatus = { ...categoryStatus, [currentCategory.id]: status };
     setCategoryStatus(newStatus);
     try {
-      await patchSurvey(survey.id, {
+      const result = await patchSurvey(survey.id, {
         answers,
         category_status: newStatus,
         last_category: currentCategory.id,
         last_edited_platform: isMobile ? "mobile" : "web",
+        last_known_updated_at: lastUpdatedAtRef.current,
       });
       lastSavedRef.current = JSON.stringify({ answers, category_status: newStatus });
+      lastUpdatedAtRef.current = result.updated_at;
       setSavedAt(new Date());
+      setConflictAlert(false);
     } catch (e: any) {
-      setError(e.message || "저장에 실패했습니다");
+      if (e.message?.includes("409") || e.status === 409) {
+        setConflictAlert(true);
+        setError("다른 기기 또는 사용자가 이 설문을 수정했습니다. 새로고침이 필요합니다.");
+      } else {
+        setError(e.message || "저장에 실패했습니다");
+      }
     }
   };
 
@@ -223,7 +263,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
     type Issue = { id: string; title: string; reason: string; items?: string[] };
     const issues: Issue[] = [];
 
-    for (const cat of schema.categories) {
+    for (const cat of visibleCategories) {
       const status = categoryStatus[cat.id] || "not_started";
       const catAnswers = answers[cat.id] || {};
       const missing = collectMissingRequired(cat, catAnswers);
@@ -268,7 +308,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
           msg
       );
       // 첫 번째 미완료 카테고리로 이동
-      const firstIdx = schema.categories.findIndex((c) => c.id === issues[0].id);
+      const firstIdx = visibleCategories.findIndex((c) => c.id === issues[0].id);
       if (firstIdx >= 0) goToCategory(firstIdx);
       return;
     }
@@ -280,11 +320,13 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
         clearTimeout(saveTimer.current);
         saveTimer.current = null;
       }
-      await patchSurvey(survey.id, {
+      const result = await patchSurvey(survey.id, {
         answers,
         category_status: categoryStatus,
         last_edited_platform: isMobile ? "mobile" : "web",
+        last_known_updated_at: lastUpdatedAtRef.current,
       });
+      lastUpdatedAtRef.current = result.updated_at;
       await submitSurvey(survey.id);
       onSubmitted?.();
     } catch (e: any) {
@@ -298,8 +340,8 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
   const isWebOnly = currentCategory.platforms?.includes("web") && !currentCategory.platforms?.includes("mobile");
   const blockMobile = isMobile && isWebOnly;
 
-  // 진행률
-  const completedCount = schema.categories.filter((c) => {
+  // 진행률 (보이는 카테고리만)
+  const completedCount = visibleCategories.filter((c) => {
     const s = categoryStatus[c.id];
     return s === "completed" || s === "skipped";
   }).length;
@@ -326,7 +368,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
         role="tablist"
         aria-label="카테고리 진행 상태"
       >
-        {schema.categories.map((c, idx) => {
+        {visibleCategories.map((c, idx) => {
           const s = categoryStatus[c.id] || "not_started";
           const active = idx === currentIdx;
           return (
@@ -365,6 +407,30 @@ export default function DynamicSurvey({ schema, survey, onSubmitted }: Props) {
           );
         })}
       </div>
+
+      {/* 충돌 알림 배너 */}
+      {conflictAlert && (
+        <div style={{
+          padding: 16, marginBottom: 16, background: "#FEF2F2", border: "1px solid #FECACA",
+          borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+        }}>
+          <div>
+            <div style={{ fontWeight: 600, color: "#991B1B", fontSize: 14, marginBottom: 4 }}>
+              동시 편집 충돌 감지
+            </div>
+            <div style={{ fontSize: 12, color: "#991B1B" }}>
+              다른 기기 또는 사용자가 이 설문을 수정했습니다. 새로고침하여 최신 데이터를 불러오세요.
+            </div>
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ flexShrink: 0, fontSize: 13 }}
+            onClick={() => window.location.reload()}
+          >
+            새로고침
+          </button>
+        </div>
+      )}
 
       {/* 현재 카테고리 카드 */}
       <div className="card" style={{ padding: 24 }}>

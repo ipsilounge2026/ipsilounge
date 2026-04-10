@@ -148,7 +148,13 @@ export default function Preheigh1SurveyPage() {
         )}
 
         {!loading && !error && !submitted && schema && survey && (
-          <DynamicSurvey schema={schema} survey={survey} onSubmitted={handleSubmitted} />
+          <DynamicSurvey
+            schema={schema}
+            survey={survey}
+            onSubmitted={handleSubmitted}
+            memberType={getMemberType()}
+            isParentEditing={isParent && !!selectedChild}
+          />
         )}
       </main>
       <Footer />

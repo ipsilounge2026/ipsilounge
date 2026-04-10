@@ -41,6 +41,17 @@ def get_schema_version(survey_type: str) -> str:
     return schema.get("version") or schema.get("schema_version") or "unknown"
 
 
+@lru_cache(maxsize=8)
+def get_parent_category_ids(survey_type: str) -> frozenset[str]:
+    """respondent == "parent" 인 카테고리 ID 집합을 반환."""
+    schema = load_schema(survey_type)
+    return frozenset(
+        cat["id"]
+        for cat in schema.get("categories", [])
+        if cat.get("respondent") == "parent"
+    )
+
+
 def validate_survey_params(survey_type: str, timing: str | None, mode: str) -> None:
     """
     설문 생성 파라미터의 정합성 검증.
