@@ -1,0 +1,250 @@
+{
+  "id": "senior_pre_survey",
+  "version": "1.0.0",
+  "title": "선배 상담 사전 설문",
+
+  "common_questions": [
+    {
+      "id": "Q1",
+      "type": "radio",
+      "label": "요즘 학교 생활 어때요?",
+      "required": true,
+      "options": [
+        {"value": "좋음", "label": "좋음"},
+        {"value": "그럭저럭", "label": "그럭저럭"},
+        {"value": "힘듦", "label": "힘듦"},
+        {"value": "많이힘듦", "label": "많이 힘듦"}
+      ]
+    },
+    {
+      "id": "Q2",
+      "type": "radio",
+      "label": "오늘 컨디션은?",
+      "required": true,
+      "options": [
+        {"value": "좋음", "label": "좋음"},
+        {"value": "보통", "label": "보통"},
+        {"value": "피곤함", "label": "피곤함"}
+      ]
+    },
+    {
+      "id": "Q3",
+      "type": "checkboxes",
+      "label": "선배에게 가장 듣고 싶은 조언?",
+      "required": true,
+      "options_by_session": true,
+      "note": "세션별 옵션은 session_questions에서 참조"
+    },
+    {
+      "id": "Q4",
+      "type": "textarea",
+      "label": "선배에게 구체적으로 묻고 싶은 질문이 있나요?",
+      "required": false,
+      "max_length": 500
+    },
+    {
+      "id": "Q5",
+      "type": "radio",
+      "label": "지금 가장 고민되는 것은?",
+      "required": true,
+      "options": [
+        {"value": "공부성적", "label": "공부·성적"},
+        {"value": "진로미래", "label": "진로·미래"},
+        {"value": "친구관계", "label": "친구관계"},
+        {"value": "가족갈등", "label": "가족갈등"},
+        {"value": "학교생활", "label": "학교생활"},
+        {"value": "특별히없음", "label": "특별히 없음"},
+        {"value": "기타", "label": "기타"}
+      ]
+    }
+  ],
+
+  "session_questions": {
+    "S1": {
+      "label": "고1-1학기 초",
+      "Q3_options": [
+        {"value": "학교분위기문화", "label": "학교 분위기·문화"},
+        {"value": "선생님스타일", "label": "선생님 스타일"},
+        {"value": "첫내신대비", "label": "첫 내신 대비"},
+        {"value": "동아리선택", "label": "동아리 선택"},
+        {"value": "수행평가준비", "label": "수행평가 준비"},
+        {"value": "하루일과적응", "label": "하루 일과 적응"},
+        {"value": "친구관계", "label": "친구 관계"},
+        {"value": "기타", "label": "기타"}
+      ],
+      "questions": [
+        {
+          "id": "Q6",
+          "type": "radio",
+          "label": "동아리는 정하셨어요?",
+          "required": true,
+          "options": [
+            {"value": "정함", "label": "정함"},
+            {"value": "고민중", "label": "고민 중"},
+            {"value": "아직모름", "label": "아직 모름"}
+          ]
+        },
+        {
+          "id": "Q7",
+          "type": "radio",
+          "label": "중학교 때 본인 성적대는?",
+          "required": true,
+          "options": [
+            {"value": "상위권", "label": "상위권"},
+            {"value": "중상위권", "label": "중상위권"},
+            {"value": "중위권", "label": "중위권"},
+            {"value": "중하위권", "label": "중하위권"}
+          ]
+        }
+      ]
+    },
+
+    "S2": {
+      "label": "고1-2학기 초",
+      "Q3_options": [
+        {"value": "1학기성적복기", "label": "1학기 성적 복기"},
+        {"value": "고2선택과목", "label": "고2 선택 과목"},
+        {"value": "수행평가심화", "label": "수행평가 심화"},
+        {"value": "2학기전략", "label": "2학기 전략"},
+        {"value": "수능공부시기", "label": "수능 공부 시기"},
+        {"value": "기타", "label": "기타"}
+      ],
+      "questions": [
+        {
+          "id": "Q6",
+          "type": "radio",
+          "label": "1학기 내신 결과에 만족하나요?",
+          "required": true,
+          "options": [
+            {"value": "만족", "label": "만족"},
+            {"value": "그럭저럭", "label": "그럭저럭"},
+            {"value": "불만족", "label": "불만족"},
+            {"value": "많이불만족", "label": "많이 불만족"}
+          ]
+        },
+        {
+          "id": "Q7",
+          "type": "radio",
+          "label": "고2 선택과목은 정하셨어요?",
+          "required": true,
+          "options": [
+            {"value": "다정함", "label": "다 정함"},
+            {"value": "일부정함", "label": "일부 정함"},
+            {"value": "고민중", "label": "고민 중"},
+            {"value": "잘모르겠음", "label": "잘 모르겠음"}
+          ]
+        },
+        {
+          "id": "Q8",
+          "type": "radio",
+          "label": "현재 진로 방향은?",
+          "required": true,
+          "options": [
+            {"value": "구체적으로있음", "label": "구체적으로 있음"},
+            {"value": "대략있음", "label": "대략 있음"},
+            {"value": "아직모름", "label": "아직 모름"}
+          ]
+        }
+      ]
+    },
+
+    "S3": {
+      "label": "고2-1학기 초",
+      "Q3_options": [
+        {"value": "고2전환적응", "label": "고2 전환 적응"},
+        {"value": "선택과목공부법", "label": "선택 과목 공부법"},
+        {"value": "학생부관리", "label": "학생부 관리"},
+        {"value": "수행평가세특", "label": "수행평가·세특"},
+        {"value": "수능공부시작", "label": "수능 공부 시작"},
+        {"value": "고2병멘탈", "label": "고2병·멘탈"},
+        {"value": "기타", "label": "기타"}
+      ],
+      "questions": [
+        {
+          "id": "Q6",
+          "type": "radio",
+          "label": "고1 전체 평균 내신 등급은?",
+          "required": true,
+          "options": [
+            {"value": "1~2등급", "label": "1~2등급"},
+            {"value": "3~4등급", "label": "3~4등급"},
+            {"value": "5등급", "label": "5등급"},
+            {"value": "답하고싶지않음", "label": "답하고 싶지 않음"}
+          ]
+        },
+        {
+          "id": "Q7",
+          "type": "radio",
+          "label": "지금까지 학생부 관리는?",
+          "required": true,
+          "options": [
+            {"value": "잘하고있음", "label": "잘하고 있음"},
+            {"value": "보통", "label": "보통"},
+            {"value": "부족함", "label": "부족함"},
+            {"value": "잘모르겠음", "label": "잘 모르겠음"}
+          ]
+        },
+        {
+          "id": "Q8",
+          "type": "radio",
+          "label": "수능 공부를 시작했나요?",
+          "required": true,
+          "options": [
+            {"value": "이미시작", "label": "이미 시작"},
+            {"value": "계획중", "label": "계획 중"},
+            {"value": "아직없음", "label": "아직 없음"}
+          ]
+        }
+      ]
+    },
+
+    "S4": {
+      "label": "고2-2학기 초",
+      "Q3_options": [
+        {"value": "수시정시결정", "label": "수시·정시 결정"},
+        {"value": "목표대학구체화", "label": "목표 대학 구체화"},
+        {"value": "겨울방학계획", "label": "겨울방학 계획"},
+        {"value": "체력멘탈관리", "label": "체력·멘탈 관리"},
+        {"value": "고3학습체계", "label": "고3 학습 체계"},
+        {"value": "기타", "label": "기타"}
+      ],
+      "questions": [
+        {
+          "id": "Q6",
+          "type": "radio",
+          "label": "수시·정시 방향을 정했나요?",
+          "required": true,
+          "options": [
+            {"value": "수시", "label": "수시"},
+            {"value": "정시", "label": "정시"},
+            {"value": "혼합", "label": "혼합"},
+            {"value": "아직결정못함", "label": "아직 결정 못함"}
+          ]
+        },
+        {
+          "id": "Q7",
+          "type": "radio",
+          "label": "고2-1학기까지 평균 내신 등급은?",
+          "required": true,
+          "options": [
+            {"value": "1~2등급", "label": "1~2등급"},
+            {"value": "3~4등급", "label": "3~4등급"},
+            {"value": "5등급", "label": "5등급"},
+            {"value": "답하고싶지않음", "label": "답하고 싶지 않음"}
+          ]
+        },
+        {
+          "id": "Q8",
+          "type": "radio",
+          "label": "목표로 하는 대학·학과가 있나요?",
+          "required": true,
+          "options": [
+            {"value": "구체적으로있음", "label": "구체적으로 있음"},
+            {"value": "대략있음", "label": "대략 있음"},
+            {"value": "없음", "label": "없음"}
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -334,6 +334,10 @@ export async function deleteSurvey(id: string) {
   return request(`/api/consultation-surveys/${id}`, { method: "DELETE" });
 }
 
+export async function getSurveyComputed(id: string) {
+  return request(`/api/consultation-surveys/${id}/computed`);
+}
+
 export async function submitSurvey(id: string) {
   return request(`/api/consultation-surveys/${id}/submit`, {
     method: "POST",

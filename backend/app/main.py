@@ -33,7 +33,9 @@ from app.routers import (
     seminar,
     admin_seminar,
     admin_notice,
+    admin_senior_consultation,
     notice,
+    senior_pre_survey,
     universities,
 )
 from app.services.scheduler_service import start_scheduler, stop_scheduler
@@ -94,7 +96,9 @@ app.include_router(schools.router)
 app.include_router(seminar.router)
 app.include_router(admin_seminar.router)
 app.include_router(admin_notice.router)
+app.include_router(admin_senior_consultation.router)
 app.include_router(notice.router)
+app.include_router(senior_pre_survey.router)
 app.include_router(universities.router)
 
 
@@ -124,6 +128,8 @@ async def startup():
         family_link,
         family_invite,
         senior_change_request,
+        senior_consultation_note,
+        senior_pre_survey as senior_pre_survey_model,
     )
 
     async with engine.begin() as conn:

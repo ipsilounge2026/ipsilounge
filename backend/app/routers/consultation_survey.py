@@ -5,6 +5,7 @@
 - POST   /api/consultation-surveys                       새 설문 생성
 - GET    /api/consultation-surveys                       내 설문 목록
 - GET    /api/consultation-surveys/{id}                  단건 조회 (전체 데이터)
+- GET    /api/consultation-surveys/{id}/computed         분석 결과 (레이더 점수)
 - PATCH  /api/consultation-surveys/{id}                  부분 저장 (이어쓰기)
 - POST   /api/consultation-surveys/{id}/submit           제출 (status → submitted)
 - DELETE /api/consultation-surveys/{id}                  삭제 (draft만 허용)
@@ -332,6 +333,40 @@ async def create_survey(
             if raw_mode == "full":
                 raw_mode = "delta"  # preheigh1 데이터가 사전 입력되므로 delta
 
+    # T2/T3/T4 → 이전 타이밍 답변 자동 복사 (delta 자동채움)
+    if data.survey_type == "high" and raw_timing in ("T2", "T3", "T4") and not prefill_answers:
+        _PREV_TIMING = {"T2": "T1", "T3": "T2", "T4": "T3"}
+        prev_timing = _PREV_TIMING[raw_timing]
+        prev_q = (
+            select(ConsultationSurvey)
+            .where(
+                ConsultationSurvey.user_id == owner_id,
+                ConsultationSurvey.survey_type == "high",
+                ConsultationSurvey.timing == prev_timing,
+                ConsultationSurvey.status == "submitted",
+            )
+            .order_by(ConsultationSurvey.submitted_at.desc())
+            .limit(1)
+        )
+        prev_result = await db.execute(prev_q)
+        prev_survey = prev_result.scalar_one_or_none()
+
+        if prev_survey and prev_survey.answers:
+            prefill_answers = dict(prev_survey.answers)
+            # 모든 카테고리를 in_progress로 설정 (학생이 검토/수정 필요)
+            prefill_category_status = {
+                cat_key: "in_progress" for cat_key in prefill_answers.keys()
+            }
+            source_survey_id = prev_survey.id
+            preserved_data = {
+                "converted_at": datetime.utcnow().isoformat(),
+                "source_survey_type": "high",
+                "source_timing": prev_timing,
+                "auto_converted": True,
+            }
+            if raw_mode == "full":
+                raw_mode = "delta"
+
     survey = ConsultationSurvey(
         user_id=owner_id,
         survey_type=data.survey_type,
@@ -414,6 +449,27 @@ async def get_survey(
     """설문 단건 조회 (본인 + 연결된 자녀)"""
     survey = await _get_visible_survey(survey_id, user, db)
     return SurveyResponse.model_validate(survey)
+
+
+# ----- 설문 분석 결과 (레이더 점수) -----
+
+@router.get("/{survey_id}/computed")
+async def get_computed_stats(
+    survey_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """제출된 설문의 자동 계산 결과 (레이더 점수 포함). 본인 + 연결된 자녀."""
+    survey = await _get_visible_survey(survey_id, user, db)
+    if survey.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출된 설문만 분석 결과를 조회할 수 있습니다",
+        )
+
+    from app.routers.admin_consultation_survey import _compute_stats
+    computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
+    return computed
 
 
 # ----- 이어쓰기 토큰 발급 + 이메일 -----
