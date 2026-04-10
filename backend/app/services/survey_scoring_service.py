@@ -1,7 +1,8 @@
 """
-고등학교 상담시스템 기획서 V3 — 4영역 점수 산출 엔진
+상담시스템 점수 산출 엔진
 
-4각형 레이더: 내신 경쟁력(100) / 모의고사 역량(100) / 학습 습관&전략(100) / 진로·전형 전략(100)
+[고등학교] 4각형 레이더: 내신 경쟁력(100) / 모의고사 역량(100) / 학습 습관&전략(100) / 진로·전형 전략(100)
+[예비고1]  5각형 레이더: 학업기초력(100) / 학습습관&자기주도력(100) / 교과선행도(100) / 진로방향성(100) / 비교과역량(100)
 종합 등급: S(90~100) / A(75~89) / B(55~74) / C(35~54) / D(0~34)
 """
 
@@ -669,4 +670,733 @@ def compute_radar_scores(answers: dict, timing: str | None = None) -> dict:
         "mock": mock,
         "study": study,
         "career": career,
+    }
+
+
+# ============================================================
+# 예비고1 — 5축 레이더 점수 산출
+# ============================================================
+
+# --- 4-1. 학업기초력 (100점) ---
+
+# ① 전과목 평균 원점수 → 50점
+_PH1_AVG_SCORE_TABLE = [
+    (95, 100.1, 50), (90, 95, 45), (85, 90, 38), (80, 85, 30),
+    (75, 80, 22), (70, 75, 15), (65, 70, 8), (0, 65, 3),
+]
+
+# ② 과목별 균형도 (최고-최저 차이) → 20점
+_PH1_BALANCE_TABLE = [
+    (0, 10.1, 20), (10.1, 15.1, 16), (15.1, 20.1, 12),
+    (20.1, 26, 6), (26, 101, 0),
+]
+
+# ③ 성적 추이 → 20점
+_PH1_TREND_MAP = {"상승": 20, "유지": 12, "등락": 8, "하락": 4}
+
+
+def _calc_ph1_academic_score(answers: dict) -> dict:
+    """4-1. 학업기초력 100점."""
+    cat_c = answers.get("C", {})
+    subjects = ["ko", "en", "ma", "so", "sc"]
+    semesters = ["C1", "C2", "C3", "C4", "C5", "C6"]
+
+    # 모든 학기별 과목 원점수 수집
+    semester_avgs: list[float] = []
+    latest_scores: list[float] = []
+    latest_sem_key = None
+
+    for sem_key in semesters:
+        sem_data = cat_c.get(sem_key)
+        if not sem_data or not isinstance(sem_data, dict):
+            continue
+        scores = []
+        for subj in subjects:
+            subj_data = sem_data.get(subj, {})
+            if isinstance(subj_data, dict):
+                raw = _sf(subj_data.get("raw_score"))
+                if raw is not None:
+                    scores.append(raw)
+        if scores:
+            semester_avgs.append(sum(scores) / len(scores))
+            latest_scores = scores
+            latest_sem_key = sem_key
+
+    # ① 전과목 평균 원점수 (50점)
+    avg_raw = sum(latest_scores) / len(latest_scores) if latest_scores else 0
+    s1 = _range_score(avg_raw, _PH1_AVG_SCORE_TABLE)
+
+    # ② 과목별 균형도 (20점)
+    if len(latest_scores) >= 2:
+        gap = max(latest_scores) - min(latest_scores)
+        s2 = _range_score(gap, _PH1_BALANCE_TABLE)
+    else:
+        s2 = 10  # 중립
+
+    # ③ 성적 추이 (20점)
+    if len(semester_avgs) >= 2:
+        diff = semester_avgs[-1] - semester_avgs[0]
+        max_swing = max(
+            abs(semester_avgs[i + 1] - semester_avgs[i])
+            for i in range(len(semester_avgs) - 1)
+        ) if len(semester_avgs) > 1 else 0
+        if diff >= 3:
+            trend = "상승"
+        elif diff <= -3:
+            trend = "하락"
+        elif max_swing > 5:
+            trend = "등락"
+        else:
+            trend = "유지"
+    else:
+        trend = "유지"
+    s3 = _PH1_TREND_MAP.get(trend, 12)
+
+    # ④ 강점 과목 보유 (10점): 90점 이상 과목 수
+    strong_count = sum(1 for sc in latest_scores if sc >= 90)
+    s4 = 10 if strong_count >= 2 else (6 if strong_count == 1 else 0)
+
+    total = s1 + s2 + s3 + s4
+    return {
+        "total": round(total, 1),
+        "grade": _grade_label(total),
+        "details": {
+            "전과목_평균원점수": {"score": s1, "max": 50, "value": round(avg_raw, 1)},
+            "과목별_균형도": {"score": s2, "max": 20, "value": round(gap, 1) if len(latest_scores) >= 2 else None},
+            "성적_추이": {"score": s3, "max": 20, "value": trend},
+            "강점과목_보유": {"score": s4, "max": 10, "value": strong_count},
+        },
+    }
+
+
+# --- 4-2. 학습습관 & 자기주도력 (100점) ---
+
+# ① 자기주도 비율 → 20점
+_PH1_SELF_RATIO_TABLE = [
+    (50, 101, 20), (40, 50, 16), (30, 40, 12),
+    (20, 30, 8), (10, 20, 4), (0, 10, 0),
+]
+
+# ② 자기주도 학습 시간 (주간) → 15점
+_PH1_SELF_HOURS_TABLE = [
+    (15, 200, 15), (10, 15, 12), (7, 10, 9),
+    (4, 7, 6), (1, 4, 3), (0, 1, 0),
+]
+
+# D2 시험 준비 시작 시점 → 8점
+_TEST_PREP_MAP = {
+    "상시학습": 8, "2주이상전": 7, "1주전": 5, "3_5일전": 3, "1_2일전": 1,
+}
+
+# D2 과목별 계획표 작성 → 7점
+_PLAN_DETAIL_MAP = {
+    "매우구체적": 7, "구체적": 5, "대략적": 3, "안함": 1,
+}
+
+# D3 오답 정리 방법 점수
+_WRONG_METHOD_SCORES = {
+    "안함": 0, "문제집표시": 2, "별도노트": 4, "태블릿앱": 5, "번호체크재풀이": 6,
+}
+
+# D3 복습 빈도 → 8점
+_REVIEW_FREQ_MAP = {
+    "완전풀때까지": 8, "주1회": 6, "시험직전만": 3, "거의안함": 0,
+}
+
+# D3 복습 방법 점수
+_REVIEW_METHOD_SCORES = {
+    "답풀이확인": 1, "원인분석": 3, "개념재확인": 2, "유사문제풀이": 3,
+}
+
+# D4 문제 해결 적극성 점수
+_SOLVE_METHOD_SCORES = {
+    "혼자고민": 2, "답안지확인": 0, "개념서재확인": 2, "인터넷유튜브": 1,
+    "AI도구": 1, "학원과외선생님": 1, "학교선생님": 2, "친구": 1,
+    "부모님": 0, "그냥넘어감": -2,
+}
+
+
+def _calc_ph1_study_score(answers: dict) -> dict:
+    """4-2. 학습습관 & 자기주도력 100점."""
+    cat_d = answers.get("D", {})
+
+    # --- D1: 학습 스케줄 분석 ---
+    d1 = cat_d.get("D1")
+    schedule = d1 if isinstance(d1, list) else (d1.get("schedule") if isinstance(d1, dict) else None)
+    if not schedule or not isinstance(schedule, list):
+        schedule = []
+
+    total_hours = 0.0
+    self_hours = 0.0
+    subj_self: dict[str, float] = {}
+    for entry in schedule:
+        if not isinstance(entry, dict):
+            continue
+        h = _sf(entry.get("hours")) or 0
+        cat = entry.get("category", "")
+        subj = entry.get("subject", "기타")
+        total_hours += h
+        if cat == "self_study":
+            self_hours += h
+            subj_self[subj] = subj_self.get(subj, 0) + h
+
+    # ① 자기주도 비율 (20점)
+    ratio = (self_hours / total_hours * 100) if total_hours > 0 else 0
+    s1 = _range_score(ratio, _PH1_SELF_RATIO_TABLE)
+
+    # ② 자기주도 학습 시간 (15점)
+    s2 = _range_score(self_hours, _PH1_SELF_HOURS_TABLE)
+
+    # ③ 과목별 학습 밸런스 (10점): 자기주도 0시간 과목 수
+    main_subjects = {"국어", "영어", "수학", "사회", "과학"}
+    zero_count = sum(1 for s in main_subjects if subj_self.get(s, 0) == 0)
+    s3 = max(0, 10 - zero_count * 2)  # 과목당 -2점
+
+    # --- D2: 학습 계획 및 실행력 (25점) ---
+    d2 = cat_d.get("D2", {})
+    if not isinstance(d2, dict):
+        d2 = {}
+    plan_exec = _sf(d2.get("plan_execution")) or 0
+    s4_exec = min(10, plan_exec * 1.0)  # 슬라이더 1~10 → 최대 10점
+    s4_prep = _TEST_PREP_MAP.get(d2.get("test_prep_start", ""), 3)
+    s4_plan = _PLAN_DETAIL_MAP.get(d2.get("subject_plan_detail", ""), 1)
+    s4 = s4_exec + s4_prep + s4_plan
+
+    # --- D3: 오답 관리 품질 (20점) ---
+    d3 = cat_d.get("D3", {})
+    if not isinstance(d3, dict):
+        d3 = {}
+    # 정리 방법 (6점): 가장 높은 점수 1개
+    methods = d3.get("method", [])
+    if isinstance(methods, list):
+        s5_method = max((_WRONG_METHOD_SCORES.get(m, 0) for m in methods), default=0)
+    else:
+        s5_method = 0
+
+    # 복습 빈도 (8점)
+    s5_freq = _REVIEW_FREQ_MAP.get(d3.get("review_frequency", ""), 0)
+
+    # 복습 방법 (6점): 합산 cap 6
+    review_methods = d3.get("review_method", [])
+    if isinstance(review_methods, list):
+        s5_review = min(6, sum(_REVIEW_METHOD_SCORES.get(m, 0) for m in review_methods))
+    else:
+        s5_review = 0
+    s5 = s5_method + s5_freq + s5_review
+
+    # --- D4: 문제 해결 적극성 (10점) ---
+    d4 = cat_d.get("D4", [])
+    if isinstance(d4, list):
+        s6 = min(10, max(0, sum(_SOLVE_METHOD_SCORES.get(m, 0) for m in d4)))
+    else:
+        s6 = 0
+
+    total = s1 + s2 + s3 + s4 + s5 + s6
+    return {
+        "total": round(min(100, total), 1),
+        "grade": _grade_label(min(100, total)),
+        "details": {
+            "자기주도_비율": {"score": s1, "max": 20, "value": f"{ratio:.0f}%"},
+            "자기주도_학습시간": {"score": s2, "max": 15, "value": f"{self_hours:.1f}h/주"},
+            "과목별_밸런스": {"score": s3, "max": 10, "value": f"0시간과목 {zero_count}개"},
+            "학습계획_실행력": {"score": round(s4, 1), "max": 25},
+            "오답관리_품질": {"score": s5, "max": 20},
+            "문제해결_적극성": {"score": s6, "max": 10},
+        },
+    }
+
+
+# --- 4-3. 교과선행도 (100점) ---
+
+def _calc_ph1_prep_score(answers: dict) -> dict:
+    """4-3. 교과선행도 100점."""
+    cat_e = answers.get("E", {})
+
+    # === 수학 선행 (30점): 진도(18) + 레벨(12) ===
+    e1 = cat_e.get("E1", {})
+    if not isinstance(e1, dict):
+        e1 = {}
+
+    # 진도 (18점): advance_progress 회독 수
+    advance = e1.get("advance_progress", {})
+    if not isinstance(advance, dict):
+        advance = {}
+    math_courses = ["공통수학1", "공통수학2", "미적분1", "확률과통계", "미적분2", "기하"]
+    progress_pts = {"0": 0, "1": 2, "2": 4, "3+": 5}
+    math_progress = 0
+    for course in math_courses:
+        val = advance.get(course, "0")
+        math_progress += progress_pts.get(str(val), 0)
+    s_math_progress = min(18, math_progress)
+
+    # 레벨 (12점): problem_level 정답률
+    prob_level = e1.get("problem_level", {})
+    if not isinstance(prob_level, dict):
+        prob_level = {}
+    level_scores = {"low": 2, "mid": 3, "high": 4, "top": 5}
+    math_level = 0
+    for lv, pts in level_scores.items():
+        acc = _sf(prob_level.get(lv))
+        if acc is not None and acc >= 70:
+            math_level += pts
+        elif acc is not None and acc >= 50:
+            math_level += pts * 0.5
+    s_math_level = min(12, math_level)
+    s_math = s_math_progress + s_math_level
+
+    # === 영어 역량 (25점): 어휘(5) + 독해(6) + 문법(5) + 영작(4) + 모의고사(5) ===
+    e2 = cat_e.get("E2", {})
+    if not isinstance(e2, dict):
+        e2 = {}
+
+    # 어휘 (5점)
+    vocab = e2.get("vocabulary", {})
+    if not isinstance(vocab, dict):
+        vocab = {}
+    vocab_level = vocab.get("level", "")
+    vocab_book = vocab.get("highschool_vocab_book", {})
+    if isinstance(vocab_book, dict):
+        vocab_status = vocab_book.get("status", "없음")
+    else:
+        vocab_status = "없음"
+    vocab_map = {"중학필수": 1, "고등기본중": 2, "고등필수대부분": 3}
+    book_map = {"없음": 0, "학습중": 1, "1회독완료": 2}
+    s_eng_vocab = min(5, vocab_map.get(vocab_level, 0) + book_map.get(vocab_status, 0))
+
+    # 독해 (6점): radio_grid 3 items
+    reading = e2.get("reading", {})
+    s_eng_reading = _score_radio_grid(reading, 3, 6)
+
+    # 문법 (5점): radio_grid 3 items
+    grammar = e2.get("grammar", {})
+    s_eng_grammar = _score_radio_grid(grammar, 3, 5)
+
+    # 영작 (4점)
+    writing = e2.get("writing", {})
+    if not isinstance(writing, dict):
+        writing = {}
+    w_level_map = {"단문": 1, "중문": 2, "복문": 3}
+    w_cond_map = {"없음": 0, "조금": 0.5, "꾸준히": 1}
+    s_eng_writing = min(4, w_level_map.get(writing.get("level", ""), 0) + w_cond_map.get(writing.get("conditional_writing", ""), 0))
+
+    # 모의고사 (5점)
+    mock = e2.get("mock_exam", {})
+    s_eng_mock = _score_mock_exam(mock, 5)
+
+    s_eng = s_eng_vocab + s_eng_reading + s_eng_grammar + s_eng_writing + s_eng_mock
+
+    # === 국어 역량 (25점): 문학(7) + 비문학(6) + 문법어휘(4) + 모의고사(5) + 독서(3) ===
+    e3 = cat_e.get("E3", {})
+    if not isinstance(e3, dict):
+        e3 = {}
+
+    # 문학 (7점): radio_grid 5 items
+    lit = e3.get("literature", {})
+    s_kor_lit = _score_radio_grid(lit, 5, 7)
+
+    # 비문학 (6점)
+    nf = e3.get("non_fiction", {})
+    if not isinstance(nf, dict):
+        nf = {}
+    nf_map = {"어려움": 0, "보통": 1, "자신있음": 2}
+    nf_score = nf_map.get(nf.get("long_text", ""), 0) + nf_map.get(nf.get("term_inference", ""), 0)
+    diff_fields = nf.get("difficult_fields", [])
+    if isinstance(diff_fields, list) and "없음" in diff_fields:
+        nf_score += 2
+    s_kor_nf = min(6, nf_score)
+
+    # 문법어휘 (4점)
+    gv = e3.get("grammar_vocab", {})
+    if not isinstance(gv, dict):
+        gv = {}
+    gv_mid_map = {"거의모름": 0, "정리안됨": 0.5, "체계적정리": 1}
+    gv_high_map = {"안함": 0, "학습중": 0.5, "완료": 1}
+    gv_hanja_map = {"안함": 0, "학습중": 0.5, "완료": 1}
+    gv_habit_map = {"없음": 0, "가끔": 0.5, "꾸준히": 1}
+    s_kor_gv = min(4, gv_mid_map.get(gv.get("middle_grammar", ""), 0)
+                   + gv_high_map.get(gv.get("high_grammar", ""), 0)
+                   + gv_hanja_map.get(gv.get("hanja_terms", ""), 0)
+                   + gv_habit_map.get(gv.get("vocab_habit", ""), 0))
+
+    # 모의고사 (5점)
+    kor_mock = e3.get("mock_exam", {})
+    s_kor_mock = _score_mock_exam(kor_mock, 5)
+
+    # 독서 (3점)
+    rh = e3.get("reading_habit", {})
+    if not isinstance(rh, dict):
+        rh = {}
+    books_map = {"0권": 0, "1_2권": 0.5, "3_4권": 1, "5권이상": 1.5}
+    news_map = {"안읽음": 0, "가끔": 0.5, "주1_2회이상": 1}
+    fields = rh.get("fields", [])
+    field_pts = min(0.5, len(fields) * 0.1) if isinstance(fields, list) else 0
+    s_kor_reading = min(3, books_map.get(rh.get("monthly_books", ""), 0) + news_map.get(rh.get("newspaper", ""), 0) + field_pts)
+
+    s_kor = s_kor_lit + s_kor_nf + s_kor_gv + s_kor_mock + s_kor_reading
+
+    # === 과학 선행 (20점): 기초(8) + 선행(8) + 역량(4) ===
+    e4 = cat_e.get("E4", {})
+    if not isinstance(e4, dict):
+        e4 = {}
+
+    # 기초 (8점): radio_grid 4 items
+    basic = e4.get("basic_skills", {})
+    s_sci_basic = _score_radio_grid(basic, 4, 8)
+
+    # 선행 (8점): advance_progress
+    sci_advance = e4.get("advance_progress", {})
+    if not isinstance(sci_advance, dict):
+        sci_advance = {}
+    sci_courses = ["통합과학1", "통합과학2", "물리학", "화학", "생명과학", "지구과학"]
+    status_pts = {"안함": 0, "진행중": 0.5, "1회독": 1.5, "2회독이상": 2}
+    level_bonus = {"개념만": 0, "문제집까지": 0.5}
+    sci_prog = 0
+    for course in sci_courses:
+        c_data = sci_advance.get(course, {})
+        if isinstance(c_data, dict):
+            sci_prog += status_pts.get(c_data.get("study_status", "안함"), 0)
+            sci_prog += level_bonus.get(c_data.get("study_level", ""), 0)
+        elif isinstance(c_data, str):
+            sci_prog += status_pts.get(c_data, 0)
+    s_sci_advance = min(8, sci_prog)
+
+    # 역량 (4점): radio_grid 3 items
+    skills = e4.get("science_skills", {})
+    s_sci_skills = _score_radio_grid(skills, 3, 4)
+
+    s_sci = s_sci_basic + s_sci_advance + s_sci_skills
+
+    total = s_math + s_eng + s_kor + s_sci
+    return {
+        "total": round(min(100, total), 1),
+        "grade": _grade_label(min(100, total)),
+        "details": {
+            "수학_선행": {"score": round(s_math, 1), "max": 30, "sub": {"진도": round(s_math_progress, 1), "레벨": round(s_math_level, 1)}},
+            "영어_역량": {"score": round(s_eng, 1), "max": 25, "sub": {"어휘": s_eng_vocab, "독해": round(s_eng_reading, 1), "문법": round(s_eng_grammar, 1), "영작": round(s_eng_writing, 1), "모의고사": round(s_eng_mock, 1)}},
+            "국어_역량": {"score": round(s_kor, 1), "max": 25, "sub": {"문학": round(s_kor_lit, 1), "비문학": round(s_kor_nf, 1), "문법어휘": round(s_kor_gv, 1), "모의고사": round(s_kor_mock, 1), "독서": round(s_kor_reading, 1)}},
+            "과학_선행": {"score": round(s_sci, 1), "max": 20, "sub": {"기초": round(s_sci_basic, 1), "선행": round(s_sci_advance, 1), "역량": round(s_sci_skills, 1)}},
+        },
+    }
+
+
+def _score_radio_grid(data: Any, n_items: int, max_pts: float) -> float:
+    """radio_grid 항목 공통 채점. 어려움=0, 보통=1, 자신있음=2 → 비율로 max_pts 환산."""
+    if not data or not isinstance(data, (dict, list)):
+        return 0
+    val_map = {"어려움": 0, "어려움 / 모름": 0, "보통": 1, "자신있음": 2, "자신 있음": 2}
+    total = 0
+    count = 0
+    if isinstance(data, dict):
+        for v in data.values():
+            if isinstance(v, str):
+                total += val_map.get(v, 0)
+                count += 1
+    elif isinstance(data, list):
+        for v in data:
+            if isinstance(v, str):
+                total += val_map.get(v, 0)
+                count += 1
+    if count == 0:
+        return 0
+    return round(total / (count * 2) * max_pts, 1)
+
+
+def _score_mock_exam(data: Any, max_pts: float) -> float:
+    """모의고사 경험 채점. 등급 기반."""
+    if not data or not isinstance(data, dict):
+        return 0
+    # 등급 값들 수집
+    ranks = []
+    for grade_key, entry in data.items():
+        if isinstance(entry, dict):
+            rank = _sf(entry.get("rank"))
+            if rank is not None:
+                ranks.append(rank)
+        elif isinstance(entry, list):
+            for e in entry:
+                if isinstance(e, dict):
+                    rank = _sf(e.get("rank"))
+                    if rank is not None:
+                        ranks.append(rank)
+    if not ranks:
+        return 0
+    best_rank = min(ranks)
+    # 등급 → 점수 환산
+    if best_rank <= 2:
+        return max_pts
+    elif best_rank <= 3:
+        return max_pts * 0.8
+    elif best_rank <= 4:
+        return max_pts * 0.6
+    elif best_rank <= 5:
+        return max_pts * 0.4
+    elif best_rank <= 6:
+        return max_pts * 0.2
+    return 0
+
+
+# --- 4-4. 진로방향성 (100점) ---
+
+# B1 진로 구체성 점수 매핑
+_CAREER_DEPTH_MAP = {
+    "exploring": 5,  # 탐색 중
+}
+
+
+def _calc_ph1_career_score(answers: dict) -> dict:
+    """4-4. 진로방향성 100점."""
+    cat_b = answers.get("B", {})
+
+    # ① 진로 구체성 (35점): B1 선택 깊이
+    b1 = cat_b.get("B1", {})
+    if not b1 or (isinstance(b1, dict) and not b1) or (isinstance(b1, list) and not b1):
+        s1 = 5  # 미응답
+    else:
+        # B1은 career_select: 카테고리 + 서브카테고리 선택
+        if isinstance(b1, dict):
+            categories = b1.get("categories", [])
+            subcategories = b1.get("subcategories", [])
+            if not isinstance(categories, list):
+                categories = [b1.get("key")] if b1.get("key") else []
+            if not isinstance(subcategories, list):
+                subcategories = []
+        elif isinstance(b1, list):
+            categories = b1
+            subcategories = []
+        else:
+            categories = []
+            subcategories = []
+
+        # "exploring" 또는 "탐색 중" 선택
+        is_exploring = any(
+            c in ("exploring", "탐색 중", "탐색중") or (isinstance(c, dict) and c.get("key") == "exploring")
+            for c in categories
+        ) if categories else True
+
+        if is_exploring and not subcategories:
+            s1 = 5
+        elif len(subcategories) >= 2:
+            s1 = 35
+        elif len(subcategories) == 1:
+            s1 = 25
+        elif len(categories) >= 2:
+            s1 = 20
+        elif len(categories) == 1:
+            s1 = 15
+        else:
+            s1 = 5
+
+    # ② 전형 이해도 (30점): B2 슬라이더 x 3
+    b2 = _sf(cat_b.get("B2"))
+    s2 = min(30, (b2 or 0) * 3)
+
+    # ③ 전형 선택 명확성 (15점): B3
+    b3 = cat_b.get("B3", "")
+    if b3 in ("아직모름", "아직 모름", ""):
+        s3 = 3
+    else:
+        s3 = 15
+
+    # ④ 진로-전형 정합성 (20점): B1 x B3 자동 판정
+    if s1 <= 5 or s3 <= 3:
+        s4 = 5  # 판정 불가
+        coherence = "판정불가"
+    else:
+        # 간단 규칙: 진로와 전형이 모두 구체적이면 높은 점수
+        # 의약계열 + 수능위주/학생부교과 → 일치
+        # 예체능계열 + 예체능 → 일치
+        # 대부분의 경우 구체적 선택이 있으면 "부분일치"
+        if isinstance(b1, dict):
+            cats = b1.get("categories", [])
+        elif isinstance(b1, list):
+            cats = b1
+        else:
+            cats = []
+
+        cat_keys = set()
+        for c in cats:
+            if isinstance(c, dict):
+                cat_keys.add(c.get("key", ""))
+            elif isinstance(c, str):
+                cat_keys.add(c)
+
+        track_match = {
+            "arts": {"예체능"},
+            "medical": {"학생부교과", "수능위주", "학생부종합"},
+            "engineering": {"학생부종합", "수능위주", "논술"},
+            "natural_science": {"학생부종합", "수능위주", "논술"},
+            "humanities": {"학생부종합", "학생부교과"},
+            "social": {"학생부종합", "학생부교과"},
+            "business": {"학생부종합", "학생부교과", "수능위주"},
+            "education": {"학생부종합", "학생부교과"},
+        }
+        matched = False
+        for ck in cat_keys:
+            valid_tracks = track_match.get(ck, set())
+            if b3 in valid_tracks:
+                matched = True
+                break
+
+        if matched:
+            s4 = 20
+            coherence = "일치"
+        elif s1 >= 15 and s3 >= 15:
+            s4 = 12
+            coherence = "부분일치"
+        else:
+            s4 = 5
+            coherence = "불일치"
+
+    total = s1 + s2 + s3 + s4
+    return {
+        "total": round(min(100, total), 1),
+        "grade": _grade_label(min(100, total)),
+        "details": {
+            "진로_구체성": {"score": s1, "max": 35},
+            "전형_이해도": {"score": round(s2, 1), "max": 30, "value": b2},
+            "전형_선택명확성": {"score": s3, "max": 15, "value": b3 or "미선택"},
+            "진로전형_정합성": {"score": s4, "max": 20, "value": coherence},
+        },
+    }
+
+
+# --- 4-5. 비교과역량 (100점) ---
+
+def _calc_ph1_extracurricular_score(answers: dict) -> dict:
+    """4-5. 비교과역량 100점."""
+    cat_f = answers.get("F", {})
+
+    # ① 동아리 활동 (20점): F1 개수
+    f1 = cat_f.get("F1", [])
+    if not isinstance(f1, list):
+        f1 = []
+    club_count = len([x for x in f1 if x and str(x).strip()])
+    if club_count >= 3:
+        s1 = 20
+    elif club_count == 2:
+        s1 = 14
+    elif club_count == 1:
+        s1 = 8
+    else:
+        s1 = 0
+
+    # ② 수상 경험 (15점): F2 개수
+    f2 = cat_f.get("F2", [])
+    if not isinstance(f2, list):
+        f2 = []
+    award_count = len([x for x in f2 if x and str(x).strip()])
+    if award_count >= 3:
+        s2 = 15
+    elif award_count >= 1:
+        s2 = 8
+    else:
+        s2 = 0
+
+    # ③ 봉사활동 (15점): F3
+    f3 = cat_f.get("F3", "")
+    volunteer_map = {"자발적참여": 15, "의무만": 7, "없음": 0}
+    s3 = volunteer_map.get(f3, 0)
+
+    # ④ 리더십 경험 (20점): F4
+    f4 = cat_f.get("F4", {})
+    if not isinstance(f4, dict):
+        f4 = {}
+    has_exp = f4.get("has_experience", "없음")
+    role = str(f4.get("role", "")).strip()
+    if has_exp == "있음" and role:
+        # 학생회 키워드 감지
+        if any(kw in role for kw in ("학생회", "부회장", "회장")):
+            s4 = 20
+        elif any(kw in role for kw in ("반장", "임원", "부장")):
+            s4 = 14
+        else:
+            s4 = 10
+    elif has_exp == "있음":
+        s4 = 10
+    else:
+        s4 = 0
+
+    # ⑤ 자기개발 활동 (15점): F5 개수
+    f5 = cat_f.get("F5", [])
+    if not isinstance(f5, list):
+        f5 = []
+    dev_count = len([x for x in f5 if x and str(x).strip()])
+    if dev_count >= 2:
+        s5 = 15
+    elif dev_count == 1:
+        s5 = 7
+    else:
+        s5 = 0
+
+    # ⑥ 자기 인식 역량 (15점): F6 다양성
+    f6 = cat_f.get("F6", [])
+    if not isinstance(f6, list):
+        f6 = []
+    strength_count = len(f6)
+    # 다양성 판단: 서로 다른 카테고리 수
+    leadership_type = {"리더십", "협업", "의사소통", "공감능력"}
+    analytical_type = {"분석력", "창의성", "문제해결"}
+    personal_type = {"끈기", "자기관리"}
+    cats_found = set()
+    for s in f6:
+        if s in leadership_type:
+            cats_found.add("social")
+        elif s in analytical_type:
+            cats_found.add("analytical")
+        elif s in personal_type:
+            cats_found.add("personal")
+    if strength_count >= 3 and len(cats_found) >= 2:
+        s6 = 15  # 다양 3개
+    elif strength_count >= 3:
+        s6 = 10  # 유사 편중
+    else:
+        s6 = 5   # 2개 이하
+
+    total = s1 + s2 + s3 + s4 + s5 + s6
+    return {
+        "total": round(min(100, total), 1),
+        "grade": _grade_label(min(100, total)),
+        "details": {
+            "동아리_활동": {"score": s1, "max": 20, "value": club_count},
+            "수상_경험": {"score": s2, "max": 15, "value": award_count},
+            "봉사활동": {"score": s3, "max": 15, "value": f3 or "미응답"},
+            "리더십_경험": {"score": s4, "max": 20, "value": role or ("있음" if has_exp == "있음" else "없음")},
+            "자기개발_활동": {"score": s5, "max": 15, "value": dev_count},
+            "자기인식_역량": {"score": s6, "max": 15, "value": strength_count},
+        },
+    }
+
+
+# ============================================================
+# 종합 산출 — 예비고1 5각형 레이더
+# ============================================================
+
+def compute_preheigh1_radar_scores(answers: dict) -> dict:
+    """5영역 점수 + 등급 + 레이더 데이터 산출 (예비고1)."""
+    academic = _calc_ph1_academic_score(answers)
+    study = _calc_ph1_study_score(answers)
+    prep = _calc_ph1_prep_score(answers)
+    career = _calc_ph1_career_score(answers)
+    extra = _calc_ph1_extracurricular_score(answers)
+
+    radar = {
+        "학업기초력": {"score": academic["total"], "grade": academic["grade"]},
+        "학습습관_자기주도력": {"score": study["total"], "grade": study["grade"]},
+        "교과선행도": {"score": prep["total"], "grade": prep["grade"]},
+        "진로방향성": {"score": career["total"], "grade": career["grade"]},
+        "비교과역량": {"score": extra["total"], "grade": extra["grade"]},
+    }
+
+    avg = (academic["total"] + study["total"] + prep["total"] + career["total"] + extra["total"]) / 5
+    overall_grade = _grade_label(avg)
+
+    return {
+        "radar": radar,
+        "overall_score": round(avg, 1),
+        "overall_grade": overall_grade,
+        "academic": academic,
+        "study": study,
+        "prep": prep,
+        "career": career,
+        "extracurricular": extra,
     }
