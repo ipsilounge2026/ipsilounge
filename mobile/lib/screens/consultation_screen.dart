@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/consultation.dart';
 import '../services/consultation_service.dart';
 import '../widgets/child_selector.dart';
+import 'survey_screen.dart';
 
 class _ConsultationType {
   final String value;
@@ -481,17 +482,53 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                 const Text('사전 조사', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 Text(
-                  '${_selectedType?.label ?? ''} 예약을 진행합니다.\n더 나은 상담을 위해 사전 조사가 준비 중입니다.',
+                  '${_selectedType?.label ?? ''} 예약 전 사전 조사를 작성해주세요.\n더 나은 상담을 위해 활용됩니다.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280), height: 1.6),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _goToBooking,
-                    child: const Text('예약 진행하기'),
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SurveyScreen(
+                            surveyType: 'preheigh1',
+                            ownerUserId: _selectedChildId,
+                          ),
+                        ),
+                      );
+                      // 설문 완료 후 예약 단계로
+                      if (result == true) _goToBooking();
+                    },
+                    child: const Text('예비고1 사전 조사 작성'),
                   ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SurveyScreen(
+                            surveyType: 'high',
+                            ownerUserId: _selectedChildId,
+                          ),
+                        ),
+                      );
+                      if (result == true) _goToBooking();
+                    },
+                    child: const Text('고등학생 사전 조사 작성'),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _goToBooking,
+                  child: const Text('사전 조사 건너뛰고 예약하기', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
                 ),
               ],
             ),

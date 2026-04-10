@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/consultation.dart';
 import '../services/consultation_service.dart';
+import '../services/survey_service.dart';
 import '../services/user_service.dart';
 import 'analysis_list_screen.dart';
+import 'survey_screen.dart';
 
 const _roleLabels = {
   'student': '학생',
@@ -51,6 +53,9 @@ class _MypageScreenState extends State<MypageScreen> {
   Counselor? _myCounselor;
   bool _counselorLoading = true;
 
+  // 설문 관련
+  List<Map<String, dynamic>> _surveys = [];
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +68,7 @@ class _MypageScreenState extends State<MypageScreen> {
     final memberType = user?.memberType ?? 'student';
     if (memberType != 'branch_manager') {
       _loadCounselor();
+      _loadSurveys();
     } else {
       _counselorLoading = false;
     }
@@ -88,6 +94,13 @@ class _MypageScreenState extends State<MypageScreen> {
     } catch (_) {
       setState(() => _counselorLoading = false);
     }
+  }
+
+  Future<void> _loadSurveys() async {
+    try {
+      final list = await SurveyService.listMy();
+      setState(() => _surveys = list);
+    } catch (_) {}
   }
 
   Future<void> _save() async {
@@ -560,6 +573,116 @@ class _MypageScreenState extends State<MypageScreen> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // 사전 조사
+            if (_surveys.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('사전 조사', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                        GestureDetector(
+                          onTap: () => Navigator.pushNamed(context, '/consultation'),
+                          child: const Text('새 설문 →', style: TextStyle(fontSize: 13, color: Color(0xFF3B82F6))),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ..._surveys.map((s) {
+                      final typeLabel = s['survey_type'] == 'preheigh1' ? '예비고1' : '고등학생';
+                      final timing = s['timing'] as String?;
+                      final statusText = s['status'] == 'submitted' ? '제출 완료' : '작성 중';
+                      final statusColor = s['status'] == 'submitted' ? const Color(0xFF16A34A) : const Color(0xFFF59E0B);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: InkWell(
+                          onTap: () async {
+                            await Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => SurveyScreen(
+                                surveyType: s['survey_type'],
+                                timing: timing,
+                                existingSurveyId: s['id'],
+                              ),
+                            ));
+                            _loadSurveys();
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '$typeLabel${timing != null ? " ($timing)" : ""} 사전 조사',
+                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${DateTime.tryParse(s['updated_at'] ?? '')?.toLocal().toString().substring(0, 10) ?? ''} 수정',
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                      decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(20)),
+                                      child: Text(statusText, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                                    ),
+                                    if (s['status'] == 'draft') ...[
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: () async {
+                                          final confirmed = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              title: const Text('설문 삭제'),
+                                              content: const Text('이 설문을 삭제하시겠습니까?'),
+                                              actions: [
+                                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+                                                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('삭제', style: TextStyle(color: Colors.red))),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirmed == true) {
+                                            try {
+                                              await SurveyService.delete(s['id']);
+                                              _loadSurveys();
+                                            } catch (_) {}
+                                          }
+                                        },
+                                        child: const Text('삭제', style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            if (_surveys.isNotEmpty) const SizedBox(height: 12),
 
             // 빠른 메뉴
             Container(

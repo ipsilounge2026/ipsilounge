@@ -330,6 +330,10 @@ export async function patchSurvey(
   });
 }
 
+export async function deleteSurvey(id: string) {
+  return request(`/api/consultation-surveys/${id}`, { method: "DELETE" });
+}
+
 export async function submitSurvey(id: string) {
   return request(`/api/consultation-surveys/${id}/submit`, {
     method: "POST",

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FamilyLinkSection from "@/components/FamilyLinkSection";
-import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange, listMySurveys } from "@/lib/api";
+import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange, listMySurveys, deleteSurvey } from "@/lib/api";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 interface User {
@@ -720,24 +720,22 @@ export default function MyPage() {
                       ? "/consultation-survey/preheigh1"
                       : "/consultation-survey/high";
                     return (
-                      <a
+                      <div
                         key={s.id}
-                        href={href}
                         style={{
                           display: "flex", justifyContent: "space-between", alignItems: "center",
                           padding: "12px 14px", borderRadius: 10,
                           border: "1px solid var(--gray-200)",
-                          textDecoration: "none", color: "var(--gray-700)",
                         }}
                       >
-                        <div>
+                        <a href={href} style={{ flex: 1, textDecoration: "none", color: "var(--gray-700)" }}>
                           <div style={{ fontWeight: 600, fontSize: 14 }}>
                             {typeLabel}{timingLabel} 사전 조사
                           </div>
                           <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 2 }}>
                             {new Date(s.updated_at).toLocaleDateString("ko-KR")} 수정
                           </div>
-                        </div>
+                        </a>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{
                             padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600,
@@ -745,11 +743,28 @@ export default function MyPage() {
                           }}>
                             {statusLabel}
                           </span>
-                          <span style={{ color: "var(--primary)", fontSize: 13 }}>
+                          <a href={href} style={{ color: "var(--primary)", fontSize: 13, textDecoration: "none" }}>
                             {s.status === "submitted" ? "수정" : "이어쓰기"} →
-                          </span>
+                          </a>
+                          {s.status === "draft" && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm("이 설문을 삭제하시겠습니까?")) return;
+                                try {
+                                  await deleteSurvey(s.id);
+                                  setSurveys((prev) => prev.filter((x) => x.id !== s.id));
+                                } catch {}
+                              }}
+                              style={{
+                                background: "none", border: "none", cursor: "pointer",
+                                fontSize: 13, color: "#DC2626", padding: "2px 4px",
+                              }}
+                            >
+                              삭제
+                            </button>
+                          )}
                         </div>
-                      </a>
+                      </div>
                     );
                   })}
                 </div>
