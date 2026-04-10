@@ -200,7 +200,14 @@ export default function ConsultationPage() {
                         <button className="btn btn-success btn-sm" onClick={() => handleStatusChange(b.id, "confirmed")}>확정</button>
                       )}
                       {b.status === "confirmed" && (
-                        <button className="btn btn-primary btn-sm" onClick={() => handleStatusChange(b.id, "completed")}>완료</button>
+                        <>
+                          <Link
+                            href={`/consultation/session/${b.id}`}
+                            className="btn btn-sm"
+                            style={{ background: "#7C3AED", color: "white", border: "none" }}
+                          >상담 시작</Link>
+                          <button className="btn btn-primary btn-sm" onClick={() => handleStatusChange(b.id, "completed")}>완료</button>
+                        </>
                       )}
                       {(b.status === "confirmed" || b.status === "completed") && (
                         <Link

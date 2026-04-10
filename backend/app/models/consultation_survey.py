@@ -86,6 +86,9 @@ class ConsultationSurvey(Base):
     # 상담사 메모 (관리자/상담사 전용)
     admin_memo: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # 액션 플랜 (상담 후 실행 과제, JSONB)
+    action_plan: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

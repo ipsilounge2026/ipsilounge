@@ -159,6 +159,10 @@ export async function getBookings(statusFilter?: string, year?: number, month?: 
   return request(`/api/admin/consultation/bookings?${params}`);
 }
 
+export async function getBookingDetail(id: string) {
+  return request(`/api/admin/consultation/bookings/${id}`);
+}
+
 export async function updateBookingStatus(id: string, status: string, cancelReason?: string) {
   const payload: any = { status };
   if (cancelReason) payload.cancel_reason = cancelReason;
@@ -445,6 +449,35 @@ export async function updateSurveyMemo(id: string, adminMemo: string) {
 
 export async function deleteSurveyMemo(id: string) {
   return request(`/api/admin/surveys/${id}/memo`, { method: "DELETE" });
+}
+
+export async function downloadSurveyReport(id: string): Promise<void> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+  const res = await fetch(`${API_BASE}/api/admin/surveys/${id}/report`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("리포트 생성에 실패했습니다");
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : "survey_report.pdf";
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function getSurveyActionPlan(id: string) {
+  return request(`/api/admin/surveys/${id}/action-plan`);
+}
+
+export async function updateSurveyActionPlan(id: string, data: { items: any[]; note?: string }) {
+  return request(`/api/admin/surveys/${id}/action-plan`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 }
 
 // --- 공지사항 관리 ---

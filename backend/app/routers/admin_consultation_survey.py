@@ -6,13 +6,17 @@
 - 자동 계산 (내신 추이, 모의고사 추이, 학습시간 분석)
 - Delta diff (이전 상담 대비 변경점)
 - 상담사 메모 CRUD
+- PDF 리포트 다운로드
+- 액션 플랜 CRUD
 """
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -251,6 +255,131 @@ async def delete_memo(
     survey.admin_memo = None
     await db.commit()
     return {"ok": True}
+
+
+# ---- PDF 리포트 ----
+
+@router.get("/{survey_id}/report")
+async def download_report_pdf(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """설문 리포트 PDF 다운로드"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    uresult = await db.execute(select(User).where(User.id == survey.user_id))
+    user = uresult.scalar_one_or_none()
+
+    from app.surveys.schema_loader import load_schema
+    try:
+        schema = load_schema(survey.survey_type)
+    except Exception:
+        schema = None
+
+    computed = _compute_stats(survey.survey_type, survey.answers)
+
+    survey_dict = {
+        "survey_type": survey.survey_type,
+        "timing": survey.timing,
+        "mode": survey.mode,
+        "status": survey.status,
+        "answers": survey.answers,
+        "admin_memo": survey.admin_memo,
+        "submitted_at": survey.submitted_at.isoformat() if survey.submitted_at else None,
+    }
+    user_info = {
+        "name": user.name if user else "?",
+        "email": user.email if user else "",
+    }
+
+    from app.services.survey_report_service import generate_survey_report_pdf
+    pdf_bytes = generate_survey_report_pdf(survey_dict, user_info, schema, computed)
+
+    student_name = user.name if user else "unknown"
+    filename = f"{student_name}_survey_report.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---- 액션 플랜 ----
+
+class ActionItem(BaseModel):
+    id: str | None = None
+    content: str
+    deadline: str | None = None
+    responsible: str | None = Field(None, description="담당자 (student/parent/counselor)")
+    completed: bool = False
+
+
+class ActionPlanRequest(BaseModel):
+    items: list[ActionItem]
+    note: str | None = None
+
+
+@router.get("/{survey_id}/action-plan")
+async def get_action_plan(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """설문에 연결된 액션 플랜 조회"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    # action_plan은 answers와 별도로 JSONB에 저장 (admin_memo와 유사하게 모델에 추가)
+    plan = getattr(survey, "action_plan", None) or {}
+    return plan
+
+
+@router.put("/{survey_id}/action-plan")
+async def update_action_plan(
+    survey_id: uuid.UUID,
+    data: ActionPlanRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """액션 플랜 저장/수정"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    # 각 아이템에 ID 부여
+    items = []
+    for i, item in enumerate(data.items):
+        items.append({
+            "id": item.id or f"ap_{i+1}",
+            "content": item.content,
+            "deadline": item.deadline,
+            "responsible": item.responsible,
+            "completed": item.completed,
+        })
+
+    plan = {
+        "items": items,
+        "note": data.note,
+        "updated_at": datetime.utcnow().isoformat(),
+        "updated_by": str(admin.id),
+    }
+    survey.action_plan = plan
+    await db.commit()
+    return plan
 
 
 # ============================================================

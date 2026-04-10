@@ -321,6 +321,64 @@ async def list_bookings(
     return {"items": items, "total": len(items)}
 
 
+@router.get("/bookings/{booking_id}")
+async def get_booking_detail(
+    booking_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """예약 상세 조회"""
+    result = await db.execute(
+        select(ConsultationBooking, ConsultationSlot, User)
+        .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
+        .join(User, ConsultationBooking.user_id == User.id)
+        .where(ConsultationBooking.id == booking_id)
+    )
+    row = result.one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다")
+
+    booking, slot, user = row
+    admin_name = await _get_admin_name(slot.admin_id, db) if slot.admin_id else None
+
+    # 해당 학생의 설문 목록도 함께 조회
+    from app.models.consultation_survey import ConsultationSurvey
+    survey_q = (
+        select(ConsultationSurvey)
+        .where(ConsultationSurvey.user_id == user.id)
+        .order_by(ConsultationSurvey.created_at.desc())
+        .limit(5)
+    )
+    surveys = (await db.execute(survey_q)).scalars().all()
+
+    return {
+        "id": str(booking.id),
+        "user_id": str(user.id),
+        "user_name": user.name,
+        "user_email": user.email,
+        "user_phone": user.phone,
+        "slot_date": str(slot.date),
+        "slot_start_time": str(slot.start_time),
+        "slot_end_time": str(slot.end_time),
+        "admin_name": admin_name,
+        "type": booking.type,
+        "memo": booking.memo,
+        "status": booking.status,
+        "cancel_reason": booking.cancel_reason,
+        "created_at": booking.created_at.isoformat(),
+        "surveys": [
+            {
+                "id": str(s.id),
+                "survey_type": s.survey_type,
+                "timing": s.timing,
+                "status": s.status,
+                "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+            }
+            for s in surveys
+        ],
+    }
+
+
 @router.put("/bookings/{booking_id}/status")
 async def update_booking_status(
     booking_id: uuid.UUID,

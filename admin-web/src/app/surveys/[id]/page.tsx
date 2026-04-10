@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo } from "@/lib/api";
+import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 import { GradeTrendChart, MockTrendChart, StudyAnalysisChart } from "@/components/SurveyCharts";
 
@@ -131,7 +131,21 @@ const changeTypeColor: Record<string, string> = {
   decreased: "#EF4444",
 };
 
-type TabType = "answers" | "computed" | "delta" | "memo";
+interface ActionItem {
+  id: string;
+  content: string;
+  deadline: string | null;
+  responsible: string | null;
+  completed: boolean;
+}
+
+interface ActionPlan {
+  items: ActionItem[];
+  note: string | null;
+  updated_at?: string;
+}
+
+type TabType = "answers" | "computed" | "delta" | "memo" | "action_plan";
 
 export default function SurveyDetailPage() {
   const router = useRouter();
@@ -149,6 +163,14 @@ export default function SurveyDetailPage() {
   // Delta state
   const [delta, setDelta] = useState<DeltaResult | null>(null);
   const [deltaLoading, setDeltaLoading] = useState(false);
+
+  // PDF download state
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+
+  // Action plan state
+  const [actionPlan, setActionPlan] = useState<ActionPlan>({ items: [], note: null });
+  const [actionPlanLoaded, setActionPlanLoaded] = useState(false);
+  const [actionPlanSaving, setActionPlanSaving] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -197,6 +219,9 @@ export default function SurveyDetailPage() {
     if (tab === "delta" && !delta) {
       loadDelta();
     }
+    if (tab === "action_plan" && !actionPlanLoaded) {
+      loadActionPlan();
+    }
   };
 
   const handleSaveMemo = async () => {
@@ -222,6 +247,66 @@ export default function SurveyDetailPage() {
       alert("메모 삭제에 실패했습니다.");
     } finally {
       setMemoSaving(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    setPdfDownloading(true);
+    try {
+      await downloadSurveyReport(id);
+    } catch {
+      alert("PDF 리포트 생성에 실패했습니다.");
+    } finally {
+      setPdfDownloading(false);
+    }
+  };
+
+  const loadActionPlan = async () => {
+    if (actionPlanLoaded) return;
+    try {
+      const data = await getSurveyActionPlan(id);
+      if (data && data.items) {
+        setActionPlan(data);
+      }
+    } catch {
+      // empty plan
+    }
+    setActionPlanLoaded(true);
+  };
+
+  const handleAddActionItem = () => {
+    setActionPlan((prev) => ({
+      ...prev,
+      items: [...prev.items, { id: `ap_${Date.now()}`, content: "", deadline: null, responsible: null, completed: false }],
+    }));
+  };
+
+  const handleRemoveActionItem = (idx: number) => {
+    setActionPlan((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== idx),
+    }));
+  };
+
+  const handleUpdateActionItem = (idx: number, field: string, value: any) => {
+    setActionPlan((prev) => ({
+      ...prev,
+      items: prev.items.map((item, i) => i === idx ? { ...item, [field]: value } : item),
+    }));
+  };
+
+  const handleSaveActionPlan = async () => {
+    setActionPlanSaving(true);
+    try {
+      const result = await updateSurveyActionPlan(id, {
+        items: actionPlan.items.filter((i) => i.content.trim()),
+        note: actionPlan.note || undefined,
+      });
+      setActionPlan(result);
+    } catch {
+      alert("액션 플랜 저장에 실패했습니다.");
+    } finally {
+      setActionPlanSaving(false);
     }
   };
 
@@ -487,6 +572,7 @@ export default function SurveyDetailPage() {
     { key: "computed", label: "자동 분석" },
     { key: "delta", label: "변경 비교" },
     { key: "memo", label: `메모${survey.admin_memo ? " *" : ""}` },
+    { key: "action_plan", label: "액션 플랜" },
   ];
 
   return (
@@ -510,6 +596,18 @@ export default function SurveyDetailPage() {
               </span>
             </h1>
           </div>
+          <button
+            onClick={handleDownloadPdf}
+            disabled={pdfDownloading}
+            style={{
+              padding: "8px 20px", borderRadius: 6, border: "1px solid #3B82F6",
+              background: pdfDownloading ? "#93C5FD" : "#3B82F6", color: "white",
+              fontSize: 13, cursor: pdfDownloading ? "default" : "pointer",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            {pdfDownloading ? "생성 중..." : "PDF 리포트 다운로드"}
+          </button>
         </div>
 
         {/* 기본 정보 카드 */}
@@ -674,6 +772,134 @@ export default function SurveyDetailPage() {
         {activeTab === "delta" && renderDelta()}
 
         {activeTab === "memo" && renderMemo()}
+
+        {activeTab === "action_plan" && (
+          <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ fontSize: 15, margin: 0 }}>액션 플랜</h3>
+              <button
+                onClick={handleAddActionItem}
+                style={{
+                  padding: "6px 14px", borderRadius: 6, border: "1px solid #3B82F6",
+                  background: "#EFF6FF", color: "#3B82F6", fontSize: 13, cursor: "pointer",
+                }}
+              >
+                + 항목 추가
+              </button>
+            </div>
+
+            {actionPlan.items.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                아직 등록된 액션 플랜이 없습니다. &quot;+ 항목 추가&quot;를 클릭하세요.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {actionPlan.items.map((item, idx) => (
+                  <div key={item.id || idx} style={{
+                    padding: 16, border: "1px solid #E5E7EB", borderRadius: 8,
+                    background: item.completed ? "#F0FDF4" : "#FAFAFA",
+                  }}>
+                    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                      <input
+                        type="checkbox"
+                        checked={item.completed}
+                        onChange={(e) => handleUpdateActionItem(idx, "completed", e.target.checked)}
+                        style={{ marginTop: 4, width: 18, height: 18, cursor: "pointer" }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <input
+                          type="text"
+                          value={item.content}
+                          onChange={(e) => handleUpdateActionItem(idx, "content", e.target.value)}
+                          placeholder="실행 과제 내용을 입력하세요"
+                          style={{
+                            width: "100%", padding: "6px 10px", border: "1px solid #D1D5DB",
+                            borderRadius: 4, fontSize: 14, marginBottom: 8,
+                            textDecoration: item.completed ? "line-through" : "none",
+                            color: item.completed ? "#9CA3AF" : "#111827",
+                          }}
+                        />
+                        <div style={{ display: "flex", gap: 12 }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: 11, color: "#6B7280" }}>기한</label>
+                            <input
+                              type="date"
+                              value={item.deadline || ""}
+                              onChange={(e) => handleUpdateActionItem(idx, "deadline", e.target.value || null)}
+                              style={{
+                                width: "100%", padding: "4px 8px", border: "1px solid #D1D5DB",
+                                borderRadius: 4, fontSize: 13,
+                              }}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: 11, color: "#6B7280" }}>담당</label>
+                            <select
+                              value={item.responsible || ""}
+                              onChange={(e) => handleUpdateActionItem(idx, "responsible", e.target.value || null)}
+                              style={{
+                                width: "100%", padding: "4px 8px", border: "1px solid #D1D5DB",
+                                borderRadius: 4, fontSize: 13,
+                              }}
+                            >
+                              <option value="">선택</option>
+                              <option value="student">학생</option>
+                              <option value="parent">학부모</option>
+                              <option value="counselor">상담사</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveActionItem(idx)}
+                        style={{
+                          padding: "4px 8px", border: "none", background: "none",
+                          color: "#EF4444", cursor: "pointer", fontSize: 16,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 메모 */}
+            <div style={{ marginTop: 16 }}>
+              <label style={{ fontSize: 12, color: "#6B7280" }}>액션 플랜 메모</label>
+              <textarea
+                value={actionPlan.note || ""}
+                onChange={(e) => setActionPlan((prev) => ({ ...prev, note: e.target.value }))}
+                placeholder="추가 메모..."
+                style={{
+                  width: "100%", minHeight: 80, padding: 10, border: "1px solid #D1D5DB",
+                  borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", marginTop: 4,
+                }}
+              />
+            </div>
+
+            {/* 저장 버튼 */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+              {actionPlan.updated_at && (
+                <span style={{ fontSize: 12, color: "#9CA3AF", marginRight: "auto", lineHeight: "32px" }}>
+                  마지막 저장: {new Date(actionPlan.updated_at).toLocaleString("ko-KR")}
+                </span>
+              )}
+              <button
+                onClick={handleSaveActionPlan}
+                disabled={actionPlanSaving}
+                style={{
+                  padding: "8px 24px", borderRadius: 6, border: "none", background: "#3B82F6",
+                  color: "white", fontSize: 13, cursor: "pointer",
+                  opacity: actionPlanSaving ? 0.5 : 1,
+                }}
+              >
+                {actionPlanSaving ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
