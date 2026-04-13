@@ -944,7 +944,7 @@ def _calc_ph1_prep_score(answers: dict) -> dict:
     s_math_level = min(12, math_level)
     s_math = s_math_progress + s_math_level
 
-    # === 영어 역량 (25점): 어휘(5) + 독해(6) + 문법(5) + 영작(4) + 모의고사(5) ===
+    # === 영어 역량 (30점): 어휘(5)+독해(5)+문법(5)+영작에세이(4)+모의고사(4)+듣기(2)+영문자료독해(3)+의사소통(2) ===
     e2 = cat_e.get("E2", {})
     if not isinstance(e2, dict):
         e2 = {}
@@ -959,42 +959,85 @@ def _calc_ph1_prep_score(answers: dict) -> dict:
         vocab_status = vocab_book.get("status", "없음")
     else:
         vocab_status = "없음"
+    vocab_count = vocab.get("vocab_count", "")
     vocab_map = {"중학필수": 1, "고등기본중": 2, "고등필수대부분": 3}
-    book_map = {"없음": 0, "학습중": 1, "1회독완료": 2}
-    s_eng_vocab = min(5, vocab_map.get(vocab_level, 0) + book_map.get(vocab_status, 0))
+    book_map = {"없음": 0, "학습중": 0.5, "1회독완료": 1}
+    count_map = {"1000이하": 0, "1000-2000": 0.5, "2000이상": 1}
+    s_eng_vocab = min(5, vocab_map.get(vocab_level, 0) + book_map.get(vocab_status, 0) + count_map.get(vocab_count, 0))
 
-    # 독해 (6점): radio_grid 3 items
+    # 독해 (5점): radio_grid 3 items
     reading = e2.get("reading", {})
-    s_eng_reading = _score_radio_grid(reading, 3, 6)
+    s_eng_reading = _score_radio_grid(reading, 3, 5)
 
     # 문법 (5점): radio_grid 3 items
     grammar = e2.get("grammar", {})
     s_eng_grammar = _score_radio_grid(grammar, 3, 5)
 
-    # 영작 (4점)
+    # 영작·에세이 (4점)
     writing = e2.get("writing", {})
     if not isinstance(writing, dict):
         writing = {}
-    w_level_map = {"단문": 1, "중문": 2, "복문": 3}
+    w_level_map = {"단문": 0.5, "중문": 1, "복문": 1.5}
     w_cond_map = {"없음": 0, "조금": 0.5, "꾸준히": 1}
-    s_eng_writing = min(4, w_level_map.get(writing.get("level", ""), 0) + w_cond_map.get(writing.get("conditional_writing", ""), 0))
+    w_essay_map = {"없음": 0, "학교수업": 0.5, "자율": 1.5}
+    s_eng_writing = min(4,
+        w_level_map.get(writing.get("level", ""), 0)
+        + w_cond_map.get(writing.get("conditional_writing", ""), 0)
+        + w_essay_map.get(writing.get("essay_experience", ""), 0))
 
-    # 모의고사 (5점)
+    # 모의고사 (4점)
     mock = e2.get("mock_exam", {})
-    s_eng_mock = _score_mock_exam(mock, 5)
+    s_eng_mock = _score_mock_exam(mock, 4)
 
-    s_eng = s_eng_vocab + s_eng_reading + s_eng_grammar + s_eng_writing + s_eng_mock
+    # 듣기 (2점)
+    listening = e2.get("listening", {})
+    if not isinstance(listening, dict):
+        listening = {}
+    s_eng_listen = 0.0
+    if listening.get("experience") == "있음":
+        s_eng_listen = 0.5
+        acc = _sf(listening.get("accuracy"))
+        if acc is not None:
+            if acc >= 90:
+                s_eng_listen = 2
+            elif acc >= 70:
+                s_eng_listen = 1.5
+            elif acc >= 50:
+                s_eng_listen = 1
 
-    # === 국어 역량 (25점): 문학(7) + 비문학(6) + 문법어휘(4) + 모의고사(5) + 독서(3) ===
+    # 영문 자료 독해 경험 (3점) — 외고/국제고 판별 핵심
+    eng_extra = e2.get("english_reading_extra", {})
+    if not isinstance(eng_extra, dict):
+        eng_extra = {}
+    freq_map = {"없음": 0, "가끔": 1, "자주": 2}
+    s_eng_extra = freq_map.get(eng_extra.get("frequency", ""), 0)
+    mat_types = eng_extra.get("material_types", [])
+    if isinstance(mat_types, list) and len(mat_types) >= 2:
+        s_eng_extra += 1
+    s_eng_extra = min(3, s_eng_extra)
+
+    # 영어 의사소통 경험 (2점) — 국제고 판별 핵심
+    eng_comm = e2.get("english_communication", {})
+    if not isinstance(eng_comm, dict):
+        eng_comm = {}
+    pres_map = {"없음": 0, "학교": 0.5, "외부": 1}
+    conv_map = {"없음": 0, "가끔": 0.5, "자주": 1}
+    s_eng_comm = min(2,
+        pres_map.get(eng_comm.get("presentation", ""), 0)
+        + conv_map.get(eng_comm.get("conversation", ""), 0))
+
+    s_eng = s_eng_vocab + s_eng_reading + s_eng_grammar + s_eng_writing + s_eng_mock + s_eng_listen + s_eng_extra + s_eng_comm
+
+    # === 국어 역량 (20점): 문학(5) + 비문학(5) + 문법어휘(3) + 모의고사(4) + 독서(3) ===
     e3 = cat_e.get("E3", {})
     if not isinstance(e3, dict):
         e3 = {}
 
-    # 문학 (7점): radio_grid 5 items
+    # 문학 (5점): radio_grid 5 items
     lit = e3.get("literature", {})
-    s_kor_lit = _score_radio_grid(lit, 5, 7)
+    s_kor_lit = _score_radio_grid(lit, 5, 5)
 
-    # 비문학 (6점)
+    # 비문학 (5점)
     nf = e3.get("non_fiction", {})
     if not isinstance(nf, dict):
         nf = {}
@@ -1002,25 +1045,25 @@ def _calc_ph1_prep_score(answers: dict) -> dict:
     nf_score = nf_map.get(nf.get("long_text", ""), 0) + nf_map.get(nf.get("term_inference", ""), 0)
     diff_fields = nf.get("difficult_fields", [])
     if isinstance(diff_fields, list) and "없음" in diff_fields:
-        nf_score += 2
-    s_kor_nf = min(6, nf_score)
+        nf_score += 1
+    s_kor_nf = min(5, nf_score)
 
-    # 문법어휘 (4점)
+    # 문법어휘 (3점)
     gv = e3.get("grammar_vocab", {})
     if not isinstance(gv, dict):
         gv = {}
     gv_mid_map = {"거의모름": 0, "정리안됨": 0.5, "체계적정리": 1}
     gv_high_map = {"안함": 0, "학습중": 0.5, "완료": 1}
-    gv_hanja_map = {"안함": 0, "학습중": 0.5, "완료": 1}
-    gv_habit_map = {"없음": 0, "가끔": 0.5, "꾸준히": 1}
-    s_kor_gv = min(4, gv_mid_map.get(gv.get("middle_grammar", ""), 0)
+    gv_hanja_map = {"안함": 0, "학습중": 0.25, "완료": 0.5}
+    gv_habit_map = {"없음": 0, "가끔": 0.25, "꾸준히": 0.5}
+    s_kor_gv = min(3, gv_mid_map.get(gv.get("middle_grammar", ""), 0)
                    + gv_high_map.get(gv.get("high_grammar", ""), 0)
                    + gv_hanja_map.get(gv.get("hanja_terms", ""), 0)
                    + gv_habit_map.get(gv.get("vocab_habit", ""), 0))
 
-    # 모의고사 (5점)
+    # 모의고사 (4점)
     kor_mock = e3.get("mock_exam", {})
-    s_kor_mock = _score_mock_exam(kor_mock, 5)
+    s_kor_mock = _score_mock_exam(kor_mock, 4)
 
     # 독서 (3점)
     rh = e3.get("reading_habit", {})
@@ -1072,8 +1115,8 @@ def _calc_ph1_prep_score(answers: dict) -> dict:
         "grade": _grade_label(min(100, total)),
         "details": {
             "수학_선행": {"score": round(s_math, 1), "max": 30, "sub": {"진도": round(s_math_progress, 1), "레벨": round(s_math_level, 1)}},
-            "영어_역량": {"score": round(s_eng, 1), "max": 25, "sub": {"어휘": s_eng_vocab, "독해": round(s_eng_reading, 1), "문법": round(s_eng_grammar, 1), "영작": round(s_eng_writing, 1), "모의고사": round(s_eng_mock, 1)}},
-            "국어_역량": {"score": round(s_kor, 1), "max": 25, "sub": {"문학": round(s_kor_lit, 1), "비문학": round(s_kor_nf, 1), "문법어휘": round(s_kor_gv, 1), "모의고사": round(s_kor_mock, 1), "독서": round(s_kor_reading, 1)}},
+            "영어_역량": {"score": round(s_eng, 1), "max": 30, "sub": {"어휘": round(s_eng_vocab, 1), "독해": round(s_eng_reading, 1), "문법": round(s_eng_grammar, 1), "영작에세이": round(s_eng_writing, 1), "모의고사": round(s_eng_mock, 1), "듣기": round(s_eng_listen, 1), "영문자료독해": round(s_eng_extra, 1), "의사소통": round(s_eng_comm, 1)}},
+            "국어_역량": {"score": round(s_kor, 1), "max": 20, "sub": {"문학": round(s_kor_lit, 1), "비문학": round(s_kor_nf, 1), "문법어휘": round(s_kor_gv, 1), "모의고사": round(s_kor_mock, 1), "독서": round(s_kor_reading, 1)}},
             "과학_선행": {"score": round(s_sci, 1), "max": 20, "sub": {"기초": round(s_sci_basic, 1), "선행": round(s_sci_advance, 1), "역량": round(s_sci_skills, 1)}},
         },
     }

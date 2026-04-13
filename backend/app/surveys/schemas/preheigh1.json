@@ -588,6 +588,16 @@
                       "show_when": { "field": "status", "in": ["학습중", "1회독완료"] }
                     }
                   ]
+                },
+                {
+                  "name": "vocab_count",
+                  "type": "radio",
+                  "label": "현재 알고 있는 영단어 수 (체감)",
+                  "options": [
+                    { "value": "1000이하", "label": "1,000개 이하" },
+                    { "value": "1000-2000", "label": "1,000~2,000개" },
+                    { "value": "2000이상", "label": "2,000개 이상" }
+                  ]
                 }
               ]
             },
@@ -623,7 +633,7 @@
             },
             {
               "key": "writing",
-              "label": "④ 영작 (서술형 대비)",
+              "label": "④ 영작·에세이",
               "type": "composite",
               "fields": [
                 {
@@ -644,6 +654,16 @@
                     { "value": "없음", "label": "없음" },
                     { "value": "조금", "label": "조금 해봄" },
                     { "value": "꾸준히", "label": "꾸준히 연습 중" }
+                  ]
+                },
+                {
+                  "name": "essay_experience",
+                  "type": "radio",
+                  "label": "영어 에세이(5문장 이상 구조적 글) 작성 경험",
+                  "options": [
+                    { "value": "없음", "label": "없음" },
+                    { "value": "학교수업", "label": "학교 수업에서 해봄" },
+                    { "value": "자율", "label": "스스로 써본 적 있음 (학원/자율)" }
                   ]
                 }
               ]
@@ -681,6 +701,62 @@
                   "min": 0,
                   "max": 100,
                   "show_when": { "field": "experience", "equals": "있음" }
+                }
+              ]
+            },
+            {
+              "key": "english_reading_extra",
+              "label": "⑦ 영문 자료 독해 경험",
+              "type": "composite",
+              "fields": [
+                {
+                  "name": "frequency",
+                  "type": "radio",
+                  "label": "교과서 외 영문 자료(원서, 영자신문, 영문 웹사이트 등) 읽기 경험",
+                  "options": [
+                    { "value": "없음", "label": "거의 없음" },
+                    { "value": "가끔", "label": "가끔 읽음 (월 1~2회)" },
+                    { "value": "자주", "label": "자주 읽음 (주 1회 이상)" }
+                  ]
+                },
+                {
+                  "name": "material_types",
+                  "type": "checkbox",
+                  "label": "읽어본 영문 자료 유형 (해당 항목 모두 선택)",
+                  "options": [
+                    { "value": "novel", "label": "영어 원서 (소설/논픽션)" },
+                    { "value": "news", "label": "영자신문·영문 뉴스" },
+                    { "value": "web", "label": "영문 웹사이트·블로그·유튜브 자막" },
+                    { "value": "academic", "label": "영문 학습 자료·논문 요약" }
+                  ],
+                  "show_when": { "field": "frequency", "in": ["가끔", "자주"] }
+                }
+              ]
+            },
+            {
+              "key": "english_communication",
+              "label": "⑧ 영어 의사소통 경험",
+              "type": "composite",
+              "fields": [
+                {
+                  "name": "presentation",
+                  "type": "radio",
+                  "label": "영어로 발표·토론·스피치 경험",
+                  "options": [
+                    { "value": "없음", "label": "없음" },
+                    { "value": "학교", "label": "학교 수업에서 해봄" },
+                    { "value": "외부", "label": "외부 활동(영어캠프, 대회 등)에서 해봄" }
+                  ]
+                },
+                {
+                  "name": "conversation",
+                  "type": "radio",
+                  "label": "원어민 또는 외국인과 영어 대화 경험",
+                  "options": [
+                    { "value": "없음", "label": "거의 없음" },
+                    { "value": "가끔", "label": "가끔 있음 (학원, 화상영어 등)" },
+                    { "value": "자주", "label": "자주 있음 (정기적 대화 경험)" }
+                  ]
                 }
               ]
             }
