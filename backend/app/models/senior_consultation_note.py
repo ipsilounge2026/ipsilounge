@@ -80,6 +80,8 @@ class SeniorConsultationNote(Base):
     # 관리자 리뷰 상태
     review_status = Column(String(20), default="pending")  # pending / reviewed / revision_requested
     review_notes = Column(Text, nullable=True)  # 관리자 리뷰 코멘트
+    sharing_settings = Column(JSONB, nullable=True)  # 항목별 공유 설정 (counselor/next senior에게 공개 여부)
+    content_checklist = Column(JSONB, nullable=True)  # 콘텐츠 리뷰 체크리스트 결과
 
     # 공개 여부
     is_visible_to_user = Column(Boolean, default=False)

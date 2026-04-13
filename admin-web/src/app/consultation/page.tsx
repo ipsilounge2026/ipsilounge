@@ -168,6 +168,7 @@ export default function ConsultationPage() {
           <h1>상담 관리</h1>
           <div style={{ display: "flex", gap: 8 }}>
             <Link href="/consultation/notes" className="btn btn-outline">상담 기록</Link>
+            <Link href="/consultation/senior-review" className="btn btn-outline">선배 기록 검토</Link>
             <button className="btn btn-outline" onClick={() => { resetManualForm(); setShowManualModal(true); }}>직접 예약</button>
             <Link href="/consultation/settings" className="btn btn-primary">시간 설정</Link>
           </div>

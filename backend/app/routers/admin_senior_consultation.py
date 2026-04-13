@@ -5,8 +5,9 @@
 - POST   /api/admin/senior-consultation/notes                  기록 생성 (선배 전용)
 - GET    /api/admin/senior-consultation/notes                  기록 목록 (관리자/선배)
 - GET    /api/admin/senior-consultation/notes/{id}             기록 단건
-- PUT    /api/admin/senior-consultation/notes/{id}/review      관리자 리뷰 상태 변경
+- PUT    /api/admin/senior-consultation/notes/{id}/review      관리자 리뷰 상태 변경 (sharing_settings, content_checklist 포함)
 - POST   /api/admin/senior-consultation/notes/{id}/addendum    추가 기록 (append-only)
+- GET    /api/admin/senior-consultation/student/{user_id}/senior-notes  상담사용 리뷰 완료 선배 기록 조회
 - GET    /api/admin/senior-consultation/pre-survey/schema      사전 설문 스키마 조회
 - GET    /api/admin/senior-consultation/pre-surveys             사전 설문 목록 (관리자)
 - GET    /api/admin/senior-consultation/pre-surveys/{id}        사전 설문 단건
@@ -62,6 +63,8 @@ class SeniorNoteCreate(BaseModel):
 class ReviewUpdate(BaseModel):
     review_status: str  # reviewed / revision_requested
     review_notes: str | None = None
+    sharing_settings: dict | None = None  # 항목별 공유 설정
+    content_checklist: list[dict] | None = None  # 콘텐츠 리뷰 체크리스트
 
 
 class AddendumCreate(BaseModel):
@@ -94,6 +97,8 @@ def _note_to_dict(note: SeniorConsultationNote) -> dict:
         "context_for_next": note.context_for_next,
         "review_status": note.review_status,
         "review_notes": note.review_notes,
+        "sharing_settings": note.sharing_settings,
+        "content_checklist": note.content_checklist,
         "is_visible_to_user": note.is_visible_to_user,
         "is_visible_to_next_senior": note.is_visible_to_next_senior,
         "addenda": note.addenda or [],
@@ -225,9 +230,86 @@ async def review_senior_note(
 
     note.review_status = data.review_status
     note.review_notes = data.review_notes
+    if data.sharing_settings is not None:
+        note.sharing_settings = data.sharing_settings
+    if data.content_checklist is not None:
+        note.content_checklist = data.content_checklist
     await db.commit()
     await db.refresh(note)
     return _note_to_dict(note)
+
+
+DEFAULT_SHARING_SETTINGS = {
+    "core_topics": True,
+    "optional_topics": True,
+    "student_questions": True,
+    "student_observation": True,
+    "action_items": True,
+    "next_checkpoints": True,
+    "context_for_next": True,
+    "operator_notes": False,
+}
+
+
+def _apply_sharing_filter(note_dict: dict, sharing: dict) -> dict:
+    """sharing_settings 기반으로 비공유 항목을 제거한 dict 반환."""
+    filtered = dict(note_dict)
+    if not sharing.get("core_topics", True):
+        filtered["core_topics"] = []
+    if not sharing.get("optional_topics", True):
+        filtered["optional_topics"] = []
+    if not sharing.get("student_questions", True):
+        filtered["student_questions"] = None
+        filtered["senior_answers"] = None
+    if not sharing.get("student_observation", True):
+        filtered["student_mood"] = None
+        filtered["study_attitude"] = None
+        filtered["special_observations"] = None
+    if not sharing.get("action_items", True):
+        filtered["action_items"] = []
+    if not sharing.get("next_checkpoints", True):
+        filtered["next_checkpoints"] = []
+    if not sharing.get("context_for_next", True):
+        filtered["context_for_next"] = None
+    if not sharing.get("operator_notes", False):
+        filtered["operator_notes"] = None
+    # 내부 리뷰 정보는 상담사에게 노출하지 않음
+    filtered.pop("review_notes", None)
+    filtered.pop("content_checklist", None)
+    return filtered
+
+
+@router.get("/student/{user_id}/senior-notes")
+async def get_reviewed_senior_notes_for_student(
+    user_id: str,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    상담사용: 학생의 리뷰 완료된 선배 상담 기록 조회.
+
+    review_status='reviewed'인 기록만 반환하며,
+    sharing_settings에 따라 비공유 항목은 제외됨.
+    """
+    uid = uuid.UUID(user_id)
+    q = (
+        select(SeniorConsultationNote)
+        .where(
+            SeniorConsultationNote.user_id == uid,
+            SeniorConsultationNote.review_status == "reviewed",
+        )
+        .order_by(SeniorConsultationNote.consultation_date.desc())
+    )
+    result = await db.execute(q)
+    notes = result.scalars().all()
+
+    filtered_notes = []
+    for note in notes:
+        note_dict = _note_to_dict(note)
+        sharing = note.sharing_settings or DEFAULT_SHARING_SETTINGS
+        filtered_notes.append(_apply_sharing_filter(note_dict, sharing))
+
+    return {"notes": filtered_notes}
 
 
 @router.post("/notes/{note_id}/addendum")

@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
-import { getBookingDetail, updateBookingStatus, createConsultationNote, getCounselorSummaryForSenior } from "@/lib/api";
+import { getBookingDetail, updateBookingStatus, createConsultationNote, getCounselorSummaryForSenior, getSeniorNotesForCounselor } from "@/lib/api";
 import { isLoggedIn, getAdminInfo } from "@/lib/auth";
 
 interface BookingDetail {
@@ -47,7 +47,24 @@ const DEFAULT_CHECKLIST: Omit<CheckItem, "checked">[] = [
 
 const CONSULTATION_MINUTES = 50;
 
-type SessionTab = "checklist" | "notes";
+interface SeniorNoteForCounselor {
+  id: string;
+  session_number: number;
+  session_timing: string | null;
+  consultation_date: string;
+  core_topics: { topic: string; progress_status?: string; key_content?: string }[];
+  optional_topics: { topic: string; covered?: boolean; note?: string }[];
+  student_questions: string | null;
+  senior_answers: string | null;
+  student_mood: string | null;
+  study_attitude: string | null;
+  special_observations: string | null;
+  action_items: { action: string; priority?: string }[];
+  next_checkpoints: { checkpoint: string; status?: string }[];
+  context_for_next: string | null;
+}
+
+type SessionTab = "checklist" | "notes" | "senior-notes";
 
 export default function ConsultationSessionPage() {
   const router = useRouter();
@@ -85,6 +102,10 @@ export default function ConsultationSessionPage() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const isSenior = getAdminInfo()?.role === "senior";
 
+  // 상담사용 선배 기록
+  const [seniorNotes, setSeniorNotes] = useState<SeniorNoteForCounselor[]>([]);
+  const [seniorNotesLoading, setSeniorNotesLoading] = useState(false);
+
   useEffect(() => {
     if (!isLoggedIn()) {
       router.push("/login");
@@ -110,6 +131,18 @@ export default function ConsultationSessionPage() {
           setCounselorSummary(summary);
         } catch {
           // 상담사 설문 없으면 무시
+        }
+      }
+      // 상담사인 경우 선배 기록 로드
+      if (!isSenior && data?.user_id) {
+        setSeniorNotesLoading(true);
+        try {
+          const snData = await getSeniorNotesForCounselor(data.user_id);
+          setSeniorNotes(snData.notes || []);
+        } catch {
+          // 선배 기록 없으면 무시
+        } finally {
+          setSeniorNotesLoading(false);
         }
       }
     } catch {
@@ -478,9 +511,9 @@ export default function ConsultationSessionPage() {
           </div>
         )}
 
-        {/* 체크리스트/메모 탭 */}
+        {/* 체크리스트/메모/선배기록 탭 */}
         <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: "2px solid #E5E7EB" }}>
-          {(["checklist", "notes"] as SessionTab[]).map((tab) => (
+          {((!isSenior && seniorNotes.length > 0 ? ["checklist", "notes", "senior-notes"] : ["checklist", "notes"]) as SessionTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setSessionTab(tab)}
@@ -492,7 +525,7 @@ export default function ConsultationSessionPage() {
                 marginBottom: -2,
               }}
             >
-              {tab === "checklist" ? `체크리스트 (${checkedCount}/${checklist.length})` : "상담 기록"}
+              {tab === "checklist" ? `체크리스트 (${checkedCount}/${checklist.length})` : tab === "notes" ? "상담 기록" : `선배 기록 (${seniorNotes.length})`}
             </button>
           ))}
         </div>
@@ -630,6 +663,132 @@ export default function ConsultationSessionPage() {
                   </button>
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {/* 선배 기록 탭 */}
+        {sessionTab === "senior-notes" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {seniorNotesLoading ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF" }}>로딩 중...</div>
+            ) : seniorNotes.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF" }}>선배 상담 기록이 없습니다</div>
+            ) : (
+              seniorNotes.map((sn) => (
+                <div key={sn.id} style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                  {/* 헤더 */}
+                  <div style={{
+                    padding: "12px 20px", background: "#F5F3FF", borderBottom: "1px solid #E5E7EB",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                  }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#5B21B6" }}>
+                      {sn.session_timing || `${sn.session_number}회차`} 선배 상담
+                    </div>
+                    <div style={{ fontSize: 12, color: "#6B7280" }}>{sn.consultation_date}</div>
+                  </div>
+
+                  <div style={{ padding: 20 }}>
+                    {/* 핵심 주제 */}
+                    {sn.core_topics && sn.core_topics.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                          ■ 핵심 주제 진행 결과
+                        </div>
+                        {sn.core_topics.map((t, i) => (
+                          <div key={i} style={{ padding: "6px 0", fontSize: 13, borderBottom: "1px solid #F3F4F6" }}>
+                            <span>{t.progress_status === "충분히 다룸" ? "✓" : t.progress_status === "간단히 다룸" ? "△" : "✗"}</span>{" "}
+                            <strong>{t.topic}</strong>: {t.progress_status || "미기록"}
+                            {t.key_content && (
+                              <div style={{ color: "#6B7280", marginTop: 2, paddingLeft: 16 }}>
+                                &quot;{t.key_content}&quot;
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 자유 질의 */}
+                    {sn.student_questions && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                          ■ 자유 질의 핵심
+                        </div>
+                        <div style={{ fontSize: 13, padding: "8px 12px", background: "#F9FAFB", borderRadius: 6 }}>
+                          &quot;{sn.student_questions}&quot;
+                          {sn.senior_answers && (
+                            <div style={{ marginTop: 6, color: "#6B7280" }}>
+                              &rarr; {sn.senior_answers}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 학생 상태 */}
+                    {(sn.student_mood || sn.study_attitude || sn.special_observations) && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                          ■ 학생 상태 관찰
+                        </div>
+                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6, fontSize: 13 }}>
+                          {sn.student_mood && <span>· 전반적 분위기: {sn.student_mood}</span>}
+                          {sn.study_attitude && <span>· 공부 태도: {sn.study_attitude}</span>}
+                        </div>
+                        {sn.special_observations && (
+                          <div style={{ padding: "6px 12px", background: "#FEF3C7", borderRadius: 6, fontSize: 13 }}>
+                            · 특이사항: &quot;{sn.special_observations}&quot;
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 실천 사항 */}
+                    {sn.action_items && sn.action_items.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                          ■ 선배가 제안한 실천 사항
+                        </div>
+                        {sn.action_items.map((a, i) => (
+                          <div key={i} style={{ fontSize: 13, padding: "4px 0" }}>
+                            {i + 1}. &quot;{a.action}&quot;
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 다음 확인 사항 */}
+                    {sn.next_checkpoints && sn.next_checkpoints.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                          ■ 다음 상담 시 확인 필요 사항
+                        </div>
+                        {sn.next_checkpoints.map((c, i) => (
+                          <div key={i} style={{ fontSize: 13, padding: "4px 0" }}>
+                            · {c.checkpoint}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 맥락 전달 */}
+                    {sn.context_for_next && (
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                          ■ 선배가 상담사에게 전달하는 맥락
+                        </div>
+                        <div style={{
+                          padding: 12, background: "#EFF6FF", border: "1px solid #BFDBFE",
+                          borderRadius: 6, fontSize: 13, lineHeight: 1.6,
+                        }}>
+                          {sn.context_for_next}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}

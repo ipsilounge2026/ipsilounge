@@ -354,6 +354,42 @@ export async function getCounselorSummaryForSenior(userId: string) {
   return request(`/api/admin/senior-consultation/student/${userId}/counselor-summary`);
 }
 
+// --- 선배 상담 기록 ---
+export async function getSeniorNotes(userId?: string, seniorId?: string, sessionTiming?: string) {
+  const params = new URLSearchParams();
+  if (userId) params.set("user_id", userId);
+  if (seniorId) params.set("senior_id", seniorId);
+  if (sessionTiming) params.set("session_timing", sessionTiming);
+  return request(`/api/admin/senior-consultation/notes?${params}`);
+}
+
+export async function getSeniorNote(id: string) {
+  return request(`/api/admin/senior-consultation/notes/${id}`);
+}
+
+export async function updateSeniorNoteReview(id: string, data: {
+  review_status: string;
+  review_notes?: string;
+  sharing_settings?: Record<string, boolean>;
+  content_checklist?: { label: string; checked: boolean }[];
+}) {
+  return request(`/api/admin/senior-consultation/notes/${id}/review`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function addSeniorNoteAddendum(id: string, content: string) {
+  return request(`/api/admin/senior-consultation/notes/${id}/addendum`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function getSeniorNotesForCounselor(userId: string) {
+  return request(`/api/admin/senior-consultation/student/${userId}/senior-notes`);
+}
+
 // --- 설명회 관리 ---
 export async function getSeminarDashboard(scheduleId?: string) {
   const params = new URLSearchParams();
