@@ -84,6 +84,31 @@ interface ComputedStats {
     self_study_ratio: number;
     subject_balance: number;
   };
+  c4_type?: {
+    type: string;
+    recommended_admission: string;
+    naesin_avg: number;
+    mock_pct_avg: number;
+    susi_reachable_tier: number;
+    susi_reachable_label: string;
+    susi_sample_univs: string[];
+    jeongsi_reachable_tier: number;
+    jeongsi_reachable_label: string;
+    jeongsi_sample_univs: string[];
+    comparison_table: { subject: string; naesin_grade: number | null; mock_rank: string | null; mock_percentile: number | null; mock_raw_score: number | null }[];
+    reasoning: string;
+  };
+  auto_comments?: Record<string, string>;
+  roadmap?: {
+    items: { area: string; area_key: string; priority: string; title: string; description: string; period: string; current_score: number; current_grade: string }[];
+    matrix: {
+      phases: string[];
+      tracks: string[];
+      cells: Record<string, Record<string, string>>;
+    };
+    summary: string;
+  };
+  radar_scores?: Record<string, any>;
 }
 
 interface DeltaResult {
@@ -937,37 +962,247 @@ export default function SurveyDetailPage() {
                   <MockTrendChart computed={survey.computed} />
                   <StudyAnalysisChart computed={survey.computed} />
 
-                  {/* 상담사 코멘트 편집 영역 */}
+                  {/* C4 유형 판정 (입결 기반) */}
+                  {survey.survey_type === "high" && (survey.computed as any)?.c4_type && (
+                    <div style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>📊 C4. 내신 vs 모의고사 비교 — 유형 ���정</h4>
+                      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>입결 DB 기반으로 수시/정시 가능 대학 라인을 비교하여 자동 판정된 결과입니다. 상담사가 검토 후 수정할 수 있습니다.</div>
+
+                      {/* 수시 vs 정시 가능 대학 라인 비교 */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                        <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 14 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#1E40AF", marginBottom: 6 }}>수시 가능 라인 (내신 {(survey.computed as any).c4_type.naesin_avg}등급 기준)</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: "#1D4ED8" }}>{(survey.computed as any).c4_type.susi_reachable_label}</div>
+                          {(survey.computed as any).c4_type.susi_sample_univs?.length > 0 && (
+                            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>예시: {(survey.computed as any).c4_type.susi_sample_univs.join(", ")}</div>
+                          )}
+                        </div>
+                        <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: 14 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#166534", marginBottom: 6 }}>정시 가능 라인 (백분�� {(survey.computed as any).c4_type.mock_pct_avg}% 기준)</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: "#15803D" }}>{(survey.computed as any).c4_type.jeongsi_reachable_label}</div>
+                          {(survey.computed as any).c4_type.jeongsi_sample_univs?.length > 0 && (
+                            <div style={{ fontSize: 11, color: "#6B7280", marginTop: 4 }}>예시: {(survey.computed as any).c4_type.jeongsi_sample_univs.join(", ")}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 과목별 비교 테이블 */}
+                      {(survey.computed as any).c4_type.comparison_table?.length > 0 && (
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginBottom: 16 }}>
+                          <thead>
+                            <tr style={{ background: "#F9FAFB" }}>
+                              <th style={{ padding: "8px 12px", textAlign: "left", borderBottom: "2px solid #E5E7EB" }}>과목</th>
+                              <th style={{ padding: "8px 12px", textAlign: "center", borderBottom: "2px solid #E5E7EB" }}>내신 등급</th>
+                              <th style={{ padding: "8px 12px", textAlign: "center", borderBottom: "2px solid #E5E7EB" }}>모의 ��급</th>
+                              <th style={{ padding: "8px 12px", textAlign: "center", borderBottom: "2px solid #E5E7EB" }}>모의 백분위</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(survey.computed as any).c4_type.comparison_table.map((row: any, i: number) => (
+                              <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                                <td style={{ padding: "8px 12px" }}>{row.subject}</td>
+                                <td style={{ padding: "8px 12px", textAlign: "center" }}>{row.naesin_grade != null ? `${row.naesin_grade}등급` : "-"}</td>
+                                <td style={{ padding: "8px 12px", textAlign: "center" }}>{row.mock_rank != null ? `${row.mock_rank}등급` : "-"}</td>
+                                <td style={{ padding: "8px 12px", textAlign: "center" }}>{row.mock_percentile != null ? `${row.mock_percentile}%` : "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {/* 유형 판정 + 상담사 편집 */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                        <div>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>유형 판정</label>
+                          <select
+                            defaultValue={(survey.counselor_overrides as any)?.c4_type_override || (survey.computed as any).c4_type.type}
+                            onChange={(e) => handleSaveOverride("c4_type_override", e.target.value)}
+                            style={{ width: "100%", padding: "8px 12px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, background: "white" }}
+                          >
+                            <option value="내신형">내신형</option>
+                            <option value="균형형">균형��</option>
+                            <option value="수능형">���능형</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>추천 전형 방향</label>
+                          <select
+                            defaultValue={(survey.counselor_overrides as any)?.c4_recommended_override || (survey.computed as any).c4_type.recommended_admission}
+                            onChange={(e) => handleSaveOverride("c4_recommended_override", e.target.value)}
+                            style={{ width: "100%", padding: "8px 12px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, background: "white" }}
+                          >
+                            <option value="수시">수시</option>
+                            <option value="정시">정시</option>
+                          </select>
+                        </div>
+                      </div>
+                      <textarea
+                        defaultValue={(survey.counselor_overrides as any)?.c4_reasoning_override || (survey.computed as any).c4_type.reasoning || ""}
+                        placeholder="판정 근거 메모..."
+                        onBlur={(e) => {
+                          const val = e.target.value.trim();
+                          const prev = (survey.counselor_overrides as any)?.c4_reasoning_override || (survey.computed as any)?.c4_type?.reasoning || "";
+                          if (val !== prev) handleSaveOverride("c4_reasoning_override", val);
+                        }}
+                        style={{ width: "100%", minHeight: 80, padding: 12, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+                      />
+                    </div>
+                  )}
+
+                  {/* 6개 영역 상담사 분석 코멘트 */}
                   <div style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
-                    <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>상담사 분석 코멘트</h4>
-                    <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>자동 분석 결과에 대한 상담사의 해석이나 보충 의견을 작성하세요. 이 내용은 리포트에 반영됩니다.</div>
-                    <textarea
-                      defaultValue={(survey.counselor_overrides as any)?.grade_trend_comment || ""}
-                      placeholder="성적 추이에 대한 상담사 코멘트..."
-                      onBlur={(e) => {
-                        const val = e.target.value.trim();
-                        const prev = (survey.counselor_overrides as any)?.grade_trend_comment || "";
-                        if (val !== prev) handleSaveOverride("grade_trend_comment", val);
-                      }}
-                      style={{
-                        width: "100%", minHeight: 80, padding: 12, border: "1px solid #D1D5DB",
-                        borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", marginBottom: 12,
-                      }}
-                    />
-                    <textarea
-                      defaultValue={(survey.counselor_overrides as any)?.study_analysis_comment || ""}
-                      placeholder="학습 습관 분석에 대한 상담사 코멘트..."
-                      onBlur={(e) => {
-                        const val = e.target.value.trim();
-                        const prev = (survey.counselor_overrides as any)?.study_analysis_comment || "";
-                        if (val !== prev) handleSaveOverride("study_analysis_comment", val);
-                      }}
-                      style={{
-                        width: "100%", minHeight: 80, padding: 12, border: "1px solid #D1D5DB",
-                        borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit",
-                      }}
-                    />
+                    <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>✏️ 상담사 분석 코멘트</h4>
+                    <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 16 }}>자동 생성된 초안을 검토하고 필요 시 수정하세요. 이 내용은 리포트에 반���됩니다.</div>
+
+                    {[
+                      { key: "grade_trend_comment", label: "내신 등급 추이 분석", icon: "📈" },
+                      { key: "mock_trend_comment", label: "모��고사 추이 분석", icon: "📊" },
+                      { key: "comparison_comment", label: "내신 vs 모의고사 비교 분석", icon: "⚖️" },
+                      { key: "subject_competitiveness_comment", label: "과목별 경쟁력 분석", icon: "📚" },
+                      { key: "study_method_comment", label: "학습 방법 진단", icon: "🎯" },
+                    ].map(({ key, label, icon }) => (
+                      <div key={key} style={{ marginBottom: 16 }}>
+                        <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>{icon} {label}</label>
+                        <textarea
+                          defaultValue={
+                            (survey.counselor_overrides as any)?.[key]
+                            || (survey.computed as any)?.auto_comments?.[key]
+                            || ""
+                          }
+                          placeholder={`${label} 코멘트...`}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            const prev = (survey.counselor_overrides as any)?.[key]
+                              || (survey.computed as any)?.auto_comments?.[key] || "";
+                            if (val !== prev) handleSaveOverride(key, val);
+                          }}
+                          style={{
+                            width: "100%", minHeight: 80, padding: 12, border: "1px solid #D1D5DB",
+                            borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit",
+                            background: (survey.counselor_overrides as any)?.[key] ? "#FFFBEB" : "#F9FAFB",
+                          }}
+                        />
+                        {(survey.counselor_overrides as any)?.[key] && (
+                          <div style={{ fontSize: 11, color: "#D97706", marginTop: 2 }}>상담사 수정됨</div>
+                        )}
+                      </div>
+                    ))}
                     {overrideSaving && <div style={{ fontSize: 12, color: "#3B82F6", marginTop: 8 }}>저장 중...</div>}
+                  </div>
+
+                  {/* 맞춤 전략 로드맵 (Phase × 4트랙) */}
+                  {survey.survey_type === "high" && (survey.computed as any)?.roadmap?.matrix && (
+                    <div style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🗺️ 맞춤 전략 로드맵</h4>
+                      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>
+                        자동 생성된 로드맵 초안입니다. 각 셀을 클릭하여 내용을 수정할 수 있습니다.
+                        {(survey.computed as any).roadmap.summary && (
+                          <span style={{ display: "block", marginTop: 4, fontStyle: "italic" }}>{(survey.computed as any).roadmap.summary}</span>
+                        )}
+                      </div>
+
+                      {/* 우선순위 항��� */}
+                      {(survey.computed as any).roadmap.items?.length > 0 && (
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>핵심 개선 항목</div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {(survey.computed as any).roadmap.items.slice(0, 6).map((item: any, i: number) => (
+                              <div key={i} style={{
+                                background: item.priority === "상" ? "#FEF2F2" : item.priority === "중" ? "#FEF3C7" : "#F0FDF4",
+                                border: `1px solid ${item.priority === "상" ? "#FECACA" : item.priority === "중" ? "#FDE68A" : "#BBF7D0"}`,
+                                borderRadius: 8, padding: "8px 12px", fontSize: 12, flex: "1 1 auto", minWidth: 200,
+                              }}>
+                                <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                                  <span style={{ color: item.priority === "상" ? "#DC2626" : item.priority === "��" ? "#D97706" : "#16A34A" }}>
+                                    [{item.priority}]
+                                  </span>{" "}
+                                  {item.title}
+                                </div>
+                                <div style={{ color: "#6B7280", fontSize: 11 }}>{item.description}</div>
+                                <div style={{ color: "#9CA3AF", fontSize: 11, marginTop: 2 }}>{item.area} · {item.current_grade}등급 ({item.current_score}점)</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Phase × Track 매트릭스 */}
+                      {(() => {
+                        const matrix = (survey.computed as any).roadmap.matrix;
+                        const phases = matrix?.phases || [];
+                        const tracks = matrix?.tracks || [];
+                        const cells = matrix?.cells || {};
+                        if (phases.length === 0 || tracks.length === 0) return null;
+
+                        return (
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                              <thead>
+                                <tr>
+                                  <th style={{ padding: "8px 10px", background: "#4472C4", color: "white", borderRight: "1px solid #3B5EA6", textAlign: "left", minWidth: 100 }}>트랙 \\ Phase</th>
+                                  {phases.map((phase: string) => (
+                                    <th key={phase} style={{ padding: "8px 10px", background: "#4472C4", color: "white", borderRight: "1px solid #3B5EA6", textAlign: "center", minWidth: 160 }}>{phase}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {tracks.map((track: string, ti: number) => (
+                                  <tr key={track} style={{ background: ti % 2 === 0 ? "#F9FAFB" : "white" }}>
+                                    <td style={{ padding: "8px 10px", fontWeight: 600, borderRight: "1px solid #E5E7EB", borderBottom: "1px solid #E5E7EB", whiteSpace: "nowrap" }}>{track}</td>
+                                    {phases.map((phase: string) => {
+                                      const cellKey = `${track}__${phase}`;
+                                      const overrideKey = `roadmap_cell_${ti}_${phases.indexOf(phase)}`;
+                                      const autoVal = cells?.[track]?.[phase] || "";
+                                      const overrideVal = (survey.counselor_overrides as any)?.[overrideKey];
+                                      const displayVal = overrideVal ?? autoVal;
+
+                                      return (
+                                        <td key={cellKey} style={{ padding: 4, borderRight: "1px solid #E5E7EB", borderBottom: "1px solid #E5E7EB", verticalAlign: "top" }}>
+                                          <textarea
+                                            defaultValue={displayVal}
+                                            onBlur={(e) => {
+                                              const val = e.target.value.trim();
+                                              if (val !== (overrideVal ?? autoVal)) handleSaveOverride(overrideKey, val);
+                                            }}
+                                            style={{
+                                              width: "100%", minHeight: 60, padding: 6, border: "1px solid transparent",
+                                              borderRadius: 4, fontSize: 11, resize: "vertical", fontFamily: "inherit",
+                                              background: overrideVal != null ? "#FFFBEB" : "transparent",
+                                            }}
+                                            onFocus={(e) => { e.target.style.borderColor = "#3B82F6"; }}
+                                            onBlurCapture={(e) => { (e.target as HTMLTextAreaElement).style.borderColor = "transparent"; }}
+                                          />
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* 상담사 메모 (리포트 미반���) */}
+                  <div style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>📝 상담사 메모 <span style={{ fontWeight: 400, fontSize: 12, color: "#9CA3AF" }}>(리포트 미반영)</span></h4>
+                    <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>상담 시 확인할 포인트, 주의사항 등을 메모합니다. 학생/학부모에게 전달되지 않습니다.</div>
+                    <textarea
+                      defaultValue={(survey.counselor_overrides as any)?.counselor_private_memo || ""}
+                      placeholder="상담 전 메모, 이 학생 상담 시 주의사항..."
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        const prev = (survey.counselor_overrides as any)?.counselor_private_memo || "";
+                        if (val !== prev) handleSaveOverride("counselor_private_memo", val);
+                      }}
+                      style={{
+                        width: "100%", minHeight: 80, padding: 12, border: "1px dashed #D1D5DB",
+                        borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit",
+                        background: "#FAFAFA",
+                      }}
+                    />
                   </div>
                 </>
               ) : (

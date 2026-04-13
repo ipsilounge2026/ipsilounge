@@ -664,6 +664,23 @@ def _compute_stats(survey_type: str, answers: dict, timing: str | None = None) -
             study=radar["study"], career=radar["career"],
             timing=timing,
         )
+        # C4 유형 판정 자동 생성 (입결 DB 기반)
+        try:
+            from app.services.counselor_type_service import determine_counselor_type
+            result["c4_type"] = determine_counselor_type(answers)
+        except Exception:
+            result["c4_type"] = None
+        # 6개 영역 분석 코멘트 자동 초안 생성
+        try:
+            from app.services.comment_generation_service import generate_all_comments
+            result["auto_comments"] = generate_all_comments(
+                answers=answers,
+                radar_scores=radar,
+                computed_stats=result,
+                c4_result=result.get("c4_type"),
+            )
+        except Exception:
+            result["auto_comments"] = {}
         return result
     elif survey_type == "preheigh1":
         result = _compute_preheigh1(answers)
