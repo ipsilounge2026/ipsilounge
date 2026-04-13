@@ -89,8 +89,26 @@ class _SurveyReportScreenState extends State<SurveyReportScreen> {
             _GradeTrendCard(data: _computed!['grade_trend'] as Map<String, dynamic>),
             const SizedBox(height: 16),
           ],
-          // 학습 습관 분석 (예비고1)
-          if (isPreheigh1 && _computed?['study_analysis'] != null && (_computed!['study_analysis'] as Map).isNotEmpty) ...[
+          // 고등학생 내신 등급 추이
+          if (!isPreheigh1 && _computed?['grade_trend'] != null) ...[
+            _HighGradeTrendCard(data: _computed!['grade_trend'] as Map<String, dynamic>),
+            const SizedBox(height: 16),
+          ],
+          // 고등학생 모의고사 추이
+          if (!isPreheigh1 && _computed?['mock_trend'] != null) ...[
+            _MockTrendCard(data: _computed!['mock_trend'] as Map<String, dynamic>),
+            const SizedBox(height: 16),
+          ],
+          // 고등학생 내신 vs 모의 비교
+          if (!isPreheigh1 && _computed?['grade_trend'] != null && _computed?['mock_trend'] != null) ...[
+            _NaesinMockCompareCard(
+              gradeTrend: _computed!['grade_trend'] as Map<String, dynamic>,
+              mockTrend: _computed!['mock_trend'] as Map<String, dynamic>,
+            ),
+            const SizedBox(height: 16),
+          ],
+          // 학습 습관 분석 (공통)
+          if (_computed?['study_analysis'] != null && (_computed!['study_analysis'] as Map).isNotEmpty) ...[
             _StudyAnalysisCard(data: _computed!['study_analysis'] as Map<String, dynamic>),
             const SizedBox(height: 16),
           ],
@@ -1083,6 +1101,537 @@ class _SummaryMini extends StatelessWidget {
           Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
           const SizedBox(height: 2),
           Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 고등학생 내신 등급 추이 카드 ──
+
+class _HighGradeTrendCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _HighGradeTrendCard({required this.data});
+
+  static const _subjColors = {
+    '국어': Color(0xFF70AD47), '영어': Color(0xFFED7D31), '수학': Color(0xFF4472C4),
+    '탐구1': Color(0xFFFFC000), '탐구2': Color(0xFF5B9BD5), '사회': Color(0xFF9DC3E6),
+  };
+
+  static const _trendBadges = {
+    '상승': ('↑ 상승', Color(0xFF16A34A)),
+    '유지': ('→ 유지', Color(0xFF6B7280)),
+    '등락': ('↕ 등락', Color(0xFFD97706)),
+    '하락': ('↓ 하락', Color(0xFFDC2626)),
+  };
+
+  static const _distColors = [Color(0xFF4338CA), Color(0xFF059669), Color(0xFFD97706), Color(0xFFDC2626), Color(0xFF6B7280)];
+
+  @override
+  Widget build(BuildContext context) {
+    final trendData = data['data'] as List? ?? [];
+    final subjectTrends = data['subject_trends'] as Map<String, dynamic>? ?? {};
+    final badge = data['trend_badge'] as String?;
+    final gradeDist = data['grade_distribution'] as List? ?? [];
+
+    if (trendData.isEmpty) return const SizedBox();
+
+    final badgeInfo = badge != null ? _trendBadges[badge] : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Text('내신 등급 추이', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            if (badgeInfo != null) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(color: badgeInfo.$2.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                child: Text(badgeInfo.$1, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: badgeInfo.$2)),
+              ),
+            ],
+          ]),
+          const SizedBox(height: 4),
+          const Text('학기별 전과목 평균 등급 (낮을수록 우수)', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          const SizedBox(height: 16),
+
+          // 전과목 평균 등급 라인차트
+          const Text('전과목 평균 등급', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 180,
+            child: LineChart(LineChartData(
+              minY: 1, maxY: 5,
+              gridData: FlGridData(show: true, drawVerticalLine: false,
+                getDrawingHorizontalLine: (_) => const FlLine(color: Color(0xFFE5E7EB), strokeWidth: 0.5)),
+              titlesData: FlTitlesData(
+                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+                  getTitlesWidget: (val, _) {
+                    final idx = val.toInt();
+                    if (idx < 0 || idx >= trendData.length) return const SizedBox();
+                    return Text((trendData[idx] as Map)['semester'] ?? '', style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)));
+                  })),
+                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+                  getTitlesWidget: (val, _) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))))),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              ),
+              borderData: FlBorderData(show: false),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: trendData.asMap().entries.map((e) {
+                    final avg = ((e.value as Map)['avg_grade'] ?? 3).toDouble();
+                    return FlSpot(e.key.toDouble(), avg);
+                  }).toList(),
+                  color: const Color(0xFF4472C4), barWidth: 2.5,
+                  dotData: FlDotData(show: true, getDotPainter: (_, __, ___, ____) =>
+                    FlDotCirclePainter(radius: 4, color: const Color(0xFF4472C4), strokeColor: Colors.white, strokeWidth: 1.5)),
+                  isCurved: true, curveSmoothness: 0.2,
+                ),
+              ],
+            )),
+          ),
+
+          // 과목별 추이
+          if (subjectTrends.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('과목별 등급 추이', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const SizedBox(height: 8),
+            SizedBox(height: 200, child: _buildSubjChart(subjectTrends)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12, runSpacing: 4,
+              children: subjectTrends.keys.map((s) {
+                final c = _subjColors[s] ?? const Color(0xFF6B7280);
+                return Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(width: 12, height: 3, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 4),
+                  Text(s, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                ]);
+              }).toList(),
+            ),
+          ],
+
+          // 등급 분포 변화
+          if (gradeDist.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('등급 분포 변화', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const SizedBox(height: 8),
+            ...gradeDist.map((sem) {
+              final m = sem as Map<String, dynamic>;
+              final total = [1,2,3,4,5].fold<int>(0, (a, g) => a + ((m['$g'] ?? 0) as int));
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(m['semester'] ?? '', style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: SizedBox(
+                      height: 16,
+                      child: Row(children: [1,2,3,4,5].map((g) {
+                        final cnt = (m['$g'] ?? 0) as int;
+                        if (cnt == 0 || total == 0) return const SizedBox();
+                        return Expanded(
+                          flex: cnt,
+                          child: Container(color: _distColors[g - 1]),
+                        );
+                      }).toList()),
+                    ),
+                  ),
+                ]),
+              );
+            }),
+            Wrap(
+              spacing: 10, runSpacing: 4,
+              children: [1,2,3,4,5].map((g) => Row(mainAxisSize: MainAxisSize.min, children: [
+                Container(width: 10, height: 10, decoration: BoxDecoration(color: _distColors[g - 1], borderRadius: BorderRadius.circular(2))),
+                const SizedBox(width: 3),
+                Text('${g}등급', style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280))),
+              ])).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubjChart(Map<String, dynamic> subjectTrends) {
+    final allSems = <String>{};
+    for (final arr in subjectTrends.values) {
+      for (final p in (arr as List)) allSems.add((p as Map)['semester'] as String);
+    }
+    final sems = allSems.toList()..sort();
+
+    final bars = <LineChartBarData>[];
+    for (final entry in subjectTrends.entries) {
+      final color = _subjColors[entry.key] ?? const Color(0xFF6B7280);
+      final spots = <FlSpot>[];
+      for (var i = 0; i < sems.length; i++) {
+        final pt = (entry.value as List).cast<Map>().where((p) => p['semester'] == sems[i]).firstOrNull;
+        if (pt != null) spots.add(FlSpot(i.toDouble(), (pt['grade'] ?? 3).toDouble()));
+      }
+      bars.add(LineChartBarData(spots: spots, color: color, barWidth: 2,
+        dotData: FlDotData(show: true, getDotPainter: (_, __, ___, ____) =>
+          FlDotCirclePainter(radius: 3, color: color, strokeColor: Colors.white, strokeWidth: 1)),
+        isCurved: true, curveSmoothness: 0.2));
+    }
+
+    return LineChart(LineChartData(
+      minY: 1, maxY: 5,
+      gridData: FlGridData(show: true, drawVerticalLine: false,
+        getDrawingHorizontalLine: (_) => const FlLine(color: Color(0xFFE5E7EB), strokeWidth: 0.5)),
+      titlesData: FlTitlesData(
+        bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+          getTitlesWidget: (val, _) {
+            final idx = val.toInt();
+            if (idx < 0 || idx >= sems.length) return const SizedBox();
+            return Text(sems[idx], style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)));
+          })),
+        leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+          getTitlesWidget: (val, _) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))))),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      ),
+      borderData: FlBorderData(show: false),
+      lineBarsData: bars,
+    ));
+  }
+}
+
+// ── 고등학생 모의고사 추이 카드 ──
+
+class _MockTrendCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _MockTrendCard({required this.data});
+
+  static const _areaColors = {
+    '국어': Color(0xFF70AD47), '수학': Color(0xFF4472C4), '영어': Color(0xFFED7D31),
+    '탐구1': Color(0xFFFFC000), '탐구2': Color(0xFF5B9BD5),
+  };
+
+  static const _trendBadges = {
+    '상승': ('↑ 상승', Color(0xFF16A34A)),
+    '유지': ('→ 유지', Color(0xFF6B7280)),
+    '등락': ('↕ 등락', Color(0xFFD97706)),
+    '하락': ('↓ 하락', Color(0xFFDC2626)),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final avgTrend = data['avg_trend'] as List? ?? [];
+    final areaTrends = data['area_trends'] as Map<String, dynamic>? ?? {};
+    final badge = data['trend_badge'] as String?;
+    final weakAreas = data['weak_areas'] as List? ?? [];
+
+    if (avgTrend.isEmpty) return const SizedBox();
+    final badgeInfo = badge != null ? _trendBadges[badge] : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Text('모의고사 추이', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            if (badgeInfo != null) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(color: badgeInfo.$2.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                child: Text(badgeInfo.$1, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: badgeInfo.$2)),
+              ),
+            ],
+          ]),
+          const SizedBox(height: 4),
+          const Text('모의고사 회차별 평균 등급 (낮을수록 우수)', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          const SizedBox(height: 16),
+
+          // 전 영역 평균 등급
+          const Text('전 영역 평균 등급', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 180,
+            child: LineChart(LineChartData(
+              minY: 1, maxY: 9,
+              gridData: FlGridData(show: true, drawVerticalLine: false,
+                getDrawingHorizontalLine: (_) => const FlLine(color: Color(0xFFE5E7EB), strokeWidth: 0.5)),
+              titlesData: FlTitlesData(
+                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+                  getTitlesWidget: (val, _) {
+                    final idx = val.toInt();
+                    if (idx < 0 || idx >= avgTrend.length) return const SizedBox();
+                    return Text((avgTrend[idx] as Map)['session'] ?? '', style: const TextStyle(fontSize: 9, color: Color(0xFF6B7280)));
+                  })),
+                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+                  getTitlesWidget: (val, _) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))))),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              ),
+              borderData: FlBorderData(show: false),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: avgTrend.asMap().entries.map((e) {
+                    return FlSpot(e.key.toDouble(), ((e.value as Map)['avg_rank'] ?? 5).toDouble());
+                  }).toList(),
+                  color: const Color(0xFF4472C4), barWidth: 2.5,
+                  dotData: FlDotData(show: true, getDotPainter: (_, __, ___, ____) =>
+                    FlDotCirclePainter(radius: 4, color: const Color(0xFF4472C4), strokeColor: Colors.white, strokeWidth: 1.5)),
+                  isCurved: true, curveSmoothness: 0.2,
+                ),
+              ],
+            )),
+          ),
+
+          // 영역별 추이
+          if (areaTrends.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('영역별 등급 추이', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const SizedBox(height: 8),
+            SizedBox(height: 200, child: _buildAreaChart(areaTrends)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12, runSpacing: 4,
+              children: areaTrends.keys.map((a) {
+                final c = _areaColors[a] ?? const Color(0xFF6B7280);
+                return Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(width: 12, height: 3, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 4),
+                  Text(a, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                ]);
+              }).toList(),
+            ),
+          ],
+
+          // 취약 영역
+          if (weakAreas.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('취약 영역', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const SizedBox(height: 8),
+            ...weakAreas.map((w) {
+              final m = w as Map<String, dynamic>;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                ),
+                child: Row(children: [
+                  Text(m['area'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFDC2626))),
+                  const SizedBox(width: 10),
+                  Text('평균 ${(m['avg_rank'] ?? 0).toStringAsFixed(1)}등급', style: const TextStyle(fontSize: 12, color: Color(0xFFDC2626))),
+                  const Spacer(),
+                  Text('전체 대비 +${(m['gap'] ?? 0).toStringAsFixed(1)}', style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+                ]),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAreaChart(Map<String, dynamic> areaTrends) {
+    final allSes = <String>{};
+    for (final arr in areaTrends.values) {
+      for (final p in (arr as List)) allSes.add((p as Map)['session'] as String);
+    }
+    final sessions = allSes.toList()..sort();
+
+    final bars = <LineChartBarData>[];
+    for (final entry in areaTrends.entries) {
+      final color = _areaColors[entry.key] ?? const Color(0xFF6B7280);
+      final spots = <FlSpot>[];
+      for (var i = 0; i < sessions.length; i++) {
+        final pt = (entry.value as List).cast<Map>().where((p) => p['session'] == sessions[i]).firstOrNull;
+        if (pt != null) spots.add(FlSpot(i.toDouble(), (pt['rank'] ?? 5).toDouble()));
+      }
+      bars.add(LineChartBarData(spots: spots, color: color, barWidth: 2,
+        dotData: FlDotData(show: true, getDotPainter: (_, __, ___, ____) =>
+          FlDotCirclePainter(radius: 3, color: color, strokeColor: Colors.white, strokeWidth: 1)),
+        isCurved: true, curveSmoothness: 0.2));
+    }
+
+    return LineChart(LineChartData(
+      minY: 1, maxY: 9,
+      gridData: FlGridData(show: true, drawVerticalLine: false,
+        getDrawingHorizontalLine: (_) => const FlLine(color: Color(0xFFE5E7EB), strokeWidth: 0.5)),
+      titlesData: FlTitlesData(
+        bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+          getTitlesWidget: (val, _) {
+            final idx = val.toInt();
+            if (idx < 0 || idx >= sessions.length) return const SizedBox();
+            return Text(sessions[idx], style: const TextStyle(fontSize: 9, color: Color(0xFF6B7280)));
+          })),
+        leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+          getTitlesWidget: (val, _) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))))),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      ),
+      borderData: FlBorderData(show: false),
+      lineBarsData: bars,
+    ));
+  }
+}
+
+// ── 내신 vs 모의 비교 카드 (고등학생) ──
+
+class _NaesinMockCompareCard extends StatelessWidget {
+  final Map<String, dynamic> gradeTrend;
+  final Map<String, dynamic> mockTrend;
+  const _NaesinMockCompareCard({required this.gradeTrend, required this.mockTrend});
+
+  @override
+  Widget build(BuildContext context) {
+    final gradeData = gradeTrend['data'] as List? ?? [];
+    final subjectTrends = gradeTrend['subject_trends'] as Map<String, dynamic>? ?? {};
+    final areaTrends = mockTrend['area_trends'] as Map<String, dynamic>? ?? {};
+
+    if (gradeData.isEmpty) return const SizedBox();
+
+    // 최근 내신 과목별 등급
+    final latestGrade = <String, double>{};
+    for (final entry in subjectTrends.entries) {
+      final arr = entry.value as List;
+      if (arr.isNotEmpty) latestGrade[entry.key] = ((arr.last as Map)['grade'] ?? 0).toDouble();
+    }
+
+    // 최근 모의 영역별 등급
+    final latestMock = <String, double>{};
+    for (final entry in areaTrends.entries) {
+      final arr = entry.value as List;
+      if (arr.isNotEmpty) latestMock[entry.key] = ((arr.last as Map)['rank'] ?? 0).toDouble();
+    }
+
+    final rows = [
+      ('국어', latestGrade['국어'], latestMock['국어']),
+      ('수학', latestGrade['수학'], latestMock['수학']),
+      ('영어', latestGrade['영어'], latestMock['영어']),
+      ('탐구1', latestGrade['탐구1'], latestMock['탐구1']),
+      ('탐구2', latestGrade['탐구2'], latestMock['탐구2']),
+    ].where((r) => r.$2 != null || r.$3 != null).toList();
+
+    if (rows.isEmpty) return const SizedBox();
+
+    final lastAvgGrade = (gradeData.last as Map)['avg_grade']?.toDouble();
+    final mockAvg = mockTrend['avg_trend'] as List? ?? [];
+    final lastAvgMock = mockAvg.isNotEmpty ? (mockAvg.last as Map)['avg_rank']?.toDouble() : null;
+
+    String typeHint = '';
+    if (lastAvgGrade != null && lastAvgMock != null) {
+      final conv = lastAvgGrade * 2 - 1;
+      final diff = lastAvgMock - conv;
+      typeHint = diff > 1.5 ? '내신형' : diff < -1.5 ? '수능형' : '균형형';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('내신 vs 모의고사 비교', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          const Text('최근 내신(5등급) vs 최근 모의(9등급) 비교', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          const SizedBox(height: 16),
+
+          // 테이블 헤더
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: const BoxDecoration(
+              color: Color(0xFF4472C4),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+            ),
+            child: const Row(children: [
+              Expanded(child: Text('과목', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white))),
+              Expanded(child: Text('내신', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white))),
+              Expanded(child: Text('모의', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white))),
+              Expanded(child: Text('Gap', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white))),
+            ]),
+          ),
+
+          // 테이블 행
+          ...rows.asMap().entries.map((e) {
+            final (label, naesin, mock) = e.value;
+            final gap = naesin != null && mock != null ? mock - (naesin * 2 - 1) : null;
+            return Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: e.key % 2 == 0 ? Colors.white : const Color(0xFFF9FAFB),
+                border: const Border(top: BorderSide(color: Color(0xFFF3F4F6))),
+              ),
+              child: Row(children: [
+                Expanded(child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                Expanded(child: Text(naesin != null ? naesin.toStringAsFixed(1) : '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+                Expanded(child: Text(mock != null ? mock.toStringAsFixed(1) : '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+                Expanded(child: Text(
+                  gap != null ? (gap > 0 ? '+${gap.toStringAsFixed(1)}' : gap.toStringAsFixed(1)) : '-',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                    color: gap == null ? const Color(0xFF6B7280) : gap > 1 ? const Color(0xFFDC2626) : gap < -1 ? const Color(0xFF16A34A) : const Color(0xFF6B7280)),
+                )),
+              ]),
+            );
+          }),
+
+          // 평균 + 유형
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Row(children: [
+              if (lastAvgGrade != null) ...[
+                const Text('내신 ', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                Text('${lastAvgGrade.toStringAsFixed(2)}등급', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                const SizedBox(width: 16),
+              ],
+              if (lastAvgMock != null) ...[
+                const Text('모의 ', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                Text('${lastAvgMock.toStringAsFixed(2)}등급', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              ],
+              const Spacer(),
+              if (typeHint.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: typeHint == '내신형' ? const Color(0xFFEEF2FF)
+                         : typeHint == '수능형' ? const Color(0xFFECFDF5)
+                         : const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(typeHint, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                    color: typeHint == '내신형' ? const Color(0xFF4338CA)
+                         : typeHint == '수능형' ? const Color(0xFF059669)
+                         : const Color(0xFFD97706))),
+                ),
+            ]),
+          ),
+          const SizedBox(height: 8),
+          const Text('※ Gap은 5등급→9등급 환산 참고값. 정확한 유형 판정은 상담사가 확정합니다.',
+            style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF), height: 1.4)),
         ],
       ),
     );

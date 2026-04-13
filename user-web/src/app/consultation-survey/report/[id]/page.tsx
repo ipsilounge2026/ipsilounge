@@ -169,16 +169,29 @@ export default function ReportPage() {
       {/* 레이더 차트 */}
       <RadarSection rs={rs} labels={radarLabels} />
 
-      {/* 성적 추이 차트 (예비고1만) */}
+      {/* 성적 추이 차트 */}
       {isPreheigh1 && computed?.grade_trend && (
         <GradeTrendSection data={computed.grade_trend} />
+      )}
+      {!isPreheigh1 && computed?.grade_trend && (
+        <HighGradeTrendSection data={computed.grade_trend} />
+      )}
+
+      {/* 모의고사 추이 차트 (고등학생만) */}
+      {!isPreheigh1 && computed?.mock_trend && (
+        <MockTrendSection data={computed.mock_trend} />
+      )}
+
+      {/* 내신 vs 모의 비교 (고등학생만) */}
+      {!isPreheigh1 && computed?.grade_trend && computed?.mock_trend && (
+        <NaesinMockCompareSection gradeTrend={computed.grade_trend} mockTrend={computed.mock_trend} />
       )}
 
       {/* 과목별 준비율 차트 (예비고1만) */}
       {isPreheigh1 && rs.prep && <PrepRateChart prep={rs.prep} />}
 
-      {/* 학습 습관 분석 (예비고1만) */}
-      {isPreheigh1 && computed?.study_analysis && Object.keys(computed.study_analysis).length > 0 && (
+      {/* 학습 습관 분석 */}
+      {computed?.study_analysis && Object.keys(computed.study_analysis).length > 0 && (
         <StudyAnalysisSection data={computed.study_analysis} />
       )}
 
@@ -676,6 +689,355 @@ function StudyAnalysisSection({ data }: { data: any }) {
             </ResponsiveContainer>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── 고등학생 내신 등급 추이 ──
+
+const HIGH_SUBJECT_COLORS: Record<string, string> = {
+  "국어": "#70AD47", "영어": "#ED7D31", "수학": "#4472C4",
+  "탐구1": "#FFC000", "탐구2": "#5B9BD5", "사회": "#9DC3E6",
+};
+
+function HighGradeTrendSection({ data }: { data: any }) {
+  const trendData = data?.data as any[] | undefined;
+  const subjectTrends = data?.subject_trends as Record<string, any[]> | undefined;
+  const badge = data?.trend_badge as string | undefined;
+  const gradeDist = data?.grade_distribution as any[] | undefined;
+
+  if (!trendData?.length) return null;
+
+  const badgeInfo = badge ? TREND_BADGE_LABELS[badge] || { label: badge, color: "#6B7280" } : null;
+
+  // 과목별 라인차트 데이터
+  const subjectLineData: any[] = [];
+  if (subjectTrends) {
+    const allSems = new Set<string>();
+    Object.values(subjectTrends).forEach((arr: any[]) => arr.forEach((p: any) => allSems.add(p.semester)));
+    const semesters = Array.from(allSems).sort();
+    for (const sem of semesters) {
+      const row: any = { semester: sem };
+      for (const [subj, arr] of Object.entries(subjectTrends)) {
+        const pt = (arr as any[]).find((p: any) => p.semester === sem);
+        if (pt) row[subj] = pt.grade;
+      }
+      subjectLineData.push(row);
+    }
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>내신 등급 추이</h2>
+        {badgeInfo && (
+          <span style={{
+            fontSize: 12, fontWeight: 700, color: badgeInfo.color,
+            padding: "2px 10px", borderRadius: 10, background: `${badgeInfo.color}15`,
+          }}>
+            {badgeInfo.label}
+          </span>
+        )}
+      </div>
+      <p style={{ fontSize: 12, color: "var(--gray-500)", margin: "0 0 16px" }}>
+        학기별 전과목 평균 등급 및 과목별 등급 추이 (낮을수록 우수)
+      </p>
+
+      {/* 전과목 평균 등급 */}
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 8 }}>전과목 평균 등급</div>
+      <ResponsiveContainer width="100%" height={180}>
+        <LineChart data={trendData} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="semester" tick={{ fontSize: 11 }} />
+          <YAxis domain={[1, 5]} reversed tick={{ fontSize: 10 }} />
+          <Tooltip contentStyle={{ fontSize: 12 }} />
+          <Line type="monotone" dataKey="avg_grade" stroke="#4472C4" strokeWidth={2.5}
+            dot={{ r: 5, fill: "#4472C4" }} name="평균 등급" />
+        </LineChart>
+      </ResponsiveContainer>
+
+      {/* 과목별 추이 */}
+      {subjectLineData.length > 0 && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", margin: "16px 0 8px" }}>과목별 등급 추이</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={subjectLineData} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="semester" tick={{ fontSize: 11 }} />
+              <YAxis domain={[1, 5]} reversed tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {Object.keys(subjectTrends || {}).map((subj) => (
+                <Line key={subj} type="monotone" dataKey={subj} stroke={HIGH_SUBJECT_COLORS[subj] || "#6B7280"}
+                  strokeWidth={2} dot={{ r: 3 }} name={subj} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </>
+      )}
+
+      {/* 등��� 분포 변�� (누적 바) */}
+      {gradeDist && gradeDist.length > 0 && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", margin: "16px 0 8px" }}>등급 분포 변화</div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={gradeDist} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="semester" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="1" stackId="g" fill="#4338CA" name="1등급" />
+              <Bar dataKey="2" stackId="g" fill="#059669" name="2등급" />
+              <Bar dataKey="3" stackId="g" fill="#D97706" name="3등급" />
+              <Bar dataKey="4" stackId="g" fill="#DC2626" name="4등급" />
+              <Bar dataKey="5" stackId="g" fill="#6B7280" name="5등급" />
+            </BarChart>
+          </ResponsiveContainer>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 모의고사 추이 차트 (고등학생) ──
+
+const MOCK_AREA_COLORS: Record<string, string> = {
+  "국어": "#70AD47", "수학": "#4472C4", "영어": "#ED7D31",
+  "탐구1": "#FFC000", "탐구2": "#5B9BD5",
+};
+
+function MockTrendSection({ data }: { data: any }) {
+  const avgTrend = data?.avg_trend as any[] | undefined;
+  const areaTrends = data?.area_trends as Record<string, any[]> | undefined;
+  const badge = data?.trend_badge as string | undefined;
+  const weakAreas = data?.weak_areas as any[] | undefined;
+
+  if (!avgTrend?.length) return null;
+
+  const badgeInfo = badge ? TREND_BADGE_LABELS[badge] || { label: badge, color: "#6B7280" } : null;
+
+  // 영역별 라인차트 데이터
+  const areaLineData: any[] = [];
+  if (areaTrends) {
+    const allSessions = new Set<string>();
+    Object.values(areaTrends).forEach((arr: any[]) => arr.forEach((p: any) => allSessions.add(p.session)));
+    const sessions = Array.from(allSessions).sort();
+    for (const ses of sessions) {
+      const row: any = { session: ses };
+      for (const [area, arr] of Object.entries(areaTrends)) {
+        const pt = (arr as any[]).find((p: any) => p.session === ses);
+        if (pt) row[area] = pt.rank;
+      }
+      areaLineData.push(row);
+    }
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>모의고사 추이</h2>
+        {badgeInfo && (
+          <span style={{
+            fontSize: 12, fontWeight: 700, color: badgeInfo.color,
+            padding: "2px 10px", borderRadius: 10, background: `${badgeInfo.color}15`,
+          }}>
+            {badgeInfo.label}
+          </span>
+        )}
+      </div>
+      <p style={{ fontSize: 12, color: "var(--gray-500)", margin: "0 0 16px" }}>
+        모의고사 회차별 평균 등급 및 영역별 등급 추이 (낮을수록 우수)
+      </p>
+
+      {/* 전 영역 평균 등급 */}
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 8 }}>전 영역 평균 등급</div>
+      <ResponsiveContainer width="100%" height={180}>
+        <LineChart data={avgTrend} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="session" tick={{ fontSize: 11 }} />
+          <YAxis domain={[1, 9]} reversed tick={{ fontSize: 10 }} />
+          <Tooltip contentStyle={{ fontSize: 12 }} />
+          <Line type="monotone" dataKey="avg_rank" stroke="#4472C4" strokeWidth={2.5}
+            dot={{ r: 5, fill: "#4472C4" }} name="평균 등급" />
+        </LineChart>
+      </ResponsiveContainer>
+
+      {/* 영역별 추이 */}
+      {areaLineData.length > 0 && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", margin: "16px 0 8px" }}>영역별 등급 추이</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={areaLineData} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="session" tick={{ fontSize: 11 }} />
+              <YAxis domain={[1, 9]} reversed tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {Object.keys(areaTrends || {}).map((area) => (
+                <Line key={area} type="monotone" dataKey={area} stroke={MOCK_AREA_COLORS[area] || "#6B7280"}
+                  strokeWidth={2} dot={{ r: 3 }} name={area} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </>
+      )}
+
+      {/* 취약 영역 하이라이트 */}
+      {weakAreas && weakAreas.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 8 }}>취약 영역</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {weakAreas.map((w: any, i: number) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+                borderRadius: 10, background: "#FEF2F2", border: "1px solid #FCA5A5",
+              }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>{w.area}</span>
+                <span style={{ fontSize: 12, color: "#DC2626" }}>평균 {w.avg_rank}등급</span>
+                <span style={{ fontSize: 11, color: "#9CA3AF", marginLeft: "auto" }}>
+                  전��� 대비 +{w.gap.toFixed(1)}등급 낮음
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 내신 vs 모의 비교 테이블 (고등학생) ──
+
+function NaesinMockCompareSection({ gradeTrend, mockTrend }: { gradeTrend: any; mockTrend: any }) {
+  // 최근 학기 내신 데이터
+  const gradeData = gradeTrend?.data as any[] | undefined;
+  const subjectTrends = gradeTrend?.subject_trends as Record<string, any[]> | undefined;
+  // 최근 모의 데이터
+  const areaTrends = mockTrend?.area_trends as Record<string, any[]> | undefined;
+
+  if (!gradeData?.length || !areaTrends) return null;
+
+  // 최근 ������ 과목별 등급
+  const latestGrade: Record<string, number> = {};
+  if (subjectTrends) {
+    for (const [subj, arr] of Object.entries(subjectTrends)) {
+      const last = (arr as any[]).at(-1);
+      if (last) latestGrade[subj] = last.grade;
+    }
+  }
+
+  // 최근 모의 영역별 등급
+  const latestMock: Record<string, number> = {};
+  for (const [area, arr] of Object.entries(areaTrends)) {
+    const last = (arr as any[]).at(-1);
+    if (last) latestMock[area] = last.rank;
+  }
+
+  // 매핑: 내�� 과목명 → 모의 영역명
+  const compareRows = [
+    { label: "���어", naesin: latestGrade["국어"], mock: latestMock["국어"] },
+    { label: "수학", naesin: latestGrade["수학"], mock: latestMock["수학"] },
+    { label: "영어", naesin: latestGrade["영어"], mock: latestMock["영어"] },
+    { label: "탐구1", naesin: latestGrade["탐구1"], mock: latestMock["탐구1"] },
+    { label: "탐구2", naesin: latestGrade["탐구2"], mock: latestMock["탐구2"] },
+  ].filter(r => r.naesin != null || r.mock != null);
+
+  if (compareRows.length === 0) return null;
+
+  // 전체 평균
+  const lastGradeAvg = gradeData.at(-1)?.avg_grade;
+  const mockAvgData = mockTrend?.avg_trend as any[] | undefined;
+  const lastMockAvg = mockAvgData?.at(-1)?.avg_rank;
+
+  // 유형 자동 ���정 (참고용)
+  let typeHint = "";
+  if (lastGradeAvg != null && lastMockAvg != null) {
+    const naesinConverted = lastGradeAvg * 2 - 1; // 5등급→9등급 대략 환산
+    const diff = lastMockAvg - naesinConverted;
+    if (diff > 1.5) typeHint = "내신형 (내신 우위)";
+    else if (diff < -1.5) typeHint = "수능형 (모의 우위)";
+    else typeHint = "균형형";
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>내신 vs 모의고사 비교</h2>
+      <p style={{ fontSize: 12, color: "var(--gray-500)", margin: "0 0 16px" }}>
+        최근 학기 내신 등급(5���급제)과 최근 모의 등급(9등급제)을 과목별로 비교합니다
+      </p>
+
+      {/* 비교 테이블 */}
+      <div style={{ borderRadius: 10, border: "1px solid var(--gray-200)", overflow: "hidden" }}>
+        {/* 헤더 */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 0,
+          background: "#4472C4", color: "white", fontSize: 12, fontWeight: 700, textAlign: "center",
+        }}>
+          <div style={{ padding: "8px 0" }}>과목</div>
+          <div style={{ padding: "8px 0" }}>내신 (5등급)</div>
+          <div style={{ padding: "8px 0" }}>모의 (9등급)</div>
+          <div style={{ padding: "8px 0" }}>Gap</div>
+        </div>
+        {/* 행 */}
+        {compareRows.map((r, i) => {
+          const gap = r.naesin != null && r.mock != null
+            ? r.mock - (r.naesin * 2 - 1) // 5등급→9등급 대략 환산 후 비교
+            : null;
+          return (
+            <div key={i} style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 0,
+              fontSize: 13, textAlign: "center", borderTop: "1px solid var(--gray-100)",
+              background: i % 2 === 0 ? "white" : "var(--gray-50)",
+            }}>
+              <div style={{ padding: "8px 0", fontWeight: 600 }}>{r.label}</div>
+              <div style={{ padding: "8px 0" }}>{r.naesin != null ? `${r.naesin.toFixed(1)}` : "-"}</div>
+              <div style={{ padding: "8px 0" }}>{r.mock != null ? `${r.mock.toFixed(1)}` : "-"}</div>
+              <div style={{
+                padding: "8px 0", fontWeight: 600,
+                color: gap == null ? "#6B7280" : gap > 1 ? "#DC2626" : gap < -1 ? "#16A34A" : "#6B7280",
+              }}>
+                {gap != null ? (gap > 0 ? `+${gap.toFixed(1)}` : gap.toFixed(1)) : "-"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 평균 비교 + 유형 참고 */}
+      <div style={{
+        marginTop: 12, display: "flex", alignItems: "center", gap: 16,
+        padding: "12px 16px", borderRadius: 10, background: "var(--gray-50)", border: "1px solid var(--gray-200)",
+      }}>
+        {lastGradeAvg != null && (
+          <div style={{ fontSize: 12 }}>
+            <span style={{ color: "var(--gray-500)" }}>내신 평균</span>{" "}
+            <span style={{ fontWeight: 700 }}>{lastGradeAvg.toFixed(2)}등급</span>
+          </div>
+        )}
+        {lastMockAvg != null && (
+          <div style={{ fontSize: 12 }}>
+            <span style={{ color: "var(--gray-500)" }}>모의 평균</span>{" "}
+            <span style={{ fontWeight: 700 }}>{lastMockAvg.toFixed(2)}등급</span>
+          </div>
+        )}
+        {typeHint && (
+          <div style={{
+            marginLeft: "auto", fontSize: 12, fontWeight: 700, padding: "4px 12px",
+            borderRadius: 10,
+            color: typeHint.includes("내신") ? "#4338CA" : typeHint.includes("수능") ? "#059669" : "#D97706",
+            background: typeHint.includes("내신") ? "#EEF2FF" : typeHint.includes("수능") ? "#ECFDF5" : "#FFF7ED",
+          }}>
+            {typeHint}
+          </div>
+        )}
+      </div>
+
+      <div style={{
+        marginTop: 10, fontSize: 11, color: "var(--gray-400)", lineHeight: 1.5,
+      }}>
+        ※ Gap은 5등급 내신을 9등급 상당으로 환산한 참고값입니다. 정확한 유형 판정은 상담사가 확정합니다.
       </div>
     </div>
   );
