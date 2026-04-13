@@ -67,7 +67,7 @@ async def get_counselors(
             "has_slots": has_slots,
         }
 
-    # 주 담당자 없으면 활성 슬롯이 있는 전체 상담자 반환
+    # 주 담당자 없으면 활성 슬롯이 있는 상담사만 반환 (관리자/선배 제외)
     result = await db.execute(
         select(ConsultationSlot.admin_id)
         .where(
@@ -89,7 +89,11 @@ async def get_counselors(
         except ValueError:
             continue
         admin_result = await db.execute(
-            select(Admin).where(Admin.id == aid_uuid, Admin.is_active == True)
+            select(Admin).where(
+                Admin.id == aid_uuid,
+                Admin.is_active == True,
+                Admin.role == "counselor",
+            )
         )
         admin = admin_result.scalar_one_or_none()
         if admin:
@@ -398,12 +402,12 @@ async def get_available_counselors(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """담당자 변경 시 선택 가능한 상담자 목록 (현재 담당자 제외)"""
+    """담당자 변경 시 선택 가능한 상담사 목록 (현재 담당자 제외, 상담사만)"""
     assigned_admin = await _get_assigned_admin(user.id, db)
     current_admin_id = assigned_admin.id if assigned_admin else None
 
     result = await db.execute(
-        select(Admin).where(Admin.is_active == True, Admin.role.in_(["admin", "counselor", "super_admin"]))
+        select(Admin).where(Admin.is_active == True, Admin.role == "counselor")
     )
     admins = result.scalars().all()
 
@@ -413,6 +417,30 @@ async def get_available_counselors(
         if a.id != current_admin_id
     ]
     return counselors
+
+
+@router.get("/available-seniors")
+async def get_available_seniors(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """선배 변경 시 선택 가능한 선배 목록 (현재 선배 제외, 선배만)"""
+    senior_assign = await db.execute(
+        select(SeniorStudentAssignment).where(SeniorStudentAssignment.user_id == user.id)
+    )
+    current_assignment = senior_assign.scalar_one_or_none()
+    current_senior_id = current_assignment.senior_id if current_assignment else None
+
+    result = await db.execute(
+        select(Admin).where(Admin.is_active == True, Admin.role == "senior")
+    )
+    seniors = result.scalars().all()
+
+    return [
+        {"id": str(s.id), "name": s.name}
+        for s in seniors
+        if s.id != current_senior_id
+    ]
 
 
 class CounselorChangeRequestCreate(BaseModel):

@@ -113,9 +113,12 @@ async def get_all_menus(
 @router.get("")
 async def list_admins(
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_super_admin),
+    current_admin: Admin = Depends(get_current_admin),
 ):
-    """관리자 목록 조회 (super_admin 전용)"""
+    """관리자 목록 조회 (super_admin: 전체, admin: 변경요청 처리용)"""
+    if current_admin.role not in ("super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
     result = await db.execute(select(Admin).order_by(Admin.created_at))
     admins = result.scalars().all()
     return [
@@ -436,9 +439,11 @@ async def list_unmatched_students(
 async def list_change_requests(
     status_filter: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_super_admin),
+    current_admin: Admin = Depends(get_current_admin),
 ):
-    """담당자 변경 요청 목록 (super_admin 전용)"""
+    """담당자 변경 요청 목록 (최고관리자 + 관리자)"""
+    if current_admin.role not in ("super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
     query = select(CounselorChangeRequest).order_by(CounselorChangeRequest.created_at.desc())
     if status_filter:
         query = query.where(CounselorChangeRequest.status == status_filter)
@@ -490,9 +495,11 @@ async def process_change_request(
     request_id: str,
     data: ChangeRequestProcess,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_super_admin),
+    current_admin: Admin = Depends(get_current_admin),
 ):
-    """담당자 변경 요청 처리 (super_admin 전용)"""
+    """담당자 변경 요청 처리 (최고관리자 + 관리자)"""
+    if current_admin.role not in ("super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
     try:
         rid = uuid.UUID(request_id)
     except ValueError:
@@ -615,9 +622,11 @@ async def delete_senior_assignment(
 async def list_senior_change_requests(
     status_filter: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_super_admin),
+    current_admin: Admin = Depends(get_current_admin),
 ):
-    """선배 변경 요청 목록 (super_admin 전용)"""
+    """선배 변경 요청 목록 (최고관리자 + 관리자)"""
+    if current_admin.role not in ("super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
     query = select(SeniorChangeRequest).order_by(SeniorChangeRequest.created_at.desc())
     if status_filter:
         query = query.where(SeniorChangeRequest.status == status_filter)
@@ -663,9 +672,11 @@ async def process_senior_change_request(
     request_id: str,
     data: ChangeRequestProcess,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_super_admin),
+    current_admin: Admin = Depends(get_current_admin),
 ):
-    """선배 변경 요청 처리 (super_admin 전용)"""
+    """선배 변경 요청 처리 (최고관리자 + 관리자)"""
+    if current_admin.role not in ("super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
     try:
         rid = uuid.UUID(request_id)
     except ValueError:
