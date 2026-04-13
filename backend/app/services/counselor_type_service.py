@@ -358,25 +358,31 @@ def _extract_mock_pct_avg(answers: dict) -> float:
 # ============================================================
 
 def _calc_susi_reachable(naesin_avg: float) -> dict:
-    """내신 등급으로 수시 입결 매칭 → 가능 대학 티어 산출."""
+    """내신 등급으로 수시 입결 매칭 → 가능 대학 티어 산출.
+
+    최근 3년 입결의 대학·학과별 평균값을 기준으로 비교.
+    """
     susi_db = _load_susi_db()
     univ_tier_map = _build_univ_tier_map()
 
     if not susi_db:
         return {"tier": 0, "label": "데이터 없음", "sample_univs": []}
 
-    # 최신 2개년 필터
+    # 최근 3개년 필터
     years = sorted(set(r["year"] for r in susi_db if r["year"]), reverse=True)
-    recent_years = years[:2] if years else []
+    recent_years = years[:3] if years else []
     filtered = [r for r in susi_db if r["year"] in recent_years] if recent_years else susi_db
 
-    # 내신 avg <= 입결70% 인 대학 = 학생이 경쟁 가능한 곳
+    # 대학·학과별 3년 평균 입결70% 산출
+    avg_cuts = _avg_susi_by_univ_dept(filtered)
+
+    # 내신 avg <= 평균 입결70% 인 대학 = 학생이 경쟁 가능한 곳
     # 내신은 낮을수록 좋으므로, 학생 등급 <= 입결컷 이면 가능
-    reachable = [r for r in filtered if r["cut70"] >= naesin_avg]
+    reachable = [r for r in avg_cuts if r["avg_cut70"] >= naesin_avg]
 
     if not reachable:
         # 완화: 0.3 등급 여유
-        reachable = [r for r in filtered if r["cut70"] >= naesin_avg - 0.3]
+        reachable = [r for r in avg_cuts if r["avg_cut70"] >= naesin_avg - 0.3]
 
     if not reachable:
         return {"tier": 1, "label": TIER_LABELS[1], "sample_univs": []}
@@ -390,7 +396,7 @@ def _calc_susi_reachable(naesin_avg: float) -> dict:
     top_count = max(1, len(tiers_sorted) // 5)
     representative_tier = round(sum(tiers_sorted[:top_count]) / top_count)
 
-    # 해당 티어 대표 대학 3개
+    # 해당 티어 대표 대학 5개
     sample = [u for u in reachable_univs if univ_tier_map.get(u, 1) >= representative_tier][:5]
 
     return {
@@ -400,16 +406,39 @@ def _calc_susi_reachable(naesin_avg: float) -> dict:
     }
 
 
+def _avg_susi_by_univ_dept(records: list[dict]) -> list[dict]:
+    """수시 입결을 대학·학과별로 그룹핑하여 3년 평균 cut70 산출."""
+    groups: dict[tuple[str, str], list[float]] = {}
+    for r in records:
+        if r["cut70"] is None or r["cut70"] <= 0:
+            continue
+        key = (r["univ"], r["dept"])
+        groups.setdefault(key, []).append(r["cut70"])
+
+    result = []
+    for (univ, dept), cuts in groups.items():
+        result.append({
+            "univ": univ,
+            "dept": dept,
+            "avg_cut70": round(sum(cuts) / len(cuts), 3),
+            "years_count": len(cuts),
+        })
+    return result
+
+
 def _calc_jeongsi_reachable(mock_pct_avg: float) -> dict:
-    """모의 백분위로 정시 입결 매칭 → 가능 대학 티어 산출."""
+    """모의 백분위로 정시 입결 매칭 → 가능 대학 티어 산출.
+
+    최근 3년 입결의 대학·학과별 평균값을 기준으로 비교.
+    """
     jeongsi_db = _load_jeongsi_db()
 
     if not jeongsi_db:
         return {"tier": 0, "label": "데이터 없음", "sample_univs": []}
 
-    # 최신 2개년 + 백분위70% 데이터 있는 것만
+    # 최근 3개년 + 백분위70% 데이터 있는 것만
     years = sorted(set(r["year"] for r in jeongsi_db if r["year"]), reverse=True)
-    recent_years = years[:2] if years else []
+    recent_years = years[:3] if years else []
     filtered = [
         r for r in jeongsi_db
         if r["year"] in recent_years and r["pct70"] is not None and r["pct70"] > 0
@@ -417,12 +446,15 @@ def _calc_jeongsi_reachable(mock_pct_avg: float) -> dict:
         r for r in jeongsi_db if r["pct70"] is not None and r["pct70"] > 0
     ]
 
-    # 학생 백분위 >= 입결 백분위70% 이면 가능
-    reachable = [r for r in filtered if mock_pct_avg >= r["pct70"]]
+    # 대학·학과별 3년 평균 백분위70% 산출
+    avg_pcts = _avg_jeongsi_by_univ_dept(filtered)
+
+    # 학생 백분위 >= 평균 백분위70% 이면 가능
+    reachable = [r for r in avg_pcts if mock_pct_avg >= r["avg_pct70"]]
 
     if not reachable:
         # 완화: 2% 여유
-        reachable = [r for r in filtered if mock_pct_avg >= r["pct70"] - 2]
+        reachable = [r for r in avg_pcts if mock_pct_avg >= r["avg_pct70"] - 2]
 
     if not reachable:
         return {"tier": 1, "label": TIER_LABELS[1], "sample_univs": []}
@@ -445,6 +477,28 @@ def _calc_jeongsi_reachable(mock_pct_avg: float) -> dict:
         "label": TIER_LABELS.get(representative_tier, "기타"),
         "sample_univs": sample,
     }
+
+
+def _avg_jeongsi_by_univ_dept(records: list[dict]) -> list[dict]:
+    """정시 입결을 대학·학과별로 그룹핑하여 3년 평균 백분위70% 산출."""
+    groups: dict[tuple[str, str], dict] = {}
+    for r in records:
+        key = (r["univ"], r["dept"])
+        if key not in groups:
+            groups[key] = {"pcts": [], "tier": r.get("tier", "")}
+        groups[key]["pcts"].append(r["pct70"])
+
+    result = []
+    for (univ, dept), info in groups.items():
+        pcts = info["pcts"]
+        result.append({
+            "univ": univ,
+            "dept": dept,
+            "tier": info["tier"],
+            "avg_pct70": round(sum(pcts) / len(pcts), 2),
+            "years_count": len(pcts),
+        })
+    return result
 
 
 # ============================================================
