@@ -18,7 +18,7 @@ class _ConsultationManagementScreenState
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -45,6 +45,7 @@ class _ConsultationManagementScreenState
             Tab(text: '액션 플랜'),
             Tab(text: '학습 로드맵'),
             Tab(text: '변화 추적'),
+            Tab(text: '과목 경쟁력'),
           ],
         ),
       ),
@@ -55,6 +56,7 @@ class _ConsultationManagementScreenState
           _ActionPlanTab(),
           _RoadmapTab(),
           _DeltaTab(),
+          _CompetitivenessTab(),
         ],
       ),
     );
@@ -270,6 +272,30 @@ class _ActionPlanTabState extends State<_ActionPlanTab> {
     'T4': '고2 2학기',
   };
 
+  Future<void> _toggleActionItem(int planIndex, int itemIndex, bool completed) async {
+    // Optimistic update
+    setState(() {
+      final items = _plans[planIndex]['items'] as List;
+      items[itemIndex] = Map<String, dynamic>.from(items[itemIndex])
+        ..['completed'] = completed;
+    });
+
+    try {
+      final surveyId = _plans[planIndex]['survey_id'];
+      await ApiService.patch(
+        '/consultation-surveys/$surveyId/action-plan-progress',
+        {'item_index': itemIndex, 'completed': completed},
+      );
+    } catch (_) {
+      // Revert on error
+      setState(() {
+        final items = _plans[planIndex]['items'] as List;
+        items[itemIndex] = Map<String, dynamic>.from(items[itemIndex])
+          ..['completed'] = !completed;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
@@ -348,49 +374,56 @@ class _ActionPlanTabState extends State<_ActionPlanTab> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                ...items.map((item) {
+                ...items.asMap().entries.map((entry) {
+                  final itemIndex = entry.key;
+                  final item = entry.value;
                   final done = item['completed'] == true;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          done
-                              ? Icons.check_circle
-                              : Icons.radio_button_unchecked,
-                          size: 20,
-                          color: done
-                              ? const Color(0xFF16A34A)
-                              : const Color(0xFFD1D5DB),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item['content'] ?? '',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: done
-                                      ? const Color(0xFF9CA3AF)
-                                      : const Color(0xFF1F2937),
-                                  decoration: done
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                ),
-                              ),
-                              if (item['deadline'] != null &&
-                                  (item['deadline'] as String).isNotEmpty)
-                                Text('마감: ${item['deadline']}',
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Color(0xFF9CA3AF))),
-                            ],
+                  final planIndex = _plans.indexOf(plan);
+                  return InkWell(
+                    onTap: () => _toggleActionItem(planIndex, itemIndex, !done),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            done
+                                ? Icons.check_circle
+                                : Icons.radio_button_unchecked,
+                            size: 20,
+                            color: done
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFFD1D5DB),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item['content'] ?? '',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: done
+                                        ? const Color(0xFF9CA3AF)
+                                        : const Color(0xFF1F2937),
+                                    decoration: done
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ),
+                                ),
+                                if (item['deadline'] != null &&
+                                    (item['deadline'] as String).isNotEmpty)
+                                  Text('마감: ${item['deadline']}',
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF9CA3AF))),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }),
@@ -733,6 +766,8 @@ class _DeltaTab extends StatefulWidget {
 class _DeltaTabState extends State<_DeltaTab> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _deltas = [];
+  List<Map<String, dynamic>> _changeReports = [];
+  bool _reportLoading = false;
 
   static const _timingLabels = {
     'T1': '고1 1학기',
@@ -794,8 +829,59 @@ class _DeltaTabState extends State<_DeltaTab> {
         } catch (_) {}
       }
       setState(() => _deltas = deltas);
+      // Also load change reports
+      _loadChangeReports(items);
     } catch (_) {} finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadChangeReports(List items) async {
+    setState(() => _reportLoading = true);
+    try {
+      final reports = <Map<String, dynamic>>[];
+      for (final s in items) {
+        try {
+          final data = await ApiService.get(
+              '/consultation-surveys/${s['id']}/change-report') as Map<String, dynamic>;
+          if (data['has_previous'] == true) {
+            reports.add({
+              'survey_id': s['id'],
+              'timing': s['timing'] ?? '',
+              'report': data,
+            });
+          }
+        } catch (_) {}
+      }
+      setState(() => _changeReports = reports);
+    } catch (_) {} finally {
+      setState(() => _reportLoading = false);
+    }
+  }
+
+  Color _dirColor(String direction) {
+    switch (direction) {
+      case '개선': return const Color(0xFF16A34A);
+      case '하락': return const Color(0xFFDC2626);
+      case '혼재': return const Color(0xFFD97706);
+      default: return const Color(0xFF6B7280);
+    }
+  }
+
+  Color _dirBg(String direction) {
+    switch (direction) {
+      case '개선': return const Color(0xFFF0FDF4);
+      case '하락': return const Color(0xFFFEF2F2);
+      case '혼재': return const Color(0xFFFEF3C7);
+      default: return const Color(0xFFF3F4F6);
+    }
+  }
+
+  String _dirIcon(String direction) {
+    switch (direction) {
+      case '개선': return '\u25B2';
+      case '하락': return '\u25BC';
+      default: return '\u25AC';
     }
   }
 
@@ -824,7 +910,8 @@ class _DeltaTabState extends State<_DeltaTab> {
       onRefresh: _loadDeltas,
       child: ListView(
         padding: const EdgeInsets.all(16),
-        children: _deltas.map((d) {
+        children: [
+          ..._deltas.map((d) {
           final delta = d['delta'] as Map<String, dynamic>;
           final diff = delta['diff'] as Map<String, dynamic>? ?? {};
           final studyChanges = delta['study_method_changes'] as Map<String, dynamic>?;
@@ -1112,7 +1199,958 @@ class _DeltaTabState extends State<_DeltaTab> {
                 ),
             ],
           );
+        }),
+
+          // ─── 종합 변화 리포트 ───
+          if (_reportLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+
+          if (!_reportLoading && _changeReports.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.only(bottom: 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Color(0xFF3B82F6), width: 2)),
+              ),
+              child: const Text('종합 변화 리포트',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1F2937))),
+            ),
+            const SizedBox(height: 16),
+
+            ..._changeReports.map((cr) {
+              final report = cr['report'] as Map<String, dynamic>;
+              final summary = report['summary'] as Map<String, dynamic>?;
+              final grades = report['grades'] as Map<String, dynamic>?;
+              final studyMethods = report['study_methods'] as Map<String, dynamic>?;
+              final psych = report['psychology'] as Map<String, dynamic>?;
+              final goals = report['goals'] as Map<String, dynamic>?;
+              final timingLabel = _timingLabels[cr['timing']] ?? cr['timing'] ?? '현재';
+              final prevTimingLabel = _timingLabels[report['previous_timing']] ?? report['previous_timing'] ?? '이전';
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 종합 요약
+                  if (summary != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _dirColor(summary['overall_direction'] ?? '유지').withOpacity(0.2), width: 2),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                summary['icon'] == 'up' ? '\uD83D\uDCC8' : summary['icon'] == 'down' ? '\uD83D\uDCC9' : summary['icon'] == 'mixed' ? '\uD83D\uDD04' : '\u2796',
+                                style: const TextStyle(fontSize: 24),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('$prevTimingLabel → $timingLabel 종합 변화',
+                                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                    Text(summary['summary'] ?? '',
+                                        style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _dirBg(summary['overall_direction'] ?? '유지'),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${_dirIcon(summary['overall_direction'] ?? '유지')} ${summary['overall_direction'] ?? '유지'}',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _dirColor(summary['overall_direction'] ?? '유지')),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (summary['section_directions'] is Map)
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: (summary['section_directions'] as Map<String, dynamic>).entries.map((e) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _dirBg(e.value ?? '유지'),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${e.key} ${_dirIcon(e.value ?? '유지')} ${e.value ?? '유지'}',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: _dirColor(e.value ?? '유지')),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                  // 성적 변화
+                  if (grades != null && (grades['changes'] as List?)?.isNotEmpty == true)
+                    _ReportSectionCard(
+                      icon: '\uD83D\uDCCA',
+                      title: '성적 변화',
+                      direction: grades['direction'] ?? '유지',
+                      summary: grades['summary'] ?? '',
+                      dirColor: _dirColor,
+                      dirBg: _dirBg,
+                      dirIcon: _dirIcon,
+                      child: Column(
+                        children: (grades['changes'] as List).map<Widget>((g) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              children: [
+                                SizedBox(width: 50, child: Text(g['semester'] ?? '', style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)))),
+                                Expanded(child: Text(g['subject'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
+                                Text('${g['prev_grade'] ?? '-'}', style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+                                const Text(' → ', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+                                Text('${g['curr_grade'] ?? '-'}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: _dirBg(g['direction'] ?? '유지'),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(_dirIcon(g['direction'] ?? '유지'), style: TextStyle(fontSize: 9, color: _dirColor(g['direction'] ?? '유지'))),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                  // 학습법 변화
+                  if (studyMethods != null && (studyMethods['subjects'] as List?)?.isNotEmpty == true)
+                    _ReportSectionCard(
+                      icon: '\uD83D\uDCDD',
+                      title: '학습 방법 변화',
+                      direction: studyMethods['direction'] ?? '유지',
+                      summary: studyMethods['summary'] ?? '',
+                      dirColor: _dirColor,
+                      dirBg: _dirBg,
+                      dirIcon: _dirIcon,
+                      child: Column(
+                        children: (studyMethods['subjects'] as List).map<Widget>((subj) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAFAFA),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(subj['subject'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 6),
+                                if ((subj['method_added'] as List?)?.isNotEmpty == true || (subj['method_removed'] as List?)?.isNotEmpty == true)
+                                  Wrap(
+                                    spacing: 4,
+                                    runSpacing: 4,
+                                    children: [
+                                      ...(subj['method_added'] as List? ?? []).map((m) =>
+                                        _ChangeTag('+ $m', const Color(0xFF16A34A), const Color(0xFFF0FDF4))),
+                                      ...(subj['method_removed'] as List? ?? []).map((m) =>
+                                        _ChangeTag('- $m', const Color(0xFFDC2626), const Color(0xFFFEF2F2))),
+                                    ],
+                                  ),
+                                if (subj['engagement'] is Map) ...[
+                                  const SizedBox(height: 4),
+                                  _ChangeRow(
+                                    '수업 참여',
+                                    subj['engagement']['prev']?.toString() ?? '-',
+                                    subj['engagement']['curr']?.toString() ?? '-',
+                                  ),
+                                ],
+                                if (subj['satisfaction'] is Map)
+                                  _ChangeRow(
+                                    '만족도',
+                                    subj['satisfaction']['prev']?.toString() ?? '-',
+                                    subj['satisfaction']['curr']?.toString() ?? '-',
+                                  ),
+                                if (subj['textbook'] is Map)
+                                  _ChangeRow(
+                                    '교재',
+                                    subj['textbook']['prev']?.toString() ?? '-',
+                                    subj['textbook']['curr']?.toString() ?? '-',
+                                  ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                  // 심리 컨디션 변화
+                  if (psych != null && (psych['items'] as List?)?.isNotEmpty == true)
+                    _ReportSectionCard(
+                      icon: '\uD83E\uDDE0',
+                      title: '심리 · 컨디션 변화',
+                      direction: psych['direction'] ?? '유지',
+                      summary: psych['summary'] ?? '',
+                      dirColor: _dirColor,
+                      dirBg: _dirBg,
+                      dirIcon: _dirIcon,
+                      child: Column(
+                        children: (psych['items'] as List).map<Widget>((item) {
+                          final dir = item['direction'] ?? '유지';
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAFAFA),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 80,
+                                  child: Text(item['label'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                                ),
+                                Expanded(
+                                  child: RichText(
+                                    text: TextSpan(
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                                      children: [
+                                        TextSpan(text: '${item['prev'] ?? '-'} → '),
+                                        TextSpan(text: '${item['curr'] ?? '-'}', style: TextStyle(fontWeight: FontWeight.w600, color: _dirColor(dir))),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(color: _dirBg(dir), borderRadius: BorderRadius.circular(8)),
+                                  child: Text('${_dirIcon(dir)} $dir', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: _dirColor(dir))),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                  // 목표 변화
+                  if (goals != null && (goals['items'] as List?)?.isNotEmpty == true)
+                    _ReportSectionCard(
+                      icon: '\uD83C\uDFAF',
+                      title: '목표 · 진로 변화',
+                      direction: goals['direction'] ?? '유지',
+                      summary: goals['summary'] ?? '',
+                      dirColor: _dirColor,
+                      dirBg: _dirBg,
+                      dirIcon: _dirIcon,
+                      child: Column(
+                        children: (goals['items'] as List).map<Widget>((item) {
+                          final prev = item['prev'];
+                          final curr = item['curr'];
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 4),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAFAFA),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item['label'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                                const SizedBox(height: 4),
+                                RichText(
+                                  text: TextSpan(
+                                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                                    children: [
+                                      TextSpan(text: '${prev is Map ? prev.toString() : (prev ?? '-')} → '),
+                                      TextSpan(
+                                        text: curr is Map ? curr.toString() : (curr ?? '-').toString(),
+                                        style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                  const SizedBox(height: 24),
+                ],
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/* ──────── 리포트 섹션 카드 위젯 ──────── */
+
+class _ReportSectionCard extends StatelessWidget {
+  final String icon;
+  final String title;
+  final String direction;
+  final String summary;
+  final Color Function(String) dirColor;
+  final Color Function(String) dirBg;
+  final String Function(String) dirIcon;
+  final Widget child;
+
+  const _ReportSectionCard({
+    required this.icon,
+    required this.title,
+    required this.direction,
+    required this.summary,
+    required this.dirColor,
+    required this.dirBg,
+    required this.dirIcon,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(icon, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: dirBg(direction), borderRadius: BorderRadius.circular(10)),
+                child: Text('${dirIcon(direction)} $direction', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: dirColor(direction))),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(summary, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+
+/* ──────── 과목 경쟁력 탭 ──────── */
+
+class _CompetitivenessTab extends StatefulWidget {
+  const _CompetitivenessTab();
+  @override
+  State<_CompetitivenessTab> createState() => _CompetitivenessTabState();
+}
+
+class _CompetitivenessTabState extends State<_CompetitivenessTab> {
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _compData = [];
+
+  static const _timingLabels = {
+    'T1': '고1 1학기',
+    'T2': '고1 2학기',
+    'T3': '고2 1학기',
+    'T4': '고2 2학기',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final surveys = await ApiService.get(
+          '/consultation-surveys?status=submitted') as Map<String, dynamic>;
+      final items = (surveys['items'] ?? []) as List;
+      final results = <Map<String, dynamic>>[];
+      for (final s in items) {
+        try {
+          final data = await ApiService.get(
+                  '/consultation-surveys/${s['id']}/subject-competitiveness')
+              as Map<String, dynamic>;
+          if (data['subjects'] != null &&
+              (data['subjects'] as Map).isNotEmpty) {
+            results.add({
+              'survey_id': s['id'],
+              'timing': s['timing'] ?? '',
+              'data': data,
+            });
+          }
+        } catch (_) {}
+      }
+      setState(() => _compData = results);
+    } catch (_) {
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Color _gradeBarColor(dynamic gap) {
+    if (gap == null) return const Color(0xFF94A3B8);
+    final g = (gap is num) ? gap.toDouble() : 0.0;
+    if (g <= 0) return const Color(0xFF16A34A);
+    if (g <= 1) return const Color(0xFFEAB308);
+    return const Color(0xFFDC2626);
+  }
+
+  Color _gradeLabelColor(dynamic gap) {
+    if (gap == null) return const Color(0xFF6B7280);
+    final g = (gap is num) ? gap.toDouble() : 0.0;
+    if (g <= 0) return const Color(0xFF166534);
+    if (g <= 1) return const Color(0xFFA16207);
+    return const Color(0xFF991B1B);
+  }
+
+  String _trendSymbol(String? trend) {
+    switch (trend) {
+      case 'improving':
+        return '↑';
+      case 'declining':
+        return '↓';
+      case 'stable':
+        return '→';
+      default:
+        return '-';
+    }
+  }
+
+  Color _trendColor(String? trend) {
+    switch (trend) {
+      case 'improving':
+        return const Color(0xFF16A34A);
+      case 'declining':
+        return const Color(0xFFDC2626);
+      case 'stable':
+        return const Color(0xFF6B7280);
+      default:
+        return const Color(0xFF9CA3AF);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+
+    if (_compData.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.bar_chart_outlined, size: 56, color: Color(0xFFD1D5DB)),
+            SizedBox(height: 16),
+            Text('과목별 경쟁력 데이터가 없습니���',
+                style: TextStyle(color: Color(0xFF6B7280))),
+            SizedBox(height: 4),
+            Text('설문에서 내신 성적과 모의고사 데이터를 입력하면 분석됩니다',
+                style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: _compData.map((cd) {
+          final data = cd['data'] as Map<String, dynamic>;
+          final subjects = data['subjects'] as Map<String, dynamic>? ?? {};
+          final strategy = data['strategy'] as Map<String, dynamic>? ?? {};
+          final targetGrade = data['target_grade'];
+          final targetLevel = data['target_level'] as String?;
+          final weakestSubjects =
+              (data['weakest_subjects'] as List?)?.cast<String>() ?? [];
+          final strongestSubjects =
+              (data['strongest_subjects'] as List?)?.cast<String>() ?? [];
+          final weaknessTypes =
+              data['weakness_types'] as Map<String, dynamic>? ?? {};
+          final timing = _timingLabels[cd['timing']] ?? cd['timing'];
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$timing 과목별 경쟁력 분석',
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              if (targetLevel != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '목표: $targetLevel (환산 목표등급 ${targetGrade}등급)',
+                    style:
+                        const TextStyle(fontSize: 13, color: Color(0xFF1E40AF)),
+                  ),
+                ),
+              // Subject grade bars card
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2)),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('과목별 내신 등급',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 12),
+                    ...subjects.entries.map((entry) {
+                      final subj = entry.value as Map<String, dynamic>;
+                      final currentGrade = subj['current_grade'] as num?;
+                      if (currentGrade == null) return const SizedBox.shrink();
+                      final gap = subj['gap'];
+                      final barColor = _gradeBarColor(gap);
+                      final labelColor = _gradeLabelColor(gap);
+                      final barPct =
+                          ((5 - currentGrade + 1) / 5).clamp(0.05, 1.0);
+                      final withinPM1 = subj['within_plus_minus_1'] == true;
+                      final mockCurrent = subj['mock_current'] as num?;
+                      final trend = subj['trend'] as String?;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              Text(subj['name'] ?? '',
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500)),
+                              const SizedBox(width: 4),
+                              Text(_trendSymbol(trend),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: _trendColor(trend))),
+                              if (withinPM1) ...[
+                                const SizedBox(width: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                  child: const Text('+-1',
+                                      style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF92400E))),
+                                ),
+                              ],
+                              const Spacer(),
+                              Text('${currentGrade}등급',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: labelColor)),
+                              if (gap != null) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                    '(${(gap as num) > 0 ? "+" : ""}$gap)',
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF9CA3AF))),
+                              ],
+                            ]),
+                            const SizedBox(height: 4),
+                            LayoutBuilder(builder: (context, constraints) {
+                              final maxW = constraints.maxWidth;
+                              return Stack(children: [
+                                Container(
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                        color: const Color(0xFFF1F5F9),
+                                        borderRadius:
+                                            BorderRadius.circular(4))),
+                                Container(
+                                    height: 16,
+                                    width: maxW * barPct.toDouble(),
+                                    decoration: BoxDecoration(
+                                        color: barColor,
+                                        borderRadius:
+                                            BorderRadius.circular(4))),
+                                if (targetGrade != null)
+                                  Positioned(
+                                    left: (maxW *
+                                            ((5 - (targetGrade as num) + 1) /
+                                                5))
+                                        .clamp(0.0, maxW - 2),
+                                    top: 0,
+                                    child: Container(
+                                        width: 2,
+                                        height: 16,
+                                        color: Colors.black54),
+                                  ),
+                              ]);
+                            }),
+                            if (mockCurrent != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  '모의: ${mockCurrent}등급 (내신 대비 ${mockCurrent < currentGrade ? "우위" : mockCurrent > currentGrade ? "열위" : "동일"})',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: mockCurrent < currentGrade
+                                          ? const Color(0xFF16A34A)
+                                          : mockCurrent > currentGrade
+                                              ? const Color(0xFFDC2626)
+                                              : const Color(0xFF6B7280)),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
+                    if (targetGrade != null) ...[
+                      const Divider(),
+                      Row(children: [
+                        Container(
+                            width: 12, height: 2, color: Colors.black54),
+                        const SizedBox(width: 4),
+                        Text('목표 등급 ($targetGrade)',
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF9CA3AF))),
+                      ]),
+                    ],
+                  ],
+                ),
+              ),
+              // C2 weakness types
+              if (weaknessTypes.isNotEmpty)
+                _WeaknessTypesCard(
+                    weaknessTypes: weaknessTypes, subjects: subjects),
+              // D6 self-diagnosis
+              if (weakestSubjects.isNotEmpty || strongestSubjects.isNotEmpty)
+                _SelfDiagnosisCard(
+                    weakestSubjects: weakestSubjects,
+                    strongestSubjects: strongestSubjects),
+              // Strategy cards
+              ..._buildStrategyCards(strategy),
+              const SizedBox(height: 20),
+            ],
+          );
         }).toList(),
+      ),
+    );
+  }
+
+  List<Widget> _buildStrategyCards(Map<String, dynamic> strategy) {
+    final widgets = <Widget>[];
+    final focus = (strategy['focus'] as List?) ?? [];
+    if (focus.isNotEmpty) {
+      widgets.add(_StrategyCard(
+          title: '집중 공략 과목',
+          icon: Icons.gps_fixed,
+          borderColor: const Color(0xFF2563EB),
+          bgColor: const Color(0xFFEFF6FF),
+          labelColor: const Color(0xFF1E40AF),
+          items: focus.cast<Map<String, dynamic>>()));
+    }
+    final maintain = (strategy['maintain'] as List?) ?? [];
+    if (maintain.isNotEmpty) {
+      widgets.add(_StrategyCard(
+          title: '유지 관리 과목',
+          icon: Icons.check_circle_outline,
+          borderColor: const Color(0xFF16A34A),
+          bgColor: const Color(0xFFF0FDF4),
+          labelColor: const Color(0xFF166534),
+          items: maintain.cast<Map<String, dynamic>>()));
+    }
+    final consider = (strategy['consider'] as List?) ?? [];
+    if (consider.isNotEmpty) {
+      widgets.add(_StrategyCard(
+          title: '전략적 시간 배분 고려',
+          icon: Icons.balance,
+          borderColor: const Color(0xFF9CA3AF),
+          bgColor: const Color(0xFFF9FAFB),
+          labelColor: const Color(0xFF6B7280),
+          items: consider.cast<Map<String, dynamic>>()));
+    }
+    return widgets;
+  }
+}
+
+class _WeaknessTypesCard extends StatelessWidget {
+  final Map<String, dynamic> weaknessTypes;
+  final Map<String, dynamic> subjects;
+  const _WeaknessTypesCard(
+      {required this.weaknessTypes, required this.subjects});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('모의고사 취약 유형',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          ...weaknessTypes.entries.map((entry) {
+            final subjName =
+                (subjects[entry.key] as Map?)?['name'] ?? entry.key;
+            final types = (entry.value as List?)?.cast<String>() ?? [];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFECACA)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(subjName,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF991B1B))),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: types
+                        .map((t) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                  color: const Color(0xFFFEE2E2),
+                                  borderRadius: BorderRadius.circular(4)),
+                              child: Text(t,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Color(0xFFB91C1C))),
+                            ))
+                        .toList(),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelfDiagnosisCard extends StatelessWidget {
+  final List<String> weakestSubjects;
+  final List<String> strongestSubjects;
+  const _SelfDiagnosisCard(
+      {required this.weakestSubjects, required this.strongestSubjects});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('자가 진단',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          if (weakestSubjects.isNotEmpty) ...[
+            Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  const Text('가장 어려운 과목: ',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFDC2626))),
+                  ...weakestSubjects.map((s) => Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(4)),
+                      child: Text(s,
+                          style: const TextStyle(
+                              fontSize: 12, color: Color(0xFFB91C1C))))),
+                ]),
+            const SizedBox(height: 8),
+          ],
+          if (strongestSubjects.isNotEmpty)
+            Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  const Text('가장 자신있는 과목: ',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF16A34A))),
+                  ...strongestSubjects.map((s) => Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(4)),
+                      child: Text(s,
+                          style: const TextStyle(
+                              fontSize: 12, color: Color(0xFF166534))))),
+                ]),
+        ],
+      ),
+    );
+  }
+}
+
+class _StrategyCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color borderColor;
+  final Color bgColor;
+  final Color labelColor;
+  final List<Map<String, dynamic>> items;
+
+  const _StrategyCard({
+    required this.title,
+    required this.icon,
+    required this.borderColor,
+    required this.bgColor,
+    required this.labelColor,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: borderColor, width: 4)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, size: 18, color: borderColor),
+            const SizedBox(width: 6),
+            Text(title,
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: borderColor)),
+          ]),
+          const SizedBox(height: 10),
+          ...items.map((item) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                  color: bgColor, borderRadius: BorderRadius.circular(8)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(item['name'] ?? '',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: labelColor)),
+                        if (item['current_grade'] != null &&
+                            item['target_grade'] != null)
+                          Text(
+                              '${item['current_grade']}등급 → ${item['target_grade']}등급',
+                              style:
+                                  TextStyle(fontSize: 11, color: labelColor)),
+                      ]),
+                  if (item['tip'] != null) ...[
+                    const SizedBox(height: 4),
+                    Text(item['tip'],
+                        style: TextStyle(
+                            fontSize: 12, color: labelColor, height: 1.5)),
+                  ],
+                ],
+              ))),
+        ],
       ),
     );
   }

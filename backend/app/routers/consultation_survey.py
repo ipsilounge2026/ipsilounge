@@ -631,6 +631,772 @@ async def get_delta_user(
     }
 
 
+# ----- 과목별 경쟁력 분석 (Subject Competitiveness) -----
+
+
+def _safe_float_sc(val) -> float | None:
+    """숫자 변환 헬퍼 (None-safe)."""
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _detect_subject_trend(grades: list[float]) -> str:
+    """성적 추이 판정 (lower is better for rank)."""
+    if len(grades) < 2:
+        return "insufficient"
+    first_half = sum(grades[: len(grades) // 2]) / max(1, len(grades) // 2)
+    second_half = sum(grades[len(grades) // 2 :]) / max(1, len(grades) - len(grades) // 2)
+    diff = second_half - first_half
+    if diff < -0.3:
+        return "improving"
+    elif diff > 0.3:
+        return "declining"
+    return "stable"
+
+
+def _compute_subject_competitiveness(answers: dict) -> dict:
+    """과목별 경쟁력 분석 결과 생성."""
+    cat_b = answers.get("B", {})
+    cat_c = answers.get("C", {})
+    cat_d = answers.get("D", {})
+    cat_e = answers.get("E", {})
+
+    semesters = ["B1", "B2", "B3", "B4"]
+    semester_labels = ["고1-1", "고1-2", "고2-1", "고2-2"]
+    subjects = ["ko", "en", "ma", "sc1", "sc2", "so"]
+    subject_names = {
+        "ko": "국어", "en": "영어", "ma": "수학",
+        "sc1": "탐구1", "sc2": "탐구2", "so": "사회",
+    }
+    mock_area_to_naesin = {
+        "korean": "ko", "math": "ma", "english": "en",
+        "inquiry1": "sc1", "inquiry2": "sc2",
+    }
+
+    # --- 1. 과목별 내신 데이터 수집 ---
+    subject_data: dict[str, dict] = {}
+    for subj_key in subjects:
+        grades_by_sem: list[dict] = []
+        for i, sem_key in enumerate(semesters):
+            sem_data = cat_b.get(sem_key)
+            if not sem_data or not isinstance(sem_data, dict):
+                continue
+            subj_data = sem_data.get(subj_key, {})
+            if not isinstance(subj_data, dict):
+                continue
+            grade = _safe_float_sc(subj_data.get("rank_grade"))
+            if grade is not None:
+                grades_by_sem.append({
+                    "semester": semester_labels[i],
+                    "grade": grade,
+                })
+        if grades_by_sem:
+            grade_values = [g["grade"] for g in grades_by_sem]
+            current_grade = grade_values[-1]
+            avg_grade = round(sum(grade_values) / len(grade_values), 2)
+            trend = _detect_subject_trend(grade_values)
+            subject_data[subj_key] = {
+                "name": subject_names[subj_key],
+                "current_grade": current_grade,
+                "avg_grade": avg_grade,
+                "trend": trend,
+                "history": grades_by_sem,
+            }
+
+    # --- 2. 모의고사 데이터 통합 ---
+    mock_data = cat_c.get("C1")
+    if mock_data and isinstance(mock_data, dict):
+        area_names = {
+            "korean": "국어", "math": "수학", "english": "영어",
+            "inquiry1": "탐구1", "inquiry2": "탐구2",
+        }
+        for area_key, naesin_key in mock_area_to_naesin.items():
+            mock_ranks = []
+            for session_key, session in sorted(mock_data.items()):
+                if not isinstance(session, dict):
+                    continue
+                area_data = session.get(area_key, {})
+                if not isinstance(area_data, dict):
+                    continue
+                rank = _safe_float_sc(area_data.get("rank"))
+                if rank is not None:
+                    mock_ranks.append({"session": session_key, "rank": rank})
+
+            if mock_ranks:
+                if naesin_key not in subject_data:
+                    subject_data[naesin_key] = {
+                        "name": subject_names.get(naesin_key, area_names.get(area_key, area_key)),
+                        "current_grade": None,
+                        "avg_grade": None,
+                        "trend": "insufficient",
+                        "history": [],
+                    }
+                subject_data[naesin_key]["mock_ranks"] = mock_ranks
+                subject_data[naesin_key]["mock_current"] = mock_ranks[-1]["rank"]
+                mock_vals = [r["rank"] for r in mock_ranks]
+                subject_data[naesin_key]["mock_avg"] = round(
+                    sum(mock_vals) / len(mock_vals), 2
+                )
+
+    # --- 3. 목표 등급 및 gap 계산 ---
+    # E2 목표 대학 수준에서 목표 등급 추정
+    e2 = cat_e.get("E2")
+    target_grade: float | None = None
+    target_level_label: str | None = None
+    if e2 and isinstance(e2, dict):
+        target_level = e2.get("target_level")
+        # 목표 대학 수준 -> 대략적 목표 등급 매핑
+        target_map = {
+            "최상위SKY": 1.5,
+            "상위인서울주요": 2.5,
+            "인서울": 3.0,
+            "수도권": 3.5,
+            "지방거점": 3.5,
+        }
+        if target_level and target_level in target_map:
+            target_grade = target_map[target_level]
+            target_level_label = target_level
+
+    for subj_key, data in subject_data.items():
+        if target_grade is not None and data.get("current_grade") is not None:
+            gap = round(data["current_grade"] - target_grade, 2)
+            data["target_grade"] = target_grade
+            data["gap"] = gap  # positive = below target (worse)
+            data["within_plus_minus_1"] = abs(gap) <= 1.0
+        else:
+            data["target_grade"] = target_grade
+            data["gap"] = None
+            data["within_plus_minus_1"] = False
+
+    # --- 4. C2 취약 유형 통합 ---
+    c2_data = cat_c.get("C2")
+    weakness_types: dict[str, list[str]] = {}
+    if c2_data and isinstance(c2_data, dict):
+        c2_to_naesin = {
+            "korean": "ko", "math": "ma", "english": "en", "inquiry": "sc1",
+        }
+        for c2_subj, naesin_key in c2_to_naesin.items():
+            types = c2_data.get(c2_subj)
+            if types and isinstance(types, list):
+                weakness_types[naesin_key] = types
+                if naesin_key in subject_data:
+                    subject_data[naesin_key]["weakness_types"] = types
+
+    # --- 5. D6 취약 과목 통합 ---
+    d6_data = cat_d.get("D6")
+    weakest_subjects: list[str] = []
+    weakest_reasons: list[str] = []
+    strongest_subjects: list[str] = []
+    if d6_data and isinstance(d6_data, dict):
+        ws = d6_data.get("weakest", [])
+        if isinstance(ws, list):
+            weakest_subjects = ws
+        wr = d6_data.get("weakest_reason", [])
+        if isinstance(wr, list):
+            weakest_reasons = wr
+        ss = d6_data.get("strongest", [])
+        if isinstance(ss, list):
+            strongest_subjects = ss
+
+    # --- 6. 전략 과목 분류 ---
+    strategy_focus: list[dict] = []   # 집중 공략
+    strategy_maintain: list[dict] = []  # 유지 관리
+    strategy_consider: list[dict] = []  # 전략적 포기 고려
+
+    for subj_key, data in subject_data.items():
+        entry = {
+            "key": subj_key,
+            "name": data["name"],
+            "current_grade": data.get("current_grade"),
+            "target_grade": data.get("target_grade"),
+            "gap": data.get("gap"),
+            "trend": data.get("trend"),
+        }
+
+        gap = data.get("gap")
+        current = data.get("current_grade")
+
+        if gap is None or current is None:
+            continue
+
+        name = data["name"]
+        is_weakest = name in weakest_subjects
+        is_strongest = name in strongest_subjects
+
+        if gap <= 0:
+            # 이미 목표 달성 또는 초과
+            tip = f"{data['name']} 현재 {current}등급으로 목표 이내입니다. 현 수준 유지에 집중하세요."
+            entry["tip"] = tip
+            strategy_maintain.append(entry)
+        elif gap <= 1.5 and not is_weakest:
+            # 목표에 근접 + 가장 어려운 과목이 아님 -> 집중 공략
+            tip = f"{data['name']} 목표까지 {gap}등급 차이. "
+            if data.get("trend") == "improving":
+                tip += "상승 추세이므로 유지하면 달성 가능합니다."
+            else:
+                tip += "집중 학습으로 등급 향상이 기대됩니다."
+            if data.get("weakness_types"):
+                tip += f" 취약 유형: {', '.join(data['weakness_types'][:3])}"
+            entry["tip"] = tip
+            strategy_focus.append(entry)
+        elif gap > 2.0 and is_weakest:
+            # 목표와 괴리 크고 본인도 어렵다고 느끼는 과목
+            tip = f"{data['name']} 목표 대비 {gap}등급 차이가 크고, 학생 본인도 어려움을 느끼는 과목입니다. "
+            if weakest_reasons:
+                tip += f"어려운 이유: {', '.join(weakest_reasons[:2])}. "
+            tip += "다른 과목의 등급 향상에 시간을 배분하는 것이 효율적일 수 있습니다."
+            entry["tip"] = tip
+            strategy_consider.append(entry)
+        else:
+            # 그 외: 갭은 있지만 투자 가치 있음 -> 집중 공략
+            tip = f"{data['name']} 목표까지 {gap}등급 차이. "
+            if data.get("weakness_types"):
+                tip += f"취약 유형({', '.join(data['weakness_types'][:2])}) 집중 보완으로 등급 향상을 노려보세요."
+            else:
+                tip += "기본 개념 복습과 오답 분석을 병행해 보세요."
+            entry["tip"] = tip
+            strategy_focus.append(entry)
+
+    # 정렬: 집중 공략은 gap 작은 순(=달성 가능성 높은 순)
+    strategy_focus.sort(key=lambda x: x.get("gap") or 99)
+    strategy_consider.sort(key=lambda x: -(x.get("gap") or 0))
+
+    return {
+        "subjects": subject_data,
+        "target_grade": target_grade,
+        "target_level": target_level_label,
+        "weakness_types": weakness_types,
+        "weakest_subjects": weakest_subjects,
+        "weakest_reasons": weakest_reasons,
+        "strongest_subjects": strongest_subjects,
+        "strategy": {
+            "focus": strategy_focus,
+            "maintain": strategy_maintain,
+            "consider": strategy_consider,
+        },
+    }
+
+
+@router.get("/{survey_id}/subject-competitiveness")
+async def get_subject_competitiveness(
+    survey_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """과목별 경쟁력 분석 (내신-모의 비교, +-1등급 하이라이트, 전략 과목 제안).
+
+    설문 답변의 B(내신), C(모의/취약유형), D(학습고민), E(목표) 데이터를 종합 분석하여
+    과목 단위 통합 차트 렌더링용 데이터를 반환한다.
+    """
+    survey = await _get_visible_survey(survey_id, user, db)
+    if survey.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출된 설문만 경쟁력 분석을 조회할 수 있습니다",
+        )
+    return _compute_subject_competitiveness(survey.answers or {})
+
+
+# ----- 액션 플랜 진행 체크 업데이트 -----
+
+class ActionPlanProgressRequest(BaseModel):
+    item_index: int
+    completed: bool
+
+
+@router.patch("/{survey_id}/action-plan-progress")
+async def update_action_plan_progress(
+    survey_id: uuid.UUID,
+    data: ActionPlanProgressRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """학생용 액션 플랜 항목 완료 체크 업데이트"""
+    survey = await _get_owned_survey(survey_id, user, db)
+    if survey.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출된 설문만 액션 플랜을 업데이트할 수 있습니다",
+        )
+
+    action_plan = dict(survey.action_plan or {})
+    items = action_plan.get("items", [])
+
+    if data.item_index < 0 or data.item_index >= len(items):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"유효하지 않은 항목 인덱스입니다 (0~{len(items) - 1})",
+        )
+
+    items = [dict(item) for item in items]
+    items[data.item_index]["completed"] = data.completed
+    action_plan["items"] = items
+    survey.action_plan = action_plan
+
+    await db.commit()
+    await db.refresh(survey)
+    return survey.action_plan or {}
+
+
+# ----- 변화 추적 리포트 -----
+
+# D8 필드 라벨 매핑
+_D8_FIELD_LABELS = {
+    "test_anxiety": "시험 불안",
+    "motivation": "학습 의욕",
+    "study_load": "학습량 체감",
+    "sleep_hours": "수면 시간",
+}
+
+_D8_VALUE_LABELS = {
+    "test_anxiety": {"없음": "없음", "가끔": "가끔", "자주": "자주"},
+    "motivation": {"매우낮음": "매우 낮음", "낮음": "낮음", "보통": "보통", "높음": "높음", "매우높음": "매우 높음"},
+    "study_load": {"너무적음": "너무 적음", "적절함": "적절함", "약간버거움": "약간 버거움", "많이버거움": "많이 버거움"},
+    "sleep_hours": {"under5": "5시간 미만", "5_6": "5~6시간", "6_7": "6~7시간", "over7": "7시간 이상"},
+}
+
+# D8 direction: index order from worst to best
+_D8_POSITIVE_DIRECTION = {
+    "test_anxiety": ["자주", "가끔", "없음"],
+    "motivation": ["매우낮음", "낮음", "보통", "높음", "매우높음"],
+    "study_load": ["많이버거움", "약간버거움", "적절함", "너무적음"],
+    "sleep_hours": ["under5", "5_6", "6_7", "over7"],
+}
+
+_CR_STUDY_METHOD_LABELS = {
+    "수업전예습": "수업 전 예습", "당일복습": "당일 복습", "교과서정독": "교과서 정독",
+    "필기요약정리": "필기·요약 정리", "인강수강": "인강 수강", "문제집반복": "문제집 반복",
+    "기출분석": "기출 분석", "개념서회독": "개념서 회독", "요약노트": "요약 노트", "기타": "기타",
+}
+
+_CR_ENGAGEMENT_LABELS = {
+    "거의안들음": "거의 안 들음", "듣기만함": "듣기만 함",
+    "필기하며": "필기하며 수업", "적극참여": "적극 참여",
+}
+_CR_ENGAGEMENT_ORDER = ["거의안들음", "듣기만함", "필기하며", "적극참여"]
+
+_CR_SATISFACTION_LABELS = {
+    "불만족": "불만족", "보통": "보통", "만족": "만족",
+}
+_CR_SATISFACTION_ORDER = ["불만족", "보통", "만족"]
+
+
+def _cr_direction_label(prev_val, curr_val, order_list: list) -> str:
+    """Compare two values by position in an ordered list. Returns direction string."""
+    try:
+        pi = order_list.index(prev_val)
+        ci = order_list.index(curr_val)
+        if ci > pi:
+            return "개선"
+        elif ci < pi:
+            return "하락"
+        return "유지"
+    except (ValueError, TypeError):
+        if prev_val != curr_val:
+            return "변경"
+        return "유지"
+
+
+def _cr_build_grade_section(prev_answers: dict, curr_answers: dict) -> dict:
+    """B category grade change analysis for change-report."""
+    prev_b = (prev_answers or {}).get("B", {})
+    curr_b = (curr_answers or {}).get("B", {})
+    if not isinstance(prev_b, dict) or not isinstance(curr_b, dict):
+        return {"direction": "유지", "changes": [], "summary": "성적 데이터가 없습니다."}
+
+    prev_grades = prev_b.get("B1_B4", {})
+    curr_grades = curr_b.get("B1_B4", {})
+    if not isinstance(prev_grades, dict) or not isinstance(curr_grades, dict):
+        return {"direction": "유지", "changes": [], "summary": "성적 데이터가 없습니다."}
+
+    changes = []
+    improved = 0
+    declined = 0
+
+    all_semesters = set(prev_grades.keys()) | set(curr_grades.keys())
+    for sem in sorted(all_semesters):
+        prev_sem = prev_grades.get(sem, {})
+        curr_sem = curr_grades.get(sem, {})
+        if not isinstance(prev_sem, dict) or not isinstance(curr_sem, dict):
+            continue
+
+        prev_subjects = prev_sem.get("subjects", [])
+        curr_subjects = curr_sem.get("subjects", [])
+        if not isinstance(prev_subjects, list) or not isinstance(curr_subjects, list):
+            continue
+
+        prev_lookup = {}
+        for s in prev_subjects:
+            if isinstance(s, dict) and s.get("course_name"):
+                prev_lookup[s["course_name"]] = s
+        curr_lookup = {}
+        for s in curr_subjects:
+            if isinstance(s, dict) and s.get("course_name"):
+                curr_lookup[s["course_name"]] = s
+
+        for subj in sorted(set(prev_lookup.keys()) | set(curr_lookup.keys())):
+            p = prev_lookup.get(subj, {})
+            c = curr_lookup.get(subj, {})
+            p_grade = p.get("grade")
+            c_grade = c.get("grade")
+            p_score = p.get("score")
+            c_score = c.get("score")
+
+            if p_grade != c_grade or p_score != c_score:
+                direction = "유지"
+                if isinstance(p_grade, (int, float)) and isinstance(c_grade, (int, float)):
+                    if c_grade < p_grade:
+                        direction = "개선"
+                        improved += 1
+                    elif c_grade > p_grade:
+                        direction = "하락"
+                        declined += 1
+                elif p_grade != c_grade:
+                    direction = "변경"
+
+                changes.append({
+                    "semester": sem,
+                    "subject": subj,
+                    "prev_grade": p_grade,
+                    "curr_grade": c_grade,
+                    "prev_score": p_score,
+                    "curr_score": c_score,
+                    "direction": direction,
+                })
+
+    overall = "유지"
+    if improved > declined:
+        overall = "개선"
+    elif declined > improved:
+        overall = "하락"
+
+    parts = []
+    if changes:
+        parts.append(f"{len(changes)}개 과목 성적 변동")
+        if improved:
+            parts.append(f"등급 상승 {improved}개")
+        if declined:
+            parts.append(f"등급 하락 {declined}개")
+    else:
+        parts.append("성적 변동 없음")
+
+    return {
+        "direction": overall,
+        "changes": changes,
+        "improved_count": improved,
+        "declined_count": declined,
+        "summary": ", ".join(parts),
+    }
+
+
+def _cr_build_study_method_section(prev_answers: dict, curr_answers: dict) -> dict:
+    """D7 study method change analysis for the change-report."""
+    raw = _analyze_study_method_changes(prev_answers, curr_answers)
+    if not raw or not raw.get("subject_changes"):
+        return {"direction": "유지", "subjects": [], "summary": "학습법 변동 없음"}
+
+    subjects = []
+    improved = 0
+    declined = 0
+
+    for sc in raw["subject_changes"]:
+        ch = sc.get("changes", {})
+
+        if ch.get("class_engagement"):
+            d = _cr_direction_label(
+                ch["class_engagement"].get("prev"),
+                ch["class_engagement"].get("curr"),
+                _CR_ENGAGEMENT_ORDER,
+            )
+            if d == "개선":
+                improved += 1
+            elif d == "하락":
+                declined += 1
+
+        if ch.get("satisfaction"):
+            d = _cr_direction_label(
+                ch["satisfaction"].get("prev"),
+                ch["satisfaction"].get("curr"),
+                _CR_SATISFACTION_ORDER,
+            )
+            if d == "개선":
+                improved += 1
+            elif d == "하락":
+                declined += 1
+
+        subjects.append({
+            "subject": sc["subject"],
+            "method_added": [_CR_STUDY_METHOD_LABELS.get(m, m) for m in ch.get("study_method", {}).get("added", [])],
+            "method_removed": [_CR_STUDY_METHOD_LABELS.get(m, m) for m in ch.get("study_method", {}).get("removed", [])],
+            "engagement": {
+                "prev": _CR_ENGAGEMENT_LABELS.get(ch["class_engagement"]["prev"], ch["class_engagement"]["prev"]) if ch.get("class_engagement") else None,
+                "curr": _CR_ENGAGEMENT_LABELS.get(ch["class_engagement"]["curr"], ch["class_engagement"]["curr"]) if ch.get("class_engagement") else None,
+                "direction": _cr_direction_label(ch["class_engagement"]["prev"], ch["class_engagement"]["curr"], _CR_ENGAGEMENT_ORDER) if ch.get("class_engagement") else None,
+            } if ch.get("class_engagement") else None,
+            "satisfaction": {
+                "prev": _CR_SATISFACTION_LABELS.get(ch["satisfaction"]["prev"], ch["satisfaction"]["prev"]) if ch.get("satisfaction") else None,
+                "curr": _CR_SATISFACTION_LABELS.get(ch["satisfaction"]["curr"], ch["satisfaction"]["curr"]) if ch.get("satisfaction") else None,
+                "direction": _cr_direction_label(ch["satisfaction"]["prev"], ch["satisfaction"]["curr"], _CR_SATISFACTION_ORDER) if ch.get("satisfaction") else None,
+            } if ch.get("satisfaction") else None,
+            "textbook": {
+                "prev": ch["main_textbook"]["prev"],
+                "curr": ch["main_textbook"]["curr"],
+            } if ch.get("main_textbook") else None,
+        })
+
+    overall = "유지"
+    if improved > declined:
+        overall = "개선"
+    elif declined > improved:
+        overall = "하락"
+    elif improved > 0:
+        overall = "혼재"
+
+    return {
+        "direction": overall,
+        "subjects": subjects,
+        "total_changed": raw["total_subjects_changed"],
+        "summary": f"{raw['total_subjects_changed']}개 과목 학습법 변동",
+    }
+
+
+def _cr_build_psych_section(prev_answers: dict, curr_answers: dict) -> dict:
+    """D8 psychological state change analysis for change-report."""
+    prev_d8 = (prev_answers or {}).get("D", {}).get("D8", {})
+    curr_d8 = (curr_answers or {}).get("D", {}).get("D8", {})
+    if not isinstance(prev_d8, dict) or not isinstance(curr_d8, dict):
+        return {"direction": "유지", "items": [], "summary": "심리 컨디션 데이터가 없습니다."}
+
+    items = []
+    improved = 0
+    declined = 0
+
+    for field_key, label in _D8_FIELD_LABELS.items():
+        prev_val = prev_d8.get(field_key)
+        curr_val = curr_d8.get(field_key)
+        if prev_val == curr_val:
+            continue
+
+        order = _D8_POSITIVE_DIRECTION.get(field_key, [])
+        direction = _cr_direction_label(prev_val, curr_val, order)
+
+        val_labels = _D8_VALUE_LABELS.get(field_key, {})
+        items.append({
+            "field": field_key,
+            "label": label,
+            "prev": val_labels.get(prev_val, prev_val),
+            "curr": val_labels.get(curr_val, curr_val),
+            "direction": direction,
+        })
+
+        if direction == "개선":
+            improved += 1
+        elif direction == "하락":
+            declined += 1
+
+    # subject_giveup
+    prev_giveup = prev_d8.get("subject_giveup", {})
+    curr_giveup = curr_d8.get("subject_giveup", {})
+    if isinstance(prev_giveup, dict) and isinstance(curr_giveup, dict):
+        prev_has = prev_giveup.get("has_giveup")
+        curr_has = curr_giveup.get("has_giveup")
+        if prev_has != curr_has:
+            direction = "개선" if curr_has == "없음" and prev_has == "고민중" else "하락" if curr_has == "고민중" else "변경"
+            items.append({
+                "field": "subject_giveup",
+                "label": "과목 포기 고민",
+                "prev": f"{prev_has}" + (f" ({prev_giveup.get('subject_name', '')})" if prev_has == "고민중" else ""),
+                "curr": f"{curr_has}" + (f" ({curr_giveup.get('subject_name', '')})" if curr_has == "고민중" else ""),
+                "direction": direction,
+            })
+            if direction == "개선":
+                improved += 1
+            elif direction == "하락":
+                declined += 1
+
+    overall = "유지"
+    if not items:
+        summary = "심리 컨디션 변동 없음"
+    else:
+        if improved > declined:
+            overall = "개선"
+        elif declined > improved:
+            overall = "하락"
+        summary = f"{len(items)}개 항목 변동 (개선 {improved}, 하락 {declined})"
+
+    return {
+        "direction": overall,
+        "items": items,
+        "summary": summary,
+    }
+
+
+def _cr_build_goal_section(prev_answers: dict, curr_answers: dict) -> dict:
+    """E category goal/career change analysis for change-report."""
+    prev_e = (prev_answers or {}).get("E", {})
+    curr_e = (curr_answers or {}).get("E", {})
+    if not isinstance(prev_e, dict) or not isinstance(curr_e, dict):
+        return {"direction": "유지", "items": [], "summary": "목표 데이터가 없습니다."}
+
+    items = []
+
+    # E1: 희망 진로
+    prev_e1 = prev_e.get("E1")
+    curr_e1 = curr_e.get("E1")
+    if prev_e1 != curr_e1:
+        items.append({"field": "E1", "label": "희망 진로", "prev": prev_e1, "curr": curr_e1, "direction": "변경"})
+
+    # E2: 목표 대학·학과
+    prev_e2 = prev_e.get("E2", {})
+    curr_e2 = curr_e.get("E2", {})
+    if isinstance(prev_e2, dict) and isinstance(curr_e2, dict):
+        for subfield, label in [("target_level", "목표 대학 수준"), ("target_university", "목표 대학"), ("target_major", "목표 학과")]:
+            pv = prev_e2.get(subfield)
+            cv = curr_e2.get(subfield)
+            if pv != cv:
+                items.append({"field": f"E2.{subfield}", "label": label, "prev": pv, "curr": cv, "direction": "변경"})
+
+    # E3: 대입 전형 전략
+    prev_e3 = prev_e.get("E3", {})
+    curr_e3 = curr_e.get("E3", {})
+    if isinstance(prev_e3, dict) and isinstance(curr_e3, dict):
+        pv_under = prev_e3.get("understanding")
+        cv_under = curr_e3.get("understanding")
+        if pv_under != cv_under:
+            direction = "유지"
+            if isinstance(pv_under, (int, float)) and isinstance(cv_under, (int, float)):
+                direction = "개선" if cv_under > pv_under else "하락" if cv_under < pv_under else "유지"
+            items.append({"field": "E3.understanding", "label": "전형 이해도", "prev": pv_under, "curr": cv_under, "direction": direction})
+
+        pv_type = prev_e3.get("preferred_type")
+        cv_type = curr_e3.get("preferred_type")
+        if pv_type != cv_type:
+            items.append({"field": "E3.preferred_type", "label": "선호 전형", "prev": pv_type, "curr": cv_type, "direction": "변경"})
+
+    # E6: 학습 우선순위
+    prev_e6 = prev_e.get("E6")
+    curr_e6 = curr_e.get("E6")
+    if prev_e6 != curr_e6:
+        items.append({"field": "E6", "label": "학습 우선순위", "prev": prev_e6, "curr": curr_e6, "direction": "변경"})
+
+    has_changes = len(items) > 0
+    return {
+        "direction": "변경" if has_changes else "유지",
+        "items": items,
+        "summary": f"{len(items)}개 목표/진로 항목 변동" if has_changes else "목표/진로 변동 없음",
+    }
+
+
+def _cr_build_overall_summary(grades: dict, study: dict, psych: dict, goals: dict) -> dict:
+    """Build overall summary from all sections."""
+    sections = [
+        ("성적", grades["direction"]),
+        ("학습법", study["direction"]),
+        ("심리컨디션", psych["direction"]),
+        ("목표", goals["direction"]),
+    ]
+
+    improved = sum(1 for _, d in sections if d == "개선")
+    declined = sum(1 for _, d in sections if d == "하락")
+    changed = sum(1 for _, d in sections if d not in ("유지",))
+
+    if improved > declined and improved >= 2:
+        overall = "개선"
+        icon = "up"
+    elif declined > improved and declined >= 2:
+        overall = "하락"
+        icon = "down"
+    elif changed == 0:
+        overall = "유지"
+        icon = "stable"
+    else:
+        overall = "혼재"
+        icon = "mixed"
+
+    parts = []
+    improved_areas = [n for n, d in sections if d == "개선"]
+    declined_areas = [n for n, d in sections if d == "하락"]
+    if improved_areas:
+        parts.append(f"{'·'.join(improved_areas)} 영역 개선")
+    if declined_areas:
+        parts.append(f"{'·'.join(declined_areas)} 영역 하락")
+    if not parts:
+        parts.append("전 영역 유지")
+
+    return {
+        "overall_direction": overall,
+        "icon": icon,
+        "summary": ", ".join(parts),
+        "section_directions": {n: d for n, d in sections},
+    }
+
+
+@router.get("/{survey_id}/change-report")
+async def get_change_report(
+    survey_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """변화 추적 종합 리포트: 성적·학습법·심리·목표 변화를 구조화된 리포트로 생성"""
+    survey = await _get_visible_survey(survey_id, user, db)
+    if survey.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출된 설문만 변화 추적 리포트를 조회할 수 있습니다",
+        )
+
+    prev_q = (
+        select(ConsultationSurvey)
+        .where(
+            ConsultationSurvey.user_id == survey.user_id,
+            ConsultationSurvey.survey_type == survey.survey_type,
+            ConsultationSurvey.id != survey.id,
+            ConsultationSurvey.status == "submitted",
+            ConsultationSurvey.created_at < survey.created_at,
+        )
+        .order_by(ConsultationSurvey.created_at.desc())
+        .limit(1)
+    )
+    prev_result = await db.execute(prev_q)
+    previous = prev_result.scalar_one_or_none()
+
+    if not previous:
+        return {
+            "has_previous": False,
+            "summary": None,
+            "grades": None,
+            "study_methods": None,
+            "psychology": None,
+            "goals": None,
+        }
+
+    prev_answers = previous.answers or {}
+    curr_answers = survey.answers or {}
+
+    grades = _cr_build_grade_section(prev_answers, curr_answers)
+    study = _cr_build_study_method_section(prev_answers, curr_answers)
+    psych = _cr_build_psych_section(prev_answers, curr_answers)
+    goals = _cr_build_goal_section(prev_answers, curr_answers)
+    overall = _cr_build_overall_summary(grades, study, psych, goals)
+
+    return {
+        "has_previous": True,
+        "previous_timing": previous.timing,
+        "current_timing": survey.timing,
+        "previous_submitted_at": previous.submitted_at.isoformat() if previous.submitted_at else None,
+        "current_submitted_at": survey.submitted_at.isoformat() if survey.submitted_at else None,
+        "summary": overall,
+        "grades": grades,
+        "study_methods": study,
+        "psychology": psych,
+        "goals": goals,
+    }
+
+
 # ----- 로드맵 진행 체크 업데이트 -----
 
 class RoadmapProgressRequest(BaseModel):

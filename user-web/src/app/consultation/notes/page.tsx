@@ -4,10 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getMyConsultationNotes, listMySurveys, getSurveyActionPlan, getSurveyRoadmap, getSurveyDelta, updateRoadmapProgress } from "@/lib/api";
+import { getMyConsultationNotes, listMySurveys, getSurveyActionPlan, getSurveyRoadmap, getSurveyDelta, getChangeReport, getSubjectCompetitiveness, updateRoadmapProgress, updateActionPlanProgress } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
-type PageTab = "notes" | "action-plan" | "roadmap" | "delta";
+type PageTab = "notes" | "action-plan" | "roadmap" | "delta" | "competitiveness";
 
 interface ConsultationNote {
   id: string;
@@ -92,6 +92,14 @@ export default function ConsultationNotesPage() {
   const [deltas, setDeltas] = useState<{ surveyId: string; timing: string | null; delta: any }[]>([]);
   const [deltaLoading, setDeltaLoading] = useState(false);
 
+  // Change Report state
+  const [changeReports, setChangeReports] = useState<{ surveyId: string; timing: string | null; report: any }[]>([]);
+  const [changeReportLoading, setChangeReportLoading] = useState(false);
+
+  // Competitiveness state
+  const [compData, setCompData] = useState<{ surveyId: string; timing: string | null; data: any }[]>([]);
+  const [compLoading, setCompLoading] = useState(false);
+
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
     getMyConsultationNotes()
@@ -171,7 +179,73 @@ export default function ConsultationNotesPage() {
         .catch(() => setDeltas([]))
         .finally(() => setDeltaLoading(false));
     }
+
+    // Also load change reports for the formatted view
+    if (pageTab === "delta" && changeReports.length === 0 && !changeReportLoading) {
+      setChangeReportLoading(true);
+      listMySurveys({ status: "submitted" })
+        .then(async (surveys: any[]) => {
+          const reports = [];
+          for (const s of surveys) {
+            try {
+              const data = await getChangeReport(s.id);
+              if (data && data.has_previous) {
+                reports.push({ surveyId: s.id, timing: s.timing, report: data });
+              }
+            } catch { /* skip */ }
+          }
+          setChangeReports(reports);
+        })
+        .catch(() => setChangeReports([]))
+        .finally(() => setChangeReportLoading(false));
+    }
   }, [pageTab]);
+
+  // Load competitiveness when tab switches
+  useEffect(() => {
+    if (pageTab === "competitiveness" && compData.length === 0 && !compLoading) {
+      setCompLoading(true);
+      listMySurveys({ status: "submitted" })
+        .then(async (surveys: any[]) => {
+          const items = [];
+          for (const s of surveys) {
+            try {
+              const data = await getSubjectCompetitiveness(s.id);
+              if (data && data.subjects && Object.keys(data.subjects).length > 0) {
+                items.push({ surveyId: s.id, timing: s.timing, data });
+              }
+            } catch { /* skip */ }
+          }
+          setCompData(items);
+        })
+        .catch(() => setCompData([]))
+        .finally(() => setCompLoading(false));
+    }
+  }, [pageTab]);
+
+  const handleActionPlanCheck = useCallback(async (surveyId: string, itemIndex: number, completed: boolean) => {
+    // Optimistic update
+    setActionPlans(prev => prev.map(ap => {
+      if (ap.surveyId !== surveyId) return ap;
+      const items = ap.plan.items.map((item, i) =>
+        i === itemIndex ? { ...item, completed } : item
+      );
+      return { ...ap, plan: { ...ap.plan, items } };
+    }));
+
+    try {
+      await updateActionPlanProgress(surveyId, itemIndex, completed);
+    } catch {
+      // Revert on error
+      setActionPlans(prev => prev.map(ap => {
+        if (ap.surveyId !== surveyId) return ap;
+        const items = ap.plan.items.map((item, i) =>
+          i === itemIndex ? { ...item, completed: !completed } : item
+        );
+        return { ...ap, plan: { ...ap.plan, items } };
+      }));
+    }
+  }, []);
 
   const handleRoadmapCheck = useCallback(async (surveyId: string, phaseKey: string, trackKey: string, checked: boolean) => {
     // Optimistic update
@@ -232,6 +306,7 @@ export default function ConsultationNotesPage() {
             { key: "action-plan" as PageTab, label: "액션 플랜" },
             { key: "roadmap" as PageTab, label: "학습 로드맵" },
             { key: "delta" as PageTab, label: "변화 추적" },
+            { key: "competitiveness" as PageTab, label: "과목 경쟁력" },
           ]).map((t) => (
             <button
               key={t.key}
@@ -391,8 +466,8 @@ export default function ConsultationNotesPage() {
                         <div style={{ height: 6, backgroundColor: pct === 100 ? "#16A34A" : "var(--primary)", borderRadius: 3, width: `${pct}%`, transition: "width 0.3s" }} />
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {ap.plan.items.map((item) => (
-                          <div key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 10px", backgroundColor: item.completed ? "#F0FDF4" : "#FAFAFA", borderRadius: 8, border: `1px solid ${item.completed ? "#BBF7D0" : "var(--gray-100)"}` }}>
+                        {ap.plan.items.map((item, itemIndex) => (
+                          <div key={item.id} onClick={() => handleActionPlanCheck(ap.surveyId, itemIndex, !item.completed)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 10px", backgroundColor: item.completed ? "#F0FDF4" : "#FAFAFA", borderRadius: 8, border: `1px solid ${item.completed ? "#BBF7D0" : "var(--gray-100)"}`, cursor: "pointer" }}>
                             <div style={{ width: 20, height: 20, borderRadius: "50%", border: item.completed ? "none" : "2px solid var(--gray-300)", backgroundColor: item.completed ? "#16A34A" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
                               {item.completed && <span style={{ color: "white", fontSize: 12 }}>✓</span>}
                             </div>
@@ -630,6 +705,511 @@ export default function ConsultationNotesPage() {
                               </div>
                             ))}
                           </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ─── 종합 변화 리포트 ─── */}
+            {changeReportLoading ? (
+              <div style={{ textAlign: "center", padding: 40, color: "var(--gray-400)", marginTop: 16 }}>리포트 생성 중...</div>
+            ) : changeReports.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--gray-800)", marginBottom: 16, paddingBottom: 8, borderBottom: "2px solid var(--primary)" }}>
+                  종합 변화 리포트
+                </div>
+                {changeReports.map((cr) => {
+                  const report = cr.report;
+                  const summary = report.summary;
+                  const grades = report.grades;
+                  const studyMethods = report.study_methods;
+                  const psych = report.psychology;
+                  const goals = report.goals;
+
+                  const directionStyle = (dir: string) => {
+                    if (dir === "개선") return { color: "#16A34A", bg: "#F0FDF4", icon: "\u25B2" };
+                    if (dir === "하락") return { color: "#DC2626", bg: "#FEF2F2", icon: "\u25BC" };
+                    if (dir === "혼재") return { color: "#D97706", bg: "#FEF3C7", icon: "\u25AC" };
+                    return { color: "#6B7280", bg: "#F3F4F6", icon: "\u25AC" };
+                  };
+
+                  const timingLabel = cr.timing ? TIMING_LABEL[cr.timing] || cr.timing : "현재";
+                  const prevTimingLabel = report.previous_timing ? TIMING_LABEL[report.previous_timing] || report.previous_timing : "이전";
+
+                  return (
+                    <div key={cr.surveyId} style={{ marginBottom: 32 }}>
+                      {/* 종합 요약 */}
+                      {summary && (
+                        <div className="card" style={{ padding: 20, marginBottom: 16, border: `2px solid ${directionStyle(summary.overall_direction).color}20` }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                            <span style={{ fontSize: 24 }}>
+                              {summary.icon === "up" ? "\uD83D\uDCC8" : summary.icon === "down" ? "\uD83D\uDCC9" : summary.icon === "mixed" ? "\uD83D\uDD04" : "\u2796"}
+                            </span>
+                            <div>
+                              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--gray-800)" }}>
+                                {prevTimingLabel} → {timingLabel} 종합 변화
+                              </div>
+                              <div style={{ fontSize: 13, color: "var(--gray-500)", marginTop: 2 }}>{summary.summary}</div>
+                            </div>
+                            <span style={{
+                              marginLeft: "auto", fontSize: 13, fontWeight: 600, padding: "4px 12px", borderRadius: 20,
+                              backgroundColor: directionStyle(summary.overall_direction).bg,
+                              color: directionStyle(summary.overall_direction).color,
+                            }}>
+                              {directionStyle(summary.overall_direction).icon} {summary.overall_direction}
+                            </span>
+                          </div>
+                          {summary.section_directions && (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              {Object.entries(summary.section_directions).map(([name, dir]: [string, any]) => {
+                                const ds = directionStyle(dir);
+                                return (
+                                  <span key={name} style={{
+                                    fontSize: 12, padding: "3px 10px", borderRadius: 12,
+                                    backgroundColor: ds.bg, color: ds.color, fontWeight: 500,
+                                  }}>
+                                    {name} {ds.icon} {dir}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 성적 변화 */}
+                      {grades && grades.changes && grades.changes.length > 0 && (
+                        <div className="card" style={{ padding: 16, marginBottom: 12 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                            <span style={{ fontSize: 18 }}>{"\uD83D\uDCCA"}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)" }}>성적 변화</span>
+                            <span style={{
+                              fontSize: 11, padding: "2px 8px", borderRadius: 10, marginLeft: "auto",
+                              backgroundColor: directionStyle(grades.direction).bg,
+                              color: directionStyle(grades.direction).color, fontWeight: 500,
+                            }}>
+                              {directionStyle(grades.direction).icon} {grades.direction}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 10 }}>{grades.summary}</p>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 4, fontSize: 11 }}>
+                            <div style={{ fontWeight: 600, color: "var(--gray-500)", padding: "4px 6px" }}>학기</div>
+                            <div style={{ fontWeight: 600, color: "var(--gray-500)", padding: "4px 6px" }}>과목</div>
+                            <div style={{ fontWeight: 600, color: "var(--gray-500)", padding: "4px 6px", textAlign: "center" }}>이전</div>
+                            <div style={{ fontWeight: 600, color: "var(--gray-500)", padding: "4px 6px", textAlign: "center" }}>현재</div>
+                            <div style={{ fontWeight: 600, color: "var(--gray-500)", padding: "4px 6px", textAlign: "center" }}>변화</div>
+                            {grades.changes.map((g: any, i: number) => {
+                              const ds = directionStyle(g.direction);
+                              return [
+                                <div key={`${i}-sem`} style={{ padding: "4px 6px", color: "var(--gray-600)", borderTop: "1px solid var(--gray-100)" }}>{g.semester}</div>,
+                                <div key={`${i}-sub`} style={{ padding: "4px 6px", color: "var(--gray-700)", fontWeight: 500, borderTop: "1px solid var(--gray-100)" }}>{g.subject}</div>,
+                                <div key={`${i}-prev`} style={{ padding: "4px 6px", textAlign: "center", color: "var(--gray-500)", borderTop: "1px solid var(--gray-100)" }}>
+                                  {g.prev_grade ?? "-"}{g.prev_score != null ? ` (${g.prev_score})` : ""}
+                                </div>,
+                                <div key={`${i}-curr`} style={{ padding: "4px 6px", textAlign: "center", color: "var(--gray-700)", fontWeight: 600, borderTop: "1px solid var(--gray-100)" }}>
+                                  {g.curr_grade ?? "-"}{g.curr_score != null ? ` (${g.curr_score})` : ""}
+                                </div>,
+                                <div key={`${i}-dir`} style={{ padding: "4px 6px", textAlign: "center", borderTop: "1px solid var(--gray-100)" }}>
+                                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, backgroundColor: ds.bg, color: ds.color }}>
+                                    {ds.icon}
+                                  </span>
+                                </div>,
+                              ];
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 학습법 변화 */}
+                      {studyMethods && studyMethods.subjects && studyMethods.subjects.length > 0 && (
+                        <div className="card" style={{ padding: 16, marginBottom: 12 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                            <span style={{ fontSize: 18 }}>{"\uD83D\uDCDD"}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)" }}>학습 방법 변화</span>
+                            <span style={{
+                              fontSize: 11, padding: "2px 8px", borderRadius: 10, marginLeft: "auto",
+                              backgroundColor: directionStyle(studyMethods.direction).bg,
+                              color: directionStyle(studyMethods.direction).color, fontWeight: 500,
+                            }}>
+                              {directionStyle(studyMethods.direction).icon} {studyMethods.direction}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 10 }}>{studyMethods.summary}</p>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {studyMethods.subjects.map((subj: any) => (
+                              <div key={subj.subject} style={{ padding: 12, borderRadius: 8, border: "1px solid var(--gray-100)", backgroundColor: "#FAFAFA" }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-800)", marginBottom: 8 }}>{subj.subject}</div>
+                                {(subj.method_added.length > 0 || subj.method_removed.length > 0) && (
+                                  <div style={{ marginBottom: 6 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--gray-500)", marginBottom: 4 }}>학습법</div>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                      {subj.method_added.map((m: string) => (
+                                        <span key={m} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, backgroundColor: "#F0FDF4", color: "#16A34A" }}>+ {m}</span>
+                                      ))}
+                                      {subj.method_removed.map((m: string) => (
+                                        <span key={m} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, backgroundColor: "#FEF2F2", color: "#DC2626" }}>- {m}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {subj.engagement && (
+                                  <div style={{ fontSize: 12, color: "var(--gray-600)", marginBottom: 4 }}>
+                                    수업 참여: <span style={{ color: "var(--gray-400)" }}>{subj.engagement.prev || "-"}</span>
+                                    {" → "}
+                                    <span style={{ fontWeight: 600, color: directionStyle(subj.engagement.direction || "유지").color }}>{subj.engagement.curr || "-"}</span>
+                                    {subj.engagement.direction && subj.engagement.direction !== "유지" && (
+                                      <span style={{ fontSize: 10, marginLeft: 4, color: directionStyle(subj.engagement.direction).color }}>
+                                        {directionStyle(subj.engagement.direction).icon}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {subj.satisfaction && (
+                                  <div style={{ fontSize: 12, color: "var(--gray-600)", marginBottom: 4 }}>
+                                    만족도: <span style={{ color: "var(--gray-400)" }}>{subj.satisfaction.prev || "-"}</span>
+                                    {" → "}
+                                    <span style={{ fontWeight: 600, color: directionStyle(subj.satisfaction.direction || "유지").color }}>{subj.satisfaction.curr || "-"}</span>
+                                    {subj.satisfaction.direction && subj.satisfaction.direction !== "유지" && (
+                                      <span style={{ fontSize: 10, marginLeft: 4, color: directionStyle(subj.satisfaction.direction).color }}>
+                                        {directionStyle(subj.satisfaction.direction).icon}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {subj.textbook && (
+                                  <div style={{ fontSize: 12, color: "var(--gray-600)" }}>
+                                    교재: <span style={{ color: "var(--gray-400)" }}>{subj.textbook.prev || "-"}</span>
+                                    {" → "}
+                                    <span style={{ fontWeight: 600, color: "var(--gray-700)" }}>{subj.textbook.curr || "-"}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 심리 컨디션 변화 */}
+                      {psych && psych.items && psych.items.length > 0 && (
+                        <div className="card" style={{ padding: 16, marginBottom: 12 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                            <span style={{ fontSize: 18 }}>{"\uD83E\uDDE0"}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)" }}>심리 · 컨디션 변화</span>
+                            <span style={{
+                              fontSize: 11, padding: "2px 8px", borderRadius: 10, marginLeft: "auto",
+                              backgroundColor: directionStyle(psych.direction).bg,
+                              color: directionStyle(psych.direction).color, fontWeight: 500,
+                            }}>
+                              {directionStyle(psych.direction).icon} {psych.direction}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 10 }}>{psych.summary}</p>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {psych.items.map((item: any) => {
+                              const ds = directionStyle(item.direction);
+                              return (
+                                <div key={item.field} style={{ display: "flex", alignItems: "center", padding: "8px 10px", borderRadius: 8, backgroundColor: "#FAFAFA", border: "1px solid var(--gray-100)" }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--gray-600)", minWidth: 90 }}>{item.label}</span>
+                                  <span style={{ fontSize: 12, color: "var(--gray-400)", flex: 1 }}>
+                                    {item.prev ?? "-"} → <span style={{ fontWeight: 600, color: ds.color }}>{item.curr ?? "-"}</span>
+                                  </span>
+                                  <span style={{ fontSize: 10, padding: "1px 8px", borderRadius: 8, backgroundColor: ds.bg, color: ds.color, fontWeight: 500 }}>
+                                    {ds.icon} {item.direction}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 목표 변화 */}
+                      {goals && goals.items && goals.items.length > 0 && (
+                        <div className="card" style={{ padding: 16, marginBottom: 12 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                            <span style={{ fontSize: 18 }}>{"\uD83C\uDFAF"}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)" }}>목표 · 진로 변화</span>
+                            <span style={{
+                              fontSize: 11, padding: "2px 8px", borderRadius: 10, marginLeft: "auto",
+                              backgroundColor: directionStyle(goals.direction).bg,
+                              color: directionStyle(goals.direction).color, fontWeight: 500,
+                            }}>
+                              {directionStyle(goals.direction).icon} {goals.direction}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 10 }}>{goals.summary}</p>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {goals.items.map((item: any) => (
+                              <div key={item.field} style={{ padding: "8px 10px", borderRadius: 8, backgroundColor: "#FAFAFA", border: "1px solid var(--gray-100)" }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--gray-600)", marginBottom: 4 }}>{item.label}</div>
+                                <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
+                                  {typeof item.prev === "object" ? JSON.stringify(item.prev) : (item.prev ?? "-")}
+                                  {" → "}
+                                  <span style={{ fontWeight: 600, color: "var(--gray-700)" }}>
+                                    {typeof item.curr === "object" ? JSON.stringify(item.curr) : (item.curr ?? "-")}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+        {/* --- 과목 경쟁력 탭 --- */}
+        {pageTab === "competitiveness" && (
+          <>
+            {compLoading ? (
+              <div style={{ textAlign: "center", padding: 60, color: "var(--gray-400)" }}>불러오는 중...</div>
+            ) : compData.length === 0 ? (
+              <div className="card" style={{ textAlign: "center", padding: 60 }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+                <p style={{ color: "var(--gray-500)", marginBottom: 4 }}>과목별 경쟁력 데이터가 없습니다</p>
+                <p style={{ fontSize: 13, color: "var(--gray-400)" }}>설문에서 내신 성적과 모의고사 데이터를 입력하면 분석됩니다</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                {compData.map((cd) => {
+                  const d = cd.data;
+                  const subjects = d.subjects || {};
+                  const strategy = d.strategy || {};
+                  const subjectEntries = Object.entries(subjects) as [string, any][];
+
+                  // Grade color helper
+                  const gradeColor = (gap: number | null) => {
+                    if (gap === null) return { bar: "#94A3B8", bg: "#F1F5F9", label: "var(--gray-500)" };
+                    if (gap <= 0) return { bar: "#16A34A", bg: "#F0FDF4", label: "#166534" };
+                    if (gap <= 1) return { bar: "#EAB308", bg: "#FEFCE8", label: "#A16207" };
+                    return { bar: "#DC2626", bg: "#FEF2F2", label: "#991B1B" };
+                  };
+
+                  const trendIcon = (trend: string) => {
+                    if (trend === "improving") return { symbol: "↑", color: "#16A34A" };
+                    if (trend === "declining") return { symbol: "↓", color: "#DC2626" };
+                    if (trend === "stable") return { symbol: "→", color: "#6B7280" };
+                    return { symbol: "-", color: "#9CA3AF" };
+                  };
+
+                  // Max grade for bar width calculation (5 grade system)
+                  const maxGrade = 5;
+
+                  return (
+                    <div key={cd.surveyId}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)", marginBottom: 12 }}>
+                        {cd.timing ? TIMING_LABEL[cd.timing] || cd.timing : "설문"} 과목별 경쟁력 분석
+                      </div>
+
+                      {/* 목표 정보 */}
+                      {d.target_level && (
+                        <div style={{ padding: "8px 12px", backgroundColor: "#EFF6FF", borderRadius: 8, marginBottom: 16, fontSize: 13, color: "#1E40AF" }}>
+                          목표: {d.target_level} (환산 목표등급 {d.target_grade}등급)
+                        </div>
+                      )}
+
+                      {/* 과목별 경쟁력 차트 */}
+                      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 12 }}>
+                          과목별 내신 등급
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {subjectEntries.map(([key, subj]) => {
+                            if (!subj.current_grade) return null;
+                            const gc = gradeColor(subj.gap);
+                            const ti = trendIcon(subj.trend);
+                            const barWidthPct = Math.max(5, ((maxGrade - subj.current_grade + 1) / maxGrade) * 100);
+                            const targetPct = d.target_grade ? ((maxGrade - d.target_grade + 1) / maxGrade) * 100 : null;
+
+                            return (
+                              <div key={key}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 500, color: "var(--gray-700)", minWidth: 40 }}>{subj.name}</span>
+                                    <span style={{ fontSize: 11, color: ti.color, fontWeight: 600 }}>{ti.symbol}</span>
+                                    {subj.within_plus_minus_1 && (
+                                      <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, backgroundColor: "#FEF3C7", color: "#92400E", fontWeight: 600 }}>
+                                        +-1
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                                    <span style={{ fontWeight: 600, color: gc.label }}>{subj.current_grade}등급</span>
+                                    {subj.gap !== null && (
+                                      <span style={{ color: "var(--gray-400)" }}>
+                                        ({subj.gap > 0 ? "+" : ""}{subj.gap})
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* Bar chart */}
+                                <div style={{ position: "relative", height: 20, backgroundColor: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${barWidthPct}%`, backgroundColor: gc.bar, borderRadius: 4, transition: "width 0.4s" }} />
+                                  {targetPct !== null && (
+                                    <div style={{ position: "absolute", top: 0, left: `${targetPct}%`, width: 2, height: "100%", backgroundColor: "#1E293B", opacity: 0.6 }} />
+                                  )}
+                                </div>
+                                {/* Mock grade comparison */}
+                                {subj.mock_current != null && (
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                                    <span style={{ fontSize: 11, color: "var(--gray-400)" }}>모의: {subj.mock_current}등급</span>
+                                    {subj.current_grade != null && (
+                                      <span style={{ fontSize: 11, color: subj.mock_current < subj.current_grade ? "#16A34A" : subj.mock_current > subj.current_grade ? "#DC2626" : "#6B7280" }}>
+                                        (내신 대비 {subj.mock_current < subj.current_grade ? "우위" : subj.mock_current > subj.current_grade ? "열위" : "동일"})
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {d.target_grade && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, paddingTop: 8, borderTop: "1px solid var(--gray-100)" }}>
+                            <div style={{ width: 16, height: 2, backgroundColor: "#1E293B", opacity: 0.6 }} />
+                            <span style={{ fontSize: 11, color: "var(--gray-400)" }}>목표 등급 ({d.target_grade})</span>
+                            <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+                              <span style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: "#16A34A", display: "inline-block" }} /> 목표 달성</span>
+                              <span style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: "#EAB308", display: "inline-block" }} /> +-1 이내</span>
+                              <span style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: "#DC2626", display: "inline-block" }} /> 미달</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* C2 취약 유형 */}
+                      {d.weakness_types && Object.keys(d.weakness_types).length > 0 && (
+                        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 10 }}>
+                            모의고사 취약 유형 (C2)
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {Object.entries(d.weakness_types).map(([subKey, types]: [string, any]) => {
+                              const name = subjects[subKey]?.name || subKey;
+                              return (
+                                <div key={subKey} style={{ padding: "8px 12px", backgroundColor: "#FEF2F2", borderRadius: 8, border: "1px solid #FECACA" }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#991B1B", marginBottom: 4 }}>{name}</div>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                    {(types as string[]).map((t: string) => (
+                                      <span key={t} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, backgroundColor: "#FEE2E2", color: "#B91C1C" }}>{t}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* D6 학습 고민 */}
+                      {(d.weakest_subjects?.length > 0 || d.strongest_subjects?.length > 0) && (
+                        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 10 }}>
+                            자가 진단
+                          </div>
+                          {d.weakest_subjects?.length > 0 && (
+                            <div style={{ marginBottom: 8 }}>
+                              <span style={{ fontSize: 12, color: "#DC2626", fontWeight: 600 }}>가장 어려운 과목: </span>
+                              {d.weakest_subjects.map((s: string) => (
+                                <span key={s} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 4, backgroundColor: "#FEF2F2", color: "#B91C1C", marginRight: 4 }}>{s}</span>
+                              ))}
+                              {d.weakest_reasons?.length > 0 && (
+                                <div style={{ marginTop: 4, fontSize: 12, color: "var(--gray-500)" }}>
+                                  이유: {d.weakest_reasons.map((r: string) => {
+                                    const labels: Record<string, string> = {
+                                      "개념이해부족": "개념 이해 부족", "풀이시간부족": "풀이 시간 부족",
+                                      "응용심화": "응용/심화", "시험유형적응": "시험 유형 적응",
+                                      "학습방법모름": "학습 방법 모름", "흥미부족": "흥미 부족",
+                                    };
+                                    return labels[r] || r;
+                                  }).join(", ")}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {d.strongest_subjects?.length > 0 && (
+                            <div>
+                              <span style={{ fontSize: 12, color: "#16A34A", fontWeight: 600 }}>가장 자신있는 과목: </span>
+                              {d.strongest_subjects.map((s: string) => (
+                                <span key={s} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 4, backgroundColor: "#F0FDF4", color: "#166534", marginRight: 4 }}>{s}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 전략 과목 카드 */}
+                      {(strategy.focus?.length > 0 || strategy.maintain?.length > 0 || strategy.consider?.length > 0) && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          {/* 집중 공략 */}
+                          {strategy.focus?.length > 0 && (
+                            <div className="card" style={{ padding: 16, borderLeft: "4px solid #2563EB" }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "#2563EB", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ fontSize: 16 }}>🎯</span> 집중 공략 과목
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                {strategy.focus.map((item: any) => (
+                                  <div key={item.key} style={{ padding: 10, backgroundColor: "#EFF6FF", borderRadius: 8 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                                      <span style={{ fontSize: 13, fontWeight: 600, color: "#1E40AF" }}>{item.name}</span>
+                                      <span style={{ fontSize: 12, color: "#3B82F6" }}>
+                                        {item.current_grade}등급 → 목표 {item.target_grade}등급 (차이: {item.gap > 0 ? "+" : ""}{item.gap})
+                                      </span>
+                                    </div>
+                                    {item.tip && <p style={{ fontSize: 12, color: "#1E40AF", margin: 0, lineHeight: 1.5 }}>{item.tip}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 유지 관리 */}
+                          {strategy.maintain?.length > 0 && (
+                            <div className="card" style={{ padding: 16, borderLeft: "4px solid #16A34A" }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "#16A34A", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ fontSize: 16 }}>✅</span> 유지 관리 과목
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                {strategy.maintain.map((item: any) => (
+                                  <div key={item.key} style={{ padding: 10, backgroundColor: "#F0FDF4", borderRadius: 8 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                                      <span style={{ fontSize: 13, fontWeight: 600, color: "#166534" }}>{item.name}</span>
+                                      <span style={{ fontSize: 12, color: "#16A34A" }}>{item.current_grade}등급</span>
+                                    </div>
+                                    {item.tip && <p style={{ fontSize: 12, color: "#166534", margin: 0, lineHeight: 1.5 }}>{item.tip}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 전략적 포기 고려 */}
+                          {strategy.consider?.length > 0 && (
+                            <div className="card" style={{ padding: 16, borderLeft: "4px solid #9CA3AF" }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "#6B7280", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ fontSize: 16 }}>⚖️</span> 전략적 시간 배분 고려
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                {strategy.consider.map((item: any) => (
+                                  <div key={item.key} style={{ padding: 10, backgroundColor: "#F9FAFB", borderRadius: 8, border: "1px solid var(--gray-200)" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                                      <span style={{ fontSize: 13, fontWeight: 600, color: "#6B7280" }}>{item.name}</span>
+                                      <span style={{ fontSize: 12, color: "#9CA3AF" }}>
+                                        {item.current_grade}등급 → 목표 {item.target_grade}등급 (차이: +{item.gap})
+                                      </span>
+                                    </div>
+                                    {item.tip && <p style={{ fontSize: 12, color: "#6B7280", margin: 0, lineHeight: 1.5 }}>{item.tip}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -172,6 +172,34 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
     };
   }, []);
 
+  // Delta 모드 초기화: change_check 질문에 prefill이 있으면 delta_status를 "unchanged"로 세팅
+  useEffect(() => {
+    if (!isDelta) return;
+    let changed = false;
+    const newAnswers = { ...answers };
+    for (const cat of visibleCategories) {
+      const catAnswers = newAnswers[cat.id] || {};
+      let catChanged = false;
+      for (const q of cat.questions as any[]) {
+        if (q.delta === "change_check" && !isEmptyValue(catAnswers[q.id])) {
+          const statusKey = `${q.id}_delta_status`;
+          if (!catAnswers[statusKey]) {
+            catAnswers[statusKey] = "unchanged";
+            catChanged = true;
+          }
+        }
+      }
+      if (catChanged) {
+        newAnswers[cat.id] = catAnswers;
+        changed = true;
+      }
+    }
+    if (changed) {
+      setAnswers(newAnswers);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 답변 업데이트
   const updateAnswer = (questionId: string, value: any) => {
     const newAnswers = {
@@ -578,14 +606,67 @@ function CategoryQuestions({
   readOnly?: boolean;
   isDelta?: boolean;
 }) {
+  // Delta "변경 없음" 체크 상태: question id -> boolean
+  // change_check 질문에 prefill이 있으면 기본 true(변경 없음 체크됨)
+  const [unchangedMap, setUnchangedMap] = useState<Record<string, boolean>>(() => {
+    if (!isDelta) return {};
+    const initial: Record<string, boolean> = {};
+    for (const q of category.questions as any[]) {
+      if (q.delta === "change_check" && !isEmptyValue(answers[q.id])) {
+        initial[q.id] = true;
+      }
+    }
+    return initial;
+  });
+
+  const toggleUnchanged = (qId: string, checked: boolean) => {
+    setUnchangedMap((prev) => ({ ...prev, [qId]: checked }));
+    // delta_status 메타 필드 업데이트
+    onChange(`${qId}_delta_status`, checked ? "unchanged" : "changed");
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, ...(readOnly ? { opacity: 0.7, pointerEvents: "none" } : {}) }}>
       {category.questions.map((q: any) => {
         if (!evaluateShowWhen(q.show_when, answers)) return null;
         const hasPrefill = isDelta && !isEmptyValue(answers[q.id]);
+        const isChangeCheck = isDelta && q.delta === "change_check" && hasPrefill;
+        const isUnchanged = isChangeCheck && unchangedMap[q.id] === true;
+
         return (
-          <div key={q.id} style={hasPrefill ? { position: "relative" } : undefined}>
-            {hasPrefill && (
+          <div key={q.id} style={{ position: "relative" }}>
+            {/* Delta change_check: "변경 없음" 체크박스 */}
+            {isChangeCheck && (
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 8,
+                  padding: "6px 10px",
+                  background: isUnchanged ? "#F0FDF4" : "#FEF3C7",
+                  border: `1px solid ${isUnchanged ? "#BBF7D0" : "#FDE68A"}`,
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  color: isUnchanged ? "#166534" : "#92400E",
+                  fontWeight: 500,
+                  userSelect: "none",
+                  transition: "background 0.15s, border-color 0.15s",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isUnchanged}
+                  onChange={(e) => toggleUnchanged(q.id, e.target.checked)}
+                  style={{ accentColor: "#16A34A", width: 16, height: 16, cursor: "pointer" }}
+                />
+                {isUnchanged ? "변경 없음 (이전 답변 유지)" : "변경하려면 아래 내용을 수정하세요"}
+              </label>
+            )}
+
+            {/* "이전 답변" 뱃지 (change_check가 아닌 delta prefill에만 표시) */}
+            {hasPrefill && !isChangeCheck && (
               <span style={{
                 position: "absolute", top: 0, right: 0, fontSize: 10, fontWeight: 600,
                 padding: "2px 8px", borderRadius: 4,
@@ -594,11 +675,15 @@ function CategoryQuestions({
                 이전 답변
               </span>
             )}
-            <QuestionRenderer
-              question={q}
-              value={answers[q.id]}
-              onChange={(v) => onChange(q.id, v)}
-            />
+
+            {/* 질문 본체: 변경 없음이면 비활성화 */}
+            <div style={isUnchanged ? { opacity: 0.5, pointerEvents: "none", transition: "opacity 0.15s" } : undefined}>
+              <QuestionRenderer
+                question={q}
+                value={answers[q.id]}
+                onChange={(v) => onChange(q.id, v)}
+              />
+            </div>
           </div>
         );
       })}

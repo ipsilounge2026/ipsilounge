@@ -350,6 +350,21 @@ export async function getSurveyDelta(id: string) {
   return request(`/api/consultation-surveys/${id}/delta`);
 }
 
+export async function getChangeReport(id: string) {
+  return request(`/api/consultation-surveys/${id}/change-report`);
+}
+
+export async function getSubjectCompetitiveness(id: string) {
+  return request(`/api/consultation-surveys/${id}/subject-competitiveness`);
+}
+
+export async function updateActionPlanProgress(id: string, itemIndex: number, completed: boolean) {
+  return request(`/api/consultation-surveys/${id}/action-plan-progress`, {
+    method: "PATCH",
+    body: JSON.stringify({ item_index: itemIndex, completed }),
+  });
+}
+
 export async function updateRoadmapProgress(id: string, progress: Record<string, Record<string, boolean>>) {
   return request(`/api/consultation-surveys/${id}/roadmap-progress`, {
     method: "PATCH",

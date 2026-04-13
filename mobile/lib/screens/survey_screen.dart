@@ -41,6 +41,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
   // 답변 저장: { "A": { "A1": value, ... }, ... }
   Map<String, Map<String, dynamic>> _answers = {};
 
+  // Delta "변경 없음" 체크 상태: "catId:qId" -> true/false
+  final Map<String, bool> _unchangedMap = {};
+
   Timer? _autoSaveTimer;
   bool _dirty = false;
 
@@ -112,6 +115,30 @@ class _SurveyScreenState extends State<SurveyScreen> {
       _answers = {};
       for (final entry in ans.entries) {
         _answers[entry.key] = Map<String, dynamic>.from(entry.value as Map);
+      }
+
+      // Delta 모드: change_check 질문에 prefill이 있으면 "변경 없음"으로 초기화
+      if (survey['mode'] == 'delta') {
+        for (final cat in _categories) {
+          final catId = cat['id'] as String;
+          final catAnswers = _answers[catId] ?? {};
+          final questions = (cat['questions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          for (final q in questions) {
+            if (q['delta'] == 'change_check') {
+              final qId = q['id'] as String;
+              final val = catAnswers[qId];
+              final hasPrefill = val != null && val != '' && (val is! List || val.isNotEmpty);
+              if (hasPrefill) {
+                _unchangedMap['$catId:$qId'] = true;
+                // 메타 필드 초기화
+                catAnswers['${qId}_delta_status'] ??= 'unchanged';
+              }
+            }
+          }
+          if (catAnswers.isNotEmpty) {
+            _answers[catId] = catAnswers;
+          }
+        }
       }
 
       // 마지막 작성 카테고리로 이동
@@ -407,12 +434,66 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
     final isDelta = _survey?['mode'] == 'delta';
     final hasPrefill = isDelta && answer != null && answer != '' && (answer is! List || (answer as List).isNotEmpty);
+    final isChangeCheck = isDelta && q['delta'] == 'change_check' && hasPrefill;
+    final unchangedKey = '$catId:$qId';
+    final isUnchanged = isChangeCheck && (_unchangedMap[unchangedKey] == true);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Delta change_check: "변경 없음" 체크박스
+          if (isChangeCheck)
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  final newVal = !(_unchangedMap[unchangedKey] ?? false);
+                  _unchangedMap[unchangedKey] = newVal;
+                  _setAnswer(catId, '${qId}_delta_status', newVal ? 'unchanged' : 'changed');
+                });
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isUnchanged ? const Color(0xFFF0FDF4) : const Color(0xFFFEF3C7),
+                  border: Border.all(color: isUnchanged ? const Color(0xFFBBF7D0) : const Color(0xFFFDE68A)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Checkbox(
+                        value: isUnchanged,
+                        onChanged: (val) {
+                          setState(() {
+                            _unchangedMap[unchangedKey] = val ?? false;
+                            _setAnswer(catId, '${qId}_delta_status', (val ?? false) ? 'unchanged' : 'changed');
+                          });
+                        },
+                        activeColor: const Color(0xFF16A34A),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isUnchanged ? '변경 없음 (이전 답변 유지)' : '변경하려면 아래 내용을 수정하세요',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: isUnchanged ? const Color(0xFF166534) : const Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // 라벨 행
           Row(
             children: [
               Expanded(
@@ -424,7 +505,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
                   ),
                 ),
               ),
-              if (hasPrefill)
+              // "이전 답변" 뱃지: change_check가 아닌 delta prefill에만 표시
+              if (hasPrefill && !isChangeCheck)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(color: const Color(0xFFDBEAFE), borderRadius: BorderRadius.circular(4)),
@@ -438,7 +520,15 @@ class _SurveyScreenState extends State<SurveyScreen> {
               child: Text(q['description'], style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
             ),
           const SizedBox(height: 8),
-          _buildInput(type, q, catId, qId, answer),
+          // 질문 본체: 변경 없음이면 비활성화
+          IgnorePointer(
+            ignoring: isUnchanged,
+            child: AnimatedOpacity(
+              opacity: isUnchanged ? 0.5 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              child: _buildInput(type, q, catId, qId, answer),
+            ),
+          ),
         ],
       ),
     );
