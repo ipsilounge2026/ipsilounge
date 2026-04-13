@@ -14,7 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Cell,
+  Cell, LineChart, Line, Legend, PieChart, Pie,
 } from "recharts";
 import { getSurveyComputed, getSurvey } from "@/lib/api";
 
@@ -169,8 +169,18 @@ export default function ReportPage() {
       {/* 레이더 차트 */}
       <RadarSection rs={rs} labels={radarLabels} />
 
+      {/* 성적 추이 차트 (예비고1만) */}
+      {isPreheigh1 && computed?.grade_trend && (
+        <GradeTrendSection data={computed.grade_trend} />
+      )}
+
       {/* 과목별 준비율 차트 (예비고1만) */}
       {isPreheigh1 && rs.prep && <PrepRateChart prep={rs.prep} />}
+
+      {/* 학습 습관 분석 (예비고1만) */}
+      {isPreheigh1 && computed?.study_analysis && Object.keys(computed.study_analysis).length > 0 && (
+        <StudyAnalysisSection data={computed.study_analysis} />
+      )}
 
       {/* 영역별 상세 점수 */}
       <DetailSection rs={rs} sections={detailSections} />
@@ -180,7 +190,7 @@ export default function ReportPage() {
         <CompatibilitySection data={rs.school_type_compatibility} />
       )}
 
-      {/* 로드맵 자동 초안 (예비고1만) */}
+      {/* 로드맵 (예비고1만) — 4단계×6트랙 매트릭스 + 우선순위 항목 */}
       {isPreheigh1 && rs.roadmap && <RoadmapSection roadmap={rs.roadmap} />}
 
       {/* 등급 범례 */}
@@ -389,7 +399,12 @@ function DetailSection({ rs, sections }: { rs: any; sections: { key: string; lab
 // ── 로드맵 자동 초안 ──
 
 function RoadmapSection({ roadmap }: { roadmap: any }) {
-  if (!roadmap?.items?.length) return null;
+  const [expandedPhase, setExpandedPhase] = useState<string | null>(null);
+
+  if (!roadmap?.items?.length && !roadmap?.matrix) return null;
+
+  const matrix = roadmap.matrix as { phases: any[]; tracks: any[]; cells: Record<string, Record<string, string>> } | undefined;
+  const priorityItems = (roadmap.items as any[] || []).filter((it: any) => it.priority === "상" || it.priority === "중");
 
   return (
     <div style={{ ...cardStyle, marginBottom: 20 }}>
@@ -398,43 +413,70 @@ function RoadmapSection({ roadmap }: { roadmap: any }) {
         {roadmap.summary}
       </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {roadmap.items.map((item: any, i: number) => {
-          const pc = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS["하"];
-          const gc = GRADE_COLORS[item.current_grade] || GRADE_COLORS.D;
-          return (
-            <div key={i} style={{
-              borderRadius: 12, border: "1px solid var(--gray-200)",
-              overflow: "hidden",
-            }}>
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "10px 16px", background: "var(--gray-50)",
-              }}>
-                <span style={{
-                  padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 700,
-                  color: pc.text, background: pc.bg,
-                }}>
-                  {item.priority === "상" ? "최우선" : item.priority === "중" ? "중요" : "참고"}
-                </span>
-                <span style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{item.title}</span>
-                <GradeBadge grade={item.current_grade} />
-              </div>
-              <div style={{ padding: "12px 16px" }}>
-                <p style={{ fontSize: 13, color: "var(--gray-700)", margin: "0 0 8px", lineHeight: 1.6 }}>
-                  {item.description}
-                </p>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--gray-500)" }}>
-                  <span>📅</span>
-                  <span>{item.period}</span>
-                  <span style={{ marginLeft: "auto" }}>{item.area}</span>
-                  <span style={{ fontWeight: 600, color: gc.text }}>{item.current_score}점</span>
+      {/* 우선 과제 요약 */}
+      {priorityItems.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 8 }}>우선 과제</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {priorityItems.map((item: any, i: number) => {
+              const pc = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS["하"];
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, background: "var(--gray-50)" }}>
+                  <span style={{ padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700, color: pc.text, background: pc.bg }}>
+                    {item.priority === "상" ? "최우선" : "중요"}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{item.title}</span>
+                  <GradeBadge grade={item.current_grade} />
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 4단계 × 6트랙 매트릭스 */}
+      {matrix && matrix.phases?.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 4 }}>단계별 로드맵</div>
+          {matrix.phases.map((phase: any) => {
+            const isOpen = expandedPhase === phase.key;
+            return (
+              <div key={phase.key} style={{ borderRadius: 12, border: "1px solid var(--gray-200)", overflow: "hidden" }}>
+                {/* Phase 헤더 (클릭 토글) */}
+                <div
+                  onClick={() => setExpandedPhase(isOpen ? null : phase.key)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "10px 16px",
+                    background: isOpen ? "#EEF2FF" : "var(--gray-50)", cursor: "pointer",
+                    transition: "background 0.2s",
+                  }}
+                >
+                  <span style={{ fontSize: 12, transform: isOpen ? "rotate(90deg)" : "rotate(0)", transition: "transform 0.2s" }}>▶</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{phase.label}</span>
+                  <span style={{ fontSize: 11, color: "var(--gray-500)" }}>{phase.theme}</span>
+                </div>
+                {/* 6트랙 내용 */}
+                {isOpen && (
+                  <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {matrix.tracks.map((track: any) => {
+                      const content = matrix.cells?.[phase.key]?.[track.key];
+                      if (!content) return null;
+                      return (
+                        <div key={track.key} style={{ padding: "10px 12px", borderRadius: 10, background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--gray-700)", marginBottom: 4 }}>
+                            {track.icon} {track.label}
+                          </div>
+                          <div style={{ fontSize: 12, color: "var(--gray-600)", lineHeight: 1.5 }}>{content}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{
         marginTop: 16, padding: "12px 16px", borderRadius: 10,
@@ -442,6 +484,198 @@ function RoadmapSection({ roadmap }: { roadmap: any }) {
       }}>
         이 로드맵은 설문 응답 기반 자동 생성 초안입니다.
         상담을 통해 학생 상황에 맞게 구체적인 계획을 수립할 수 있습니다.
+      </div>
+    </div>
+  );
+}
+
+// ── 성적 추이 차트 ──
+
+const SUBJECT_LINE_COLORS: Record<string, string> = {
+  "국어": "#70AD47",
+  "영어": "#ED7D31",
+  "수학": "#4472C4",
+  "사회": "#FFC000",
+  "과학": "#5B9BD5",
+};
+
+const TREND_BADGE_LABELS: Record<string, { label: string; color: string }> = {
+  "상승": { label: "↑ 상승", color: "#16A34A" },
+  "유지": { label: "→ 유지", color: "#6B7280" },
+  "등락": { label: "↕ 등락", color: "#D97706" },
+  "하락": { label: "↓ 하락", color: "#DC2626" },
+};
+
+function GradeTrendSection({ data }: { data: any }) {
+  const trendData = data?.data as any[] | undefined;
+  const subjectTrends = data?.subject_trends as Record<string, any[]> | undefined;
+  const badge = data?.trend_badge as string | undefined;
+
+  if (!trendData?.length) return null;
+
+  const badgeInfo = badge ? TREND_BADGE_LABELS[badge] || { label: badge, color: "#6B7280" } : null;
+
+  // 과목별 라인차트 데이터: semester → {semester, 국어, 영어, ...}
+  const subjectLineData: any[] = [];
+  if (subjectTrends) {
+    const allSemesters = new Set<string>();
+    Object.values(subjectTrends).forEach((arr: any[]) =>
+      arr.forEach((p: any) => allSemesters.add(p.semester))
+    );
+    const semesters = Array.from(allSemesters).sort();
+    for (const sem of semesters) {
+      const row: any = { semester: sem };
+      for (const [subj, arr] of Object.entries(subjectTrends)) {
+        const pt = (arr as any[]).find((p: any) => p.semester === sem);
+        if (pt) row[subj] = pt.raw_score;
+      }
+      subjectLineData.push(row);
+    }
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>성적 추이</h2>
+        {badgeInfo && (
+          <span style={{
+            fontSize: 12, fontWeight: 700, color: badgeInfo.color,
+            padding: "2px 10px", borderRadius: 10, background: `${badgeInfo.color}15`,
+          }}>
+            {badgeInfo.label}
+          </span>
+        )}
+      </div>
+      <p style={{ fontSize: 12, color: "var(--gray-500)", margin: "0 0 16px" }}>
+        학기별 전과목 평균 및 과목별 원점수 추이
+      </p>
+
+      {/* 전과목 평균 추이 */}
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 8 }}>전과목 평균</div>
+      <ResponsiveContainer width="100%" height={180}>
+        <LineChart data={trendData} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="semester" tick={{ fontSize: 11 }} />
+          <YAxis domain={[50, 100]} tick={{ fontSize: 10 }} />
+          <Tooltip contentStyle={{ fontSize: 12 }} />
+          <Line type="monotone" dataKey="avg_score" stroke="#4472C4" strokeWidth={2.5}
+            dot={{ r: 5, fill: "#4472C4" }} name="평균 원점수" />
+        </LineChart>
+      </ResponsiveContainer>
+
+      {/* 과목별 추이 */}
+      {subjectLineData.length > 0 && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", margin: "16px 0 8px" }}>과목별 추이</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={subjectLineData} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="semester" tick={{ fontSize: 11 }} />
+              <YAxis domain={[50, 100]} tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {Object.keys(subjectTrends || {}).map((subj) => (
+                <Line key={subj} type="monotone" dataKey={subj} stroke={SUBJECT_LINE_COLORS[subj] || "#6B7280"}
+                  strokeWidth={2} dot={{ r: 3 }} name={subj} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 학습 습관 분석 ──
+
+const STUDY_TYPE_COLORS: Record<string, string> = {
+  "학원수업": "#4472C4",
+  "학원과제": "#ED7D31",
+  "자기주도": "#70AD47",
+};
+
+function StudyAnalysisSection({ data }: { data: any }) {
+  const totalHours = data.total_weekly_hours ?? 0;
+  const byType = data.by_type as Record<string, number> | undefined;
+  const bySubject = data.by_subject as Record<string, number> | undefined;
+  const selfRatio = data.self_study_ratio ?? 0;
+  const balance = data.subject_balance ?? 0;
+
+  // Pie data for study type
+  const typeData = byType
+    ? Object.entries(byType).map(([name, value]) => ({
+        name,
+        value,
+        fill: STUDY_TYPE_COLORS[name] || "#9CA3AF",
+      }))
+    : [];
+
+  // Bar data for subject hours
+  const subjectData = bySubject
+    ? Object.entries(bySubject).map(([name, value]) => ({ name, hours: value }))
+    : [];
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>학습 습관 분석</h2>
+      <p style={{ fontSize: 12, color: "var(--gray-500)", margin: "0 0 16px" }}>
+        주간 학습 스케줄 기반 분석 결과
+      </p>
+
+      {/* 요약 카드 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+        <div style={{ textAlign: "center", padding: "12px 8px", borderRadius: 10, background: "var(--gray-50)" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#4472C4" }}>{totalHours}</div>
+          <div style={{ fontSize: 11, color: "var(--gray-500)" }}>주간 총 시간</div>
+        </div>
+        <div style={{ textAlign: "center", padding: "12px 8px", borderRadius: 10, background: "var(--gray-50)" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: selfRatio >= 40 ? "#16A34A" : selfRatio >= 20 ? "#D97706" : "#DC2626" }}>
+            {selfRatio}%
+          </div>
+          <div style={{ fontSize: 11, color: "var(--gray-500)" }}>자기주도 비율</div>
+        </div>
+        <div style={{ textAlign: "center", padding: "12px 8px", borderRadius: 10, background: "var(--gray-50)" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: balance >= 70 ? "#16A34A" : balance >= 40 ? "#D97706" : "#DC2626" }}>
+            {Math.round(balance)}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--gray-500)" }}>과목 밸런스</div>
+        </div>
+      </div>
+
+      {/* 학습 유형 비율 + 과목별 시간 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {/* 유형별 비율 파이차트 */}
+        {typeData.length > 0 && (
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 8 }}>유형별 비율</div>
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie data={typeData} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                  outerRadius={55} innerRadius={25} label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}
+                  labelLine={false}>
+                  {typeData.map((d, i) => (
+                    <Cell key={i} fill={d.fill} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v: number) => [`${v}시간`, ""]} contentStyle={{ fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {/* 과목별 시간 바차트 */}
+        {subjectData.length > 0 && (
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 8 }}>과목별 시간</div>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={subjectData} layout="vertical" margin={{ left: 0, right: 10 }}>
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={35} />
+                <Tooltip formatter={(v: number) => [`${v}시간`, ""]} contentStyle={{ fontSize: 12 }} />
+                <Bar dataKey="hours" fill="#4472C4" radius={[0, 4, 4, 0]} barSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1579,9 +1579,102 @@ def _generate_preheigh1_roadmap(
     priority_order = {"상": 0, "중": 1, "하": 2}
     items.sort(key=lambda x: priority_order.get(x["priority"], 9))
 
+    # 4단계 × 6트랙 매트릭스 생성
+    matrix = _generate_roadmap_matrix(academic, study, prep, career, extra)
+
     return {
         "items": items,
+        "matrix": matrix,
         "summary": _roadmap_summary(items),
+    }
+
+
+def _generate_roadmap_matrix(
+    academic: dict, study: dict, prep: dict, career: dict, extra: dict,
+) -> dict:
+    """4단계(Phase) × 6트랙 로드맵 매트릭스 자동 생성."""
+    phases = [
+        {"key": "phase0", "label": "Phase 0: 지금~입학 전", "theme": "기초 보완 & 습관 형성"},
+        {"key": "phase1", "label": "Phase 1: 고1-1학기", "theme": "고등학교 적응 & 첫 내신"},
+        {"key": "phase2", "label": "Phase 2: 고1-2학기", "theme": "진로 구체화 & 심화 탐색"},
+        {"key": "phase3", "label": "Phase 3: 고2 이후", "theme": "전형 전략 본격화"},
+    ]
+    tracks = [
+        {"key": "academic", "label": "교과 학습", "icon": "📘"},
+        {"key": "naesin", "label": "내신 전략", "icon": "📋"},
+        {"key": "setuek", "label": "세특", "icon": "📝"},
+        {"key": "mock", "label": "수능/모의고사", "icon": "🎯"},
+        {"key": "extra", "label": "비교과", "icon": "🏫"},
+        {"key": "habit", "label": "습관 개선", "icon": "🔧"},
+    ]
+
+    scores = {
+        "academic": academic["total"],
+        "study": study["total"],
+        "prep": prep["total"],
+        "career": career["total"],
+        "extra": extra["total"],
+    }
+
+    math_weak = _detail_score(prep, "수학_선행도") < 15
+    eng_weak = _detail_score(prep, "영어_역량") < 15
+    kor_weak = _detail_score(prep, "국어_역량") < 10
+    sci_weak = _detail_score(prep, "과학_역량") < 10
+    study_weak = scores["study"] < 55
+    career_weak = scores["career"] < 55
+    extra_weak = scores["extra"] < 55
+
+    # 매트릭스 셀 생성 (phase_key → track_key → content)
+    cells: dict[str, dict[str, str]] = {}
+
+    # Phase 0: 지금~입학 전
+    p0: dict[str, str] = {}
+    p0["academic"] = "수학: 중학 핵심 단원(방정식·함수) 완전 정복" if math_weak else "고등수학(상) 1회독 완료 목표"
+    p0["academic"] += "\n영어: 고등 필수 어휘 암기 시작" if eng_weak else "\n영어: 수능형 독해 유형 연습"
+    if kor_weak:
+        p0["academic"] += "\n국어: 비문학 지문 독해 연습(주 3회)"
+    p0["naesin"] = "고등학교 내신 체계(지필+수행) 이해\n중학 오답 정리로 개념 구멍 점검"
+    p0["setuek"] = "세특이 무엇인지 이해하기\n관심 분야 탐구 주제 브레인스토밍"
+    p0["mock"] = "고1 3월 모의고사 기출 1회 풀어보기\n시간 배분 연습(국·영·수)"
+    p0["extra"] = "고등학교 동아리 목록 사전 조사" if career_weak else "진로 연계 동아리 1순위 선정"
+    p0["habit"] = "매일 자기주도 학습 1시간 루틴 만들기\n오답노트 습관 시작" if study_weak else "주간 학습 계획표 작성 연습\n시간 블록법 적용 시도"
+    cells["phase0"] = p0
+
+    # Phase 1: 고1-1학기
+    p1: dict[str, str] = {}
+    p1["academic"] = "수학: 공통수학1·2 진도 따라가기 + 유형 반복" if math_weak else "수학: 내신 기출 분석 + 심화 문제 도전"
+    p1["academic"] += "\n영어: 교과서 지문 완벽 이해 + 어휘 확장"
+    p1["naesin"] = "첫 중간고사 준비 전략 수립\n수행평가 일정 파악 및 계획\n시험 2주 전 과목별 계획표 작성"
+    p1["setuek"] = "교과 수업에서 궁금한 점 메모 습관\n1과목 이상 탐구 주제 선정 시도"
+    p1["mock"] = "3월 모의고사 결과 분석\n취약 유형 파악 및 보완 계획"
+    p1["extra"] = "동아리 가입 + 자율활동 적극 참여\n진로활동: 관심 분야 직업 탐색"
+    p1["habit"] = "주간 학습 계획 수립·실행·점검 루틴\n시험 기간 오답 정리 철저히" if study_weak else "효율적 복습 주기 정립(당일·3일·1주)\n자기주도 학습 비율 50% 이상 유지"
+    cells["phase1"] = p1
+
+    # Phase 2: 고1-2학기
+    p2: dict[str, str] = {}
+    p2["academic"] = "1학기 취약 과목 집중 보완\n기말고사 목표 등급 설정 및 실행"
+    p2["naesin"] = "1학기 성적 분석 → 2학기 전략 조정\n수행평가 퀄리티 높이기(보고서·발표)"
+    p2["setuek"] = "1학기 탐구 심화 또는 새 주제 확장\n교과 연계 탐구 보고서 1편 작성" if scores["career"] >= 55 else "관심 분야 찾기 위한 다양한 탐구 시도\n선생님과 탐구 주제 상담"
+    p2["mock"] = "9월·11월 모의고사 응시 및 분석\n수능 국·영·수 기본 유형 정리"
+    p2["extra"] = "동아리 활동 내용 정리(학생부 기재용)\n봉사·자율활동 기록 관리 시작"
+    p2["habit"] = "학습 루틴 안정화 + 시간 관리 최적화\n월 1회 학습 방법 자기 점검"
+    cells["phase2"] = p2
+
+    # Phase 3: 고2 이후
+    p3: dict[str, str] = {}
+    p3["academic"] = "선택과목 전략적 수강(진로 연계)\n전공 관련 과목 최상위 등급 목표"
+    p3["naesin"] = "학종/교과전형 목표에 맞는 등급 관리\n세특·수행평가의 전형 연계 전략"
+    p3["setuek"] = "학년별 심화되는 탐구 스토리라인 구축\n과목 간 연계 탐구로 차별화"
+    p3["mock"] = "수능 영역별 목표 등급 설정\n매 모의고사 후 오답 분석 루틴"
+    p3["extra"] = "3년 활동의 일관성 있는 스토리 정리\n학생부 기재 내용 점검 및 보완"
+    p3["habit"] = "자기주도 학습 비율 70% 이상\n입시 전략에 맞는 시간 배분"
+    cells["phase3"] = p3
+
+    return {
+        "phases": phases,
+        "tracks": tracks,
+        "cells": cells,
     }
 
 

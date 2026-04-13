@@ -84,6 +84,16 @@ class _SurveyReportScreenState extends State<SurveyReportScreen> {
           ],
           _DetailCards(rs: rs, isPreheigh1: isPreheigh1),
           const SizedBox(height: 16),
+          // 성적 추이 차트 (예비고1)
+          if (isPreheigh1 && _computed?['grade_trend'] != null) ...[
+            _GradeTrendCard(data: _computed!['grade_trend'] as Map<String, dynamic>),
+            const SizedBox(height: 16),
+          ],
+          // 학습 습관 분석 (예비고1)
+          if (isPreheigh1 && _computed?['study_analysis'] != null && (_computed!['study_analysis'] as Map).isNotEmpty) ...[
+            _StudyAnalysisCard(data: _computed!['study_analysis'] as Map<String, dynamic>),
+            const SizedBox(height: 16),
+          ],
           if (isPreheigh1 && rs['school_type_compatibility'] != null) ...[
             _CompatibilityCard(data: rs['school_type_compatibility']),
             const SizedBox(height: 16),
@@ -733,11 +743,364 @@ class _CompatibilityCard extends StatelessWidget {
   }
 }
 
+// ── 성적 추이 카드 (예비고1) ──
+
+class _GradeTrendCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _GradeTrendCard({required this.data});
+
+  static const _subjectColors = {
+    '국어': Color(0xFF70AD47),
+    '영어': Color(0xFFED7D31),
+    '수학': Color(0xFF4472C4),
+    '사회': Color(0xFFFFC000),
+    '과학': Color(0xFF5B9BD5),
+  };
+
+  static const _trendBadges = {
+    '상승': ('↑ 상승', Color(0xFF16A34A)),
+    '유지': ('→ 유지', Color(0xFF6B7280)),
+    '등락': ('↕ 등락', Color(0xFFD97706)),
+    '하락': ('↓ 하락', Color(0xFFDC2626)),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final trendData = data['data'] as List? ?? [];
+    final subjectTrends = data['subject_trends'] as Map<String, dynamic>? ?? {};
+    final badge = data['trend_badge'] as String?;
+
+    if (trendData.isEmpty) return const SizedBox();
+
+    final badgeInfo = badge != null ? _trendBadges[badge] : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('성적 추이', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              if (badgeInfo != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: badgeInfo.$2.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(badgeInfo.$1, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: badgeInfo.$2)),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text('학기별 전과목 평균 및 과목별 원점수 추이', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          const SizedBox(height: 16),
+
+          // 전과목 평균 라인차트
+          const Text('전과목 평균', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 180,
+            child: LineChart(
+              LineChartData(
+                minY: 50,
+                maxY: 100,
+                gridData: FlGridData(show: true, drawVerticalLine: false,
+                  getDrawingHorizontalLine: (_) => const FlLine(color: Color(0xFFE5E7EB), strokeWidth: 0.5)),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+                    getTitlesWidget: (val, _) {
+                      final idx = val.toInt();
+                      if (idx < 0 || idx >= trendData.length) return const SizedBox();
+                      return Text((trendData[idx] as Map)['semester'] ?? '', style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)));
+                    })),
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32,
+                    getTitlesWidget: (val, _) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))))),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: trendData.asMap().entries.map((e) {
+                      final avg = ((e.value as Map)['avg_score'] ?? 0).toDouble();
+                      return FlSpot(e.key.toDouble(), avg);
+                    }).toList(),
+                    color: const Color(0xFF4472C4),
+                    barWidth: 2.5,
+                    dotData: FlDotData(show: true, getDotPainter: (_, __, ___, ____) =>
+                      FlDotCirclePainter(radius: 4, color: const Color(0xFF4472C4), strokeColor: Colors.white, strokeWidth: 1.5)),
+                    isCurved: true,
+                    curveSmoothness: 0.2,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 과목별 추이
+          if (subjectTrends.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('과목별 추이', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 200,
+              child: _buildSubjectChart(subjectTrends),
+            ),
+            // 범례
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: subjectTrends.keys.map((subj) {
+                final c = _subjectColors[subj] ?? const Color(0xFF6B7280);
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 12, height: 3, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
+                    const SizedBox(width: 4),
+                    Text(subj, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                  ],
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubjectChart(Map<String, dynamic> subjectTrends) {
+    // Collect all semesters
+    final allSemesters = <String>{};
+    for (final arr in subjectTrends.values) {
+      for (final p in (arr as List)) {
+        allSemesters.add((p as Map)['semester'] as String);
+      }
+    }
+    final semesters = allSemesters.toList()..sort();
+
+    final bars = <LineChartBarData>[];
+    for (final entry in subjectTrends.entries) {
+      final subj = entry.key;
+      final arr = entry.value as List;
+      final color = _subjectColors[subj] ?? const Color(0xFF6B7280);
+      final spots = <FlSpot>[];
+      for (var i = 0; i < semesters.length; i++) {
+        final pt = arr.cast<Map>().where((p) => p['semester'] == semesters[i]).firstOrNull;
+        if (pt != null) spots.add(FlSpot(i.toDouble(), (pt['raw_score'] ?? 0).toDouble()));
+      }
+      bars.add(LineChartBarData(
+        spots: spots,
+        color: color,
+        barWidth: 2,
+        dotData: FlDotData(show: true, getDotPainter: (_, __, ___, ____) =>
+          FlDotCirclePainter(radius: 3, color: color, strokeColor: Colors.white, strokeWidth: 1)),
+        isCurved: true,
+        curveSmoothness: 0.2,
+      ));
+    }
+
+    return LineChart(
+      LineChartData(
+        minY: 50,
+        maxY: 100,
+        gridData: FlGridData(show: true, drawVerticalLine: false,
+          getDrawingHorizontalLine: (_) => const FlLine(color: Color(0xFFE5E7EB), strokeWidth: 0.5)),
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28,
+            getTitlesWidget: (val, _) {
+              final idx = val.toInt();
+              if (idx < 0 || idx >= semesters.length) return const SizedBox();
+              return Text(semesters[idx], style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)));
+            })),
+          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32,
+            getTitlesWidget: (val, _) => Text(val.toInt().toString(), style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))))),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(show: false),
+        lineBarsData: bars,
+      ),
+    );
+  }
+}
+
+// ── 학습 습관 분석 카드 (예비고1) ──
+
+class _StudyAnalysisCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _StudyAnalysisCard({required this.data});
+
+  static const _typeColors = {
+    '학원수업': Color(0xFF4472C4),
+    '학원과제': Color(0xFFED7D31),
+    '자기주도': Color(0xFF70AD47),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final totalHours = (data['total_weekly_hours'] ?? 0).toDouble();
+    final byType = data['by_type'] as Map<String, dynamic>? ?? {};
+    final bySubject = data['by_subject'] as Map<String, dynamic>? ?? {};
+    final selfRatio = (data['self_study_ratio'] ?? 0).toDouble();
+    final balance = (data['subject_balance'] ?? 0).toDouble();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('학습 습관 분석', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          const Text('주간 학습 스케줄 기반 분석 결과', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          const SizedBox(height: 16),
+
+          // 요약 3카드
+          Row(
+            children: [
+              Expanded(child: _SummaryMini(
+                value: '${totalHours.toStringAsFixed(0)}',
+                label: '주간 총 시간',
+                color: const Color(0xFF4472C4),
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: _SummaryMini(
+                value: '${selfRatio.toStringAsFixed(0)}%',
+                label: '자기주도 비율',
+                color: selfRatio >= 40 ? const Color(0xFF16A34A) : selfRatio >= 20 ? const Color(0xFFD97706) : const Color(0xFFDC2626),
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: _SummaryMini(
+                value: '${balance.toStringAsFixed(0)}',
+                label: '과목 밸런스',
+                color: balance >= 70 ? const Color(0xFF16A34A) : balance >= 40 ? const Color(0xFFD97706) : const Color(0xFFDC2626),
+              )),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // 유형별 비율 (가로 바)
+          if (byType.isNotEmpty) ...[
+            const Text('유형별 비율', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const SizedBox(height: 8),
+            ...byType.entries.map((e) {
+              final hours = (e.value ?? 0).toDouble();
+              final pct = totalHours > 0 ? (hours / totalHours * 100) : 0.0;
+              final color = _typeColors[e.key] ?? const Color(0xFF9CA3AF);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(width: 60, child: Text(e.key, style: const TextStyle(fontSize: 12, color: Color(0xFF374151)))),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: (pct / 100).clamp(0, 1),
+                          minHeight: 14,
+                          backgroundColor: const Color(0xFFF3F4F6),
+                          valueColor: AlwaysStoppedAnimation(color),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 55, child: Text('${hours.toStringAsFixed(0)}h (${pct.toStringAsFixed(0)}%)',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)), textAlign: TextAlign.right)),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+          ],
+
+          // 과목별 시간
+          if (bySubject.isNotEmpty) ...[
+            const Text('과목별 시간', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const SizedBox(height: 8),
+            ...bySubject.entries.map((e) {
+              final hours = (e.value ?? 0).toDouble();
+              final maxH = bySubject.values.fold<double>(1, (a, b) => max(a, (b ?? 0).toDouble()));
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(width: 40, child: Text(e.key, style: const TextStyle(fontSize: 12, color: Color(0xFF374151)))),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: (hours / maxH).clamp(0, 1),
+                          minHeight: 14,
+                          backgroundColor: const Color(0xFFF3F4F6),
+                          valueColor: const AlwaysStoppedAnimation(Color(0xFF4472C4)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 35, child: Text('${hours.toStringAsFixed(0)}h',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)), textAlign: TextAlign.right)),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryMini extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+  const _SummaryMini({required this.value, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 2),
+          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+        ],
+      ),
+    );
+  }
+}
+
 // ── 로드맵 카드 (예비고1) ──
 
-class _RoadmapCard extends StatelessWidget {
+class _RoadmapCard extends StatefulWidget {
   final Map<String, dynamic> roadmap;
   const _RoadmapCard({required this.roadmap});
+
+  @override
+  State<_RoadmapCard> createState() => _RoadmapCardState();
+}
+
+class _RoadmapCardState extends State<_RoadmapCard> {
+  String? _expandedPhase;
 
   static const _priorityColors = {
     '상': (Color(0xFFFEE2E2), Color(0xFFDC2626)),
@@ -747,9 +1110,15 @@ class _RoadmapCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = roadmap['items'] as List? ?? [];
-    final summary = roadmap['summary'] as String? ?? '';
-    if (items.isEmpty) return const SizedBox();
+    final items = widget.roadmap['items'] as List? ?? [];
+    final summary = widget.roadmap['summary'] as String? ?? '';
+    final matrix = widget.roadmap['matrix'] as Map<String, dynamic>?;
+    final priorityItems = items.where((it) {
+      final p = (it as Map)['priority'];
+      return p == '상' || p == '중';
+    }).toList();
+
+    if (items.isEmpty && matrix == null) return const SizedBox();
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -765,80 +1134,51 @@ class _RoadmapCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(summary, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
           const SizedBox(height: 16),
-          ...items.map((item) {
-            final m = item as Map<String, dynamic>;
-            final priority = m['priority'] ?? '하';
-            final (pbg, ptxt) = _priorityColors[priority] ?? _priorityColors['하']!;
-            final grade = m['current_grade'] ?? 'D';
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-              ),
-              child: Column(
-                children: [
-                  // 헤더
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+          // 우선 과제 요약
+          if (priorityItems.isNotEmpty) ...[
+            const Text('우선 과제', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const SizedBox(height: 8),
+            ...priorityItems.map((item) {
+              final m = item as Map<String, dynamic>;
+              final priority = m['priority'] ?? '하';
+              final (pbg, ptxt) = _priorityColors[priority] ?? _priorityColors['하']!;
+              final grade = m['current_grade'] ?? 'D';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(color: pbg, borderRadius: BorderRadius.circular(10)),
+                      child: Text(priority == '상' ? '최우선' : '중요',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: ptxt)),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                          decoration: BoxDecoration(color: pbg, borderRadius: BorderRadius.circular(12)),
-                          child: Text(
-                            priority == '상' ? '최우선' : priority == '중' ? '중요' : '참고',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ptxt),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(
-                          m['title'] ?? '',
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                        )),
-                        _GradeBadge(grade: grade, size: 26),
-                      ],
-                    ),
-                  ),
-                  // 내용
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          m['description'] ?? '',
-                          style: const TextStyle(fontSize: 13, color: Color(0xFF374151), height: 1.6),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.calendar_today, size: 12, color: Color(0xFF9CA3AF)),
-                            const SizedBox(width: 4),
-                            Text(m['period'] ?? '', style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-                            const Spacer(),
-                            Text(m['area'] ?? '', style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-                            const SizedBox(width: 4),
-                            Text('${(m['current_score'] ?? 0).toStringAsFixed(0)}점',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _gc(grade).$2)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(m['title'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                    _GradeBadge(grade: grade, size: 22),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
+
+          // 4단계 × 6트랙 매트릭스
+          if (matrix != null) ...[
+            const Text('단계별 로드맵', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const SizedBox(height: 8),
+            ..._buildMatrixPhases(matrix),
+          ],
 
           // 안내 문구
           Container(
-            margin: const EdgeInsets.only(top: 4),
+            margin: const EdgeInsets.only(top: 12),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFFFFFBEB),
@@ -853,6 +1193,91 @@ class _RoadmapCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildMatrixPhases(Map<String, dynamic> matrix) {
+    final phases = matrix['phases'] as List? ?? [];
+    final tracks = matrix['tracks'] as List? ?? [];
+    final cells = matrix['cells'] as Map<String, dynamic>? ?? {};
+
+    return phases.map<Widget>((phase) {
+      final p = phase as Map<String, dynamic>;
+      final phaseKey = p['key'] as String;
+      final isOpen = _expandedPhase == phaseKey;
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Column(
+          children: [
+            // Phase 헤더 (탭 토글)
+            InkWell(
+              onTap: () => setState(() => _expandedPhase = isOpen ? null : phaseKey),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isOpen ? const Color(0xFFEEF2FF) : const Color(0xFFF9FAFB),
+                  borderRadius: isOpen
+                    ? const BorderRadius.vertical(top: Radius.circular(11))
+                    : BorderRadius.circular(11),
+                ),
+                child: Row(
+                  children: [
+                    AnimatedRotation(
+                      turns: isOpen ? 0.25 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: const Icon(Icons.play_arrow, size: 14, color: Color(0xFF6B7280)),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(p['label'] ?? '', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
+                    Text(p['theme'] ?? '', style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+                  ],
+                ),
+              ),
+            ),
+            // 6트랙 내용
+            if (isOpen)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: tracks.map<Widget>((track) {
+                    final t = track as Map<String, dynamic>;
+                    final content = (cells[phaseKey] as Map<String, dynamic>?)?[t['key']];
+                    if (content == null || content.toString().isEmpty) return const SizedBox.shrink();
+                    return SizedBox(
+                      width: (MediaQuery.of(context).size.width - 80) / 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFF3F4F6)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${t['icon'] ?? ''} ${t['label'] ?? ''}',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+                            const SizedBox(height: 4),
+                            Text(content.toString(),
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.5)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+          ],
+        ),
+      );
+    }).toList();
   }
 }
 
