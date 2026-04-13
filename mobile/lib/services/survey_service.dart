@@ -73,6 +73,20 @@ class SurveyService {
     );
   }
 
+  /// 학습 방법 진단 매트릭스 조회
+  static Future<Map<String, dynamic>> getStudyMethodMatrix(String id) async {
+    return Map<String, dynamic>.from(
+      await ApiService.get('/consultation-surveys/$id/study-method-matrix'),
+    );
+  }
+
+  /// 수능 최저학력기준 충족 시뮬레이션 조회
+  static Future<Map<String, dynamic>> getSuneungMinimumSimulation(String id) async {
+    return Map<String, dynamic>.from(
+      await ApiService.get('/consultation-surveys/$id/suneung-minimum-simulation'),
+    );
+  }
+
   /// 삭제 (draft만)
   static Future<void> delete(String id) async {
     await ApiService.delete('/consultation-surveys/$id');

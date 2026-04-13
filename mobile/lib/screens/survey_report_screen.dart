@@ -20,6 +20,8 @@ class SurveyReportScreen extends StatefulWidget {
 
 class _SurveyReportScreenState extends State<SurveyReportScreen> {
   Map<String, dynamic>? _computed;
+  Map<String, dynamic>? _studyMatrix;
+  Map<String, dynamic>? _suneungSim;
   bool _loading = true;
   String? _error;
 
@@ -36,6 +38,18 @@ class _SurveyReportScreenState extends State<SurveyReportScreen> {
         _computed = data;
         _loading = false;
       });
+      // Load study method matrix separately (non-blocking)
+      try {
+        final matrix = await SurveyService.getStudyMethodMatrix(widget.surveyId);
+        if (mounted) setState(() => _studyMatrix = matrix);
+      } catch (_) {}
+      // Load suneung minimum simulation (non-blocking, high only)
+      if (widget.surveyType == 'high') {
+        try {
+          final sim = await SurveyService.getSuneungMinimumSimulation(widget.surveyId);
+          if (mounted) setState(() => _suneungSim = sim);
+        } catch (_) {}
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -112,8 +126,18 @@ class _SurveyReportScreenState extends State<SurveyReportScreen> {
             _StudyAnalysisCard(data: _computed!['study_analysis'] as Map<String, dynamic>),
             const SizedBox(height: 16),
           ],
+          // 학습 방법 진단 매트릭스
+          if (_studyMatrix != null && (_studyMatrix!['subjects'] as List?)?.isNotEmpty == true) ...[
+            _StudyMethodMatrixCard(data: _studyMatrix!),
+            const SizedBox(height: 16),
+          ],
           if (isPreheigh1 && rs['school_type_compatibility'] != null) ...[
             _CompatibilityCard(data: rs['school_type_compatibility']),
+            const SizedBox(height: 16),
+          ],
+          // 수능 최저학력기준 시뮬레이션 (고등학생만)
+          if (!isPreheigh1 && _suneungSim != null && (_suneungSim!['simulations'] as List?)?.isNotEmpty == true) ...[
+            _SuneungMinimumCard(data: _suneungSim!),
             const SizedBox(height: 16),
           ],
           if (rs['roadmap'] != null) ...[
@@ -1831,6 +1855,356 @@ class _RoadmapCardState extends State<_RoadmapCard> {
   }
 }
 
+// ── 학습 방법 진단 매트릭스 카드 ──
+
+class _StudyMethodMatrixCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _StudyMethodMatrixCard({required this.data});
+
+  static const _satColors = {
+    '만족': (Color(0xFFECFDF5), Color(0xFF059669)),
+    '보통': (Color(0xFFFFF7ED), Color(0xFFD97706)),
+    '불만족': (Color(0xFFFEF2F2), Color(0xFFDC2626)),
+  };
+
+  static const _gradeRankColors = {
+    1: (Color(0xFFEEF2FF), Color(0xFF4338CA)),
+    2: (Color(0xFFEEF2FF), Color(0xFF4338CA)),
+    3: (Color(0xFFECFDF5), Color(0xFF059669)),
+    4: (Color(0xFFFFF7ED), Color(0xFFD97706)),
+    5: (Color(0xFFFEF2F2), Color(0xFFDC2626)),
+  };
+
+  static const _matchColors = {
+    '효율적': Color(0xFF059669),
+    '적정': Color(0xFF4472C4),
+    '비효율': Color(0xFFDC2626),
+    '-': Color(0xFF9CA3AF),
+  };
+
+  static const _psychColors = {
+    '매우 긴장': Color(0xFFDC2626),
+    '가끔 긴장': Color(0xFFD97706),
+    '긴장하지 않음': Color(0xFF059669),
+    '높음': Color(0xFF059669),
+    '보통': Color(0xFFD97706),
+    '낮음': Color(0xFFDC2626),
+    '매우 부담': Color(0xFFDC2626),
+    '약간 부담': Color(0xFFD97706),
+    '적당함': Color(0xFF059669),
+    '부담 없음': Color(0xFF059669),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final subjects = (data['subjects'] as List?) ?? [];
+    final weekly = (data['weekly_summary'] as Map<String, dynamic>?) ?? {};
+    final psych = (data['psychology'] as Map<String, dynamic>?) ?? {};
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('학습 방법 진단 매트릭스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          const Text('과목별 학습 방법과 성적의 연계 분석', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          const SizedBox(height: 16),
+
+          // a) 과목별 학습 방법 매트릭스 (가로 스크롤 테이블)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: _buildMatrixTable(subjects),
+          ),
+          const SizedBox(height: 16),
+
+          // b) 학습법-성적 연계 분석
+          _buildMethodGradeAnalysis(subjects),
+          const SizedBox(height: 16),
+
+          // c) 주간 스케줄 요약
+          if (weekly['total_hours'] != null) ...[
+            _buildWeeklySummary(weekly),
+            const SizedBox(height: 12),
+          ],
+
+          // d) 학습 심리 상태
+          if (psych.values.any((v) => v != null))
+            _buildPsychCard(psych),
+
+          // 범례
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFFCD34D)),
+            ),
+            child: const Text(
+              '매칭 평가: \u2713 효율적 = 적은 학습법으로 높은 성적 | \u2713 적정 = 균형 | \u25B2 비효율 = 전략 개선 필요',
+              style: TextStyle(fontSize: 11, color: Color(0xFF92400E), height: 1.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMatrixTable(List subjects) {
+    const headerStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF374151));
+    const cellStyle = TextStyle(fontSize: 11, color: Color(0xFF374151));
+
+    return DataTable(
+      columnSpacing: 12,
+      horizontalMargin: 8,
+      headingRowHeight: 36,
+      dataRowMinHeight: 40,
+      dataRowMaxHeight: 64,
+      headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+      columns: const [
+        DataColumn(label: Text('과목', style: headerStyle)),
+        DataColumn(label: Text('학습 방법', style: headerStyle)),
+        DataColumn(label: Text('수업', style: headerStyle)),
+        DataColumn(label: Text('만족', style: headerStyle)),
+        DataColumn(label: Text('교재', style: headerStyle)),
+        DataColumn(label: Text('인강', style: headerStyle)),
+        DataColumn(label: Text('등급', style: headerStyle)),
+        DataColumn(label: Text('매칭', style: headerStyle)),
+      ],
+      rows: subjects.map<DataRow>((subj) {
+        final s = subj as Map<String, dynamic>;
+        final methods = (s['study_methods'] as List?) ?? [];
+        final sat = s['satisfaction'] as String?;
+        final satC = _satColors[sat] ?? (const Color(0xFFF3F4F6), const Color(0xFF6B7280));
+        final gradeInfo = s['grade'] as Map<String, dynamic>?;
+        final rank = gradeInfo?['rank'] != null ? (gradeInfo!['rank'] as num).round() : null;
+        final gradeC = _gradeRankColors[rank] ?? (const Color(0xFFF3F4F6), const Color(0xFF6B7280));
+        final match = (s['method_grade_match'] as String?) ?? '-';
+        final matchColor = _matchColors[match] ?? const Color(0xFF9CA3AF);
+        final lecture = s['lecture'] as Map<String, dynamic>? ?? {};
+        final hasLecture = lecture['has'] == true;
+
+        return DataRow(cells: [
+          DataCell(Text(s['name'] ?? '', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
+          DataCell(
+            methods.isNotEmpty
+              ? Wrap(spacing: 2, runSpacing: 2, children: methods.map<Widget>((m) =>
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(8)),
+                    child: Text(m.toString(), style: const TextStyle(fontSize: 10, color: Color(0xFF4338CA))),
+                  )).toList())
+              : const Text('-', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+          ),
+          DataCell(Text(s['class_engagement'] ?? '-', style: cellStyle)),
+          DataCell(
+            sat != null
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: satC.$1, borderRadius: BorderRadius.circular(8)),
+                  child: Text(sat, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: satC.$2)),
+                )
+              : const Text('-', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+          ),
+          DataCell(Text(s['textbook'] ?? '-', style: cellStyle)),
+          DataCell(
+            hasLecture
+              ? Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(lecture['instructor'] ?? 'O', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                  if (lecture['platform'] != null)
+                    Text(lecture['platform'], style: const TextStyle(fontSize: 9, color: Color(0xFF9CA3AF))),
+                ])
+              : const Text('-', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+          ),
+          DataCell(
+            rank != null
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: gradeC.$1, borderRadius: BorderRadius.circular(8)),
+                  child: Text('$rank등급', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: gradeC.$2)),
+                )
+              : const Text('-', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+          ),
+          DataCell(
+            Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(match == '효율적' || match == '적정' ? '\u2713' : match == '비효율' ? '\u25B2' : '-',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: matchColor)),
+              Text(match, style: TextStyle(fontSize: 9, color: matchColor)),
+            ]),
+          ),
+        ]);
+      }).toList(),
+    );
+  }
+
+  Widget _buildMethodGradeAnalysis(List subjects) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('학습법-성적 연계 분석', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          ...subjects.where((s) {
+            final sub = s as Map<String, dynamic>;
+            final methods = (sub['study_methods'] as List?) ?? [];
+            final grade = (sub['grade'] as Map<String, dynamic>?)?['rank'];
+            return methods.isNotEmpty || grade != null;
+          }).map((s) {
+            final sub = s as Map<String, dynamic>;
+            final methods = (sub['study_methods'] as List?) ?? [];
+            final grade = (sub['grade'] as Map<String, dynamic>?)?['rank'];
+            final match = (sub['method_grade_match'] as String?) ?? '-';
+            final matchColor = _matchColors[match] ?? const Color(0xFF9CA3AF);
+            final matchBg = match == '비효율' ? const Color(0xFFFEF2F2)
+                : match == '효율적' ? const Color(0xFFECFDF5) : const Color(0xFFF3F4F6);
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFF3F4F6)),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(width: 40, child: Text(sub['name'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    '학습법 ${methods.length}개 사용${grade != null ? ' \u2192 ${(grade as num).round()}등급' : ''}',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  )),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: matchBg, borderRadius: BorderRadius.circular(8)),
+                    child: Text(match, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: matchColor)),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeeklySummary(Map<String, dynamic> weekly) {
+    final totalHours = (weekly['total_hours'] ?? 0).toDouble();
+    final selfRatio = (weekly['self_study_ratio'] ?? 0).toDouble();
+    final bySubject = (weekly['by_subject'] as Map<String, dynamic>?) ?? {};
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('주간 스케줄 요약', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: _SummaryMini(
+              value: '${totalHours.toStringAsFixed(0)}',
+              label: '총 시간',
+              color: const Color(0xFF4472C4),
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _SummaryMini(
+              value: '${selfRatio.toStringAsFixed(0)}%',
+              label: '자기주도',
+              color: selfRatio >= 40 ? const Color(0xFF16A34A) : selfRatio >= 20 ? const Color(0xFFD97706) : const Color(0xFFDC2626),
+            )),
+          ]),
+          if (bySubject.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...bySubject.entries.map((e) {
+              final hours = (e.value ?? 0).toDouble();
+              final maxH = bySubject.values.fold<double>(1, (a, b) => max(a, (b ?? 0).toDouble()));
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(children: [
+                  SizedBox(width: 32, child: Text(e.key, style: const TextStyle(fontSize: 11, color: Color(0xFF374151)), textAlign: TextAlign.right)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: (hours / maxH).clamp(0, 1),
+                        minHeight: 10,
+                        backgroundColor: const Color(0xFFE5E7EB),
+                        valueColor: const AlwaysStoppedAnimation(Color(0xFF4472C4)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  SizedBox(width: 28, child: Text('${hours.toStringAsFixed(0)}h', style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)), textAlign: TextAlign.right)),
+                ]),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPsychCard(Map<String, dynamic> psych) {
+    final items = [
+      ('test_anxiety', '시험 불안'),
+      ('motivation', '학습 동기'),
+      ('study_load', '학습 부담'),
+      ('sleep_hours', '수면 시간'),
+      ('subject_giveup', '포기 과목'),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('학습 심리 상태', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          ...items.where((item) => psych[item.$1] != null).map((item) {
+            final val = psych[item.$1].toString();
+            final color = _psychColors[val] ?? const Color(0xFF6B7280);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Expanded(child: Text(item.$2, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)))),
+                Text(val, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+              ]),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
 // ── 등급 범례 카드 ──
 
 class _GradeLegendCard extends StatelessWidget {
@@ -1872,6 +2246,267 @@ class _GradeLegendCard extends StatelessWidget {
             }).toList(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── 수능 최저학력기준 충족 시뮬레이션 ──
+
+class _SuneungMinimumCard extends StatefulWidget {
+  final Map<String, dynamic> data;
+  const _SuneungMinimumCard({required this.data});
+
+  @override
+  State<_SuneungMinimumCard> createState() => _SuneungMinimumCardState();
+}
+
+class _SuneungMinimumCardState extends State<_SuneungMinimumCard> {
+  String? _expandedUniv;
+
+  static const _subjectLabels = {
+    'korean': '국어',
+    'math': '수학',
+    'english': '영어',
+    'inquiry1': '탐구1',
+    'inquiry2': '탐구2',
+  };
+
+  Color _resultBgColor(String result, num? margin) {
+    if (result == '충족') return const Color(0xFFECFDF5);
+    if (result == '미충족' && margin != null && margin >= -2) return const Color(0xFFFFFBEB);
+    if (result == '미충족') return const Color(0xFFFEF2F2);
+    return const Color(0xFFF3F4F6);
+  }
+
+  Color _resultTextColor(String result, num? margin) {
+    if (result == '충족') return const Color(0xFF059669);
+    if (result == '미충족' && margin != null && margin >= -2) return const Color(0xFFD97706);
+    if (result == '미충족') return const Color(0xFFDC2626);
+    return const Color(0xFF6B7280);
+  }
+
+  String _resultLabel(String result, num? margin) {
+    if (result == '충족') return '충족';
+    if (result == '미충족' && margin != null && margin >= -2) return '근접';
+    if (result == '미충족') return '미충족';
+    if (result == '해당없음') return '없음';
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final grades = (widget.data['student_mock_grades'] as Map<String, dynamic>?) ?? {};
+    final simulations = (widget.data['simulations'] as List?) ?? [];
+    final summary = (widget.data['summary'] as Map<String, dynamic>?) ?? {};
+
+    // Group by university
+    final grouped = <String, List<dynamic>>{};
+    for (final sim in simulations) {
+      final key = (sim as Map)['university'] as String? ?? '';
+      grouped.putIfAbsent(key, () => []).add(sim);
+    }
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '수능 최저학력기준 충족 시뮬레이션',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+
+            // Mock exam grades
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _subjectLabels.entries.map((entry) {
+                final grade = grades[entry.key];
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(entry.value, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                      const SizedBox(height: 2),
+                      Text(
+                        grade != null ? '$grade' : '-',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: grade != null ? Colors.black87 : const Color(0xFFD1D5DB),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 12),
+
+            // Summary row
+            Row(
+              children: [
+                _summaryChip('충족', summary['met'] ?? 0, const Color(0xFF059669), const Color(0xFFECFDF5)),
+                const SizedBox(width: 8),
+                _summaryChip('근접', summary['close'] ?? 0, const Color(0xFFD97706), const Color(0xFFFFFBEB)),
+                const SizedBox(width: 8),
+                _summaryChip('미충족', summary['not_met'] ?? 0, const Color(0xFFDC2626), const Color(0xFFFEF2F2)),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // University groups
+            ...grouped.entries.map((entry) {
+              final univ = entry.key;
+              final sims = entry.value;
+              final isExpanded = _expandedUniv == univ;
+              final metCount = sims.where((s) => (s as Map)['result'] == '충족').length;
+              final totalCount = sims.where((s) => (s as Map)['result'] != '해당없음').length;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  children: [
+                    InkWell(
+                      onTap: () => setState(() => _expandedUniv = isExpanded ? null : univ),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Text(univ, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                                  const SizedBox(width: 8),
+                                  if (totalCount > 0)
+                                    Text(
+                                      '$metCount/$totalCount 충족',
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              isExpanded ? Icons.expand_less : Icons.expand_more,
+                              size: 18,
+                              color: const Color(0xFF9CA3AF),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (isExpanded)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 14, right: 14, bottom: 12),
+                        child: Column(
+                          children: sims.asMap().entries.map((simEntry) {
+                            final sim = simEntry.value as Map;
+                            final result = sim['result'] as String? ?? '';
+                            final margin = sim['margin'] as num?;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                border: simEntry.key > 0
+                                    ? const Border(top: BorderSide(color: Color(0xFFF3F4F6)))
+                                    : null,
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _resultBgColor(result, margin),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _resultLabel(result, margin),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: _resultTextColor(result, margin),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          sim['admission_type'] as String? ?? '',
+                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                        ),
+                                        if (sim['detail'] != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Text(
+                                              sim['detail'] as String? ?? '',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: _resultTextColor(result, margin),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+
+            const SizedBox(height: 8),
+            const Text(
+              '* 최신 모의고사 등급 기준 시뮬레이션 결과입니다.',
+              style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryChip(String label, int count, Color textColor, Color bgColor) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          children: [
+            Text(
+              '$count',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: textColor),
+            ),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textColor),
+            ),
+          ],
+        ),
       ),
     );
   }

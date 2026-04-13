@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan, updateSurveyOverrides, deleteSurveyOverrides, updateSurveyChecklist, deleteSurveyChecklist, convertPreheigh1ToHigh } from "@/lib/api";
+import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan, updateSurveyOverrides, deleteSurveyOverrides, updateSurveyChecklist, deleteSurveyChecklist, convertPreheigh1ToHigh, getSuneungMinimumSimulation } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 import { GradeTrendChart, MockTrendChart, StudyAnalysisChart, RadarScoreChart, RadarDetailTable } from "@/components/SurveyCharts";
 
@@ -174,7 +174,7 @@ interface ActionPlan {
   updated_at?: string;
 }
 
-type TabType = "answers" | "computed" | "delta" | "memo" | "checklist" | "action_plan";
+type TabType = "answers" | "computed" | "delta" | "memo" | "checklist" | "action_plan" | "suneung";
 
 export default function SurveyDetailPage() {
   const router = useRouter();
@@ -210,6 +210,10 @@ export default function SurveyDetailPage() {
 
   // Convert state
   const [converting, setConverting] = useState(false);
+
+  // Suneung minimum simulation state
+  const [suneungSim, setSuneungSim] = useState<any>(null);
+  const [suneungLoading, setSuneungLoading] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -256,6 +260,19 @@ export default function SurveyDetailPage() {
     }
   };
 
+  const loadSuneungSim = async () => {
+    if (suneungSim) return;
+    setSuneungLoading(true);
+    try {
+      const data = await getSuneungMinimumSimulation(id);
+      setSuneungSim(data);
+    } catch {
+      setSuneungSim({ error: "수능 최저 시뮬레이션 조회에 실패했습니다.", simulations: [] });
+    } finally {
+      setSuneungLoading(false);
+    }
+  };
+
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     if (tab === "delta" && !delta) {
@@ -263,6 +280,9 @@ export default function SurveyDetailPage() {
     }
     if (tab === "action_plan" && !actionPlanLoaded) {
       loadActionPlan();
+    }
+    if (tab === "suneung" && !suneungSim) {
+      loadSuneungSim();
     }
   };
 
@@ -695,6 +715,7 @@ export default function SurveyDetailPage() {
     { key: "answers", label: "답변 보기" },
     { key: "computed", label: "자동 분석" },
     { key: "delta", label: "변경 비교" },
+    ...(survey.survey_type === "high" ? [{ key: "suneung" as TabType, label: "수능최저 시뮬레이션" }] : []),
     { key: "memo", label: `메모${survey.admin_memo ? " *" : ""}` },
     { key: "checklist", label: `체크리스트${survey.counselor_checklist?.items?.length ? " *" : ""}` },
     { key: "action_plan", label: "액션 플랜" },
@@ -1303,6 +1324,25 @@ export default function SurveyDetailPage() {
           </div>
         )}
 
+        {activeTab === "suneung" && (
+          <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
+            <h3 style={{ fontSize: 15, margin: 0, marginBottom: 16 }}>수능 최저학력기준 충족 시뮬레이션</h3>
+            {suneungLoading ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF" }}>로딩 중...</div>
+            ) : suneungSim?.error && !suneungSim?.simulations?.length ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#EF4444", fontSize: 13 }}>
+                {suneungSim.error}
+              </div>
+            ) : suneungSim ? (
+              <AdminSuneungSimulation data={suneungSim} />
+            ) : (
+              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                데이터가 없습니다.
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "action_plan" && (
           <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -1431,6 +1471,132 @@ export default function SurveyDetailPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+// ── 수능 최저학력기준 시뮬레이션 (관리자용) ──
+
+function AdminSuneungSimulation({ data }: { data: any }) {
+  const grades = data.student_mock_grades || {};
+  const simulations: any[] = data.simulations || [];
+  const summary = data.summary || {};
+
+  const gradeLabel: Record<string, string> = {
+    korean: "국어", math: "수학", english: "영어",
+    inquiry1: "탐구1", inquiry2: "탐구2",
+  };
+
+  const resultStyle = (result: string, margin?: number) => {
+    if (result === "충족") return { bg: "#ECFDF5", color: "#059669" };
+    if (result === "미충족" && margin != null && margin >= -2) return { bg: "#FFFBEB", color: "#D97706" };
+    if (result === "미충족") return { bg: "#FEF2F2", color: "#DC2626" };
+    return { bg: "#F3F4F6", color: "#6B7280" };
+  };
+
+  const resultText = (result: string, margin?: number) => {
+    if (result === "충족") return "충족";
+    if (result === "미충족" && margin != null && margin >= -2) return "근접";
+    if (result === "미충족") return "미충족";
+    if (result === "해당없음") return "없음";
+    return result;
+  };
+
+  // Group by university
+  const grouped: Record<string, any[]> = {};
+  for (const sim of simulations) {
+    const key = sim.university;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(sim);
+  }
+
+  return (
+    <div>
+      {/* Student mock grades */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+        {(["korean", "math", "english", "inquiry1", "inquiry2"] as const).map((key) => (
+          <div key={key} style={{
+            background: "#F8FAFC", borderRadius: 8, padding: "6px 16px", textAlign: "center",
+          }}>
+            <div style={{ fontSize: 11, color: "#6B7280" }}>{gradeLabel[key] || key}</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>
+              {grades[key] != null ? grades[key] : "-"}
+            </div>
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", fontSize: 12, color: "#6B7280" }}>
+          {data.track && <span>계열: {data.track}</span>}
+          {data.target_level && <span style={{ marginLeft: 12 }}>목표: {data.target_level}</span>}
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        <span style={{ padding: "4px 12px", borderRadius: 6, background: "#ECFDF5", color: "#059669", fontSize: 13, fontWeight: 600 }}>
+          충족 {summary.met || 0}
+        </span>
+        <span style={{ padding: "4px 12px", borderRadius: 6, background: "#FFFBEB", color: "#D97706", fontSize: 13, fontWeight: 600 }}>
+          근접 {summary.close || 0}
+        </span>
+        <span style={{ padding: "4px 12px", borderRadius: 6, background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 600 }}>
+          미충족 {summary.not_met || 0}
+        </span>
+        <span style={{ padding: "4px 12px", borderRadius: 6, background: "#F3F4F6", color: "#6B7280", fontSize: 13 }}>
+          전체 {summary.total_checked || 0}건
+        </span>
+      </div>
+
+      {/* Results table */}
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
+            <th style={{ padding: "8px 10px", textAlign: "left" }}>대학</th>
+            <th style={{ padding: "8px 10px", textAlign: "left" }}>전형</th>
+            <th style={{ padding: "8px 10px", textAlign: "left" }}>수능최저 조건</th>
+            <th style={{ padding: "8px 10px", textAlign: "center" }}>결과</th>
+            <th style={{ padding: "8px 10px", textAlign: "left" }}>상세</th>
+          </tr>
+        </thead>
+        <tbody>
+          {simulations.map((sim, i) => {
+            const rs = resultStyle(sim.result, sim.margin);
+            return (
+              <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                <td style={{ padding: "8px 10px", fontWeight: 600 }}>{sim.university}</td>
+                <td style={{ padding: "8px 10px" }}>
+                  {sim.admission_type}
+                  {sim.requirement_label !== "전체" && (
+                    <span style={{ fontSize: 11, color: "#9CA3AF", marginLeft: 4 }}>{sim.requirement_label}</span>
+                  )}
+                </td>
+                <td style={{ padding: "8px 10px", fontSize: 12, color: "#6B7280", whiteSpace: "pre-line", maxWidth: 200 }}>
+                  {sim.requirement_text?.replace(/\n/g, " / ")}
+                </td>
+                <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                  <span style={{
+                    display: "inline-block", padding: "2px 10px", borderRadius: 6,
+                    fontSize: 12, fontWeight: 700, background: rs.bg, color: rs.color,
+                  }}>
+                    {resultText(sim.result, sim.margin)}
+                  </span>
+                </td>
+                <td style={{ padding: "8px 10px", fontSize: 12 }}>
+                  {sim.detail}
+                  {sim.failures?.length > 0 && (
+                    <div style={{ color: "#DC2626", fontSize: 11, marginTop: 2 }}>
+                      {sim.failures.join(", ")}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 12, lineHeight: 1.5 }}>
+        * 최신 모의고사 등급 기준 시뮬레이션 결과이며, 실제 수능 성적과 다를 수 있습니다.
+      </div>
     </div>
   );
 }

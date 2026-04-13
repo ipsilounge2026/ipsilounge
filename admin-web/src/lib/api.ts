@@ -506,6 +506,10 @@ export async function getSurveyDelta(id: string) {
   return request(`/api/admin/surveys/${id}/delta`);
 }
 
+export async function getSuneungMinimumSimulation(id: string) {
+  return request(`/api/admin/surveys/${id}/suneung-minimum-simulation`);
+}
+
 export async function updateSurveyMemo(id: string, adminMemo: string) {
   return request(`/api/admin/surveys/${id}/memo`, {
     method: "PUT",

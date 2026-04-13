@@ -16,7 +16,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Cell, LineChart, Line, Legend, PieChart, Pie,
 } from "recharts";
-import { getSurveyComputed, getSurvey } from "@/lib/api";
+import { getSurveyComputed, getSurvey, getStudyMethodMatrix, getSuneungMinimumSimulation } from "@/lib/api";
 
 // ── 색상/등급 상수 ──
 
@@ -99,6 +99,8 @@ export default function ReportPage() {
 
   const [survey, setSurvey] = useState<any>(null);
   const [computed, setComputed] = useState<any>(null);
+  const [studyMatrix, setStudyMatrix] = useState<any>(null);
+  const [suneungSim, setSuneungSim] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -112,6 +114,10 @@ export default function ReportPage() {
         ]);
         setSurvey(sv);
         setComputed(cp);
+        // Load study method matrix separately (non-blocking)
+        getStudyMethodMatrix(surveyId).then(setStudyMatrix).catch(() => {});
+        // Load suneung minimum simulation (non-blocking, high only)
+        getSuneungMinimumSimulation(surveyId).then(setSuneungSim).catch(() => {});
       } catch (e: any) {
         setError(e?.message || "리포트를 불러올 수 없습니다");
       } finally {
@@ -193,6 +199,16 @@ export default function ReportPage() {
       {/* 학습 습관 분석 */}
       {computed?.study_analysis && Object.keys(computed.study_analysis).length > 0 && (
         <StudyAnalysisSection data={computed.study_analysis} />
+      )}
+
+      {/* 학습 방법 진단 매트릭스 */}
+      {studyMatrix && studyMatrix.subjects?.length > 0 && (
+        <StudyMethodMatrixSection data={studyMatrix} />
+      )}
+
+      {/* 수능 최저학력기준 충족 시뮬레이션 (고등학생만) */}
+      {!isPreheigh1 && suneungSim && suneungSim.simulations?.length > 0 && (
+        <SuneungMinimumSection data={suneungSim} />
       )}
 
       {/* 영역별 상세 점수 */}
@@ -695,6 +711,271 @@ function StudyAnalysisSection({ data }: { data: any }) {
   );
 }
 
+// ── 학습 방법 진단 매트릭스 ──
+
+const SATISFACTION_COLORS: Record<string, { bg: string; text: string }> = {
+  "만족": { bg: "#ECFDF5", text: "#059669" },
+  "보통": { bg: "#FFF7ED", text: "#D97706" },
+  "불만족": { bg: "#FEF2F2", text: "#DC2626" },
+};
+
+const GRADE_RANK_COLORS: Record<number, { bg: string; text: string }> = {
+  1: { bg: "#EEF2FF", text: "#4338CA" },
+  2: { bg: "#EEF2FF", text: "#4338CA" },
+  3: { bg: "#ECFDF5", text: "#059669" },
+  4: { bg: "#FFF7ED", text: "#D97706" },
+  5: { bg: "#FEF2F2", text: "#DC2626" },
+};
+
+const MATCH_ICONS: Record<string, { icon: string; color: string }> = {
+  "효율적": { icon: "\u2713", color: "#059669" },
+  "적정": { icon: "\u2713", color: "#4472C4" },
+  "비효율": { icon: "\u25B2", color: "#DC2626" },
+  "-": { icon: "-", color: "#9CA3AF" },
+};
+
+const PSYCH_COLORS: Record<string, string> = {
+  "매우 긴장": "#DC2626",
+  "가끔 긴장": "#D97706",
+  "긴장하지 않음": "#059669",
+  "높음": "#059669",
+  "보통": "#D97706",
+  "낮음": "#DC2626",
+  "매우 부담": "#DC2626",
+  "약간 부담": "#D97706",
+  "적당함": "#059669",
+  "부담 없음": "#059669",
+};
+
+function StudyMethodMatrixSection({ data }: { data: any }) {
+  const subjects = data.subjects as any[] || [];
+  const weekly = data.weekly_summary || {};
+  const psych = data.psychology || {};
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>학습 방법 진단 매트릭스</h2>
+      <p style={{ fontSize: 12, color: "var(--gray-500)", margin: "0 0 16px" }}>
+        과목별 학습 방법과 성적의 연계 분석
+      </p>
+
+      {/* a) 과목별 학습 방법 매트릭스 (가로 스크롤) */}
+      <div style={{ overflowX: "auto", marginBottom: 20 }}>
+        <table style={{ width: "100%", minWidth: 640, borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: "#F9FAFB" }}>
+              {["과목", "학습 방법", "수업 활용도", "만족도", "교재", "인강", "등급", "매칭"].map((h) => (
+                <th key={h} style={{
+                  padding: "10px 8px", textAlign: "center", fontWeight: 700, color: "#374151",
+                  borderBottom: "2px solid #E5E7EB", whiteSpace: "nowrap",
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {subjects.map((subj: any, i: number) => {
+              const satColor = SATISFACTION_COLORS[subj.satisfaction] || { bg: "#F3F4F6", text: "#6B7280" };
+              const gradeRank = subj.grade?.rank ? Math.round(subj.grade.rank) : null;
+              const gradeColor = gradeRank ? (GRADE_RANK_COLORS[gradeRank] || { bg: "#F3F4F6", text: "#6B7280" }) : { bg: "#F3F4F6", text: "#6B7280" };
+              const matchInfo = MATCH_ICONS[subj.method_grade_match] || MATCH_ICONS["-"];
+              return (
+                <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                  <td style={{ padding: "10px 8px", fontWeight: 700, color: "#1F2937", whiteSpace: "nowrap" }}>
+                    {subj.name}
+                  </td>
+                  <td style={{ padding: "10px 8px" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {(subj.study_methods || []).map((m: string, j: number) => (
+                        <span key={j} style={{
+                          padding: "2px 8px", borderRadius: 10, fontSize: 11,
+                          background: "#EEF2FF", color: "#4338CA", whiteSpace: "nowrap",
+                        }}>{m}</span>
+                      ))}
+                      {(!subj.study_methods || subj.study_methods.length === 0) && (
+                        <span style={{ color: "#9CA3AF", fontSize: 11 }}>-</span>
+                      )}
+                    </div>
+                  </td>
+                  <td style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, color: "#374151" }}>
+                    {subj.class_engagement || "-"}
+                  </td>
+                  <td style={{ padding: "10px 8px", textAlign: "center" }}>
+                    {subj.satisfaction ? (
+                      <span style={{
+                        padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        background: satColor.bg, color: satColor.text,
+                      }}>{subj.satisfaction}</span>
+                    ) : <span style={{ color: "#9CA3AF", fontSize: 11 }}>-</span>}
+                  </td>
+                  <td style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, color: "#374151" }}>
+                    {subj.textbook || "-"}
+                  </td>
+                  <td style={{ padding: "10px 8px", textAlign: "center", fontSize: 11 }}>
+                    {subj.lecture?.has ? (
+                      <div>
+                        <div style={{ fontWeight: 600, color: "#374151" }}>{subj.lecture.instructor || "O"}</div>
+                        {subj.lecture.platform && (
+                          <div style={{ fontSize: 10, color: "#9CA3AF" }}>{subj.lecture.platform}</div>
+                        )}
+                      </div>
+                    ) : <span style={{ color: "#9CA3AF" }}>-</span>}
+                  </td>
+                  <td style={{ padding: "10px 8px", textAlign: "center" }}>
+                    {gradeRank ? (
+                      <span style={{
+                        display: "inline-block", padding: "2px 10px", borderRadius: 10, fontSize: 12, fontWeight: 700,
+                        background: gradeColor.bg, color: gradeColor.text,
+                      }}>{gradeRank}등급</span>
+                    ) : <span style={{ color: "#9CA3AF", fontSize: 11 }}>-</span>}
+                  </td>
+                  <td style={{ padding: "10px 8px", textAlign: "center" }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: matchInfo.color }}>
+                      {matchInfo.icon}
+                    </span>
+                    <div style={{ fontSize: 10, color: matchInfo.color }}>{subj.method_grade_match}</div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* b) 학습법-성적 연계 분석 */}
+      <div style={{
+        padding: "16px", borderRadius: 12, background: "#F9FAFB",
+        border: "1px solid #E5E7EB", marginBottom: 16,
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1F2937", marginBottom: 10 }}>
+          학습법-성적 연계 분석
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {subjects.map((subj: any, i: number) => {
+            const methods = subj.study_methods || [];
+            const grade = subj.grade?.rank;
+            const matchInfo = MATCH_ICONS[subj.method_grade_match] || MATCH_ICONS["-"];
+            if (!grade && methods.length === 0) return null;
+            return (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "8px 12px",
+                borderRadius: 8, background: "white", border: "1px solid #F3F4F6",
+              }}>
+                <span style={{ fontWeight: 700, fontSize: 13, color: "#1F2937", minWidth: 40 }}>{subj.name}</span>
+                <span style={{ fontSize: 12, color: "#6B7280", flex: 1 }}>
+                  학습법 {methods.length}개 사용
+                  {grade ? ` → ${Math.round(grade)}등급` : ""}
+                </span>
+                <span style={{
+                  padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700,
+                  color: matchInfo.color,
+                  background: subj.method_grade_match === "비효율" ? "#FEF2F2"
+                    : subj.method_grade_match === "효율적" ? "#ECFDF5"
+                    : "#F3F4F6",
+                }}>
+                  {subj.method_grade_match}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* c) 주간 스케줄 요약 + d) 학습 심리 상태 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {/* 주간 스케줄 요약 */}
+        {weekly.total_hours != null && (
+          <div style={{
+            padding: "16px", borderRadius: 12, background: "#F9FAFB",
+            border: "1px solid #E5E7EB",
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1F2937", marginBottom: 10 }}>
+              주간 스케줄 요약
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <div style={{ textAlign: "center", flex: 1, padding: "8px 0", borderRadius: 8, background: "white" }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: "#4472C4" }}>{weekly.total_hours}</div>
+                <div style={{ fontSize: 10, color: "#9CA3AF" }}>총 시간</div>
+              </div>
+              <div style={{ textAlign: "center", flex: 1, padding: "8px 0", borderRadius: 8, background: "white" }}>
+                <div style={{
+                  fontSize: 20, fontWeight: 800,
+                  color: weekly.self_study_ratio >= 40 ? "#16A34A" : weekly.self_study_ratio >= 20 ? "#D97706" : "#DC2626",
+                }}>{weekly.self_study_ratio}%</div>
+                <div style={{ fontSize: 10, color: "#9CA3AF" }}>자기주도</div>
+              </div>
+            </div>
+            {/* 과목별 시간 바 */}
+            {weekly.by_subject && Object.keys(weekly.by_subject).length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {Object.entries(weekly.by_subject).map(([subj, hrs]: [string, any]) => {
+                  const maxHrs = Math.max(...Object.values(weekly.by_subject).map(Number), 1);
+                  return (
+                    <div key={subj} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 11, color: "#374151", width: 32, textAlign: "right" }}>{subj}</span>
+                      <div style={{ flex: 1, height: 10, borderRadius: 5, background: "#E5E7EB", overflow: "hidden" }}>
+                        <div style={{
+                          height: "100%", borderRadius: 5, background: "#4472C4",
+                          width: `${(Number(hrs) / maxHrs) * 100}%`, transition: "width 0.5s",
+                        }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: "#6B7280", width: 24 }}>{hrs}h</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 학습 심리 상태 */}
+        {Object.values(psych).some(Boolean) && (
+          <div style={{
+            padding: "16px", borderRadius: 12, background: "#F9FAFB",
+            border: "1px solid #E5E7EB",
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1F2937", marginBottom: 10 }}>
+              학습 심리 상태
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { key: "test_anxiety", label: "시험 불안" },
+                { key: "motivation", label: "학습 동기" },
+                { key: "study_load", label: "학습 부담" },
+                { key: "sleep_hours", label: "수면 시간" },
+                { key: "subject_giveup", label: "포기 과목" },
+              ].map(({ key, label }) => {
+                const val = psych[key];
+                if (!val) return null;
+                const color = PSYCH_COLORS[val] || "#6B7280";
+                return (
+                  <div key={key} style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "8px 12px", borderRadius: 8, background: "white",
+                  }}>
+                    <span style={{ fontSize: 12, color: "#6B7280", flex: 1 }}>{label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color }}>{val}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 범례 */}
+      <div style={{
+        marginTop: 12, padding: "10px 14px", borderRadius: 8,
+        background: "#FFFBEB", border: "1px solid #FCD34D",
+        fontSize: 11, color: "#92400E", lineHeight: 1.5,
+      }}>
+        매칭 평가: <strong>{"\u2713"} 효율적</strong> = 적은 학습법으로 높은 성적 |{" "}
+        <strong>{"\u2713"} 적정</strong> = 학습법과 성적 균형 |{" "}
+        <strong>{"\u25B2"} 비효율</strong> = 많은 학습법 대비 낮은 성적 (전략 개선 필요)
+      </div>
+    </div>
+  );
+}
+
 // ── 고등학생 내신 등급 추이 ──
 
 const HIGH_SUBJECT_COLORS: Record<string, string> = {
@@ -1181,6 +1462,172 @@ function GradeLegend() {
             <span>{label}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 수능 최저학력기준 충족 시뮬레이션 ──
+
+function SuneungMinimumSection({ data }: { data: any }) {
+  const [expandedUniv, setExpandedUniv] = useState<string | null>(null);
+  const grades = data.student_mock_grades || {};
+  const simulations: any[] = data.simulations || [];
+  const summary = data.summary || {};
+
+  // Group by university
+  const grouped: Record<string, any[]> = {};
+  for (const sim of simulations) {
+    const key = sim.university;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(sim);
+  }
+
+  const resultColor = (result: string, margin?: number) => {
+    if (result === "충족") return { bg: "#ECFDF5", text: "#059669", border: "#6EE7B7" };
+    if (result === "미충족" && margin != null && margin >= -2) return { bg: "#FFFBEB", text: "#D97706", border: "#FCD34D" };
+    if (result === "미충족") return { bg: "#FEF2F2", text: "#DC2626", border: "#FCA5A5" };
+    if (result === "해당없음") return { bg: "#F3F4F6", text: "#6B7280", border: "#D1D5DB" };
+    return { bg: "#F3F4F6", text: "#6B7280", border: "#D1D5DB" };
+  };
+
+  const resultLabel = (result: string, margin?: number) => {
+    if (result === "충족") return "충족";
+    if (result === "미충족" && margin != null && margin >= -2) return "근접";
+    if (result === "미충족") return "미충족";
+    if (result === "해당없음") return "없음";
+    return result;
+  };
+
+  const gradeLabel = (key: string) => {
+    const m: Record<string, string> = { korean: "국어", math: "수학", english: "영어", inquiry1: "탐구1", inquiry2: "탐구2" };
+    return m[key] || key;
+  };
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
+        수능 최저학력기준 충족 시뮬레이션
+      </h2>
+
+      {/* 학생 모의고사 등급 */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {(["korean", "math", "english", "inquiry1", "inquiry2"] as const).map((key) => {
+          const g = grades[key];
+          return (
+            <div key={key} style={{
+              background: "#F8FAFC", borderRadius: 10, padding: "8px 14px",
+              textAlign: "center", minWidth: 56,
+            }}>
+              <div style={{ fontSize: 11, color: "var(--gray-500)", marginBottom: 2 }}>{gradeLabel(key)}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: g != null ? "var(--gray-900)" : "var(--gray-300)" }}>
+                {g != null ? `${g}` : "-"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 요약 카드 */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {[
+          { label: "충족", count: summary.met || 0, color: "#059669", bg: "#ECFDF5" },
+          { label: "근접", count: summary.close || 0, color: "#D97706", bg: "#FFFBEB" },
+          { label: "미충족", count: summary.not_met || 0, color: "#DC2626", bg: "#FEF2F2" },
+        ].map((item) => (
+          <div key={item.label} style={{
+            flex: 1, minWidth: 80, background: item.bg, borderRadius: 10,
+            padding: "10px 12px", textAlign: "center",
+          }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: item.color }}>{item.count}</div>
+            <div style={{ fontSize: 11, color: item.color, fontWeight: 600 }}>{item.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 대학별 결과 */}
+      {Object.entries(grouped).map(([univ, sims]) => {
+        const isExpanded = expandedUniv === univ;
+        const metCount = sims.filter((s: any) => s.result === "충족").length;
+        const totalCount = sims.filter((s: any) => s.result !== "해당없음").length;
+
+        return (
+          <div key={univ} style={{
+            border: "1px solid var(--gray-200)", borderRadius: 12,
+            marginBottom: 8, overflow: "hidden",
+          }}>
+            {/* University header */}
+            <button
+              onClick={() => setExpandedUniv(isExpanded ? null : univ)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "12px 14px", background: "none", border: "none", cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <div>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>{univ}</span>
+                <span style={{ fontSize: 12, color: "var(--gray-500)", marginLeft: 8 }}>
+                  {totalCount > 0 ? `${metCount}/${totalCount} 충족` : ""}
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: "var(--gray-400)" }}>{isExpanded ? "\u25B2" : "\u25BC"}</span>
+            </button>
+
+            {/* Expanded detail */}
+            {isExpanded && (
+              <div style={{ padding: "0 14px 12px" }}>
+                {sims.map((sim: any, i: number) => {
+                  const rc = resultColor(sim.result, sim.margin);
+                  return (
+                    <div key={i} style={{
+                      display: "flex", alignItems: "flex-start", gap: 10,
+                      padding: "10px 0",
+                      borderTop: i > 0 ? "1px solid var(--gray-100)" : "none",
+                    }}>
+                      <span style={{
+                        display: "inline-block", padding: "2px 8px", borderRadius: 6,
+                        fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
+                        background: rc.bg, color: rc.text, border: `1px solid ${rc.border}`,
+                      }}>
+                        {resultLabel(sim.result, sim.margin)}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>
+                          {sim.admission_type}
+                          {sim.requirement_label !== "전체" && (
+                            <span style={{ fontSize: 11, color: "var(--gray-500)", marginLeft: 4 }}>
+                              {sim.requirement_label}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--gray-500)", marginTop: 2, whiteSpace: "pre-line" }}>
+                          {sim.requirement_text?.replace(/\n/g, " / ")}
+                        </div>
+                        {sim.detail && (
+                          <div style={{ fontSize: 12, color: rc.text, marginTop: 4, fontWeight: 500 }}>
+                            {sim.detail}
+                          </div>
+                        )}
+                        {sim.failures?.length > 0 && (
+                          <div style={{ fontSize: 11, color: "#DC2626", marginTop: 2 }}>
+                            {sim.failures.join(", ")}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <div style={{ fontSize: 11, color: "var(--gray-400)", marginTop: 12, lineHeight: 1.5 }}>
+        * 최신 모의고사 등급 기준 시뮬레이션 결과입니다. 실제 수능 성적과 다를 수 있습니다.
+        <br />
+        * 한국사는 대부분 4등급 이내 충족 가정으로 시뮬레이션합니다.
       </div>
     </div>
   );

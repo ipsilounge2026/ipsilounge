@@ -201,6 +201,15 @@ export interface SubsectionDef {
   instruction?: string;
 }
 
+// ----- UI Step Order (10-STEP 표시 순서) -----
+export interface UIStepOrderEntry {
+  step: number;
+  category_id: string;
+  label: string;
+  /** 특정 질문만 표시할 경우 질문 ID 목록. 없으면 해당 카테고리의 전체 질문 표시. */
+  include_questions?: string[];
+}
+
 // ----- 카테고리 / 스키마 -----
 export interface Category {
   id: string;
@@ -212,6 +221,7 @@ export interface Category {
   platforms?: Platform[];
   skippable?: boolean;
   respondent?: string;
+  timings?: string[];
   questions: any[]; // 다양한 질문 타입 union
 }
 
@@ -224,6 +234,19 @@ export interface SurveySchema {
   source_doc?: string;
   subject_codes?: Record<string, string>;
   categories: Category[];
+  ui_step_order?: UIStepOrderEntry[];
+}
+
+// ----- Virtual Step (UI 표시용 가상 단계) -----
+export interface VirtualStep {
+  /** 1-based step number from ui_step_order */
+  stepNumber: number;
+  /** Display label from ui_step_order */
+  label: string;
+  /** Original category object */
+  category: Category;
+  /** Filtered questions for this step (subset or all) */
+  questions: any[];
 }
 
 // ----- 백엔드 응답 -----

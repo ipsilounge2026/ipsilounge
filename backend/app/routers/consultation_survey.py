@@ -901,6 +901,220 @@ async def get_subject_competitiveness(
     return _compute_subject_competitiveness(survey.answers or {})
 
 
+# ----- 학습 방법 진단 매트릭스 (Study Method Matrix) -----
+
+
+def _assess_method_grade_match(num_methods: int, grade: float | None) -> str:
+    """학습법 수 대비 성적 매칭 평가.
+
+    Returns: '효율적' / '적정' / '비효율' / '-'
+    """
+    if grade is None or num_methods == 0:
+        return "-"
+    # grade 1 = best, 5 = worst (5-grade system)
+    if num_methods >= 3 and grade >= 4:
+        return "비효율"
+    if num_methods <= 1 and grade <= 2:
+        return "효율적"
+    if num_methods >= 3 and grade <= 2:
+        return "적정"
+    if num_methods <= 1 and grade >= 4:
+        return "비효율"
+    return "적정"
+
+
+def _compute_study_method_matrix(answers: dict) -> dict:
+    """D7 과목별 학습 방법, D1 주간 스케줄, D8 심리 상태, B 내신 등급을 매트릭스로 구성."""
+    cat_b = answers.get("B", {})
+    cat_d = answers.get("D", {})
+
+    d7_data = cat_d.get("D7", {})
+    d1_data = cat_d.get("D1", {})
+    d8_data = cat_d.get("D8", {})
+    d6_data = cat_d.get("D6", {})
+
+    # --- 과목별 최신 내신 등급 수집 ---
+    semesters = ["B4", "B3", "B2", "B1"]  # newest first
+    subject_keys = ["ko", "en", "ma", "sc1", "sc2", "so"]
+    subject_names = {
+        "ko": "국어", "en": "영어", "ma": "수학",
+        "sc1": "탐구1", "sc2": "탐구2", "so": "사회",
+    }
+    # 과목명 → 내신 키 역매핑
+    name_to_key = {v: k for k, v in subject_names.items()}
+
+    latest_grades: dict[str, dict] = {}
+    for subj_key in subject_keys:
+        for sem_key in semesters:
+            sem_data = cat_b.get(sem_key)
+            if not sem_data or not isinstance(sem_data, dict):
+                continue
+            subj_data = sem_data.get(subj_key, {})
+            if not isinstance(subj_data, dict):
+                continue
+            rank = _safe_float_sc(subj_data.get("rank_grade"))
+            if rank is not None:
+                latest_grades[subj_key] = {
+                    "rank": rank,
+                    "achievement": subj_data.get("achievement"),
+                    "raw_score": _safe_float_sc(subj_data.get("raw_score")),
+                }
+                break  # found latest
+
+    # --- 과목별 학습 방법 매트릭스 ---
+    subjects = []
+    if isinstance(d7_data, dict):
+        # D7 keys are subject names like "국어", "수학", etc.
+        for subj_name, subj_info in d7_data.items():
+            if not isinstance(subj_info, dict):
+                continue
+
+            methods = subj_info.get("study_method", [])
+            if isinstance(methods, str):
+                methods = [methods]
+            elif not isinstance(methods, list):
+                methods = []
+
+            engagement = subj_info.get("class_engagement", None)
+            satisfaction = subj_info.get("satisfaction", None)
+            textbook = subj_info.get("main_textbook", None)
+
+            # 인강 정보
+            lecture_info = subj_info.get("lecture", {})
+            if not isinstance(lecture_info, dict):
+                lecture_info = {}
+            has_lecture = bool(lecture_info.get("instructor") or lecture_info.get("platform"))
+            lecture = {
+                "has": has_lecture,
+                "instructor": lecture_info.get("instructor"),
+                "platform": lecture_info.get("platform"),
+            }
+
+            # 내신 등급 매칭
+            naesin_key = name_to_key.get(subj_name)
+            grade_info = latest_grades.get(naesin_key, {}) if naesin_key else {}
+
+            num_methods = len(methods)
+            grade_rank = grade_info.get("rank")
+            match_eval = _assess_method_grade_match(num_methods, grade_rank)
+
+            subjects.append({
+                "name": subj_name,
+                "study_methods": methods,
+                "class_engagement": engagement,
+                "satisfaction": satisfaction,
+                "textbook": textbook,
+                "lecture": lecture,
+                "grade": {
+                    "rank": grade_info.get("rank"),
+                    "achievement": grade_info.get("achievement"),
+                    "raw_score": grade_info.get("raw_score"),
+                } if grade_info else None,
+                "method_grade_match": match_eval,
+            })
+
+    # D6 취약 과목이 D7에 없으면 추가
+    if isinstance(d6_data, dict):
+        existing_names = {s["name"] for s in subjects}
+        weakest = d6_data.get("weakest", [])
+        if isinstance(weakest, list):
+            for w_subj in weakest:
+                if isinstance(w_subj, str) and w_subj not in existing_names:
+                    naesin_key = name_to_key.get(w_subj)
+                    grade_info = latest_grades.get(naesin_key, {}) if naesin_key else {}
+                    subjects.append({
+                        "name": w_subj,
+                        "study_methods": [],
+                        "class_engagement": None,
+                        "satisfaction": None,
+                        "textbook": None,
+                        "lecture": {"has": False, "instructor": None, "platform": None},
+                        "grade": {
+                            "rank": grade_info.get("rank"),
+                            "achievement": grade_info.get("achievement"),
+                            "raw_score": grade_info.get("raw_score"),
+                        } if grade_info else None,
+                        "method_grade_match": "-",
+                    })
+
+    # --- 주간 스케줄 요약 (D1) ---
+    weekly_summary: dict = {}
+    if isinstance(d1_data, dict):
+        total_hours = _safe_float_sc(d1_data.get("total_hours")) or 0
+        self_ratio = _safe_float_sc(d1_data.get("self_study_ratio")) or 0
+        by_subject = d1_data.get("by_subject", {})
+        if not isinstance(by_subject, dict):
+            by_subject = {}
+        weekly_summary = {
+            "total_hours": total_hours,
+            "self_study_ratio": self_ratio,
+            "by_subject": {k: _safe_float_sc(v) or 0 for k, v in by_subject.items() if isinstance(k, str)},
+        }
+
+    # --- 학습 심리 상태 (D8) ---
+    psychology: dict = {}
+    if isinstance(d8_data, dict):
+        psychology = {
+            "test_anxiety": d8_data.get("test_anxiety"),
+            "motivation": d8_data.get("motivation"),
+            "study_load": d8_data.get("study_load"),
+            "sleep_hours": d8_data.get("sleep_hours"),
+            "subject_giveup": d8_data.get("subject_giveup"),
+        }
+
+    return {
+        "subjects": subjects,
+        "weekly_summary": weekly_summary,
+        "psychology": psychology,
+    }
+
+
+@router.get("/{survey_id}/study-method-matrix")
+async def get_study_method_matrix(
+    survey_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """학습 방법 진단 매트릭스: D7 과목별 학습 방법, D1 주간 스케줄, D8 심리 상태, B 내신을 종합."""
+    survey = await _get_visible_survey(survey_id, user, db)
+    if survey.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출된 설문만 학습 방법 매트릭스를 조회할 수 있습니다",
+        )
+    return _compute_study_method_matrix(survey.answers or {})
+
+
+# ----- 수능 최저학력기준 충족 시뮬레이션 -----
+
+@router.get("/{survey_id}/suneung-minimum-simulation")
+async def get_suneung_minimum_simulation(
+    survey_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """수능 최저학력기준 충족 시뮬레이션.
+
+    학생의 모의고사 등급과 목표 대학 수준을 기반으로,
+    각 대학·전형별 수능 최저학력기준 충족 여부를 시뮬레이션한다.
+    """
+    survey = await _get_visible_survey(survey_id, user, db)
+    if survey.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출된 설문만 수능 최저 시뮬레이션을 조회할 수 있습니다",
+        )
+    # Only for high school surveys
+    if survey.survey_type not in ("high",):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="고등학생 설문만 수능 최저 시뮬레이션을 지원합니다",
+        )
+
+    from app.services.suneung_minimum_service import simulate_suneung_minimum
+    return simulate_suneung_minimum(survey.answers or {})
+
+
 # ----- 액션 플랜 진행 체크 업데이트 -----
 
 class ActionPlanProgressRequest(BaseModel):

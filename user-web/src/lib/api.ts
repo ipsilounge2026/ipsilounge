@@ -358,6 +358,14 @@ export async function getSubjectCompetitiveness(id: string) {
   return request(`/api/consultation-surveys/${id}/subject-competitiveness`);
 }
 
+export async function getStudyMethodMatrix(id: string) {
+  return request(`/api/consultation-surveys/${id}/study-method-matrix`);
+}
+
+export async function getSuneungMinimumSimulation(id: string) {
+  return request(`/api/consultation-surveys/${id}/suneung-minimum-simulation`);
+}
+
 export async function updateActionPlanProgress(id: string, itemIndex: number, completed: boolean) {
   return request(`/api/consultation-surveys/${id}/action-plan-progress`, {
     method: "PATCH",

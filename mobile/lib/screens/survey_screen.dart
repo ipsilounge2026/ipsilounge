@@ -27,11 +27,30 @@ class SurveyScreen extends StatefulWidget {
   State<SurveyScreen> createState() => _SurveyScreenState();
 }
 
+/// A virtual step that maps to a category (or subset of its questions).
+/// Categories D and E may appear in multiple steps with different question subsets.
+class _VirtualStep {
+  final int stepNumber;
+  final String label;
+  final Map<String, dynamic> category;
+  final List<Map<String, dynamic>> questions;
+
+  _VirtualStep({
+    required this.stepNumber,
+    required this.label,
+    required this.category,
+    required this.questions,
+  });
+
+  String get categoryId => category['id'] as String;
+}
+
 class _SurveyScreenState extends State<SurveyScreen> {
   Map<String, dynamic>? _schema;
   Map<String, dynamic>? _survey;
   List<Map<String, dynamic>> _categories = [];
-  int _currentCatIndex = 0;
+  List<_VirtualStep> _virtualSteps = [];
+  int _currentStepIndex = 0;
   bool _loading = true;
   bool _submitting = false;
   bool _submitted = false;
@@ -79,6 +98,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
         if (widget.ownerUserId != null && respondent != 'parent') return false;
         return platforms.contains('mobile');
       }).toList();
+
+      // Build virtual steps from ui_step_order
+      _virtualSteps = _buildVirtualSteps(schema, _categories);
 
       // 2) 기존 설문 찾기 or 생성
       String surveyId;
@@ -141,11 +163,11 @@ class _SurveyScreenState extends State<SurveyScreen> {
         }
       }
 
-      // 마지막 작성 카테고리로 이동
+      // 마지막 작성 카테고리로 이동 (virtual step 기준)
       final lastCat = survey['last_category'] as String?;
       if (lastCat != null) {
-        final idx = _categories.indexWhere((c) => c['id'] == lastCat);
-        if (idx >= 0) _currentCatIndex = idx;
+        final idx = _virtualSteps.indexWhere((s) => s.categoryId == lastCat);
+        if (idx >= 0) _currentStepIndex = idx;
       }
 
       setState(() => _loading = false);
@@ -170,7 +192,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
     if (_survey == null || !_dirty) return;
     _dirty = false;
     try {
-      final catId = _categories[_currentCatIndex]['id'];
+      final catId = _virtualSteps.isNotEmpty
+          ? _virtualSteps[_currentStepIndex].categoryId
+          : (_categories.isNotEmpty ? _categories[0]['id'] : 'A');
       final result = await SurveyService.patch(_survey!['id'], {
         'answers': {catId: _answers[catId] ?? {}},
         'category_status': {catId: 'in_progress'},
@@ -211,18 +235,96 @@ class _SurveyScreenState extends State<SurveyScreen> {
     }
   }
 
-  void _nextCategory() {
+  void _nextStep() {
     _doSave();
-    if (_currentCatIndex < _categories.length - 1) {
-      setState(() => _currentCatIndex++);
+    if (_currentStepIndex < _virtualSteps.length - 1) {
+      setState(() => _currentStepIndex++);
     }
   }
 
-  void _prevCategory() {
+  void _prevStep() {
     _doSave();
-    if (_currentCatIndex > 0) {
-      setState(() => _currentCatIndex--);
+    if (_currentStepIndex > 0) {
+      setState(() => _currentStepIndex--);
     }
+  }
+
+  /// Build virtual steps from ui_step_order in the schema.
+  /// If ui_step_order is not defined, falls back to one step per category.
+  List<_VirtualStep> _buildVirtualSteps(
+    Map<String, dynamic> schema,
+    List<Map<String, dynamic>> categories,
+  ) {
+    final stepOrder = schema['ui_step_order'] as List?;
+    if (stepOrder == null || stepOrder.isEmpty) {
+      // Fallback: one step per category
+      return categories.asMap().entries.map((e) {
+        final cat = e.value;
+        return _VirtualStep(
+          stepNumber: e.key + 1,
+          label: cat['title'] as String,
+          category: cat,
+          questions: (cat['questions'] as List).cast<Map<String, dynamic>>(),
+        );
+      }).toList();
+    }
+
+    // Build category lookup from ALL schema categories (not just filtered)
+    final allCats = (schema['categories'] as List).cast<Map<String, dynamic>>();
+    final catMap = <String, Map<String, dynamic>>{};
+    for (final c in allCats) {
+      catMap[c['id'] as String] = c;
+    }
+
+    // Set of category IDs that passed platform/respondent filtering
+    final visibleCatIds = categories.map((c) => c['id'] as String).toSet();
+
+    final timing = widget.timing; // T1, T2, T3, T4
+
+    final steps = <_VirtualStep>[];
+    for (final entry in stepOrder.cast<Map<String, dynamic>>()) {
+      final catId = entry['category_id'] as String;
+      final cat = catMap[catId];
+      if (cat == null) continue;
+
+      // Skip if category was filtered out by platform/respondent
+      if (!visibleCatIds.contains(catId)) continue;
+
+      // Timing filter: skip category if current timing not in category's timings
+      final catTimings = (cat['timings'] as List?)?.cast<String>();
+      if (catTimings != null && timing != null && !catTimings.contains(timing)) continue;
+
+      // Get questions
+      List<Map<String, dynamic>> questions =
+          (cat['questions'] as List).cast<Map<String, dynamic>>();
+
+      // Filter by include_questions if specified
+      final includeQs = (entry['include_questions'] as List?)?.cast<String>();
+      if (includeQs != null && includeQs.isNotEmpty) {
+        final includeSet = includeQs.toSet();
+        questions = questions.where((q) => includeSet.contains(q['id'])).toList();
+      }
+
+      // Per-question timing filter
+      if (timing != null) {
+        questions = questions.where((q) {
+          final qTimings = (q['timings'] as List?)?.cast<String>();
+          if (qTimings == null) return true;
+          return qTimings.contains(timing);
+        }).toList();
+      }
+
+      // Skip step if no questions remain
+      if (questions.isEmpty) continue;
+
+      steps.add(_VirtualStep(
+        stepNumber: entry['step'] as int,
+        label: entry['label'] as String,
+        category: cat,
+        questions: questions,
+      ));
+    }
+    return steps;
   }
 
   Future<void> _sendResumeLink() async {
@@ -304,15 +406,16 @@ class _SurveyScreenState extends State<SurveyScreen> {
       );
     }
 
-    if (_categories.isEmpty) {
+    if (_virtualSteps.isEmpty) {
       return const Center(child: Text('모바일에서 작성 가능한 항목이 없습니다.\n웹에서 작성해주세요.', textAlign: TextAlign.center));
     }
 
-    final cat = _categories[_currentCatIndex];
-    final catId = cat['id'] as String;
-    final questions = (cat['questions'] as List).cast<Map<String, dynamic>>();
+    final step = _virtualSteps[_currentStepIndex];
+    final cat = step.category;
+    final catId = step.categoryId;
+    final questions = step.questions;
     final catAnswers = _answers[catId] ?? {};
-    final isLast = _currentCatIndex == _categories.length - 1;
+    final isLast = _currentStepIndex == _virtualSteps.length - 1;
 
     return Column(
       children: [
@@ -325,7 +428,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${cat['title']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              Text('${step.stepNumber}. ${step.label}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               if (cat['description'] != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -372,14 +475,14 @@ class _SurveyScreenState extends State<SurveyScreen> {
             ),
             child: Row(
               children: [
-                if (_currentCatIndex > 0)
+                if (_currentStepIndex > 0)
                   Expanded(
-                    child: OutlinedButton(onPressed: _prevCategory, child: const Text('이전')),
+                    child: OutlinedButton(onPressed: _prevStep, child: const Text('이전')),
                   ),
-                if (_currentCatIndex > 0) const SizedBox(width: 12),
+                if (_currentStepIndex > 0) const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _submitting ? null : (isLast ? _submit : _nextCategory),
+                    onPressed: _submitting ? null : (isLast ? _submit : _nextStep),
                     child: _submitting
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : Text(isLast ? '제출하기' : '다음'),
@@ -394,7 +497,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
   }
 
   Widget _buildProgressBar() {
-    final progress = _categories.isEmpty ? 0.0 : (_currentCatIndex + 1) / _categories.length;
+    final total = _virtualSteps.length;
+    final progress = total == 0 ? 0.0 : (_currentStepIndex + 1) / total;
     return Column(
       children: [
         LinearProgressIndicator(value: progress, minHeight: 4, backgroundColor: const Color(0xFFE5E7EB)),
@@ -403,7 +507,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('${_currentCatIndex + 1} / ${_categories.length}', style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+              Text('${_currentStepIndex + 1} / $total 단계', style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
               if (_dirty) const Text('저장 중...', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
             ],
           ),

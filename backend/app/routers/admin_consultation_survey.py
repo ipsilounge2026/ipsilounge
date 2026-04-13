@@ -221,6 +221,32 @@ async def get_delta_diff(
     }
 
 
+# ---- 수능 최저학력기준 충족 시뮬레이션 ----
+
+@router.get("/{survey_id}/suneung-minimum-simulation")
+async def get_suneung_minimum_simulation_admin(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """수능 최저학력기준 충족 시뮬레이션 (관리자용)"""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    if survey.survey_type not in ("high",):
+        raise HTTPException(
+            status_code=400,
+            detail="고등학생 설문만 수능 최저 시뮬레이션을 지원합니다",
+        )
+
+    from app.services.suneung_minimum_service import simulate_suneung_minimum
+    return simulate_suneung_minimum(survey.answers or {})
+
+
 # ---- 상담사 메모 ----
 
 class MemoRequest(BaseModel):
