@@ -1869,3 +1869,318 @@ def compute_school_type_compatibility(
         "axis_scores": axis_scores,
         "subject_scores": {k: round(v, 1) for k, v in subject_scores.items()},
     }
+
+
+# ============================================================
+# 고등학생 로드맵 자동 초안 생성
+# ============================================================
+
+_HIGH_ROADMAP_ITEMS: dict[str, list[dict]] = {
+    "naesin": [
+        {"condition": lambda d: d["total"] < 55, "priority": "상",
+         "title": "내신 등급 긴급 보강",
+         "desc": "전과목 평균 등급이 낮습니다. 주요 과목(국·영·수) 기본 개념부터 재정비하고, 수행평가 비중이 높은 과목을 우선 공략하세요.",
+         "period": "즉시"},
+        {"condition": lambda d: d["total"] < 75, "priority": "중",
+         "title": "내신 취약 과목 집중 보강",
+         "desc": "주요 과목 등급 편차를 줄이고, 수행평가 대응력을 높여 전체 평균 등급을 끌어올리세요.",
+         "period": "이번 학기"},
+        {"condition": lambda d: d["total"] >= 75, "priority": "하",
+         "title": "내신 최상위 등급 도전",
+         "desc": "기본이 탄탄하므로, 1등급 과목 수를 늘리고 과목 간 균형을 유지하세요.",
+         "period": "다음 학기"},
+    ],
+    "mock": [
+        {"condition": lambda d: d.get("no_data"), "priority": "중",
+         "title": "모의고사 데이터 확보 필요",
+         "desc": "모의고사 응시 이력이 없습니다. 다음 모의고사에 반드시 응시하여 수능 대비 현 위치를 파악하세요.",
+         "period": "다음 모의고사"},
+        {"condition": lambda d: d["total"] < 55, "priority": "상",
+         "title": "모의고사 기초 역량 보강",
+         "desc": "백분위가 전반적으로 낮습니다. 취약 영역을 파악하고 기본 개념부터 다시 정리하세요.",
+         "period": "즉시"},
+        {"condition": lambda d: d["total"] < 75, "priority": "중",
+         "title": "모의고사 취약 영역 집중",
+         "desc": "전체 평균 대비 뒤처지는 영역에 주당 추가 2~3시간을 배분하세요.",
+         "period": "이번 학기"},
+        {"condition": lambda d: d["total"] >= 75, "priority": "하",
+         "title": "모의고사 1등급 안착",
+         "desc": "상위권이므로, 킬러 문항 대비와 시간 관리 최적화에 집중하세요.",
+         "period": "다음 모의고사"},
+    ],
+    "study": [
+        {"condition": lambda d: d["total"] < 55, "priority": "상",
+         "title": "학습 습관 전면 재구축",
+         "desc": "자기주도 학습 비율과 오답 관리 습관이 부족합니다. 매일 정해진 시간에 스스로 공부하는 루틴부터 만드세요.",
+         "period": "즉시"},
+        {"condition": lambda d: d["total"] < 75, "priority": "중",
+         "title": "학습 전략 체계화",
+         "desc": "학습 계획 수립과 실행력을 높이세요. 주간 계획표 작성, 오답노트 습관화가 핵심입니다.",
+         "period": "이번 학기"},
+        {"condition": lambda d: d["total"] >= 75, "priority": "하",
+         "title": "학습 효율 최적화",
+         "desc": "좋은 습관이 갖춰져 있으므로, 시간 블록법과 간격 반복 등 고급 전략으로 효율을 더 높이세요.",
+         "period": "지속"},
+    ],
+    "career": [
+        {"condition": lambda d: d["total"] < 55, "priority": "상",
+         "title": "진로·전형 방향 설정 시급",
+         "desc": "진로 방향이 불명확합니다. 관심 분야 탐색과 전형(수시/정시) 기본 이해부터 시작하세요.",
+         "period": "즉시"},
+        {"condition": lambda d: d["total"] < 75, "priority": "중",
+         "title": "전형 전략 구체화",
+         "desc": "진로 방향에 맞는 전형을 구체적으로 탐색하고, 성적-전형 정합성을 점검하세요.",
+         "period": "이번 학기"},
+        {"condition": lambda d: d["total"] >= 75, "priority": "하",
+         "title": "전형 전략 정교화",
+         "desc": "방향이 잘 잡혀 있으므로, 목표 대학별 세부 전형 요건을 분석하고 맞춤 전략을 세우세요.",
+         "period": "다음 학기"},
+    ],
+}
+
+
+def generate_high_roadmap(
+    naesin: dict, mock: dict, study: dict, career: dict,
+    timing: str | None = None,
+) -> dict:
+    """4축 점수 + timing 기반 고등학생 로드맵 자동 초안 생성."""
+    area_data = {
+        "naesin": naesin,
+        "mock": mock,
+        "study": study,
+        "career": career,
+    }
+    area_labels = {
+        "naesin": "내신 경쟁력",
+        "mock": "모의고사 역량",
+        "study": "학습습관·전략",
+        "career": "진로·전형 전략",
+    }
+
+    items: list[dict] = []
+    for area_key, candidates in _HIGH_ROADMAP_ITEMS.items():
+        data = area_data[area_key]
+        for cand in candidates:
+            if cand["condition"](data):
+                items.append({
+                    "area": area_labels[area_key],
+                    "area_key": area_key,
+                    "priority": cand["priority"],
+                    "title": cand["title"],
+                    "description": cand["desc"],
+                    "period": cand["period"],
+                    "current_score": data["total"],
+                    "current_grade": data["grade"],
+                })
+                break
+
+    priority_order = {"상": 0, "중": 1, "하": 2}
+    items.sort(key=lambda x: priority_order.get(x["priority"], 9))
+
+    matrix = _generate_high_roadmap_matrix(naesin, mock, study, career, timing)
+
+    return {
+        "items": items,
+        "matrix": matrix,
+        "summary": _high_roadmap_summary(items, timing),
+    }
+
+
+def _generate_high_roadmap_matrix(
+    naesin: dict, mock: dict, study: dict, career: dict,
+    timing: str | None = None,
+) -> dict:
+    """timing별 Phase × 4트랙 고등학생 로드맵 매트릭스."""
+    # 조건 플래그
+    naesin_weak = naesin["total"] < 55
+    naesin_mid = 55 <= naesin["total"] < 75
+    mock_weak = mock["total"] < 55 or mock.get("no_data")
+    mock_mid = 55 <= mock["total"] < 75
+    study_weak = study["total"] < 55
+    career_weak = career["total"] < 55
+
+    naesin_trend = _detail_score(naesin, "등급추이")
+    mock_trend_val = _detail_score(mock, "백분위_추이")
+
+    tracks = [
+        {"key": "academic", "label": "교과 학습", "icon": "📘"},
+        {"key": "naesin", "label": "내신 전략", "icon": "📋"},
+        {"key": "mock_prep", "label": "수능·모의고사", "icon": "🎯"},
+        {"key": "habit", "label": "학습 습관 개선", "icon": "🔧"},
+    ]
+
+    # timing에 따른 Phase 구성
+    t = timing or "T1"
+
+    if t == "T1":
+        phases = [
+            {"key": "p0", "label": "Phase 0: 여름방학", "theme": "1학기 보완 & 체질 개선"},
+            {"key": "p1", "label": "Phase 1: 고1-2학기", "theme": "내신 반등 & 학습법 정착"},
+            {"key": "p2", "label": "Phase 2: 고2 진입", "theme": "선택과목 & 진로 구체화"},
+        ]
+    elif t == "T2":
+        phases = [
+            {"key": "p0", "label": "Phase 0: 겨울방학", "theme": "1년 성적 분석 & 보강"},
+            {"key": "p1", "label": "Phase 1: 고2-1학기", "theme": "선택과목 첫 내신 & 모의 체계"},
+            {"key": "p2", "label": "Phase 2: 고2-2학기", "theme": "전형 방향 탐색 & 심화"},
+            {"key": "p3", "label": "Phase 3: 고3 방향", "theme": "수시/정시 윤곽 & 고3 전략"},
+        ]
+    elif t == "T3":
+        phases = [
+            {"key": "p0", "label": "Phase 0: 여름방학", "theme": "선택과목 성적 보완 & 수능 기반"},
+            {"key": "p1", "label": "Phase 1: 고2-2학기", "theme": "내신 마무리 & 전형 확정 준비"},
+            {"key": "p2", "label": "Phase 2: 고3 진입 준비", "theme": "고3 학습 로드맵 확정"},
+        ]
+    else:  # T4
+        phases = [
+            {"key": "p0", "label": "Phase 0: 겨울방학", "theme": "2년 종합 분석 & 고3 돌입 준비"},
+            {"key": "p1", "label": "Phase 1: 고3-1학기", "theme": "최종 내신 + 수능 병행"},
+            {"key": "p2", "label": "Phase 2: 수능 대비", "theme": "수능 집중 & 실전 감각"},
+            {"key": "p3", "label": "Phase 3: 수능·원서", "theme": "수능 마무리 & 원서 전략"},
+        ]
+
+    cells: dict[str, dict[str, str]] = {}
+
+    # ── T1: 고1-1학기 말 ──
+    if t == "T1":
+        p0: dict[str, str] = {}
+        p0["academic"] = ("1학기 취약 과목(특히 수학·영어) 기본 개념 재정리\n여름방학 중 2학기 범위 예습 1회독" if naesin_weak
+                          else "1학기 취약 단원 보완 + 2학기 선행\n심화 문제 풀이로 상위 등급 대비")
+        p0["naesin"] = "1학기 중간·기말 오답 분석 → 취약 유형 정리\n2학기 수행평가 대비 계획 수립"
+        p0["mock_prep"] = ("3월·6월 모의 오답 분석 + 기본 유형 정리\n수학: 킬러 제외 2~3등급 문항 반복" if not mock_weak
+                           else "모의고사 기본 유형 익히기(국·영·수)\n시간 배분 연습 + 오답 유형 분류")
+        p0["habit"] = ("매일 자기주도 학습 2시간 루틴 만들기\n오답노트 작성 습관 형성" if study_weak
+                       else "주간 학습 계획표 작성 + 실행률 점검\n과목별 시간 배분 최적화")
+        cells["p0"] = p0
+
+        p1: dict[str, str] = {}
+        p1["academic"] = ("수학·영어 기본 개념 완성에 집중\n모든 과목 교과서 완전 이해 목표" if naesin_weak
+                          else "내신 1~2등급 과목 수 늘리기\n전공 관련 과목 최상위 등급 목표")
+        p1["naesin"] = "중간·기말 시험 2주 전 과목별 계획표\n수행평가 일정 관리 + 보고서 퀄리티 향상"
+        p1["mock_prep"] = "9월·11월 모의고사 응시 + 결과 분석\n영역별 취약점 파악 및 보완 계획"
+        p1["habit"] = ("자기주도 학습 비율 40%+ 확보\n시험 기간 오답 정리 철저히" if study_weak
+                       else "효율적 복습 주기(당일·3일·1주) 정립\n시험 후 분석 루틴 정착")
+        cells["p1"] = p1
+
+        p2: dict[str, str] = {}
+        p2["academic"] = "고2 선택과목 전략적 수강 계획\n진로 연계 과목에서 최상위 등급 목표"
+        p2["naesin"] = "1학년 성적 분석 → 고2 등급 목표 설정\n학종/교과전형 방향에 맞는 등급 관리"
+        p2["mock_prep"] = "수능 영역별 목표 등급 설정\n매 모의고사 후 오답 분석 루틴 정착"
+        p2["habit"] = ("자기주도 학습 비율 50%+ 목표\n과목별 학습법 최적화" if study_weak
+                       else "학습 효율 극대화(시간 블록법, 간격 반복)\n자기주도 학습 비율 60%+ 유지")
+        cells["p2"] = p2
+
+    # ── T2: 고1-2학기 말 ──
+    elif t == "T2":
+        p0 = {}
+        p0["academic"] = ("1년간 취약 과목 집중 보강\n고2 선택과목 예습 시작" if naesin_weak
+                          else "1학년 성적 분석 → 취약 단원 보완\n고2 선택과목 선행 학습")
+        p0["naesin"] = "1학년 4회 시험 패턴 분석(출제 경향, 수행 비중)\n고2 내신 전략 재설계"
+        p0["mock_prep"] = ("모의고사 기본기 다지기: 국·영·수 유형 정리\n영어 절대평가 90점+ 기반 구축" if mock_weak
+                           else "모의 취약 영역 겨울방학 집중 보강\n수능 기출 연도별 풀이 시작")
+        p0["habit"] = ("겨울방학 학습 루틴 재정비\n하루 3시간+ 자기주도 학습 목표" if study_weak
+                       else "학습 계획 정교화 + 실행률 80%+ 목표\n과목별 학습법 만족도 점검 및 조정")
+        cells["p0"] = p0
+
+        p1 = {}
+        p1["academic"] = ("선택과목 기본 개념 확실히 잡기\n취약 과목 주당 2~3시간 추가 배분" if naesin_weak
+                          else "선택과목 심화 학습 + 내신 최상위 도전\n전공 관련 과목 1등급 확보")
+        p1["naesin"] = "고2 첫 중간고사 전략적 준비\n수행평가 초기부터 꼼꼼히 관리"
+        p1["mock_prep"] = "3월·6월 모의고사 집중 대비\n수능 유형별 풀이 전략 정립"
+        p1["habit"] = "주간 학습 계획 수립·실행·점검 정착\n시험 분석 → 다음 시험 전략 반영 루틴"
+        cells["p1"] = p1
+
+        p2 = {}
+        p2["academic"] = "1학기 성적 기반 2학기 보완 계획\n약한 선택과목 집중 보강"
+        p2["naesin"] = "고2 내신 마무리 — 등급 최적화\n수행평가 보고서·발표 퀄리티 극대화"
+        p2["mock_prep"] = "9월·11월 모의고사 결과 분석\n수능 최저 충족 가능성 사전 점검"
+        p2["habit"] = "학습 효율 분석 + 비효율 요소 제거\n시험 기간 vs 평소 학습 비율 최적화"
+        cells["p2"] = p2
+
+        p3 = {}
+        p3["academic"] = "고3 수능 과목 확정 + 선행 시작\n전공 관련 과목 심화 학습"
+        p3["naesin"] = ("학종 vs 교과전형 최종 방향 설정\n고3 내신 목표 등급 수립" if not career_weak
+                        else "수시/정시 방향 탐색 본격화\n성적 추이 기반 전형 적합도 분석")
+        p3["mock_prep"] = "수능 영역별 목표 등급 확정\n킬러 문항 대비 vs 기본 완성 전략 선택"
+        p3["habit"] = "고3 학습 로드맵 초안 작성\n자기주도 학습 비율 60%+ 목표"
+        cells["p3"] = p3
+
+    # ── T3: 고2-1학기 말 ──
+    elif t == "T3":
+        p0 = {}
+        p0["academic"] = ("선택과목 취약 단원 여름방학 집중 보강\n수능 과목 기본기 재점검" if naesin_weak or naesin_mid
+                          else "내신 최상위 유지 + 수능 기본기 병행\n전공 관련 심화 학습")
+        p0["naesin"] = "고2-1학기 성적 분석 → 2학기 전략 수정\n수행평가 유형별 대비법 정리"
+        p0["mock_prep"] = ("모의고사 취약 영역 집중 보강\n수능 기출 3개년 풀이 시작" if mock_weak or mock_mid
+                           else "모의 1~2등급 안착 전략\n킬러 문항 유형 분석 + 풀이법 훈련")
+        p0["habit"] = ("학습 습관 점검 + 개선 계획 수립\n오답 관리 시스템 재정비" if study_weak
+                       else "학습 효율 극대화 전략 적용\n수능 대비 시간 배분 계획")
+        cells["p0"] = p0
+
+        p1 = {}
+        p1["academic"] = "고2 마지막 내신 — 등급 최적화\n수능 연계 학습 비중 점진적 확대"
+        p1["naesin"] = "고2 마지막 내신 전력투구\n수시 지원 시 반영되는 최종 내신"
+        p1["mock_prep"] = "9월·11월 모의 목표 등급 설정\n수능 최저 충족 가능성 구체적 점검"
+        p1["habit"] = "내신 vs 수능 학습 시간 배분 전략\n시험 기간 집중도 극대화"
+        cells["p1"] = p1
+
+        p2 = {}
+        p2["academic"] = "고3 학습 로드맵 확정\n수능 과목별 목표 점수 설정"
+        p2["naesin"] = ("수시 6장 카드 시뮬레이션 시작\n학종/교과 지원 대학 리스트 작성" if not career_weak
+                        else "수시 vs 정시 방향 최종 확정\n전형별 유불리 분석")
+        p2["mock_prep"] = "수능 D-300 학습 계획 수립\n영역별 목표 백분위·등급 확정"
+        p2["habit"] = "고3 학습 루틴 시뮬레이션\n하루 8시간+ 자기주도 학습 체계"
+        cells["p2"] = p2
+
+    # ── T4: 고2-2학기 말 ──
+    else:
+        p0 = {}
+        p0["academic"] = ("수능 취약 과목 겨울방학 집중 보강\n기본 개념 최종 점검 + 실전 문풀" if naesin_weak or mock_weak
+                          else "수능 실전 감각 유지 + 내신 마무리 준비\n전 과목 기출 회독 완료")
+        p0["naesin"] = "2년 내신 종합 분석 → 고3 전략 확정\n학종 서류 소재 정리 시작"
+        p0["mock_prep"] = ("수능 기출 5개년 1회독 완료 목표\n취약 유형 집중 반복" if mock_weak or mock_mid
+                           else "수능 기출 정밀 분석 + 변형 문제 풀이\n시간 단축 훈련 + 실전 모의 연습")
+        p0["habit"] = ("하루 10시간 학습 체계 구축\n시간 블록법 + 집중도 관리" if study_weak
+                       else "고3 학습 루틴 최종 확정\n컨디션 관리 + 멘탈 관리 계획")
+        cells["p0"] = p0
+
+        p1 = {}
+        p1["academic"] = "고3 내신 최종 전력투구\n수능 연계교재 + 기출 병행"
+        p1["naesin"] = "고3-1학기 내신 = 수시 최종 반영\n수행평가 완벽 대비 + 세특 마무리"
+        p1["mock_prep"] = "매월 모의고사 결과 분석 + 보완\n6월 모평 = 수능 예측 핵심 지표"
+        p1["habit"] = "내신 기간 / 수능 기간 시간 배분 전환\n주 단위 학습량 점검 + 조정"
+        cells["p1"] = p1
+
+        p2 = {}
+        p2["academic"] = "수능 전 과목 최종 회독\n취약 단원 마지막 보강"
+        p2["naesin"] = "수시 원서 6장 최종 확정\n자소서·면접 준비 (해당 시)"
+        p2["mock_prep"] = "9월 모평 결과 → 수능 최종 전략 조정\n실전 모의고사 주 1회 풀이"
+        p2["habit"] = "수능 D-60 집중 루틴\n체력·수면·멘탈 관리 최우선"
+        cells["p2"] = p2
+
+        p3 = {}
+        p3["academic"] = "수능 당일 컨디션 조절\n과목별 마지막 정리 노트 활용"
+        p3["naesin"] = "수능 후 정시 원서 전략 수립\n수시 합격 시 등록 절차 확인"
+        p3["mock_prep"] = "수능 직전 실전 감각 유지\n새 문제보다 기출 재확인 중심"
+        p3["habit"] = "수능 전 1주: 가벼운 복습 + 컨디션 관리\n시험 당일 시간 배분 최종 리허설"
+        cells["p3"] = p3
+
+    return {
+        "phases": phases,
+        "tracks": tracks,
+        "cells": cells,
+    }
+
+
+def _high_roadmap_summary(items: list[dict], timing: str | None = None) -> str:
+    """고등학생 로드맵 한 줄 요약."""
+    timing_label = {
+        "T1": "고1-1학기 말", "T2": "고1-2학기 말",
+        "T3": "고2-1학기 말", "T4": "고2-2학기 말",
+    }.get(timing or "T1", "현재 시점")
+
+    high_priority = [it for it in items if it["priority"] == "상"]
+    if not high_priority:
+        return f"{timing_label} 기준, 전체적으로 양호한 수준입니다. 단계별 세부 전략을 참고하세요."
+    names = ", ".join(it["title"] for it in high_priority[:3])
+    return f"{timing_label} 기준 우선 보강 영역: {names}."

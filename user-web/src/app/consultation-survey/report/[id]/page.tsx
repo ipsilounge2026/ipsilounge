@@ -203,8 +203,8 @@ export default function ReportPage() {
         <CompatibilitySection data={rs.school_type_compatibility} />
       )}
 
-      {/* 로드맵 (예비고1만) — 4단계×6트랙 매트릭스 + 우선순위 항목 */}
-      {isPreheigh1 && rs.roadmap && <RoadmapSection roadmap={rs.roadmap} />}
+      {/* 로드맵 — 예비고1: 4단계×6트랙 / 고등학생: timing별 Phase×4트랙 */}
+      {rs.roadmap && <RoadmapSection roadmap={rs.roadmap} isPreheigh1={isPreheigh1} />}
 
       {/* 등급 범례 */}
       <GradeLegend />
@@ -411,17 +411,18 @@ function DetailSection({ rs, sections }: { rs: any; sections: { key: string; lab
 
 // ── 로드맵 자동 초안 ──
 
-function RoadmapSection({ roadmap }: { roadmap: any }) {
+function RoadmapSection({ roadmap, isPreheigh1 = false }: { roadmap: any; isPreheigh1?: boolean }) {
   const [expandedPhase, setExpandedPhase] = useState<string | null>(null);
 
   if (!roadmap?.items?.length && !roadmap?.matrix) return null;
 
   const matrix = roadmap.matrix as { phases: any[]; tracks: any[]; cells: Record<string, Record<string, string>> } | undefined;
   const priorityItems = (roadmap.items as any[] || []).filter((it: any) => it.priority === "상" || it.priority === "중");
+  const title = isPreheigh1 ? "고교 준비 로드맵" : "학습 로드맵";
 
   return (
     <div style={{ ...cardStyle, marginBottom: 20 }}>
-      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>고교 준비 로드맵</h2>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{title}</h2>
       <p style={{ fontSize: 12, color: "var(--gray-500)", margin: "0 0 16px" }}>
         {roadmap.summary}
       </p>

@@ -655,8 +655,15 @@ def _compute_stats(survey_type: str, answers: dict, timing: str | None = None) -
     if survey_type == "high":
         result = _compute_high(answers)
         # 4영역 점수 산출 (기획서 V3 — 4각형 레이더)
-        from app.services.survey_scoring_service import compute_radar_scores
-        result["radar_scores"] = compute_radar_scores(answers, timing)
+        from app.services.survey_scoring_service import compute_radar_scores, generate_high_roadmap
+        radar = compute_radar_scores(answers, timing)
+        result["radar_scores"] = radar
+        # 로드맵 자동 초안 생성 (timing별 Phase × 4트랙)
+        result["roadmap"] = generate_high_roadmap(
+            naesin=radar["naesin"], mock=radar["mock"],
+            study=radar["study"], career=radar["career"],
+            timing=timing,
+        )
         return result
     elif survey_type == "preheigh1":
         result = _compute_preheigh1(answers)

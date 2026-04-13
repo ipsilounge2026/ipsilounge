@@ -116,8 +116,8 @@ class _SurveyReportScreenState extends State<SurveyReportScreen> {
             _CompatibilityCard(data: rs['school_type_compatibility']),
             const SizedBox(height: 16),
           ],
-          if (isPreheigh1 && rs['roadmap'] != null) ...[
-            _RoadmapCard(roadmap: rs['roadmap']),
+          if (rs['roadmap'] != null) ...[
+            _RoadmapCard(roadmap: rs['roadmap'], isPreheigh1: isPreheigh1),
             const SizedBox(height: 16),
           ],
           _GradeLegendCard(),
@@ -1642,7 +1642,8 @@ class _NaesinMockCompareCard extends StatelessWidget {
 
 class _RoadmapCard extends StatefulWidget {
   final Map<String, dynamic> roadmap;
-  const _RoadmapCard({required this.roadmap});
+  final bool isPreheigh1;
+  const _RoadmapCard({required this.roadmap, this.isPreheigh1 = false});
 
   @override
   State<_RoadmapCard> createState() => _RoadmapCardState();
@@ -1679,7 +1680,7 @@ class _RoadmapCardState extends State<_RoadmapCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('고교 준비 로드맵', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text(widget.isPreheigh1 ? '고교 준비 로드맵' : '학습 로드맵', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(summary, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
           const SizedBox(height: 16),
