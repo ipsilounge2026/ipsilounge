@@ -102,6 +102,10 @@ export default function AdminsPage() {
     setSelectedUser(user);
     setSearchResults([]);
     setSearchQuery("");
+    // 현재 선택된 역할의 기본 메뉴 자동 설정
+    if (roleDefaults[promoteRole]) {
+      setPromoteMenus(roleDefaults[promoteRole]);
+    }
   };
 
   const handlePromote = async () => {
@@ -156,8 +160,10 @@ export default function AdminsPage() {
 
   const handleRoleChange = async (adminId: string, newRole: string) => {
     try {
-      await updateAdmin(adminId, { role: newRole });
-      setMessage("역할이 변경되었습니다");
+      // 역할 변경 시 해당 역할의 기본 메뉴로 자동 설정
+      const defaultMenus = roleDefaults[newRole] || [];
+      await updateAdmin(adminId, { role: newRole, allowed_menus: newRole === "super_admin" ? [] : defaultMenus });
+      setMessage(`역할이 변경되었습니다. 메뉴 권한이 ${ROLE_LABELS[newRole] || newRole} 기본값으로 설정되었습니다.`);
       loadData();
     } catch (err: any) { setMessage(err.message); }
   };

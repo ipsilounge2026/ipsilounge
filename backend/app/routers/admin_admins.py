@@ -144,7 +144,13 @@ async def create_admin(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
 
-    allowed = ",".join(data.allowed_menus) if data.allowed_menus else "dashboard"
+    # 메뉴가 지정되지 않으면 역할별 기본 메뉴 적용
+    if data.allowed_menus:
+        allowed = ",".join(data.allowed_menus)
+    elif data.role in ROLE_DEFAULT_MENUS:
+        allowed = ",".join(ROLE_DEFAULT_MENUS[data.role])
+    else:
+        allowed = "dashboard"
     admin = Admin(
         email=data.email,
         password_hash=hash_password(data.password),
@@ -183,7 +189,13 @@ async def promote_user_to_admin(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="이미 관리자로 등록된 사용자입니다.")
 
-    allowed = ",".join(data.allowed_menus) if data.allowed_menus else "dashboard"
+    # 메뉴가 지정되지 않으면 역할별 기본 메뉴 적용
+    if data.allowed_menus:
+        allowed = ",".join(data.allowed_menus)
+    elif data.role in ROLE_DEFAULT_MENUS:
+        allowed = ",".join(ROLE_DEFAULT_MENUS[data.role])
+    else:
+        allowed = "dashboard"
     admin = Admin(
         email=user.email,
         password_hash=user.password_hash,
