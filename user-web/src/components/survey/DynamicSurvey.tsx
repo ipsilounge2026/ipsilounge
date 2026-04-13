@@ -90,6 +90,7 @@ function collectMissingRequired(category: any, categoryAnswers: Record<string, a
 }
 
 export default function DynamicSurvey({ schema, survey, onSubmitted, memberType, isParentEditing }: Props) {
+  const isDelta = survey.mode === "delta";
   // 카테고리 필터링:
   // - 학생: respondent="parent" 카테고리 숨김
   // - 학부모가 자녀 설문 편집: 전체 카테고리 표시 (학부모 카테고리만 편집, 나머지 읽기전용)
@@ -465,6 +466,18 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
           </div>
         )}
 
+        {/* Delta 모드 안내 */}
+        {isDelta && !isCurrentReadOnly && (
+          <div style={{
+            padding: "10px 14px", marginBottom: 16, background: "#F0FDF4",
+            border: "1px solid #BBF7D0", borderRadius: 8, fontSize: 13, color: "#166534",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <span style={{ fontSize: 16 }}>🔄</span>
+            <span>이전 상담 답변이 자동으로 채워져 있습니다. <b>변경된 내용만 수정</b>하고 넘어가세요.</span>
+          </div>
+        )}
+
         {/* 모바일 + 무거운 카테고리 안내 */}
         {blockMobile ? (
           <MobileWebOnlyNotice
@@ -477,6 +490,7 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
             answers={answers[currentCategory.id] || {}}
             onChange={updateAnswer}
             readOnly={isCurrentReadOnly}
+            isDelta={isDelta}
           />
         )}
 
@@ -556,18 +570,30 @@ function CategoryQuestions({
   answers,
   onChange,
   readOnly,
+  isDelta,
 }: {
   category: Category;
   answers: Record<string, any>;
   onChange: (id: string, v: any) => void;
   readOnly?: boolean;
+  isDelta?: boolean;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, ...(readOnly ? { opacity: 0.7, pointerEvents: "none" } : {}) }}>
       {category.questions.map((q: any) => {
         if (!evaluateShowWhen(q.show_when, answers)) return null;
+        const hasPrefill = isDelta && !isEmptyValue(answers[q.id]);
         return (
-          <div key={q.id}>
+          <div key={q.id} style={hasPrefill ? { position: "relative" } : undefined}>
+            {hasPrefill && (
+              <span style={{
+                position: "absolute", top: 0, right: 0, fontSize: 10, fontWeight: 600,
+                padding: "2px 8px", borderRadius: 4,
+                background: "#DBEAFE", color: "#1E40AF",
+              }}>
+                이전 답변
+              </span>
+            )}
             <QuestionRenderer
               question={q}
               value={answers[q.id]}

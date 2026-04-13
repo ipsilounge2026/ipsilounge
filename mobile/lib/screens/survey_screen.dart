@@ -307,6 +307,26 @@ class _SurveyScreenState extends State<SurveyScreen> {
             ],
           ),
         ),
+        // Delta 모드 안내
+        if (_survey?['mode'] == 'delta')
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Text('🔄 ', style: TextStyle(fontSize: 16)),
+                Expanded(child: Text(
+                  '이전 상담 답변이 자동으로 채워져 있습니다. 변경된 내용만 수정하고 넘어가세요.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF166534)),
+                )),
+              ],
+            ),
+          ),
         // 질문 목록
         Expanded(
           child: ListView.builder(
@@ -385,17 +405,32 @@ class _SurveyScreenState extends State<SurveyScreen> {
     final required = q['required'] == true;
     final answer = catAnswers[qId];
 
+    final isDelta = _survey?['mode'] == 'delta';
+    final hasPrefill = isDelta && answer != null && answer != '' && (answer is! List || (answer as List).isNotEmpty);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          RichText(
-            text: TextSpan(
-              text: label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
-              children: required ? [const TextSpan(text: ' *', style: TextStyle(color: Colors.red))] : null,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    text: label,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+                    children: required ? [const TextSpan(text: ' *', style: TextStyle(color: Colors.red))] : null,
+                  ),
+                ),
+              ),
+              if (hasPrefill)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: const Color(0xFFDBEAFE), borderRadius: BorderRadius.circular(4)),
+                  child: const Text('이전 답변', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF))),
+                ),
+            ],
           ),
           if (q['description'] != null)
             Padding(

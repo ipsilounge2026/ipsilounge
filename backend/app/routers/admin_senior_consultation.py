@@ -24,9 +24,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.admin import Admin
+from app.models.consultation_survey import ConsultationSurvey
 from app.models.senior_consultation_note import SeniorConsultationNote
 from app.models.senior_pre_survey import SeniorPreSurvey
 from app.models.user import User
+from app.services.senior_sharing_service import abstract_consultation_for_senior
+from app.services.survey_scoring_service import compute_radar_scores
 from app.utils.dependencies import get_current_admin
 
 router = APIRouter(prefix="/api/admin/senior-consultation", tags=["선배 상담"])
@@ -52,6 +55,7 @@ class SeniorNoteCreate(BaseModel):
     action_items: list[dict] | None = None
     next_checkpoints: list[dict] | None = None
     operator_notes: str | None = None
+    context_for_next: str | None = None
     is_visible_to_user: bool = False
 
 
@@ -87,6 +91,7 @@ def _note_to_dict(note: SeniorConsultationNote) -> dict:
         "action_items": note.action_items or [],
         "next_checkpoints": note.next_checkpoints or [],
         "operator_notes": note.operator_notes,
+        "context_for_next": note.context_for_next,
         "review_status": note.review_status,
         "review_notes": note.review_notes,
         "is_visible_to_user": note.is_visible_to_user,
@@ -126,6 +131,7 @@ async def create_senior_note(
         action_items=data.action_items,
         next_checkpoints=data.next_checkpoints,
         operator_notes=data.operator_notes,
+        context_for_next=data.context_for_next,
         is_visible_to_user=data.is_visible_to_user,
     )
     db.add(note)
@@ -250,6 +256,76 @@ async def add_senior_note_addendum(
     await db.commit()
     await db.refresh(note)
     return _note_to_dict(note)
+
+
+# ============================================================
+# 상담사 → 선배 공유 (추상화 요약)
+# ============================================================
+
+@router.get("/student/{user_id}/counselor-summary")
+async def get_counselor_summary_for_senior(
+    user_id: str,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    선배용 상담사 설문 추상화 요약 조회.
+
+    연계규칙 V1 §3-4:
+    - 상담사 설문의 답변을 선배에게 공유할 때 추상화 변환
+    - 관리자 리뷰(reviewed)를 통과한 선배 기록이 있는 학생만 조회 가능
+    - D8, F, G 등 민감정보는 비공유
+    """
+    uid = uuid.UUID(user_id)
+
+    # 학생의 최신 submitted 상담사 설문 조회
+    survey_q = (
+        select(ConsultationSurvey)
+        .where(
+            ConsultationSurvey.user_id == uid,
+            ConsultationSurvey.status == "submitted",
+        )
+        .order_by(ConsultationSurvey.submitted_at.desc())
+        .limit(1)
+    )
+    survey_result = await db.execute(survey_q)
+    survey = survey_result.scalar_one_or_none()
+
+    if not survey:
+        raise HTTPException(status_code=404, detail="상담사 설문 데이터가 없습니다")
+
+    # 레이더 점수 산출
+    answers = survey.answers or {}
+    radar = compute_radar_scores(answers, survey.timing)
+
+    # 추상화 변환
+    abstracted = abstract_consultation_for_senior(
+        answers=answers,
+        radar_scores=radar,
+        timing=survey.timing,
+    )
+
+    # 이전 선배 기록의 context_for_next 로드
+    note_q = (
+        select(SeniorConsultationNote)
+        .where(
+            SeniorConsultationNote.user_id == uid,
+            SeniorConsultationNote.review_status == "reviewed",
+        )
+        .order_by(SeniorConsultationNote.consultation_date.desc())
+        .limit(1)
+    )
+    note_result = await db.execute(note_q)
+    prev_note = note_result.scalar_one_or_none()
+
+    return {
+        "user_id": user_id,
+        "survey_type": survey.survey_type,
+        "timing": survey.timing,
+        "abstracted_summary": abstracted,
+        "prev_senior_context": prev_note.context_for_next if prev_note else None,
+        "prev_senior_session": prev_note.session_timing if prev_note else None,
+    }
 
 
 # ============================================================

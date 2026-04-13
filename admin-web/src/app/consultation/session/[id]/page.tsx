@@ -4,8 +4,8 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
-import { getBookingDetail, updateBookingStatus, createConsultationNote } from "@/lib/api";
-import { isLoggedIn } from "@/lib/auth";
+import { getBookingDetail, updateBookingStatus, createConsultationNote, getCounselorSummaryForSenior } from "@/lib/api";
+import { isLoggedIn, getAdminInfo } from "@/lib/auth";
 
 interface BookingDetail {
   id: string;
@@ -80,6 +80,11 @@ export default function ConsultationSessionPage() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
 
+  // 선배용 상담사 요약
+  const [counselorSummary, setCounselorSummary] = useState<Record<string, unknown> | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const isSenior = getAdminInfo()?.role === "senior";
+
   useEffect(() => {
     if (!isLoggedIn()) {
       router.push("/login");
@@ -98,6 +103,15 @@ export default function ConsultationSessionPage() {
     try {
       const data = await getBookingDetail(bookingId);
       setBooking(data);
+      // 선배인 경우 상담사 요약 로드
+      if (isSenior && data?.user_id) {
+        try {
+          const summary = await getCounselorSummaryForSenior(data.user_id);
+          setCounselorSummary(summary);
+        } catch {
+          // 상담사 설문 없으면 무시
+        }
+      }
     } catch {
       // error
     } finally {
@@ -374,6 +388,95 @@ export default function ConsultationSessionPage() {
             </div>
           </div>
         </div>
+
+        {/* 선배용: 이전 상담사 요약 */}
+        {isSenior && counselorSummary && (
+          <div style={{ marginBottom: 20, background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+            <button
+              onClick={() => setSummaryOpen(!summaryOpen)}
+              style={{
+                width: "100%", padding: "14px 20px", border: "none", cursor: "pointer",
+                background: "#F5F3FF", display: "flex", alignItems: "center", justifyContent: "space-between",
+                fontSize: 14, fontWeight: 600, color: "#5B21B6",
+              }}
+            >
+              <span>이전 상담사 설문 요약 (추상화)</span>
+              <span style={{ fontSize: 12 }}>{summaryOpen ? "▲ 접기" : "▼ 펼치기"}</span>
+            </button>
+            {summaryOpen && (
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* 이전 선배 맥락 */}
+                {(counselorSummary as Record<string, unknown>).prev_senior_context && (
+                  <div style={{ padding: 12, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#92400E", marginBottom: 4 }}>
+                      이전 선배 전달 사항 ({(counselorSummary as Record<string, unknown>).prev_senior_session || "?"})
+                    </div>
+                    <div style={{ fontSize: 13, color: "#78350F" }}>
+                      {String((counselorSummary as Record<string, unknown>).prev_senior_context)}
+                    </div>
+                  </div>
+                )}
+                {/* 추상화 요약 */}
+                {(() => {
+                  const abs = (counselorSummary as Record<string, unknown>).abstracted_summary as Record<string, unknown> | undefined;
+                  if (!abs) return null;
+                  return (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      {abs.naesin && (
+                        <div style={{ padding: 12, background: "#F0FDF4", borderRadius: 6, border: "1px solid #BBF7D0" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#166534", marginBottom: 6 }}>내신</div>
+                          <div style={{ fontSize: 13 }}>
+                            최근: {((abs.naesin as Record<string, unknown>).latest_tier as string) || "-"} / 추이: {((abs.naesin as Record<string, unknown>).trend as string) || "-"}
+                          </div>
+                        </div>
+                      )}
+                      {abs.mock && (
+                        <div style={{ padding: 12, background: "#EFF6FF", borderRadius: 6, border: "1px solid #BFDBFE" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#1E40AF", marginBottom: 6 }}>모의고사</div>
+                          <div style={{ fontSize: 13 }}>
+                            {((abs.mock as Record<string, unknown>).tier as string) || "-"}
+                            {(abs.mock as Record<string, unknown>).type_hint && ` (${(abs.mock as Record<string, unknown>).type_hint})`}
+                          </div>
+                        </div>
+                      )}
+                      {abs.career_direction && (
+                        <div style={{ padding: 12, background: "#FDF4FF", borderRadius: 6, border: "1px solid #E9D5FF" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#6B21A8", marginBottom: 6 }}>진로 방향</div>
+                          <div style={{ fontSize: 13 }}>{String(abs.career_direction)}</div>
+                        </div>
+                      )}
+                      {abs.target_level && (
+                        <div style={{ padding: 12, background: "#FFF7ED", borderRadius: 6, border: "1px solid #FED7AA" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#9A3412", marginBottom: 6 }}>목표 수준</div>
+                          <div style={{ fontSize: 13 }}>{String(abs.target_level)}</div>
+                        </div>
+                      )}
+                      {abs.overall_grade && (
+                        <div style={{ padding: 12, background: "#F9FAFB", borderRadius: 6, border: "1px solid #E5E7EB" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>종합 등급</div>
+                          <div style={{ fontSize: 18, fontWeight: 700 }}>{String(abs.overall_grade)}</div>
+                        </div>
+                      )}
+                      {abs.study_methods && (
+                        <div style={{ padding: 12, background: "#F9FAFB", borderRadius: 6, border: "1px solid #E5E7EB" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>학습방법</div>
+                          <div style={{ fontSize: 12 }}>
+                            {Object.entries(abs.study_methods as Record<string, string[]>).map(([k, v]) => (
+                              <div key={k}>{k}: {Array.isArray(v) ? v.join(", ") : String(v)}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "right" }}>
+                  * 개인정보 보호를 위해 추상화된 요약입니다. 구체적 성적·대학명은 포함되지 않습니다.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 체크리스트/메모 탭 */}
         <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: "2px solid #E5E7EB" }}>

@@ -73,6 +73,10 @@ class SeniorConsultationNote(Base):
     # §5.2-⑩ 학원 운영자에게 공유할 내용
     operator_notes = Column(Text, nullable=True)
 
+    # 다음 상담자에게 전달할 맥락 (연계규칙 V1 §5)
+    # 선배가 직접 작성 — 다음 선배 또는 상담사에게 전달할 핵심 맥락 요약
+    context_for_next = Column(Text, nullable=True)
+
     # 관리자 리뷰 상태
     review_status = Column(String(20), default="pending")  # pending / reviewed / revision_requested
     review_notes = Column(Text, nullable=True)  # 관리자 리뷰 코멘트

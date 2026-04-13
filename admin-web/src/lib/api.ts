@@ -349,6 +349,11 @@ export async function toggleConsultationNoteVisibility(id: string) {
   return request(`/api/admin/consultation-notes/${id}/visibility`, { method: "PATCH" });
 }
 
+// --- 선배 상담 공유 ---
+export async function getCounselorSummaryForSenior(userId: string) {
+  return request(`/api/admin/senior-consultation/student/${userId}/counselor-summary`);
+}
+
 // --- 설명회 관리 ---
 export async function getSeminarDashboard(scheduleId?: string) {
   const params = new URLSearchParams();
