@@ -33,6 +33,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   int? _grade;
   String? _branchName; // branch_manager: 담당 지점 / student·parent: 재원 지점
   bool _isAcademyStudent = false;
+  bool _agreeTerms = false;
+  bool _agreePrivacy = false;
 
   // School search
   List<Map<String, dynamic>> _schoolResults = [];
@@ -240,6 +242,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _isAcademyStudent &&
         (_branchName == null || _branchName!.isEmpty)) {
       setState(() => _errorMessage = '재원생이시면 재원 지점을 선택해주세요');
+      return;
+    }
+
+    if (!_agreeTerms || !_agreePrivacy) {
+      setState(() => _errorMessage = '이용약관과 개인정보처리방침에 동의해주세요');
       return;
     }
 
@@ -592,6 +599,98 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
+
+                // 약관 동의
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 전체 동의
+                      InkWell(
+                        onTap: () {
+                          final newVal = !(_agreeTerms && _agreePrivacy);
+                          setState(() {
+                            _agreeTerms = newVal;
+                            _agreePrivacy = newVal;
+                          });
+                        },
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 20, height: 20,
+                              child: Checkbox(
+                                value: _agreeTerms && _agreePrivacy,
+                                onChanged: (v) {
+                                  setState(() {
+                                    _agreeTerms = v ?? false;
+                                    _agreePrivacy = v ?? false;
+                                  });
+                                },
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              '전체 동의',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 20),
+                      // 이용약관
+                      InkWell(
+                        onTap: () => setState(() => _agreeTerms = !_agreeTerms),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 18, height: 18,
+                              child: Checkbox(
+                                value: _agreeTerms,
+                                onChanged: (v) => setState(() => _agreeTerms = v ?? false),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text('[필수] 이용약관 동의',
+                                style: TextStyle(fontSize: 13)),
+                            const Spacer(),
+                            const Text('보기', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280), decoration: TextDecoration.underline)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // 개인정보처리방침
+                      InkWell(
+                        onTap: () => setState(() => _agreePrivacy = !_agreePrivacy),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 18, height: 18,
+                              child: Checkbox(
+                                value: _agreePrivacy,
+                                onChanged: (v) => setState(() => _agreePrivacy = v ?? false),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text('[필수] 개인정보처리방침 동의',
+                                style: TextStyle(fontSize: 13)),
+                            const Spacer(),
+                            const Text('보기', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280), decoration: TextDecoration.underline)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
 
                 if (_errorMessage != null) ...[
                   Container(

@@ -346,6 +346,17 @@ export async function getSurveyRoadmap(id: string) {
   return request(`/api/consultation-surveys/${id}/roadmap`);
 }
 
+export async function getSurveyDelta(id: string) {
+  return request(`/api/consultation-surveys/${id}/delta`);
+}
+
+export async function updateRoadmapProgress(id: string, progress: Record<string, Record<string, boolean>>) {
+  return request(`/api/consultation-surveys/${id}/roadmap-progress`, {
+    method: "PATCH",
+    body: JSON.stringify({ progress }),
+  });
+}
+
 export async function submitSurvey(id: string) {
   return request(`/api/consultation-surveys/${id}/submit`, {
     method: "POST",

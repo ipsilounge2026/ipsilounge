@@ -97,6 +97,8 @@ export function QuestionRenderer({ question, value, onChange }: RendererProps) {
       return <WeeklySchedule question={question} value={value} onChange={onChange} />;
     case "subject_section":
       return <SubjectSection question={question} value={value} onChange={onChange} />;
+    case "subject_study_method_panel":
+      return <SubjectStudyMethodPanel question={question} value={value} onChange={onChange} />;
     default:
       return (
         <div style={{ padding: 12, background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 8, fontSize: 12, color: "#92400E" }}>
@@ -838,6 +840,289 @@ function SubjectPickField({ question, value, onChange }: RendererProps) {
         })}
       </div>
       <p style={noteStyle}>최대 {max}개 선택</p>
+    </div>
+  );
+}
+
+// ===== subject_study_method_panel (D7 과목별 학습법) =====
+function SubjectStudyMethodPanel({ question, value, onChange }: RendererProps) {
+  const data: Record<string, any> = value && typeof value === "object" ? value : {};
+  const subjects: string[] = question.default_subjects || [];
+  // TODO: extra_subjects_from으로 D6에서 취약 과목 가져오기는 DynamicSurvey 레벨에서 처리 필요
+  const allSubjects = [...new Set([...subjects, ...Object.keys(data).filter(k => k !== "_meta")])];
+  const questionsPerSubject: any[] = question.questions_per_subject || [];
+  const isDelta = question.delta === "diff_view_change_check";
+
+  const updateSubject = (subject: string, fieldName: string, fieldValue: any) => {
+    const subData = { ...(data[subject] || {}) };
+    subData[fieldName] = fieldValue;
+    onChange({ ...data, [subject]: subData });
+  };
+
+  const setChangeStatus = (subject: string, status: string) => {
+    const subData = { ...(data[subject] || {}) };
+    subData._change_status = status;
+    if (status === "완전변경") {
+      // Clear all fields except _change_status
+      const cleared: Record<string, any> = { _change_status: status };
+      onChange({ ...data, [subject]: cleared });
+    } else {
+      onChange({ ...data, [subject]: subData });
+    }
+  };
+
+  return (
+    <div>
+      <QHeader question={question} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {allSubjects.map((subject) => {
+          const subData = data[subject] || {};
+          const changeStatus = subData._change_status;
+          const hasPrevData = isDelta && Object.keys(subData).some(k => k !== "_change_status" && subData[k] != null);
+
+          return (
+            <div
+              key={subject}
+              style={{
+                border: "1px solid var(--gray-200)",
+                borderRadius: 10,
+                overflow: "hidden",
+                background: "white",
+              }}
+            >
+              {/* 과목 헤더 */}
+              <div style={{
+                padding: "10px 14px",
+                background: "var(--gray-50)",
+                borderBottom: "1px solid var(--gray-200)",
+                fontSize: 14,
+                fontWeight: 700,
+                color: "var(--primary-dark)",
+              }}>
+                {subject}
+              </div>
+
+              {/* Delta 변경 확인 UI */}
+              {isDelta && hasPrevData && !changeStatus && (
+                <div style={{
+                  padding: 14,
+                  background: "#FFFBEB",
+                  borderBottom: "1px solid #FDE68A",
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#92400E", marginBottom: 8 }}>
+                    이전 상담에서 입력한 학습 방법이 있습니다. 변경 사항을 확인해주세요.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {[
+                      { value: "유지", label: "그대로 유지", desc: "이전과 동일", bg: "#F0FDF4", border: "#BBF7D0", color: "#166534" },
+                      { value: "일부변경", label: "일부 변경", desc: "일부 항목 수정", bg: "#EFF6FF", border: "#BFDBFE", color: "#1E40AF" },
+                      { value: "완전변경", label: "완전히 바꿈", desc: "처음부터 다시", bg: "#FEF2F2", border: "#FECACA", color: "#991B1B" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setChangeStatus(subject, opt.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: 100,
+                          padding: "10px 12px",
+                          border: `2px solid ${opt.border}`,
+                          borderRadius: 8,
+                          background: opt.bg,
+                          cursor: "pointer",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div style={{ fontSize: 13, fontWeight: 600, color: opt.color }}>{opt.label}</div>
+                        <div style={{ fontSize: 11, color: opt.color, opacity: 0.7, marginTop: 2 }}>{opt.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 변경 상태 표시 + 재선택 */}
+              {isDelta && changeStatus && (
+                <div style={{
+                  padding: "8px 14px",
+                  background: changeStatus === "유지" ? "#F0FDF4" : changeStatus === "일부변경" ? "#EFF6FF" : "#FEF2F2",
+                  borderBottom: "1px solid var(--gray-200)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: 600,
+                    color: changeStatus === "유지" ? "#166534" : changeStatus === "일부변경" ? "#1E40AF" : "#991B1B",
+                  }}>
+                    {changeStatus === "유지" ? "이전 학습법 유지" : changeStatus === "일부변경" ? "일부 항목 변경 중" : "새로 입력 중"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setChangeStatus(subject, "")}
+                    style={{
+                      fontSize: 11, color: "var(--gray-500)", background: "transparent",
+                      border: "none", cursor: "pointer", textDecoration: "underline",
+                    }}
+                  >
+                    다시 선택
+                  </button>
+                </div>
+              )}
+
+              {/* 질문 필드 (유지 선택 시 읽기전용) */}
+              {(!isDelta || !hasPrevData || changeStatus) && (
+                <div style={{
+                  padding: 14,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
+                  ...(changeStatus === "유지" ? { opacity: 0.6, pointerEvents: "none" as const } : {}),
+                }}>
+                  {questionsPerSubject.map((q: any) => {
+                    const fieldKey = q.name;
+                    const fieldValue = subData[fieldKey];
+
+                    if (q.type === "checkboxes") {
+                      const selected: string[] = Array.isArray(fieldValue) ? fieldValue : [];
+                      return (
+                        <div key={fieldKey}>
+                          <div style={labelStyle}>{q.label}</div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {q.options.map((opt: any) => {
+                              const isChecked = selected.includes(opt.value);
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => {
+                                    const next = isChecked
+                                      ? selected.filter((v) => v !== opt.value)
+                                      : [...selected, opt.value];
+                                    updateSubject(subject, fieldKey, next);
+                                  }}
+                                  style={{
+                                    padding: "6px 12px", fontSize: 13, borderRadius: 6,
+                                    border: `1px solid ${isChecked ? "var(--primary)" : "var(--gray-300)"}`,
+                                    background: isChecked ? "var(--primary)" : "white",
+                                    color: isChecked ? "white" : "var(--gray-700)",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (q.type === "radio") {
+                      return (
+                        <div key={fieldKey}>
+                          <div style={labelStyle}>{q.label}</div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {q.options.map((opt: any) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => updateSubject(subject, fieldKey, opt.value)}
+                                style={{
+                                  padding: "6px 12px", fontSize: 13, borderRadius: 6,
+                                  border: `1px solid ${fieldValue === opt.value ? "var(--primary)" : "var(--gray-300)"}`,
+                                  background: fieldValue === opt.value ? "var(--primary)" : "white",
+                                  color: fieldValue === opt.value ? "white" : "var(--gray-700)",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (q.type === "text") {
+                      return (
+                        <div key={fieldKey}>
+                          <div style={labelStyle}>{q.label}</div>
+                          <input
+                            style={inputStyle}
+                            placeholder={q.placeholder || ""}
+                            value={fieldValue || ""}
+                            onChange={(e) => updateSubject(subject, fieldKey, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (q.type === "composite") {
+                      const compData = (fieldValue && typeof fieldValue === "object") ? fieldValue : {};
+                      return (
+                        <div key={fieldKey}>
+                          <div style={labelStyle}>{q.label}</div>
+                          <div style={{ padding: 10, background: "var(--gray-50)", borderRadius: 6 }}>
+                            {q.fields.map((f: any) => {
+                              // show_when 평가
+                              if (f.show_when) {
+                                const refVal = compData[f.show_when.field];
+                                if (refVal !== f.show_when.equals) return null;
+                              }
+                              if (f.type === "radio") {
+                                return (
+                                  <div key={f.name} style={{ marginBottom: 8 }}>
+                                    {f.label && <div style={{ ...labelStyle, fontSize: 12 }}>{f.label}</div>}
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                      {f.options.map((opt: any) => (
+                                        <button
+                                          key={opt.value}
+                                          type="button"
+                                          onClick={() => updateSubject(subject, fieldKey, { ...compData, [f.name]: opt.value })}
+                                          style={{
+                                            padding: "5px 10px", fontSize: 12, borderRadius: 6,
+                                            border: `1px solid ${compData[f.name] === opt.value ? "var(--primary)" : "var(--gray-300)"}`,
+                                            background: compData[f.name] === opt.value ? "var(--primary)" : "white",
+                                            color: compData[f.name] === opt.value ? "white" : "var(--gray-700)",
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          {opt.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              if (f.type === "text") {
+                                return (
+                                  <div key={f.name} style={{ marginBottom: 8 }}>
+                                    {f.label && <div style={{ ...labelStyle, fontSize: 12 }}>{f.label}</div>}
+                                    <input
+                                      style={{ ...inputStyle, fontSize: 13 }}
+                                      placeholder={f.placeholder || ""}
+                                      value={compData[f.name] || ""}
+                                      onChange={(e) => updateSubject(subject, fieldKey, { ...compData, [f.name]: e.target.value })}
+                                    />
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -19,6 +19,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -499,7 +500,169 @@ async def get_roadmap_user(
         )
     from app.routers.admin_consultation_survey import _compute_stats
     computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
-    return {"roadmap": computed.get("roadmap", {}), "overrides": (survey.counselor_overrides or {}).get("roadmap")}
+    return {
+        "roadmap": computed.get("roadmap", {}),
+        "overrides": (survey.counselor_overrides or {}).get("roadmap"),
+        "progress": survey.roadmap_progress or {},
+    }
+
+
+# ----- 학생용 변화 추적 (Delta) -----
+
+def _analyze_study_method_changes(prev_answers: dict, curr_answers: dict) -> dict | None:
+    """D7 학습법 변화 분석: 과목별 학습법 변경 + 성적 변화 상관관계"""
+    prev_d7 = (prev_answers or {}).get("D", {}).get("D7")
+    curr_d7 = (curr_answers or {}).get("D", {}).get("D7")
+
+    if not prev_d7 or not curr_d7:
+        return None
+
+    if not isinstance(prev_d7, dict) or not isinstance(curr_d7, dict):
+        return None
+
+    changes = []
+    all_subjects = set(prev_d7.keys()) | set(curr_d7.keys())
+
+    for subject in sorted(all_subjects):
+        prev_sub = prev_d7.get(subject, {})
+        curr_sub = curr_d7.get(subject, {})
+        if not isinstance(prev_sub, dict) or not isinstance(curr_sub, dict):
+            continue
+
+        subject_changes = {}
+
+        # 학습법 변경 확인
+        prev_methods = set(prev_sub.get("study_method", []) if isinstance(prev_sub.get("study_method"), list) else [])
+        curr_methods = set(curr_sub.get("study_method", []) if isinstance(curr_sub.get("study_method"), list) else [])
+        if prev_methods != curr_methods:
+            subject_changes["study_method"] = {
+                "prev": sorted(prev_methods),
+                "curr": sorted(curr_methods),
+                "added": sorted(curr_methods - prev_methods),
+                "removed": sorted(prev_methods - curr_methods),
+            }
+
+        # 수업 참여도 변경
+        prev_engage = prev_sub.get("class_engagement")
+        curr_engage = curr_sub.get("class_engagement")
+        if prev_engage != curr_engage:
+            subject_changes["class_engagement"] = {"prev": prev_engage, "curr": curr_engage}
+
+        # 만족도 변경
+        prev_sat = prev_sub.get("satisfaction")
+        curr_sat = curr_sub.get("satisfaction")
+        if prev_sat != curr_sat:
+            subject_changes["satisfaction"] = {"prev": prev_sat, "curr": curr_sat}
+
+        # 교재 변경
+        prev_text = prev_sub.get("main_textbook")
+        curr_text = curr_sub.get("main_textbook")
+        if prev_text != curr_text:
+            subject_changes["main_textbook"] = {"prev": prev_text, "curr": curr_text}
+
+        if subject_changes:
+            changes.append({
+                "subject": subject,
+                "changes": subject_changes,
+            })
+
+    # 성적 변화 상관관계 (B카테고리 내신 데이터)
+    prev_grades = (prev_answers or {}).get("B", {})
+    curr_grades = (curr_answers or {}).get("B", {})
+    grade_changes = {}
+    if isinstance(prev_grades, dict) and isinstance(curr_grades, dict):
+        for key in set(prev_grades.keys()) | set(curr_grades.keys()):
+            if prev_grades.get(key) != curr_grades.get(key):
+                grade_changes[key] = {"prev": prev_grades.get(key), "curr": curr_grades.get(key)}
+
+    return {
+        "subject_changes": changes,
+        "total_subjects_changed": len(changes),
+        "grade_changes": grade_changes if grade_changes else None,
+    }
+
+
+@router.get("/{survey_id}/delta")
+async def get_delta_user(
+    survey_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """학생용 변화 추적 (이전 설문 대비 변경점)"""
+    survey = await _get_visible_survey(survey_id, user, db)
+    if survey.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출된 설문만 변화 추적을 조회할 수 있습니다",
+        )
+
+    # 같은 사용자의 같은 타입 이전 설문 찾기
+    prev_q = (
+        select(ConsultationSurvey)
+        .where(
+            ConsultationSurvey.user_id == survey.user_id,
+            ConsultationSurvey.survey_type == survey.survey_type,
+            ConsultationSurvey.id != survey.id,
+            ConsultationSurvey.status == "submitted",
+            ConsultationSurvey.created_at < survey.created_at,
+        )
+        .order_by(ConsultationSurvey.created_at.desc())
+        .limit(1)
+    )
+    prev_result = await db.execute(prev_q)
+    previous = prev_result.scalar_one_or_none()
+
+    if not previous:
+        return {"has_previous": False, "diff": {}, "summary": "이전 설문이 없습니다.", "study_method_changes": None}
+
+    from app.routers.admin_consultation_survey import _compute_delta, _summarize_delta
+    diff = _compute_delta(previous.answers, survey.answers)
+
+    # D7 학습법 변화 분석
+    study_method_changes = _analyze_study_method_changes(previous.answers, survey.answers)
+
+    return {
+        "has_previous": True,
+        "previous_timing": previous.timing,
+        "previous_submitted_at": previous.submitted_at.isoformat() if previous.submitted_at else None,
+        "diff": diff,
+        "summary": _summarize_delta(diff),
+        "study_method_changes": study_method_changes,
+    }
+
+
+# ----- 로드맵 진행 체크 업데이트 -----
+
+class RoadmapProgressRequest(BaseModel):
+    progress: dict  # { "p0": { "academic": true }, ... }
+
+
+@router.patch("/{survey_id}/roadmap-progress")
+async def update_roadmap_progress(
+    survey_id: uuid.UUID,
+    data: RoadmapProgressRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """학생용 로드맵 진행 체크 업데이트"""
+    survey = await _get_owned_survey(survey_id, user, db)
+    if survey.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출된 설문만 로드맵 진행 체크를 업데이트할 수 있습니다",
+        )
+
+    existing = dict(survey.roadmap_progress or {})
+    for phase_key, tracks in data.progress.items():
+        if phase_key not in existing:
+            existing[phase_key] = {}
+        if isinstance(tracks, dict):
+            existing[phase_key].update(tracks)
+
+    survey.roadmap_progress = existing
+    await db.commit()
+    await db.refresh(survey)
+    return {"roadmap_progress": survey.roadmap_progress}
 
 
 # ----- 이어쓰기 토큰 발급 + 이메일 -----

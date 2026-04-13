@@ -46,6 +46,11 @@ export default function PrivacyPage() {
                 <td style={tdStyle}>학생부 분석 리포트 생성</td>
               </tr>
               <tr>
+                <td style={tdStyle}>사전 상담 설문</td>
+                <td style={tdStyle}>설문 응답 데이터, 학습 현황, 성적 정보, 학습 방법</td>
+                <td style={tdStyle}>맞춤 상담 제공 및 변화 추적</td>
+              </tr>
+              <tr>
                 <td style={tdStyle}>자동 수집</td>
                 <td style={tdStyle}>접속 IP, 접속 일시, 브라우저 종류</td>
                 <td style={tdStyle}>서비스 이용 통계 및 부정이용 방지</td>
@@ -61,6 +66,7 @@ export default function PrivacyPage() {
             <li><strong>서비스 제공</strong>: 학생부 분석 리포트 생성 및 제공, 상담 예약 처리</li>
             <li><strong>고객 지원</strong>: 문의 응대, 공지사항 전달, 서비스 관련 알림</li>
             <li><strong>서비스 개선</strong>: 이용 통계 분석, 서비스 품질 향상</li>
+            <li><strong>상담 연계</strong>: 사전 설문 기반 상담 준비, 이전 상담 대비 변화 추적, 학습 로드맵 생성 및 상담사 간 상담 데이터 공유</li>
           </ol>
         </Section>
 
@@ -114,6 +120,7 @@ export default function PrivacyPage() {
                 <li>법령의 규정에 의거하거나, 수사 목적으로 법령에 정해진 절차에 따라 요청이 있는 경우</li>
               </ul>
             </li>
+            <li>서비스 내 입시 상담사 간 상담 데이터 공유는 제3자 제공에 해당하지 않으며, 서비스 제공에 필수적인 내부 데이터 활용입니다.</li>
           </ol>
         </Section>
 
@@ -134,6 +141,16 @@ export default function PrivacyPage() {
             <li>분석이 완료된 학생부 파일은 리포트 제공 후 90일 이내에 서버에서 완전 삭제합니다.</li>
             <li>회원이 탈퇴를 요청하는 경우, 학생부 파일과 분석 리포트를 즉시 삭제합니다.</li>
             <li>학생부 파일에 대한 접근 권한은 분석 담당자로 엄격히 제한됩니다.</li>
+          </ol>
+        </Section>
+
+        <Section title="제7조의2 (상담 데이터의 처리)">
+          상담 관련 데이터는 다음과 같이 처리됩니다.
+          <ol>
+            <li>사전 상담 설문 응답, 상담 기록, 분석 결과, 학습 로드맵 등 상담 데이터는 서비스 내 상담 품질 향상을 위해 담당 상담사가 열람할 수 있습니다.</li>
+            <li>가족 연결이 설정된 경우, 학부모 회원은 연결된 학생의 상담 데이터를 열람할 수 있습니다.</li>
+            <li>상담 데이터는 통계 목적으로 비식별화 처리 후 서비스 개선에 활용될 수 있습니다.</li>
+            <li>회원 탈퇴 시 상담 데이터는 즉시 삭제됩니다. 다만 법률에 의해 보존이 의무화된 경우 해당 기간 동안 보존합니다.</li>
           </ol>
         </Section>
 
@@ -178,7 +195,7 @@ export default function PrivacyPage() {
         </Section>
 
         <div style={{ marginTop: 40, padding: "20px 0", borderTop: "1px solid #e5e7eb", color: "#6b7280", fontSize: 14 }}>
-          <p>시행일자: 2026년 4월 1일</p>
+          <p>시행일자: 2026년 4월 13일</p>
         </div>
       </div>
     </>

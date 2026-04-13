@@ -98,6 +98,10 @@ class ConsultationSurvey(Base):
     # 예: { "items": [{"content": "...", "checked": false}], "updated_at": "..." }
     counselor_checklist: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # 로드맵 진행 체크 (학생이 직접 체크하는 진행 상태)
+    # 예: { "p0": { "academic": true, "naesin": false }, "p1": { ... } }
+    roadmap_progress: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     # --- 고1 전환 데이터 연계 ---
     # 이 설문이 전환된 원본 설문 ID (preheigh1 → high 전환 시)
     source_survey_id: Mapped[uuid.UUID | None] = mapped_column(
