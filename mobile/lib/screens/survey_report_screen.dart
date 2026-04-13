@@ -84,6 +84,10 @@ class _SurveyReportScreenState extends State<SurveyReportScreen> {
           ],
           _DetailCards(rs: rs, isPreheigh1: isPreheigh1),
           const SizedBox(height: 16),
+          if (isPreheigh1 && rs['school_type_compatibility'] != null) ...[
+            _CompatibilityCard(data: rs['school_type_compatibility']),
+            const SizedBox(height: 16),
+          ],
           if (isPreheigh1 && rs['roadmap'] != null) ...[
             _RoadmapCard(roadmap: rs['roadmap']),
             const SizedBox(height: 16),
@@ -528,6 +532,201 @@ class _DetailAreaCard extends StatelessWidget {
               }).toList(),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 고교유형 적합도 카드 (예비고1) ──
+
+class _CompatibilityCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _CompatibilityCard({required this.data});
+
+  static const _schoolIcons = {
+    '과고': '🔬',
+    '외고': '🌐',
+    '국제고': '🌍',
+    '자사고': '🏫',
+    '일반고': '📚',
+  };
+
+  static const _subjectLabels = {
+    'ko': '국어',
+    'en': '영어',
+    'ma': '수학',
+    'so': '사회',
+    'sc': '과학',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final recommendations = data['recommendations'] as List? ?? [];
+    final details = data['details'] as Map<String, dynamic>? ?? {};
+    final subjectScores = data['subject_scores'] as Map<String, dynamic>? ?? {};
+    if (recommendations.isEmpty) return const SizedBox();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('고교유형 적합도', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          const Text(
+            '4축(학업기초력·교과선행도·학습습관·진로방향성) 기반 유형별 적합도 분석',
+            style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+          ),
+          const SizedBox(height: 16),
+
+          // 유형별 카드
+          ...recommendations.map((rec) {
+            final m = rec as Map<String, dynamic>;
+            final schoolType = m['school_type'] ?? '';
+            final score = (m['score'] ?? 0).toDouble();
+            final grade = m['grade'] ?? 'D';
+            final isDesired = m['is_desired'] == true;
+            final detail = details[schoolType] as Map<String, dynamic>? ?? {};
+            final bonus = (detail['bonus'] ?? 0) as int;
+            final penalty = (detail['penalty'] ?? 0) as int;
+            final bonusReason = detail['bonus_reason'] ?? '';
+            final penaltyReason = detail['penalty_reason'] ?? '';
+            final (bg, text, border) = _gc(grade);
+            final icon = _schoolIcons[schoolType] ?? '🏫';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDesired ? border : const Color(0xFFE5E7EB),
+                  width: isDesired ? 2 : 1,
+                ),
+                color: isDesired ? bg : Colors.white,
+              ),
+              child: Column(
+                children: [
+                  // 헤더
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Text(icon, style: const TextStyle(fontSize: 20)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Text(schoolType,
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                              if (isDesired) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: text,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Text('희망',
+                                    style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        RichText(text: TextSpan(children: [
+                          TextSpan(text: score.toStringAsFixed(0),
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: text)),
+                          TextSpan(text: '점',
+                            style: TextStyle(fontSize: 11, color: text)),
+                        ])),
+                        const SizedBox(width: 8),
+                        _GradeBadge(grade: grade),
+                      ],
+                    ),
+                  ),
+
+                  // 보정 정보
+                  if (bonus != 0 || penalty != 0)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (bonus > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCFCE7),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text('+$bonus $bonusReason',
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF16A34A), fontWeight: FontWeight.w600)),
+                            ),
+                          if (penalty < 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEE2E2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text('$penalty $penaltyReason',
+                                style: const TextStyle(fontSize: 11, color: Color(0xFFDC2626), fontWeight: FontWeight.w600)),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }),
+
+          // 기준 원점수 표시
+          if (subjectScores.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('보정 기준 원점수 (최근 학기)',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 4,
+                    children: ['ko', 'en', 'ma', 'so', 'sc'].where((k) => subjectScores[k] != null).map((k) {
+                      final score = (subjectScores[k] ?? 0).toDouble();
+                      return RichText(text: TextSpan(
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF374151)),
+                        children: [
+                          TextSpan(text: '${_subjectLabels[k]} ',
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                          TextSpan(text: '${score.toStringAsFixed(0)}점',
+                            style: TextStyle(
+                              color: score >= 95 ? const Color(0xFF16A34A)
+                                  : score <= 90 ? const Color(0xFFDC2626)
+                                  : const Color(0xFF374151),
+                            )),
+                        ],
+                      ));
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

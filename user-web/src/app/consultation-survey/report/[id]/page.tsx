@@ -175,6 +175,11 @@ export default function ReportPage() {
       {/* 영역별 상세 점수 */}
       <DetailSection rs={rs} sections={detailSections} />
 
+      {/* 고교유형 적합도 (예비고1만) */}
+      {isPreheigh1 && rs.school_type_compatibility && (
+        <CompatibilitySection data={rs.school_type_compatibility} />
+      )}
+
       {/* 로드맵 자동 초안 (예비고1만) */}
       {isPreheigh1 && rs.roadmap && <RoadmapSection roadmap={rs.roadmap} />}
 
@@ -438,6 +443,124 @@ function RoadmapSection({ roadmap }: { roadmap: any }) {
         이 로드맵은 설문 응답 기반 자동 생성 초안입니다.
         상담을 통해 학생 상황에 맞게 구체적인 계획을 수립할 수 있습니다.
       </div>
+    </div>
+  );
+}
+
+// ── 고교유형 적합도 ──
+
+const SCHOOL_TYPE_ICONS: Record<string, string> = {
+  "과고": "🔬",
+  "외고": "🌐",
+  "국제고": "🌍",
+  "자사고": "🏫",
+  "일반고": "📚",
+};
+
+function CompatibilitySection({ data }: { data: any }) {
+  if (!data?.recommendations?.length) return null;
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>고교유형 적합도</h2>
+      <p style={{ fontSize: 12, color: "var(--gray-500)", margin: "0 0 16px" }}>
+        4축(학업기초력·교과선행도·학습습관·진로방향성) 기반 유형별 적합도 분석
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {data.recommendations.map((rec: any) => {
+          const detail = data.details[rec.school_type];
+          const gc = GRADE_COLORS[rec.grade] || GRADE_COLORS.D;
+          const icon = SCHOOL_TYPE_ICONS[rec.school_type] || "🏫";
+          return (
+            <div key={rec.school_type} style={{
+              borderRadius: 12,
+              border: rec.is_desired ? `2px solid ${gc.border}` : "1px solid var(--gray-200)",
+              overflow: "hidden",
+              background: rec.is_desired ? gc.bg : "white",
+            }}>
+              {/* 헤더 */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "12px 16px",
+              }}>
+                <span style={{ fontSize: 20 }}>{icon}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>
+                  {rec.school_type}
+                  {rec.is_desired && (
+                    <span style={{
+                      marginLeft: 8, fontSize: 10, padding: "2px 8px",
+                      borderRadius: 10, background: gc.text, color: "white", fontWeight: 600,
+                    }}>
+                      희망
+                    </span>
+                  )}
+                </span>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: gc.text }}>
+                    {rec.score}<span style={{ fontSize: 11, fontWeight: 400 }}>점</span>
+                  </div>
+                </div>
+                <GradeBadge grade={rec.grade} />
+              </div>
+
+              {/* 상세 (보정 정보) */}
+              {detail && (detail.bonus !== 0 || detail.penalty !== 0) && (
+                <div style={{ padding: "0 16px 12px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {detail.bonus > 0 && (
+                    <span style={{
+                      fontSize: 11, padding: "3px 10px", borderRadius: 8,
+                      background: "#DCFCE7", color: "#16A34A", fontWeight: 600,
+                    }}>
+                      +{detail.bonus} {detail.bonus_reason}
+                    </span>
+                  )}
+                  {detail.penalty < 0 && (
+                    <span style={{
+                      fontSize: 11, padding: "3px 10px", borderRadius: 8,
+                      background: "#FEE2E2", color: "#DC2626", fontWeight: 600,
+                    }}>
+                      {detail.penalty} {detail.penalty_reason}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 기준 점수 표시 */}
+      {data.subject_scores && Object.keys(data.subject_scores).length > 0 && (
+        <div style={{
+          marginTop: 16, padding: "12px 16px", borderRadius: 10,
+          background: "var(--gray-50)", border: "1px solid var(--gray-200)",
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--gray-600)", marginBottom: 8 }}>
+            보정 기준 원점수 (최근 학기)
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            {[
+              { key: "ko", label: "국어" },
+              { key: "en", label: "영어" },
+              { key: "ma", label: "수학" },
+              { key: "so", label: "사회" },
+              { key: "sc", label: "과학" },
+            ].map(({ key, label }) => {
+              const score = data.subject_scores[key];
+              if (score == null) return null;
+              return (
+                <div key={key} style={{ fontSize: 12, color: "var(--gray-700)" }}>
+                  <span style={{ fontWeight: 600 }}>{label}</span>{" "}
+                  <span style={{ color: score >= 95 ? "#16A34A" : score <= 90 ? "#DC2626" : "var(--gray-700)" }}>
+                    {score}점
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

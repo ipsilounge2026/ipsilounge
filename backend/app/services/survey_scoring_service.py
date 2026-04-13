@@ -1434,6 +1434,7 @@ def compute_preheigh1_radar_scores(answers: dict) -> dict:
     overall_grade = _grade_label(avg)
 
     roadmap = _generate_preheigh1_roadmap(academic, study, prep, career, extra)
+    compatibility = compute_school_type_compatibility(answers, academic, prep, study, career)
 
     return {
         "radar": radar,
@@ -1445,6 +1446,7 @@ def compute_preheigh1_radar_scores(answers: dict) -> dict:
         "career": career,
         "extracurricular": extra,
         "roadmap": roadmap,
+        "school_type_compatibility": compatibility,
     }
 
 
@@ -1590,3 +1592,187 @@ def _roadmap_summary(items: list[dict]) -> str:
         return "전체적으로 양호한 수준입니다. 세부 항목별 심화 전략을 참고하세요."
     names = ", ".join(it["title"] for it in high_priority[:3])
     return f"우선 보강 영역: {names}. 입학 전 집중적인 준비가 필요합니다."
+
+
+# ============================================================
+# 예비고1 고교유형 적합도 분석
+# ============================================================
+
+# 4축 가중치 (학업기초력 / 교과선행도 / 학습습관·자기주도력 / 진로방향성)
+_SCHOOL_TYPE_WEIGHTS: dict[str, tuple[float, float, float, float]] = {
+    "과고": (0.35, 0.20, 0.35, 0.10),
+    "외고": (0.30, 0.25, 0.30, 0.15),
+    "국제고": (0.30, 0.25, 0.30, 0.15),
+    "자사고": (0.35, 0.35, 0.20, 0.10),
+    "일반고": (0.25, 0.25, 0.25, 0.25),
+}
+
+# 가산 조건 (+5): (과목키 리스트, 기준 원점수)
+_BONUS_CONDITIONS: dict[str, tuple[list[str], float]] = {
+    "과고": (["ma", "sc"], 97),
+    "외고": (["ko", "en"], 95),
+    "국제고": (["en", "so"], 95),
+    "자사고": (["ko", "en", "ma", "so", "sc"], 95),  # 전과목 평균
+}
+
+# 감산 조건 (-5): (과목키 리스트, 기준 원점수)
+_PENALTY_CONDITIONS: dict[str, tuple[list[str], float]] = {
+    "과고": (["ma", "sc"], 93),
+    "외고": (["ko", "en"], 93),
+    "국제고": (["en", "so"], 93),
+    "자사고": (["ko", "ma", "sc"], 90),
+}
+
+
+def _get_latest_subject_scores(answers: dict) -> dict[str, float]:
+    """가장 최근 학기의 과목별 원점수를 반환."""
+    cat_c = answers.get("C", {})
+    semesters = ["C1", "C2", "C3", "C4", "C5", "C6"]
+    subjects = ["ko", "en", "ma", "so", "sc"]
+    latest: dict[str, float] = {}
+
+    for sem_key in semesters:
+        sem_data = cat_c.get(sem_key)
+        if not sem_data or not isinstance(sem_data, dict):
+            continue
+        found = {}
+        for subj in subjects:
+            subj_data = sem_data.get(subj, {})
+            if isinstance(subj_data, dict):
+                raw = _sf(subj_data.get("raw_score"))
+                if raw is not None:
+                    found[subj] = raw
+        if found:
+            latest = found  # 가장 마지막에 데이터가 있는 학기가 latest
+
+    return latest
+
+
+def _check_correction(
+    subject_scores: dict[str, float],
+    subjects: list[str],
+    threshold: float,
+    is_avg: bool = False,
+) -> bool:
+    """과목 점수가 조건을 충족하는지 확인.
+    is_avg=True면 과목들의 평균이 threshold 이상/이하인지 확인.
+    is_avg=False면 모든 과목이 threshold 이상/이하인지 확인.
+    """
+    scores = [subject_scores[s] for s in subjects if s in subject_scores]
+    if not scores:
+        return False
+    if is_avg:
+        return (sum(scores) / len(scores)) >= threshold
+    return all(s >= threshold for s in scores)
+
+
+def _check_penalty(
+    subject_scores: dict[str, float],
+    subjects: list[str],
+    threshold: float,
+) -> bool:
+    """감산 조건: 해당 과목 중 하나라도 threshold 이하면 True."""
+    scores = [subject_scores[s] for s in subjects if s in subject_scores]
+    if not scores:
+        return False
+    return any(s <= threshold for s in scores)
+
+
+def compute_school_type_compatibility(
+    answers: dict,
+    academic: dict,
+    prep: dict,
+    study: dict,
+    career: dict,
+) -> dict:
+    """고교유형 적합도 분석.
+
+    4축(학업기초력/교과선행도/학습습관·자기주도력/진로방향성) 가중합산 + 보정(±5).
+    """
+    subject_scores = _get_latest_subject_scores(answers)
+    desired_types: list[str] = answers.get("A", {}).get("A4", [])
+    if not isinstance(desired_types, list):
+        desired_types = []
+
+    axis_scores = {
+        "학업기초력": academic["total"],
+        "교과선행도": prep["total"],
+        "학습습관_자기주도력": study["total"],
+        "진로방향성": career["total"],
+    }
+
+    results: dict[str, dict] = {}
+
+    for school_type, weights in _SCHOOL_TYPE_WEIGHTS.items():
+        w_academic, w_prep, w_study, w_career = weights
+        base = (
+            axis_scores["학업기초력"] * w_academic
+            + axis_scores["교과선행도"] * w_prep
+            + axis_scores["학습습관_자기주도력"] * w_study
+            + axis_scores["진로방향성"] * w_career
+        )
+
+        bonus = 0
+        penalty = 0
+        bonus_reason = ""
+        penalty_reason = ""
+
+        # 가산 체크
+        if school_type in _BONUS_CONDITIONS:
+            subjs, thresh = _BONUS_CONDITIONS[school_type]
+            # 자사고는 전과목 평균 기준
+            is_avg = (school_type == "자사고")
+            if _check_correction(subject_scores, subjs, thresh, is_avg=is_avg):
+                bonus = 5
+                subj_names = {"ko": "국어", "en": "영어", "ma": "수학", "so": "사회", "sc": "과학"}
+                if is_avg:
+                    bonus_reason = f"전과목 평균 {thresh}점 이상"
+                else:
+                    names = "·".join(subj_names.get(s, s) for s in subjs)
+                    bonus_reason = f"{names} 모두 {thresh}점 이상"
+
+        # 감산 체크
+        if school_type in _PENALTY_CONDITIONS:
+            subjs, thresh = _PENALTY_CONDITIONS[school_type]
+            if _check_penalty(subject_scores, subjs, thresh):
+                penalty = -5
+                subj_names = {"ko": "국어", "en": "영어", "ma": "수학", "so": "사회", "sc": "과학"}
+                names = "·".join(subj_names.get(s, s) for s in subjs)
+                penalty_reason = f"{names} 중 {thresh}점 이하 과목 존재"
+
+        total = round(min(100, max(0, base + bonus + penalty)), 1)
+
+        results[school_type] = {
+            "score": total,
+            "grade": _grade_label(total),
+            "base_score": round(base, 1),
+            "bonus": bonus,
+            "bonus_reason": bonus_reason,
+            "penalty": penalty,
+            "penalty_reason": penalty_reason,
+            "weights": {
+                "학업기초력": w_academic,
+                "교과선행도": w_prep,
+                "학습습관_자기주도력": w_study,
+                "진로방향성": w_career,
+            },
+            "is_desired": school_type in desired_types,
+        }
+
+    # 적합도 높은 순으로 정렬된 추천 목록
+    ranked = sorted(results.items(), key=lambda x: x[1]["score"], reverse=True)
+    recommendations = []
+    for school_type, data in ranked:
+        recommendations.append({
+            "school_type": school_type,
+            "score": data["score"],
+            "grade": data["grade"],
+            "is_desired": data["is_desired"],
+        })
+
+    return {
+        "details": results,
+        "recommendations": recommendations,
+        "axis_scores": axis_scores,
+        "subject_scores": {k: round(v, 1) for k, v in subject_scores.items()},
+    }
