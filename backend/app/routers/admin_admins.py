@@ -38,9 +38,16 @@ VALID_ROLES = {"super_admin", "admin", "counselor", "senior"}
 
 ROLE_LABELS = {
     "super_admin": "최고관리자",
-    "admin": "담당자",
-    "counselor": "상담자",
+    "admin": "관리자",
+    "counselor": "상담사",
     "senior": "선배",
+}
+
+# 역할별 기본 메뉴 (새 계정 생성 시 기본값)
+ROLE_DEFAULT_MENUS = {
+    "admin": ["dashboard", "analysis", "consultation", "surveys", "seminar", "notice", "assignments"],
+    "counselor": ["dashboard", "consultation", "surveys"],
+    "senior": ["dashboard", "consultation", "surveys"],
 }
 
 
@@ -94,8 +101,11 @@ async def get_my_info(
 async def get_all_menus(
     current_admin: Admin = Depends(get_current_super_admin),
 ):
-    """전체 메뉴 목록 조회 (super_admin 전용)"""
-    return ALL_MENUS
+    """전체 메뉴 목록 조회 (super_admin 전용) + 역할별 기본 메뉴"""
+    return {
+        "menus": ALL_MENUS,
+        "role_defaults": ROLE_DEFAULT_MENUS,
+    }
 
 
 # --- 관리자 계정 관리 ---

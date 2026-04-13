@@ -32,8 +32,8 @@ interface UserItem {
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "최고관리자",
-  admin: "담당자",
-  counselor: "상담자",
+  admin: "관리자",
+  counselor: "상담사",
   senior: "선배",
 };
 
@@ -48,6 +48,7 @@ export default function AdminsPage() {
   const router = useRouter();
   const [admins, setAdmins] = useState<AdminItem[]>([]);
   const [menus, setMenus] = useState<MenuItem[]>([]);
+  const [roleDefaults, setRoleDefaults] = useState<Record<string, string[]>>({});
   const [message, setMessage] = useState("");
   const [showPromote, setShowPromote] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -72,9 +73,15 @@ export default function AdminsPage() {
 
   const loadData = async () => {
     try {
-      const [adminList, menuList] = await Promise.all([getAdmins(), getAllMenus()]);
+      const [adminList, menuRes] = await Promise.all([getAdmins(), getAllMenus()]);
       setAdmins(adminList);
-      setMenus(menuList);
+      // 메뉴 API 응답이 { menus, role_defaults } 또는 배열일 수 있음
+      if (Array.isArray(menuRes)) {
+        setMenus(menuRes);
+      } else {
+        setMenus(menuRes.menus || []);
+        setRoleDefaults(menuRes.role_defaults || {});
+      }
     } catch {}
   };
 
@@ -270,17 +277,24 @@ export default function AdminsPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
                   <div className="form-group">
                     <label>역할</label>
-                    <select className="form-control" value={promoteRole} onChange={e => setPromoteRole(e.target.value)}>
-                      <option value="admin">담당자</option>
-                      <option value="counselor">상담자</option>
+                    <select className="form-control" value={promoteRole} onChange={e => {
+                      const newRole = e.target.value;
+                      setPromoteRole(newRole);
+                      // 역할 변경 시 기본 메뉴 자동 설정
+                      if (roleDefaults[newRole]) {
+                        setPromoteMenus(roleDefaults[newRole]);
+                      }
+                    }}>
+                      <option value="admin">관리자</option>
+                      <option value="counselor">상담사</option>
                       <option value="senior">선배</option>
                       <option value="super_admin">최고관리자</option>
                     </select>
                     <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
                       {promoteRole === "super_admin" && "모든 메뉴에 접근 가능합니다"}
-                      {promoteRole === "admin" && "선택한 메뉴에만 접근 가능합니다"}
-                      {promoteRole === "counselor" && "상담 관련 메뉴에 접근 가능합니다"}
-                      {promoteRole === "senior" && "매칭된 학생에게 선배 조언을 제공합니다"}
+                      {promoteRole === "admin" && "운영 관련 메뉴에 접근 가능합니다"}
+                      {promoteRole === "counselor" && "담당 학생의 상담/설문 메뉴에 접근 가능합니다"}
+                      {promoteRole === "senior" && "담당 학생의 상담/설문 메뉴에 접근 가능합니다"}
                     </p>
                   </div>
 
@@ -344,8 +358,8 @@ export default function AdminsPage() {
                         onChange={e => handleRoleChange(admin.id, e.target.value)}
                         style={{ width: 100, fontSize: 13, padding: "2px 6px" }}
                       >
-                        <option value="admin">담당자</option>
-                        <option value="counselor">상담자</option>
+                        <option value="admin">관리자</option>
+                        <option value="counselor">상담사</option>
                         <option value="senior">선배</option>
                         <option value="super_admin">최고관리자</option>
                       </select>

@@ -46,7 +46,17 @@ export default function Sidebar() {
       <div className="sidebar-logo">입시라운지 관리자</div>
       {adminInfo && (
         <div style={{ padding: "0 20px 12px", fontSize: 12, color: "#9ca3af" }}>
-          {adminInfo.name} ({adminInfo.role === "super_admin" ? "최고관리자" : adminInfo.role === "counselor" ? "상담자" : "담당자"})
+          {adminInfo.name} (
+          {adminInfo.role === "super_admin"
+            ? "최고관리자"
+            : adminInfo.role === "admin"
+            ? "관리자"
+            : adminInfo.role === "counselor"
+            ? "상담사"
+            : adminInfo.role === "senior"
+            ? "선배"
+            : "담당자"}
+          )
         </div>
       )}
       <nav className="sidebar-nav">
