@@ -341,6 +341,198 @@ async def add_senior_note_addendum(
 
 
 # ============================================================
+# 이전 세션 체크포인트 조회 + 누적 요약
+# ============================================================
+
+@router.get("/student/{user_id}/prev-checkpoints")
+async def get_prev_checkpoints(
+    user_id: str,
+    session_number: int = 1,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """이전 세션의 체크포인트 조회 (선배가 새 기록 작성 전 참조)"""
+    uid = uuid.UUID(user_id)
+    if session_number <= 1:
+        return {"prev_checkpoints": [], "prev_action_items": []}
+
+    prev_q = (
+        select(SeniorConsultationNote)
+        .where(
+            SeniorConsultationNote.user_id == uid,
+            SeniorConsultationNote.session_number == session_number - 1,
+        )
+        .order_by(SeniorConsultationNote.created_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(prev_q)
+    prev_note = result.scalar_one_or_none()
+    if not prev_note:
+        return {"prev_checkpoints": [], "prev_action_items": []}
+
+    return {
+        "prev_checkpoints": prev_note.next_checkpoints or [],
+        "prev_action_items": prev_note.action_items or [],
+        "prev_session_timing": prev_note.session_timing,
+        "prev_consultation_date": prev_note.consultation_date.isoformat() if prev_note.consultation_date else None,
+    }
+
+
+@router.get("/student/{user_id}/cumulative-summary")
+async def get_cumulative_summary(
+    user_id: str,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    학생의 전체 선배 상담 기록을 누적 요약.
+
+    세션별 주요 정보, 학생 상태 변화 추이, 실천 사항 이행 추적,
+    핵심 주제 커버리지 등을 종합적으로 제공.
+    """
+    uid = uuid.UUID(user_id)
+    q = (
+        select(SeniorConsultationNote)
+        .where(SeniorConsultationNote.user_id == uid)
+        .order_by(SeniorConsultationNote.session_number.asc(), SeniorConsultationNote.consultation_date.asc())
+    )
+    result = await db.execute(q)
+    notes = result.scalars().all()
+
+    if not notes:
+        return {
+            "user_id": user_id,
+            "total_sessions": 0,
+            "sessions": [],
+            "mood_trend": [],
+            "attitude_trend": [],
+            "action_items_tracking": [],
+            "topic_coverage": {},
+        }
+
+    # 세션별 요약 구성
+    sessions = []
+    mood_trend = []
+    attitude_trend = []
+    all_action_items = []  # (session_number, items)
+
+    for note in notes:
+        nd = _note_to_dict(note)
+        session_summary = {
+            "session_number": note.session_number,
+            "session_timing": note.session_timing,
+            "consultation_date": note.consultation_date.isoformat() if note.consultation_date else None,
+            "review_status": note.review_status,
+            "core_topics_count": len(note.core_topics or []),
+            "core_topics_covered": sum(
+                1 for t in (note.core_topics or [])
+                if t.get("progress_status") in ("충분히 다룸", "간단히 다룸")
+            ),
+            "optional_topics_covered": sum(
+                1 for t in (note.optional_topics or [])
+                if t.get("covered")
+            ),
+            "action_items_count": len(note.action_items or []),
+            "has_special_observations": bool(note.special_observations),
+            "student_mood": note.student_mood,
+            "study_attitude": note.study_attitude,
+            "key_content_summary": [
+                t.get("key_content", "")
+                for t in (note.core_topics or [])
+                if t.get("key_content")
+            ][:3],  # 상위 3개만
+        }
+        sessions.append(session_summary)
+
+        # 상태 추이
+        if note.student_mood:
+            mood_trend.append({
+                "session": note.session_timing or f"S{note.session_number}",
+                "value": note.student_mood,
+            })
+        if note.study_attitude:
+            attitude_trend.append({
+                "session": note.session_timing or f"S{note.session_number}",
+                "value": note.study_attitude,
+            })
+
+        # 실천 사항 추적
+        if note.action_items:
+            for item in note.action_items:
+                all_action_items.append({
+                    "session": note.session_timing or f"S{note.session_number}",
+                    "session_number": note.session_number,
+                    "action": item.get("action", ""),
+                    "priority": item.get("priority", "중"),
+                })
+
+    # 실천 사항 이행 추적: 이전 세션의 action_items이 다음 세션의 체크포인트에 반영됐는지
+    action_tracking = []
+    for i, note in enumerate(notes):
+        if not note.action_items:
+            continue
+        # 다음 세션이 있으면 다음 세션의 체크포인트와 비교
+        next_note = notes[i + 1] if i + 1 < len(notes) else None
+        next_checkpoints_text = ""
+        if next_note and next_note.next_checkpoints:
+            next_checkpoints_text = " ".join(
+                c.get("checkpoint", "") for c in next_note.next_checkpoints
+            )
+        for item in note.action_items:
+            action_text = item.get("action", "")
+            # 간단한 키워드 매칭으로 이행 여부 추정
+            followed_up = False
+            if next_note:
+                # 핵심 주제 key_content에서 관련 내용 찾기
+                next_core_text = " ".join(
+                    t.get("key_content", "") for t in (next_note.core_topics or [])
+                )
+                next_observations = next_note.special_observations or ""
+                combined = next_core_text + next_checkpoints_text + next_observations
+                # 실천 사항의 핵심 단어(3글자 이상)가 다음 세션에 언급되는지 체크
+                keywords = [w for w in action_text.split() if len(w) >= 3]
+                if keywords:
+                    followed_up = any(kw in combined for kw in keywords[:3])
+
+            action_tracking.append({
+                "session": note.session_timing or f"S{note.session_number}",
+                "action": action_text,
+                "priority": item.get("priority", "중"),
+                "followed_up": followed_up if next_note else None,  # None = 아직 다음 세션 없음
+            })
+
+    # 주제 커버리지: 전체 세션에서 다뤄진 핵심 주제들
+    topic_coverage: dict[str, list] = {}
+    for note in notes:
+        session_label = note.session_timing or f"S{note.session_number}"
+        for topic in (note.core_topics or []):
+            topic_name = topic.get("topic", "")
+            if topic_name not in topic_coverage:
+                topic_coverage[topic_name] = []
+            topic_coverage[topic_name].append({
+                "session": session_label,
+                "status": topic.get("progress_status", "미진행"),
+            })
+
+    # 학생 이름 조회
+    user_result = await db.execute(select(User.name).where(User.id == uid))
+    user_name = user_result.scalar_one_or_none() or "알 수 없음"
+
+    return {
+        "user_id": user_id,
+        "user_name": user_name,
+        "total_sessions": len(notes),
+        "sessions": sessions,
+        "mood_trend": mood_trend,
+        "attitude_trend": attitude_trend,
+        "action_items_tracking": action_tracking,
+        "all_action_items": all_action_items,
+        "topic_coverage": topic_coverage,
+        "latest_session": _note_to_dict(notes[-1]) if notes else None,
+    }
+
+
+# ============================================================
 # 상담사 → 선배 공유 (추상화 요약)
 # ============================================================
 

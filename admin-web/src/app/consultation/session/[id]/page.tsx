@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
-import { getBookingDetail, updateBookingStatus, createConsultationNote, getCounselorSummaryForSenior, getSeniorNotesForCounselor, getSurveyDelta } from "@/lib/api";
+import { getBookingDetail, updateBookingStatus, createConsultationNote, getCounselorSummaryForSenior, getSeniorNotesForCounselor, getSurveyDelta, createSeniorNote, getSeniorPrevCheckpoints } from "@/lib/api";
 import { isLoggedIn, getAdminInfo } from "@/lib/auth";
 
 interface BookingDetail {
@@ -206,6 +206,24 @@ export default function ConsultationSessionPage() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
 
+  // ── 선배 상담 기록 폼 상태 ──
+  const [snCoreTopics, setSnCoreTopics] = useState<{ topic: string; progress_status: string; student_reaction: string; key_content: string }[]>([]);
+  const [snOptionalTopics, setSnOptionalTopics] = useState<{ topic: string; covered: boolean; note: string }[]>([]);
+  const [snStudentQuestions, setSnStudentQuestions] = useState("");
+  const [snSeniorAnswers, setSnSeniorAnswers] = useState("");
+  const [snStudentMood, setSnStudentMood] = useState("");
+  const [snStudyAttitude, setSnStudyAttitude] = useState("");
+  const [snSpecialObservations, setSnSpecialObservations] = useState("");
+  const [snActionItems, setSnActionItems] = useState<{ action: string; priority: string }[]>([{ action: "", priority: "중" }]);
+  const [snNextCheckpoints, setSnNextCheckpoints] = useState<{ checkpoint: string; status: string }[]>([{ checkpoint: "", status: "" }]);
+  const [snOperatorNotes, setSnOperatorNotes] = useState("");
+  const [snContextForNext, setSnContextForNext] = useState("");
+  const [snSaving, setSnSaving] = useState(false);
+  const [snSaved, setSnSaved] = useState(false);
+  const [snPrevCheckpoints, setSnPrevCheckpoints] = useState<{ checkpoint: string; status?: string }[]>([]);
+  const [snPrevActionItems, setSnPrevActionItems] = useState<{ action: string; priority?: string }[]>([]);
+  const [snPrevChecked, setSnPrevChecked] = useState<Record<number, boolean>>({});
+
   // 선배용 상담사 요약
   const [counselorSummary, setCounselorSummary] = useState<Record<string, unknown> | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -256,13 +274,34 @@ export default function ConsultationSessionPage() {
         }
       }
 
-      // 선배인 경우 상담사 요약 로드
+      // 선배인 경우 상담사 요약 + 이전 체크포인트 + 주제 초기화
       if (isSenior && data?.user_id) {
         try {
           const summary = await getCounselorSummaryForSenior(data.user_id);
           setCounselorSummary(summary);
         } catch {
           // 상담사 설문 없으면 무시
+        }
+
+        // 시점에 맞는 핵심/선택 주제 초기화
+        if (timing && TIMING_TOPICS[timing]) {
+          const topics = TIMING_TOPICS[timing];
+          const coreItems = topics.filter(t => t.category === "핵심 주제");
+          const optItems = topics.filter(t => t.category === "선택 주제");
+          setSnCoreTopics(coreItems.map(t => ({ topic: t.label, progress_status: "미진행", student_reaction: "", key_content: "" })));
+          setSnOptionalTopics(optItems.map(t => ({ topic: t.label, covered: false, note: "" })));
+        }
+
+        // 세션 번호 추정 (timing S1→1, S2→2 등, 없으면 1)
+        const sessionNum = timing ? parseInt(timing.replace(/\D/g, "")) || 1 : 1;
+        if (sessionNum > 1) {
+          try {
+            const prevData = await getSeniorPrevCheckpoints(data.user_id, sessionNum);
+            setSnPrevCheckpoints(prevData.prev_checkpoints || []);
+            setSnPrevActionItems(prevData.prev_action_items || []);
+          } catch {
+            // 이전 기록 없으면 무시
+          }
         }
       }
       // 상담사인 경우 선배 기록 로드
@@ -352,6 +391,44 @@ export default function ConsultationSessionPage() {
     }
   };
 
+  const handleSaveSeniorNote = async () => {
+    if (!booking) return;
+    const filledCore = snCoreTopics.filter(t => t.progress_status !== "미진행" || t.key_content.trim());
+    if (filledCore.length === 0) {
+      alert("최소 1개 이상의 핵심 주제 진행 결과를 입력해주세요.");
+      return;
+    }
+    setSnSaving(true);
+    try {
+      const sessionNum = currentTiming ? parseInt(currentTiming.replace(/\D/g, "")) || 1 : 1;
+      const seniorTiming = currentTiming ? `S${sessionNum}` : undefined;
+      await createSeniorNote({
+        user_id: booking.user_id,
+        booking_id: booking.id,
+        session_number: sessionNum,
+        session_timing: seniorTiming,
+        consultation_date: booking.slot_date,
+        core_topics: snCoreTopics,
+        optional_topics: snOptionalTopics.filter(t => t.covered),
+        student_questions: snStudentQuestions || undefined,
+        senior_answers: snSeniorAnswers || undefined,
+        student_mood: snStudentMood || undefined,
+        study_attitude: snStudyAttitude || undefined,
+        special_observations: snSpecialObservations || undefined,
+        action_items: snActionItems.filter(a => a.action.trim()),
+        next_checkpoints: snNextCheckpoints.filter(c => c.checkpoint.trim()),
+        operator_notes: snOperatorNotes || undefined,
+        context_for_next: snContextForNext || undefined,
+        is_visible_to_user: false,
+      });
+      setSnSaved(true);
+    } catch {
+      alert("선배 상담 기록 저장에 실패했습니다.");
+    } finally {
+      setSnSaving(false);
+    }
+  };
+
   // Format timer
   const totalMinutes = CONSULTATION_MINUTES;
   const remainingSeconds = Math.max(0, totalMinutes * 60 - elapsedSeconds);
@@ -412,6 +489,18 @@ export default function ConsultationSessionPage() {
             </h1>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            {isSenior && booking.user_id && (
+              <Link
+                href={`/consultation/senior-summary/${booking.user_id}`}
+                style={{
+                  padding: "8px 16px", borderRadius: 6, border: "1px solid #DDD6FE",
+                  background: "#F5F3FF", color: "#7C3AED", fontSize: 13, textDecoration: "none",
+                  display: "flex", alignItems: "center",
+                }}
+              >
+                누적 요약
+              </Link>
+            )}
             {booking.status === "confirmed" && (
               <button
                 onClick={handleCompleteSession}
@@ -746,7 +835,7 @@ export default function ConsultationSessionPage() {
         )}
 
         {/* 상담 기록 */}
-        {sessionTab === "notes" && (
+        {sessionTab === "notes" && !isSenior && (
           <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
             {noteSaved ? (
               <div style={{ textAlign: "center", padding: 40 }}>
@@ -832,6 +921,385 @@ export default function ConsultationSessionPage() {
                     }}
                   >
                     {noteSaving ? "저장 중..." : "상담 기록 저장"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── 선배 상담 기록 작성 폼 (10개 섹션) ── */}
+        {sessionTab === "notes" && isSenior && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {snSaved ? (
+              <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 40, textAlign: "center" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>&#10003;</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#10B981", marginBottom: 8 }}>선배 상담 기록이 저장되었습니다</div>
+                <div style={{ fontSize: 13, color: "#6B7280" }}>관리자 리뷰 후 상담사에게 공유됩니다.</div>
+              </div>
+            ) : (
+              <>
+                {/* 섹션 3: 이전 상담 체크포인트 확인 */}
+                {(snPrevCheckpoints.length > 0 || snPrevActionItems.length > 0) && (
+                  <div style={{ background: "white", border: "1px solid #FDE68A", borderRadius: 8, overflow: "hidden" }}>
+                    <div style={{ padding: "12px 20px", background: "#FFFBEB", borderBottom: "1px solid #FDE68A", fontSize: 14, fontWeight: 600, color: "#92400E" }}>
+                      3. 이전 상담 체크포인트 확인
+                    </div>
+                    <div style={{ padding: 20 }}>
+                      {snPrevCheckpoints.length > 0 && (
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>이전 세션 확인 사항</div>
+                          {snPrevCheckpoints.map((cp, i) => (
+                            <label key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", cursor: "pointer" }}>
+                              <input
+                                type="checkbox"
+                                checked={!!snPrevChecked[i]}
+                                onChange={() => setSnPrevChecked(prev => ({ ...prev, [i]: !prev[i] }))}
+                                style={{ width: 16, height: 16 }}
+                              />
+                              <span style={{ fontSize: 13, color: snPrevChecked[i] ? "#9CA3AF" : "#374151", textDecoration: snPrevChecked[i] ? "line-through" : "none" }}>
+                                {cp.checkpoint}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      {snPrevActionItems.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>이전 세션 실천 사항</div>
+                          {snPrevActionItems.map((ai, i) => (
+                            <div key={i} style={{ fontSize: 13, padding: "4px 0", color: "#6B7280" }}>
+                              <span style={{
+                                display: "inline-block", width: 18, height: 18, borderRadius: 3, fontSize: 11,
+                                textAlign: "center", lineHeight: "18px", marginRight: 8,
+                                background: ai.priority === "상" ? "#FEE2E2" : ai.priority === "하" ? "#DBEAFE" : "#FEF3C7",
+                                color: ai.priority === "상" ? "#991B1B" : ai.priority === "하" ? "#1E40AF" : "#92400E",
+                              }}>
+                                {ai.priority === "상" ? "!" : ai.priority === "하" ? "-" : "·"}
+                              </span>
+                              {ai.action}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 섹션 4: 핵심 주제별 진행 결과 */}
+                <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 20px", background: "#EFF6FF", borderBottom: "1px solid #BFDBFE", fontSize: 14, fontWeight: 600, color: "#1E40AF" }}>
+                    4. 핵심 주제별 진행 결과 <span style={{ color: "#EF4444" }}>*</span>
+                  </div>
+                  <div style={{ padding: 20 }}>
+                    {snCoreTopics.length === 0 ? (
+                      <div style={{ color: "#9CA3AF", fontSize: 13 }}>시점(T1~T4) 정보가 없어 핵심 주제를 불러올 수 없습니다.</div>
+                    ) : (
+                      snCoreTopics.map((topic, i) => (
+                        <div key={i} style={{ marginBottom: 20, paddingBottom: 20, borderBottom: i < snCoreTopics.length - 1 ? "1px solid #F3F4F6" : "none" }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                            {i + 1}. {topic.topic}
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 8 }}>
+                            <div>
+                              <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>진행 상태</label>
+                              <select
+                                value={topic.progress_status}
+                                onChange={(e) => {
+                                  const updated = [...snCoreTopics];
+                                  updated[i] = { ...updated[i], progress_status: e.target.value };
+                                  setSnCoreTopics(updated);
+                                }}
+                                style={{ width: "100%", padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13 }}
+                              >
+                                <option value="미진행">미진행</option>
+                                <option value="충분히 다룸">충분히 다룸</option>
+                                <option value="간단히 다룸">간단히 다룸</option>
+                                <option value="다루지 못함">다루지 못함</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>학생 반응</label>
+                              <select
+                                value={topic.student_reaction}
+                                onChange={(e) => {
+                                  const updated = [...snCoreTopics];
+                                  updated[i] = { ...updated[i], student_reaction: e.target.value };
+                                  setSnCoreTopics(updated);
+                                }}
+                                style={{ width: "100%", padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13 }}
+                              >
+                                <option value="">선택</option>
+                                <option value="적극적 관심">적극적 관심</option>
+                                <option value="보통">보통</option>
+                                <option value="무관심/소극적">무관심/소극적</option>
+                                <option value="혼란/어려워함">혼란/어려워함</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>핵심 내용 메모</label>
+                            <textarea
+                              value={topic.key_content}
+                              onChange={(e) => {
+                                const updated = [...snCoreTopics];
+                                updated[i] = { ...updated[i], key_content: e.target.value };
+                                setSnCoreTopics(updated);
+                              }}
+                              placeholder="이 주제에서 다룬 핵심 내용..."
+                              style={{ width: "100%", minHeight: 60, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+                            />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* 섹션 5: 선택 주제 진행 여부 */}
+                {snOptionalTopics.length > 0 && (
+                  <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                    <div style={{ padding: "12px 20px", background: "#FFFBEB", borderBottom: "1px solid #FDE68A", fontSize: 14, fontWeight: 600, color: "#92400E" }}>
+                      5. 선택 주제 진행 여부
+                    </div>
+                    <div style={{ padding: 20 }}>
+                      {snOptionalTopics.map((topic, i) => (
+                        <div key={i} style={{ marginBottom: 12 }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 4 }}>
+                            <input
+                              type="checkbox"
+                              checked={topic.covered}
+                              onChange={() => {
+                                const updated = [...snOptionalTopics];
+                                updated[i] = { ...updated[i], covered: !updated[i].covered };
+                                setSnOptionalTopics(updated);
+                              }}
+                              style={{ width: 16, height: 16 }}
+                            />
+                            <span style={{ fontSize: 13, fontWeight: 500 }}>{topic.topic}</span>
+                          </label>
+                          {topic.covered && (
+                            <textarea
+                              value={topic.note}
+                              onChange={(e) => {
+                                const updated = [...snOptionalTopics];
+                                updated[i] = { ...updated[i], note: e.target.value };
+                                setSnOptionalTopics(updated);
+                              }}
+                              placeholder="간단한 메모..."
+                              style={{ width: "100%", minHeight: 40, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12, resize: "vertical", fontFamily: "inherit", marginLeft: 26 }}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 섹션 6: 자유 질의응답 */}
+                <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 20px", background: "#F9FAFB", borderBottom: "1px solid #E5E7EB", fontSize: 14, fontWeight: 600, color: "#374151" }}>
+                    6. 자유 질의응답
+                  </div>
+                  <div style={{ padding: 20, display: "grid", gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>학생 질문</label>
+                      <textarea
+                        value={snStudentQuestions}
+                        onChange={(e) => setSnStudentQuestions(e.target.value)}
+                        placeholder="학생이 한 질문들..."
+                        style={{ width: "100%", minHeight: 60, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>선배 답변/조언</label>
+                      <textarea
+                        value={snSeniorAnswers}
+                        onChange={(e) => setSnSeniorAnswers(e.target.value)}
+                        placeholder="내가 답변한 내용..."
+                        style={{ width: "100%", minHeight: 60, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 섹션 7: 학생 상태 관찰 */}
+                <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 20px", background: "#F0FDF4", borderBottom: "1px solid #BBF7D0", fontSize: 14, fontWeight: 600, color: "#166534" }}>
+                    7. 학생 상태 관찰
+                  </div>
+                  <div style={{ padding: 20 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>전반적 분위기</label>
+                        <select
+                          value={snStudentMood}
+                          onChange={(e) => setSnStudentMood(e.target.value)}
+                          style={{ width: "100%", padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13 }}
+                        >
+                          <option value="">선택</option>
+                          <option value="밝고 적극적">밝고 적극적</option>
+                          <option value="차분하고 안정적">차분하고 안정적</option>
+                          <option value="보통">보통</option>
+                          <option value="다소 지쳐 보임">다소 지쳐 보임</option>
+                          <option value="불안/초조해 보임">불안/초조해 보임</option>
+                          <option value="무기력/의욕 없음">무기력/의욕 없음</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>공부 태도</label>
+                        <select
+                          value={snStudyAttitude}
+                          onChange={(e) => setSnStudyAttitude(e.target.value)}
+                          style={{ width: "100%", padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13 }}
+                        >
+                          <option value="">선택</option>
+                          <option value="매우 성실/열정적">매우 성실/열정적</option>
+                          <option value="꾸준히 노력 중">꾸준히 노력 중</option>
+                          <option value="보통">보통</option>
+                          <option value="조금 느슨해진 상태">조금 느슨해진 상태</option>
+                          <option value="방향을 잃은 상태">방향을 잃은 상태</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>특이사항 / 추가 관찰</label>
+                      <textarea
+                        value={snSpecialObservations}
+                        onChange={(e) => setSnSpecialObservations(e.target.value)}
+                        placeholder="학생에 대해 특별히 관찰한 점 (걱정되는 부분, 긍정적 변화 등)..."
+                        style={{ width: "100%", minHeight: 60, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 섹션 8: 실천 사항 제안 */}
+                <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 20px", background: "#EFF6FF", borderBottom: "1px solid #BFDBFE", fontSize: 14, fontWeight: 600, color: "#1E40AF" }}>
+                    8. 실천 사항 제안
+                  </div>
+                  <div style={{ padding: 20 }}>
+                    {snActionItems.map((item, i) => (
+                      <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                        <select
+                          value={item.priority}
+                          onChange={(e) => {
+                            const updated = [...snActionItems];
+                            updated[i] = { ...updated[i], priority: e.target.value };
+                            setSnActionItems(updated);
+                          }}
+                          style={{ width: 70, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12 }}
+                        >
+                          <option value="상">상</option>
+                          <option value="중">중</option>
+                          <option value="하">하</option>
+                        </select>
+                        <input
+                          value={item.action}
+                          onChange={(e) => {
+                            const updated = [...snActionItems];
+                            updated[i] = { ...updated[i], action: e.target.value };
+                            setSnActionItems(updated);
+                          }}
+                          placeholder="실천 사항..."
+                          style={{ flex: 1, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13 }}
+                        />
+                        {snActionItems.length > 1 && (
+                          <button
+                            onClick={() => setSnActionItems(snActionItems.filter((_, j) => j !== i))}
+                            style={{ padding: "4px 8px", border: "1px solid #FCA5A5", borderRadius: 4, background: "#FEF2F2", color: "#EF4444", cursor: "pointer", fontSize: 12 }}
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setSnActionItems([...snActionItems, { action: "", priority: "중" }])}
+                      style={{ padding: "6px 12px", border: "1px dashed #D1D5DB", borderRadius: 6, background: "none", color: "#6B7280", cursor: "pointer", fontSize: 12 }}
+                    >
+                      + 실천 사항 추가
+                    </button>
+                  </div>
+                </div>
+
+                {/* 섹션 9: 다음 상담 확인 사항 */}
+                <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 20px", background: "#F5F3FF", borderBottom: "1px solid #DDD6FE", fontSize: 14, fontWeight: 600, color: "#5B21B6" }}>
+                    9. 다음 상담 확인 사항
+                  </div>
+                  <div style={{ padding: 20 }}>
+                    {snNextCheckpoints.map((cp, i) => (
+                      <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                        <input
+                          value={cp.checkpoint}
+                          onChange={(e) => {
+                            const updated = [...snNextCheckpoints];
+                            updated[i] = { ...updated[i], checkpoint: e.target.value };
+                            setSnNextCheckpoints(updated);
+                          }}
+                          placeholder="다음 상담에서 꼭 확인할 사항..."
+                          style={{ flex: 1, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13 }}
+                        />
+                        {snNextCheckpoints.length > 1 && (
+                          <button
+                            onClick={() => setSnNextCheckpoints(snNextCheckpoints.filter((_, j) => j !== i))}
+                            style={{ padding: "4px 8px", border: "1px solid #FCA5A5", borderRadius: 4, background: "#FEF2F2", color: "#EF4444", cursor: "pointer", fontSize: 12 }}
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setSnNextCheckpoints([...snNextCheckpoints, { checkpoint: "", status: "" }])}
+                      style={{ padding: "6px 12px", border: "1px dashed #D1D5DB", borderRadius: 6, background: "none", color: "#6B7280", cursor: "pointer", fontSize: 12 }}
+                    >
+                      + 확인 사항 추가
+                    </button>
+                  </div>
+                </div>
+
+                {/* 섹션 10: 운영자 공유 내용 + 상담사 전달 맥락 */}
+                <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 20px", background: "#FEF2F2", borderBottom: "1px solid #FECACA", fontSize: 14, fontWeight: 600, color: "#991B1B" }}>
+                    10. 운영자/상담사 전달 사항
+                  </div>
+                  <div style={{ padding: 20, display: "grid", gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>운영자에게 공유할 내용</label>
+                      <textarea
+                        value={snOperatorNotes}
+                        onChange={(e) => setSnOperatorNotes(e.target.value)}
+                        placeholder="운영팀에 알려야 할 사항 (서비스 불만, 추가 요청 등)..."
+                        style={{ width: "100%", minHeight: 60, padding: 8, border: "1px solid #FCA5A5", borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", background: "#FFF5F5" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>상담사에게 전달할 맥락</label>
+                      <textarea
+                        value={snContextForNext}
+                        onChange={(e) => setSnContextForNext(e.target.value)}
+                        placeholder="다음 상담사(또는 다음 세션 선배)가 알아야 할 학생 맥락..."
+                        style={{ width: "100%", minHeight: 60, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 저장 버튼 */}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                  <button
+                    onClick={handleSaveSeniorNote}
+                    disabled={snSaving}
+                    style={{
+                      padding: "12px 32px", borderRadius: 8, border: "none",
+                      background: "#7C3AED", color: "white", fontSize: 15, fontWeight: 600,
+                      cursor: "pointer", opacity: snSaving ? 0.5 : 1,
+                    }}
+                  >
+                    {snSaving ? "저장 중..." : "선배 상담 기록 저장"}
                   </button>
                 </div>
               </>

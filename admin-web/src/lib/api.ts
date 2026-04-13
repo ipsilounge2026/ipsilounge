@@ -390,6 +390,36 @@ export async function getSeniorNotesForCounselor(userId: string) {
   return request(`/api/admin/senior-consultation/student/${userId}/senior-notes`);
 }
 
+export async function createSeniorNote(data: {
+  user_id: string;
+  booking_id?: string;
+  session_number: number;
+  session_timing?: string;
+  consultation_date: string;
+  core_topics?: { topic: string; progress_status: string; student_reaction?: string; key_content?: string }[];
+  optional_topics?: { topic: string; covered: boolean; note?: string }[];
+  student_questions?: string;
+  senior_answers?: string;
+  student_mood?: string;
+  study_attitude?: string;
+  special_observations?: string;
+  action_items?: { action: string; priority: string }[];
+  next_checkpoints?: { checkpoint: string; status?: string }[];
+  operator_notes?: string;
+  context_for_next?: string;
+  is_visible_to_user: boolean;
+}) {
+  return request("/api/admin/senior-consultation/notes", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function getSeniorPrevCheckpoints(userId: string, sessionNumber: number) {
+  return request(`/api/admin/senior-consultation/student/${userId}/prev-checkpoints?session_number=${sessionNumber}`);
+}
+
+export async function getSeniorCumulativeSummary(userId: string) {
+  return request(`/api/admin/senior-consultation/student/${userId}/cumulative-summary`);
+}
+
 // --- 설명회 관리 ---
 export async function getSeminarDashboard(scheduleId?: string) {
   const params = new URLSearchParams();
