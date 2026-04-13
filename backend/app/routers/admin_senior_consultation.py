@@ -65,6 +65,7 @@ class ReviewUpdate(BaseModel):
     review_notes: str | None = None
     sharing_settings: dict | None = None  # 항목별 공유 설정
     content_checklist: list[dict] | None = None  # 콘텐츠 리뷰 체크리스트
+    is_visible_to_user: bool | None = None  # 학생 공개 여부
 
 
 class AddendumCreate(BaseModel):
@@ -234,6 +235,8 @@ async def review_senior_note(
         note.sharing_settings = data.sharing_settings
     if data.content_checklist is not None:
         note.content_checklist = data.content_checklist
+    if data.is_visible_to_user is not None:
+        note.is_visible_to_user = data.is_visible_to_user
     await db.commit()
     await db.refresh(note)
     return _note_to_dict(note)

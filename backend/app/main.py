@@ -24,6 +24,7 @@ from app.routers import (
     auth,
     consultation,
     consultation_notes,
+    senior_notes,
     consultation_survey,
     family,
     payment,
@@ -89,6 +90,7 @@ app.include_router(admin_consultation_notes.router)
 app.include_router(admin_consultation_survey.router)
 app.include_router(admin_admission_cases.router)
 app.include_router(consultation_notes.router)
+app.include_router(senior_notes.router)
 app.include_router(consultation_survey.router)
 app.include_router(family.router)
 app.include_router(admission_cases.router)

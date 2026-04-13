@@ -198,6 +198,10 @@ export async function getMyConsultationNotes() {
   return request("/api/consultation-notes");
 }
 
+export async function getMySeniorNotes() {
+  return request("/api/senior-notes");
+}
+
 // --- 결제 ---
 export async function preparePayment(data: {
   order_type: "analysis" | "consultation";

@@ -15,6 +15,7 @@ import 'screens/analysis_detail_screen.dart';
 import 'screens/consultation_screen.dart';
 import 'screens/consultation_list_screen.dart';
 import 'screens/consultation_notes_screen.dart';
+import 'screens/senior_consultation_notes_screen.dart';
 import 'screens/consultation_management_screen.dart';
 import 'screens/admission_info_screen.dart';
 import 'screens/admission_cases_screen.dart';
@@ -145,6 +146,7 @@ class IpsiLoungeApp extends StatelessWidget {
           '/consultation': (context) => const ConsultationScreen(),
           '/consultation/my': (context) => const ConsultationListScreen(),
           '/consultation/notes': (context) => const ConsultationNotesScreen(),
+          '/consultation/senior-notes': (context) => const SeniorConsultationNotesScreen(),
           '/consultation/management': (context) => const ConsultationManagementScreen(),
           '/admission-info': (context) => const AdmissionInfoScreen(),
           '/admission-cases': (context) => const AdmissionCasesScreen(),

@@ -4,10 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getMyConsultationNotes, listMySurveys, getSurveyActionPlan, getSurveyRoadmap, getSurveyDelta, getChangeReport, getSubjectCompetitiveness, updateRoadmapProgress, updateActionPlanProgress } from "@/lib/api";
+import { getMyConsultationNotes, getMySeniorNotes, listMySurveys, getSurveyActionPlan, getSurveyRoadmap, getSurveyDelta, getChangeReport, getSubjectCompetitiveness, updateRoadmapProgress, updateActionPlanProgress } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
-type PageTab = "notes" | "action-plan" | "roadmap" | "delta" | "competitiveness";
+type PageTab = "notes" | "senior-notes" | "action-plan" | "roadmap" | "delta" | "competitiveness";
 
 interface ConsultationNote {
   id: string;
@@ -19,6 +19,24 @@ interface ConsultationNote {
   advice_given: string | null;
   next_steps: string | null;
   next_topic: string | null;
+}
+
+interface SeniorNote {
+  id: string;
+  session_number: number;
+  session_timing: string | null;
+  consultation_date: string | null;
+  senior_name: string | null;
+  core_topics: { topic: string; progress_status: string; key_content: string }[];
+  optional_topics: { topic: string; covered: boolean }[];
+  student_questions: string | null;
+  senior_answers: string | null;
+  student_mood: string | null;
+  study_attitude: string | null;
+  special_observations: string | null;
+  action_items: { action: string; priority: string }[];
+  next_checkpoints: { checkpoint: string }[];
+  addenda: { content: string; created_at: string }[];
 }
 
 interface ActionItem {
@@ -76,6 +94,8 @@ export default function ConsultationNotesPage() {
   const router = useRouter();
   const [pageTab, setPageTab] = useState<PageTab>("notes");
   const [notes, setNotes] = useState<ConsultationNote[]>([]);
+  const [seniorNotes, setSeniorNotes] = useState<SeniorNote[]>([]);
+  const [seniorLoading, setSeniorLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("전체");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -107,6 +127,17 @@ export default function ConsultationNotesPage() {
       .catch(() => setNotes([]))
       .finally(() => setLoading(false));
   }, []);
+
+  // Load senior notes when tab switches
+  useEffect(() => {
+    if (pageTab === "senior-notes" && seniorNotes.length === 0 && !seniorLoading) {
+      setSeniorLoading(true);
+      getMySeniorNotes()
+        .then((data) => setSeniorNotes(Array.isArray(data) ? data : []))
+        .catch(() => setSeniorNotes([]))
+        .finally(() => setSeniorLoading(false));
+    }
+  }, [pageTab]);
 
   // Load action plans when tab switches
   useEffect(() => {
@@ -303,6 +334,7 @@ export default function ConsultationNotesPage() {
         <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--gray-200)", overflowX: "auto" }}>
           {([
             { key: "notes" as PageTab, label: "상담 기록" },
+            { key: "senior-notes" as PageTab, label: "선배 상담" },
             { key: "action-plan" as PageTab, label: "액션 플랜" },
             { key: "roadmap" as PageTab, label: "학습 로드맵" },
             { key: "delta" as PageTab, label: "변화 추적" },
@@ -430,6 +462,163 @@ export default function ConsultationNotesPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ─── 선배 상담 기록 탭 ─── */}
+        {pageTab === "senior-notes" && (
+          <>
+            {seniorLoading ? (
+              <div style={{ textAlign: "center", padding: 60, color: "var(--gray-400)" }}>불러오는 중...</div>
+            ) : seniorNotes.length === 0 ? (
+              <div className="card" style={{ textAlign: "center", padding: 60 }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🎓</div>
+                <p style={{ color: "var(--gray-500)", marginBottom: 4 }}>아직 공개된 선배 상담 기록이 없습니다</p>
+                <p style={{ fontSize: 13, color: "var(--gray-400)" }}>선배 상담 완료 후 검토를 거쳐 공개됩니다</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {seniorNotes.map((sn) => (
+                  <div key={sn.id} className="card" style={{ overflow: "hidden" }}>
+                    {/* 헤더 */}
+                    <div style={{
+                      padding: "14px 20px", background: "linear-gradient(135deg, #F5F3FF, #EDE9FE)",
+                      borderBottom: "1px solid #DDD6FE",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}>
+                      <div>
+                        <span style={{
+                          display: "inline-block", padding: "3px 10px", borderRadius: 20,
+                          background: "#7C3AED", color: "white", fontSize: 12, fontWeight: 700, marginRight: 8,
+                        }}>
+                          {sn.session_timing || `S${sn.session_number}`}
+                        </span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "#5B21B6" }}>선배 상담</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
+                        {sn.consultation_date} {sn.senior_name && `· ${sn.senior_name} 선배`}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: 20 }}>
+                      {/* 핵심 주제 */}
+                      {sn.core_topics && sn.core_topics.length > 0 && (
+                        <div style={{ marginBottom: 20 }}>
+                          <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)", marginBottom: 10 }}>
+                            다룬 주제
+                          </h4>
+                          {sn.core_topics.map((t, i) => (
+                            <div key={i} style={{
+                              padding: "10px 14px", marginBottom: 6,
+                              background: t.progress_status === "충분히 다룸" ? "#F0FDF4" : t.progress_status === "간단히 다룸" ? "#FFFBEB" : "#F9FAFB",
+                              borderRadius: 8, borderLeft: `3px solid ${t.progress_status === "충분히 다룸" ? "#10B981" : t.progress_status === "간단히 다룸" ? "#F59E0B" : "#D1D5DB"}`,
+                            }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: t.key_content ? 6 : 0 }}>
+                                <span style={{ fontSize: 13, fontWeight: 500 }}>{t.topic}</span>
+                                <span style={{
+                                  fontSize: 11, padding: "2px 8px", borderRadius: 10,
+                                  background: t.progress_status === "충분히 다룸" ? "#D1FAE5" : t.progress_status === "간단히 다룸" ? "#FEF3C7" : "#F3F4F6",
+                                  color: t.progress_status === "충분히 다룸" ? "#065F46" : t.progress_status === "간단히 다룸" ? "#92400E" : "#6B7280",
+                                }}>
+                                  {t.progress_status}
+                                </span>
+                              </div>
+                              {t.key_content && (
+                                <div style={{ fontSize: 13, color: "var(--gray-600)", lineHeight: 1.6 }}>{t.key_content}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* 자유 질의응답 */}
+                      {sn.student_questions && (
+                        <div style={{ marginBottom: 20 }}>
+                          <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)", marginBottom: 10 }}>
+                            질의응답
+                          </h4>
+                          <div style={{ padding: 14, background: "#F9FAFB", borderRadius: 8 }}>
+                            <div style={{ fontSize: 13, color: "var(--gray-700)", marginBottom: 8 }}>
+                              <strong>내 질문:</strong> {sn.student_questions}
+                            </div>
+                            {sn.senior_answers && (
+                              <div style={{ fontSize: 13, color: "var(--gray-600)", paddingTop: 8, borderTop: "1px solid #E5E7EB" }}>
+                                <strong>선배 답변:</strong> {sn.senior_answers}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 실천 사항 */}
+                      {sn.action_items && sn.action_items.length > 0 && (
+                        <div style={{ marginBottom: 20 }}>
+                          <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)", marginBottom: 10 }}>
+                            선배가 제안한 실천 사항
+                          </h4>
+                          {sn.action_items.map((a, i) => (
+                            <div key={i} style={{
+                              display: "flex", alignItems: "center", gap: 10, padding: "8px 0",
+                              borderBottom: i < sn.action_items.length - 1 ? "1px solid #F3F4F6" : "none",
+                            }}>
+                              <span style={{
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                width: 22, height: 22, borderRadius: "50%", fontSize: 11, fontWeight: 700,
+                                background: a.priority === "상" ? "#FEE2E2" : a.priority === "하" ? "#DBEAFE" : "#FEF3C7",
+                                color: a.priority === "상" ? "#991B1B" : a.priority === "하" ? "#1E40AF" : "#92400E",
+                              }}>
+                                {a.priority}
+                              </span>
+                              <span style={{ fontSize: 13 }}>{a.action}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* 다음 확인 사항 */}
+                      {sn.next_checkpoints && sn.next_checkpoints.length > 0 && (
+                        <div style={{ marginBottom: 20 }}>
+                          <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)", marginBottom: 10 }}>
+                            다음에 확인할 사항
+                          </h4>
+                          {sn.next_checkpoints.map((c, i) => (
+                            <div key={i} style={{ fontSize: 13, padding: "6px 0", color: "var(--gray-600)" }}>
+                              · {c.checkpoint}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* 학생 상태 (공개된 경우만) */}
+                      {(sn.student_mood || sn.study_attitude) && (
+                        <div style={{ padding: 12, background: "#F0FDF4", borderRadius: 8, marginBottom: 20 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#166534", marginBottom: 6 }}>상담 시 나의 상태</div>
+                          <div style={{ display: "flex", gap: 16, fontSize: 13, color: "#374151" }}>
+                            {sn.student_mood && <span>분위기: {sn.student_mood}</span>}
+                            {sn.study_attitude && <span>공부 태도: {sn.study_attitude}</span>}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 추가 기록 */}
+                      {sn.addenda && sn.addenda.length > 0 && (
+                        <div>
+                          <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--gray-700)", marginBottom: 10 }}>
+                            추가 기록
+                          </h4>
+                          {sn.addenda.map((ad, i) => (
+                            <div key={i} style={{ padding: "8px 12px", background: "#FFFBEB", borderRadius: 6, marginBottom: 6, fontSize: 13 }}>
+                              {ad.content}
+                              <div style={{ fontSize: 11, color: "var(--gray-400)", marginTop: 4 }}>{ad.created_at}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </>

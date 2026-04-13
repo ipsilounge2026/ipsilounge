@@ -79,6 +79,7 @@ export default function SeniorReviewDetailPage() {
   const [sharing, setSharing] = useState<Record<string, boolean>>(DEFAULT_SHARING);
   const [contentChecklist, setContentChecklist] = useState(DEFAULT_CONTENT_CHECKLIST);
   const [reviewNotes, setReviewNotes] = useState("");
+  const [visibleToUser, setVisibleToUser] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
@@ -92,6 +93,7 @@ export default function SeniorReviewDetailPage() {
       setSharing(data.sharing_settings || DEFAULT_SHARING);
       setContentChecklist(data.content_checklist || DEFAULT_CONTENT_CHECKLIST);
       setReviewNotes(data.review_notes || "");
+      setVisibleToUser(data.is_visible_to_user || false);
     } catch {
       // error
     } finally {
@@ -113,6 +115,7 @@ export default function SeniorReviewDetailPage() {
         review_notes: reviewNotes || undefined,
         sharing_settings: sharing,
         content_checklist: contentChecklist,
+        is_visible_to_user: visibleToUser,
       });
       alert(status === "reviewed" ? "검토 완료 처리되었습니다." : "수정 요청을 보냈습니다.");
       router.push("/consultation/senior-review");
@@ -428,6 +431,24 @@ export default function SeniorReviewDetailPage() {
                     </span>
                   </label>
                 ))}
+              </div>
+
+              {/* 학생 공개 설정 */}
+              <div style={{ marginTop: 20, padding: 14, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={visibleToUser}
+                    onChange={() => setVisibleToUser(!visibleToUser)}
+                    style={{ width: 18, height: 18, cursor: "pointer" }}
+                  />
+                  <div>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "#166534" }}>학생에게 공개</span>
+                    <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
+                      체크 시 학생이 상담 기록 페이지에서 열람할 수 있습니다
+                    </div>
+                  </div>
+                </label>
               </div>
 
               {/* 관리자 코멘트 */}

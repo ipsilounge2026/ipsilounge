@@ -372,6 +372,7 @@ export async function updateSeniorNoteReview(id: string, data: {
   review_notes?: string;
   sharing_settings?: Record<string, boolean>;
   content_checklist?: { label: string; checked: boolean }[];
+  is_visible_to_user?: boolean;
 }) {
   return request(`/api/admin/senior-consultation/notes/${id}/review`, {
     method: "PUT",
