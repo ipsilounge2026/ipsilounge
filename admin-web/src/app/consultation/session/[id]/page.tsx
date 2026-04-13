@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
-import { getBookingDetail, updateBookingStatus, createConsultationNote, getCounselorSummaryForSenior, getSeniorNotesForCounselor } from "@/lib/api";
+import { getBookingDetail, updateBookingStatus, createConsultationNote, getCounselorSummaryForSenior, getSeniorNotesForCounselor, getSurveyDelta } from "@/lib/api";
 import { isLoggedIn, getAdminInfo } from "@/lib/auth";
 
 interface BookingDetail {
@@ -28,22 +28,128 @@ interface CheckItem {
   label: string;
   checked: boolean;
   category: string;
+  isOptional?: boolean;
+  detail?: string;
 }
 
-const DEFAULT_CHECKLIST: Omit<CheckItem, "checked">[] = [
-  { id: "c1", label: "학생 기본 정보 확인 (이름, 학교, 학년)", category: "도입" },
-  { id: "c2", label: "상담 목표/요청사항 파악", category: "도입" },
-  { id: "c3", label: "설문 답변 리뷰 (주요 항목)", category: "도입" },
-  { id: "c4", label: "내신 성적 추이 분석 공유", category: "성적" },
-  { id: "c5", label: "취약 과목/영역 확인", category: "성적" },
-  { id: "c6", label: "학습 방법/시간 배분 점검", category: "학습" },
-  { id: "c7", label: "자기주도 학습 비율 확인", category: "학습" },
-  { id: "c8", label: "진로/전형 방향 상담", category: "진로" },
-  { id: "c9", label: "목표 대학/학과 논의", category: "진로" },
-  { id: "c10", label: "액션 플랜 수립", category: "마무리" },
-  { id: "c11", label: "다음 상담 일정 안내", category: "마무리" },
-  { id: "c12", label: "상담 내용 요약/정리", category: "마무리" },
+// ── 시점별 상담 주제 가이드 (T1~T4) ──
+
+interface TopicGuideItem {
+  id: string;
+  label: string;
+  category: string;
+  isOptional?: boolean;
+  detail?: string;
+}
+
+const COMMON_INTRO: TopicGuideItem[] = [
+  { id: "intro1", label: "학생 기본 정보 확인 (이름, 학교, 학년)", category: "도입" },
+  { id: "intro2", label: "상담 목표/요청사항 파악", category: "도입" },
+  { id: "intro3", label: "설문 답변 리뷰 (주요 항목)", category: "도입" },
 ];
+
+const COMMON_CLOSING: TopicGuideItem[] = [
+  { id: "close1", label: "액션 플랜 수립 (과목별 + 습관 트랙)", category: "마무리" },
+  { id: "close2", label: "다음 상담 일정 안내", category: "마무리" },
+  { id: "close3", label: "상담 내용 요약/정리", category: "마무리" },
+];
+
+const TIMING_TOPICS: Record<string, TopicGuideItem[]> = {
+  T1: [
+    // 핵심 주제 4개
+    { id: "t1c1", label: "첫 학기 종합 진단 (내신 + 모의고사 결합 분석)", category: "핵심 주제", detail: "첫 내신 결과를 목표 대비 해석, 내신 vs 모의 비교 (유형 판정), 예상과 실제 차이 원인 분석" },
+    { id: "t1c2", label: "학습 방법 전환 진단 ★", category: "핵심 주제", detail: "중학교식 공부법 잔존 여부, 예습·복습·수업 활용도 점검, 과목별 학습법 적절성 평가" },
+    { id: "t1c3", label: "과목별 취약 유형 정밀 진단", category: "핵심 주제", detail: "국어: 문학/비문학, 수학: 계산 실수/고난도/단원, 영어: 어휘·독해·시간, 구체적 처방 수준까지" },
+    { id: "t1c4", label: "컨디션·심리 점검 + 여름방학 전략", category: "핵심 주제", detail: "D8 기반 심리·컨디션, 첫 학기 번아웃, 수면 패턴, 여름방학 학습 계획" },
+    // 선택 주제 3개
+    { id: "t1o1", label: "자기주도 비율 조정 (학원 의존도 높을 경우)", category: "선택 주제", isOptional: true },
+    { id: "t1o2", label: "오답 관리 루틴 재설계", category: "선택 주제", isOptional: true },
+    { id: "t1o3", label: "진로 탐색 심화 (미정 시)", category: "선택 주제", isOptional: true },
+  ],
+  T2: [
+    // 핵심 주제 5개
+    { id: "t2c1", label: "1년치 성적 데이터 종합 분석", category: "핵심 주제", detail: "1학기→2학기 내신 추이, 모의 4회 추이, 내신-모의 Gap 변화, 1년간의 패턴 해석" },
+    { id: "t2c2", label: "확정된 선택과목 학습 준비도 점검 ★", category: "핵심 주제", detail: "선택과목 목록 확인, 준비 수준 점검, 진로·권장과목 정합성, 수능 선택과목 연계" },
+    { id: "t2c3", label: "과목별 학습법 최적화 (1년 데이터 검증)", category: "핵심 주제", detail: "T1 학습법 효과 검증, 안 바뀐 습관 체크, D7 기반 재조정" },
+    { id: "t2c4", label: "전형 방향 초기 탐색", category: "핵심 주제", detail: "수시·정시 가능성 탐색, 내신형/수능형/균형형 판단, E3 주력 전형 vs 실제 성적" },
+    { id: "t2c5", label: "겨울방학 로드맵 + 고2 진입 전략", category: "핵심 주제", detail: "선택과목 선행 계획, 수능 기초 시작 여부, 피로 관리" },
+    // 선택 주제 3개
+    { id: "t2o1", label: "내신-모의 Gap 심화 분석", category: "선택 주제", isOptional: true },
+    { id: "t2o2", label: "학부모 소통 방법 (갈등 시)", category: "선택 주제", isOptional: true },
+    { id: "t2o3", label: "진로 구체화 심화 (방향 없을 경우)", category: "선택 주제", isOptional: true },
+  ],
+  T3: [
+    // 핵심 주제 5개
+    { id: "t3c1", label: "선택과목 첫 성적 분석", category: "핵심 주제", detail: "예상 vs 실제 차이, 경쟁 강도, 목표 대학 라인 영향" },
+    { id: "t3c2", label: "수시 vs 정시 방향 탐색 ★", category: "핵심 주제", detail: "1.5년치 내신+모의 비교, 내신형/수능형/균형형 탐색 (확정 아닌 탐색 단계)" },
+    { id: "t3c3", label: "수능 최저 정밀 시뮬레이션", category: "핵심 주제", detail: "목표 대학별 수능 최저 기준 대입, 충족 가능성, 부족 영역" },
+    { id: "t3c4", label: "과목별 학습법 최종 조정", category: "핵심 주제", detail: "시험 전략 점검, 방향에 따라 내신·수능 학습 비율 재조정" },
+    { id: "t3c5", label: "여름방학 집중 전략", category: "핵심 주제", detail: "탐색 방향에 맞춘 계획, 취약 보강, 체력·멘탈 관리" },
+    // 선택 주제 3개
+    { id: "t3o1", label: "모의고사 취약 유형 심화 분석", category: "선택 주제", isOptional: true },
+    { id: "t3o2", label: "학습 습관 고착화 여부 재점검", category: "선택 주제", isOptional: true },
+    { id: "t3o3", label: "진로 방향성 재검토", category: "선택 주제", isOptional: true },
+  ],
+  T4: [
+    // 핵심 주제 5개
+    { id: "t4c1", label: "2년치 종합 진단 — 나를 명확히 이해하기 ★", category: "핵심 주제", detail: "내신 패턴 확정, 모의 영역별 추이, 내신 vs 모의 최종 비교, 학습법 안정화" },
+    { id: "t4c2", label: "수시 vs 정시 최종 결정 ★", category: "핵심 주제", detail: "T3 탐색 방향을 확정, 2년 데이터 기반 최종 판단, 학생 본인 의사 반영" },
+    { id: "t4c3", label: "진학 가능성 확인 (대학 라인)", category: "핵심 주제", detail: "현실적 대학 수준 확인, 도전 vs 안전 라인, 수능 최저 충족 가능성" },
+    { id: "t4c4", label: "고3 학습 로드맵 확정 ★", category: "핵심 주제", detail: "월 단위 계획 (3월~수능), 주간 시간 배분, 과목별 내신·수능 대비법 확정" },
+    { id: "t4c5", label: "체력·멘탈 관리 + 겨울방학 집중 전략", category: "핵심 주제", detail: "D8 2년 추이, 고3 체력 관리, 번아웃 대비, 생활 리듬 전환" },
+    // 선택 주제 3개
+    { id: "t4o1", label: "학부모와의 소통 전략", category: "선택 주제", isOptional: true },
+    { id: "t4o2", label: "지난 2년 복기 (성찰)", category: "선택 주제", isOptional: true },
+    { id: "t4o3", label: "모의고사 시험 전략 최적화", category: "선택 주제", isOptional: true },
+  ],
+};
+
+const TIMING_LABELS: Record<string, string> = {
+  T1: "고1-1학기 말 (7월) — 학교 적응 진단",
+  T2: "고1-2학기 말 (2월) — 고2 진입 전략",
+  T3: "고2-1학기 말 (7월) — 수시/정시 방향 탐색",
+  T4: "고2-2학기 말 (2월) — 최종 확정 + 고3 로드맵",
+};
+
+const TIMING_CORE_QUESTION: Record<string, string> = {
+  T1: "내가 고등학교에 제대로 적응하고 있는가?",
+  T2: "고2로 어떻게 진입할 것인가?",
+  T3: "수시로 갈 것인가, 정시로 갈 것인가 — 방향을 정할 때",
+  T4: "고3 1년을 어떤 방향으로, 어떻게 준비할 것인가?",
+};
+
+function getChecklistForTiming(timing: string | null): Omit<CheckItem, "checked">[] {
+  const topics = timing && TIMING_TOPICS[timing] ? TIMING_TOPICS[timing] : [];
+  if (topics.length === 0) {
+    // fallback: generic
+    return [
+      { id: "c1", label: "학생 기본 정보 확인 (이름, 학교, 학년)", category: "도입" },
+      { id: "c2", label: "상담 목표/요청사항 파악", category: "도입" },
+      { id: "c3", label: "설문 답변 리뷰 (주요 항목)", category: "도입" },
+      { id: "c4", label: "내신 성적 추이 분석 공유", category: "성적" },
+      { id: "c5", label: "취약 과목/영역 확인", category: "성적" },
+      { id: "c6", label: "학습 방법/시간 배분 점검", category: "학습" },
+      { id: "c7", label: "자기주도 학습 비율 확인", category: "학습" },
+      { id: "c8", label: "진로/전형 방향 상담", category: "진로" },
+      { id: "c9", label: "목표 대학/학과 논의", category: "진로" },
+      { id: "c10", label: "액션 플랜 수립", category: "마무리" },
+      { id: "c11", label: "다음 상담 일정 안내", category: "마무리" },
+      { id: "c12", label: "상담 내용 요약/정리", category: "마무리" },
+    ];
+  }
+  return [...COMMON_INTRO, ...topics, ...COMMON_CLOSING];
+}
+
+// ── Delta 변화 추적 타입 ──
+
+interface DeltaData {
+  has_previous: boolean;
+  previous_id?: string;
+  previous_timing?: string;
+  previous_submitted_at?: string;
+  diff: Record<string, Record<string, { prev: unknown; curr: unknown; change_type: string }>>;
+  summary: string;
+}
 
 const CONSULTATION_MINUTES = 50;
 
@@ -64,7 +170,7 @@ interface SeniorNoteForCounselor {
   context_for_next: string | null;
 }
 
-type SessionTab = "checklist" | "notes" | "senior-notes";
+type SessionTab = "checklist" | "notes" | "delta" | "senior-notes";
 
 export default function ConsultationSessionPage() {
   const router = useRouter();
@@ -79,10 +185,13 @@ export default function ConsultationSessionPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Checklist
-  const [checklist, setChecklist] = useState<CheckItem[]>(
-    DEFAULT_CHECKLIST.map((c) => ({ ...c, checked: false }))
-  );
+  // Checklist (will be updated once booking loads with timing)
+  const [checklist, setChecklist] = useState<CheckItem[]>([]);
+  const [currentTiming, setCurrentTiming] = useState<string | null>(null);
+
+  // Delta 변화 추적
+  const [deltaData, setDeltaData] = useState<DeltaData | null>(null);
+  const [deltaLoading, setDeltaLoading] = useState(false);
 
   // Session tab
   const [sessionTab, setSessionTab] = useState<SessionTab>("checklist");
@@ -124,6 +233,29 @@ export default function ConsultationSessionPage() {
     try {
       const data = await getBookingDetail(bookingId);
       setBooking(data);
+
+      // 시점 결정: 가장 최근 submitted 설문의 timing
+      const submittedSurvey = data.surveys?.find((s: BookingDetail["surveys"][0]) => s.status === "submitted" && s.timing);
+      const timing = submittedSurvey?.timing || null;
+      setCurrentTiming(timing);
+
+      // 시점별 체크리스트 설정
+      const items = getChecklistForTiming(timing);
+      setChecklist(items.map((c) => ({ ...c, checked: false })));
+
+      // Delta 변화 추적 로드 (submitted 설문이 있을 때)
+      if (submittedSurvey) {
+        setDeltaLoading(true);
+        try {
+          const d = await getSurveyDelta(submittedSurvey.id);
+          setDeltaData(d);
+        } catch {
+          // delta 없으면 무시
+        } finally {
+          setDeltaLoading(false);
+        }
+      }
+
       // 선배인 경우 상담사 요약 로드
       if (isSenior && data?.user_id) {
         try {
@@ -233,7 +365,7 @@ export default function ConsultationSessionPage() {
   const progressPct = Math.min(100, (elapsedSeconds / (totalMinutes * 60)) * 100);
 
   const checkedCount = checklist.filter((c) => c.checked).length;
-  const categories = [...new Set(DEFAULT_CHECKLIST.map((c) => c.category))];
+  const categories = [...new Set(checklist.map((c) => c.category))];
 
   if (loading) {
     return (
@@ -511,9 +643,14 @@ export default function ConsultationSessionPage() {
           </div>
         )}
 
-        {/* 체크리스트/메모/선배기록 탭 */}
+        {/* 탭 바 */}
         <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: "2px solid #E5E7EB" }}>
-          {((!isSenior && seniorNotes.length > 0 ? ["checklist", "notes", "senior-notes"] : ["checklist", "notes"]) as SessionTab[]).map((tab) => (
+          {((() => {
+            const tabs: SessionTab[] = ["checklist", "notes"];
+            if (deltaData?.has_previous) tabs.push("delta");
+            if (!isSenior && seniorNotes.length > 0) tabs.push("senior-notes");
+            return tabs;
+          })()).map((tab) => (
             <button
               key={tab}
               onClick={() => setSessionTab(tab)}
@@ -525,51 +662,86 @@ export default function ConsultationSessionPage() {
                 marginBottom: -2,
               }}
             >
-              {tab === "checklist" ? `체크리스트 (${checkedCount}/${checklist.length})` : tab === "notes" ? "상담 기록" : `선배 기록 (${seniorNotes.length})`}
+              {tab === "checklist" ? `주제 가이드 (${checkedCount}/${checklist.length})`
+                : tab === "notes" ? "상담 기록"
+                : tab === "delta" ? "변화 추적"
+                : `선배 기록 (${seniorNotes.length})`}
             </button>
           ))}
         </div>
 
-        {/* 체크리스트 */}
+        {/* 주제 가이드 (체크리스트) */}
         {sessionTab === "checklist" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {categories.map((cat) => (
-              <div key={cat} style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
-                <div style={{
-                  padding: "10px 20px", background: "#F9FAFB", borderBottom: "1px solid #E5E7EB",
-                  fontSize: 13, fontWeight: 600, color: "#374151",
-                }}>
-                  {cat}
+            {/* 시점 정보 배너 */}
+            {currentTiming && TIMING_LABELS[currentTiming] && (
+              <div style={{ background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 8, padding: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ background: "#7C3AED", color: "white", padding: "2px 10px", borderRadius: 4, fontSize: 13, fontWeight: 700 }}>{currentTiming}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#5B21B6" }}>{TIMING_LABELS[currentTiming]}</span>
                 </div>
-                <div style={{ padding: "8px 20px" }}>
-                  {checklist
-                    .filter((c) => c.category === cat)
-                    .map((item) => (
-                      <label
-                        key={item.id}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 12, padding: "8px 0",
-                          cursor: "pointer", borderBottom: "1px solid #F3F4F6",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={item.checked}
-                          onChange={() => toggleCheck(item.id)}
-                          style={{ width: 18, height: 18, cursor: "pointer" }}
-                        />
-                        <span style={{
-                          fontSize: 14,
-                          textDecoration: item.checked ? "line-through" : "none",
-                          color: item.checked ? "#9CA3AF" : "#374151",
-                        }}>
-                          {item.label}
-                        </span>
-                      </label>
-                    ))}
+                <div style={{ fontSize: 13, color: "#6D28D9", fontStyle: "italic" }}>
+                  핵심 질문: &quot;{TIMING_CORE_QUESTION[currentTiming]}&quot;
                 </div>
               </div>
-            ))}
+            )}
+
+            {categories.map((cat) => {
+              const catItems = checklist.filter((c) => c.category === cat);
+              const isOptionalCat = cat === "선택 주제";
+              return (
+                <div key={cat} style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={{
+                    padding: "10px 20px",
+                    background: cat === "핵심 주제" ? "#EFF6FF" : cat === "선택 주제" ? "#FFFBEB" : "#F9FAFB",
+                    borderBottom: "1px solid #E5E7EB",
+                    fontSize: 13, fontWeight: 600,
+                    color: cat === "핵심 주제" ? "#1E40AF" : cat === "선택 주제" ? "#92400E" : "#374151",
+                    display: "flex", alignItems: "center", gap: 8,
+                  }}>
+                    {cat === "핵심 주제" && "🎯 "}{cat === "선택 주제" && "⭐ "}{cat}
+                    <span style={{ fontSize: 11, fontWeight: 400, color: "#9CA3AF" }}>
+                      ({catItems.filter(c => c.checked).length}/{catItems.length})
+                    </span>
+                    {isOptionalCat && <span style={{ fontSize: 11, color: "#D97706" }}> (시간 여유 시 진행)</span>}
+                  </div>
+                  <div style={{ padding: "4px 20px" }}>
+                    {catItems.map((item) => (
+                      <div key={item.id} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                        <label
+                          style={{
+                            display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.checked}
+                            onChange={() => toggleCheck(item.id)}
+                            style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0 }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <span style={{
+                              fontSize: 14,
+                              textDecoration: item.checked ? "line-through" : "none",
+                              color: item.checked ? "#9CA3AF" : "#374151",
+                              fontWeight: item.isOptional ? 400 : 500,
+                            }}>
+                              {item.label}
+                            </span>
+                            {item.detail && (
+                              <div style={{ fontSize: 12, color: "#6B7280", marginTop: 3, lineHeight: 1.5 }}>
+                                {item.detail}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -661,6 +833,109 @@ export default function ConsultationSessionPage() {
                   >
                     {noteSaving ? "저장 중..." : "상담 기록 저장"}
                   </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* 변화 추적 탭 */}
+        {sessionTab === "delta" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {deltaLoading ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF" }}>변화 추적 데이터 로딩 중...</div>
+            ) : !deltaData || !deltaData.has_previous ? (
+              <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                이전 설문이 없어 비교할 수 없습니다.
+              </div>
+            ) : (
+              <>
+                {/* 변경 요약 */}
+                <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 16 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "#1E40AF", marginBottom: 6 }}>이전 상담 대비 변화 요약</div>
+                  <div style={{ fontSize: 14, color: "#1E3A5F", marginBottom: 8 }}>{deltaData.summary}</div>
+                  {deltaData.previous_timing && (
+                    <div style={{ fontSize: 12, color: "#6B7280" }}>
+                      이전 설문: {deltaData.previous_timing}
+                      {deltaData.previous_submitted_at && ` (${new Date(deltaData.previous_submitted_at).toLocaleDateString("ko-KR")})`}
+                      {currentTiming && ` → 현재: ${currentTiming}`}
+                    </div>
+                  )}
+                </div>
+
+                {/* 카테고리별 변경 상세 */}
+                {Object.keys(deltaData.diff).length === 0 ? (
+                  <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                    변경 사항이 없습니다.
+                  </div>
+                ) : (
+                  Object.entries(deltaData.diff).map(([catId, questions]) => {
+                    const changeCount = Object.keys(questions).length;
+                    return (
+                      <div key={catId} style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                        <div style={{ padding: "12px 20px", background: "#F9FAFB", borderBottom: "1px solid #E5E7EB", fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                          {catId}
+                          <span style={{ fontSize: 12, color: "#6B7280", fontWeight: 400 }}>({changeCount}개 변경)</span>
+                        </div>
+                        <div style={{ padding: "12px 20px" }}>
+                          {Object.entries(questions).map(([qId, change]) => {
+                            const typeColors: Record<string, string> = {
+                              added: "#10B981", removed: "#EF4444", modified: "#F59E0B",
+                              increased: "#3B82F6", decreased: "#EF4444",
+                            };
+                            const typeLabels: Record<string, string> = {
+                              added: "신규", removed: "삭제", modified: "수정",
+                              increased: "증가", decreased: "감소",
+                            };
+                            const formatVal = (v: unknown) => {
+                              if (v === null || v === undefined) return "(없음)";
+                              if (typeof v === "object") return JSON.stringify(v);
+                              return String(v);
+                            };
+                            return (
+                              <div key={qId} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid #F3F4F6" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>{qId}</span>
+                                  <span style={{
+                                    padding: "1px 8px", borderRadius: 3, fontSize: 11, fontWeight: 600,
+                                    color: "white", background: typeColors[change.change_type] || "#6B7280",
+                                  }}>
+                                    {typeLabels[change.change_type] || change.change_type}
+                                  </span>
+                                </div>
+                                <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
+                                  {change.change_type !== "added" && (
+                                    <div style={{ flex: 1, padding: 10, background: "#FEF2F2", borderRadius: 6 }}>
+                                      <div style={{ color: "#991B1B", fontSize: 11, marginBottom: 3, fontWeight: 600 }}>이전</div>
+                                      <div style={{ color: "#7F1D1D", whiteSpace: "pre-wrap" }}>{formatVal(change.prev)}</div>
+                                    </div>
+                                  )}
+                                  {change.change_type !== "removed" && (
+                                    <div style={{ flex: 1, padding: 10, background: "#F0FDF4", borderRadius: 6 }}>
+                                      <div style={{ color: "#166534", fontSize: 11, marginBottom: 3, fontWeight: 600 }}>현재</div>
+                                      <div style={{ color: "#14532D", whiteSpace: "pre-wrap" }}>{formatVal(change.curr)}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+
+                {/* 주요 추적 포인트 안내 */}
+                <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#92400E", marginBottom: 8 }}>상담 시 확인 포인트</div>
+                  <div style={{ fontSize: 12, color: "#78350F", display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div>· 성적 변화: 내신·모의고사 등급 변화가 있는지 확인</div>
+                    <div>· 학습법 변화: D7 학습 방법을 변경했는지, 효과가 있었는지 확인</div>
+                    <div>· 심리 변화: D8 심리·컨디션 상태의 호전/악화 확인</div>
+                    <div>· 이전 로드맵 진행도: 지난 상담에서 세운 계획의 실행 여부 점검</div>
+                    <div>· 목표 변화: 진로·전형 방향의 변경 여부 확인</div>
+                  </div>
                 </div>
               </>
             )}
