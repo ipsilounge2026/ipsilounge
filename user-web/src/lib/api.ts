@@ -338,6 +338,14 @@ export async function getSurveyComputed(id: string) {
   return request(`/api/consultation-surveys/${id}/computed`);
 }
 
+export async function getSurveyActionPlan(id: string) {
+  return request(`/api/consultation-surveys/${id}/action-plan`);
+}
+
+export async function getSurveyRoadmap(id: string) {
+  return request(`/api/consultation-surveys/${id}/roadmap`);
+}
+
 export async function submitSurvey(id: string) {
   return request(`/api/consultation-surveys/${id}/submit`, {
     method: "POST",

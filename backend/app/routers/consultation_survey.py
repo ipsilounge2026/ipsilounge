@@ -472,6 +472,36 @@ async def get_computed_stats(
     return computed
 
 
+# ----- 학생용 액션플랜 / 로드맵 -----
+
+@router.get("/{survey_id}/action-plan")
+async def get_action_plan_user(
+    survey_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """학생용 액션 플랜 조회"""
+    survey = await _get_visible_survey(survey_id, user, db)
+    return survey.action_plan or {}
+
+@router.get("/{survey_id}/roadmap")
+async def get_roadmap_user(
+    survey_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """학생용 로드맵 조회 (computed에서 roadmap 부분만)"""
+    survey = await _get_visible_survey(survey_id, user, db)
+    if survey.status != "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="제출된 설문만 조회할 수 있습니다",
+        )
+    from app.routers.admin_consultation_survey import _compute_stats
+    computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
+    return {"roadmap": computed.get("roadmap", {}), "overrides": (survey.counselor_overrides or {}).get("roadmap")}
+
+
 # ----- 이어쓰기 토큰 발급 + 이메일 -----
 
 @router.post("/{survey_id}/resume-token", response_model=ResumeTokenResponse)
