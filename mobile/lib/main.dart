@@ -25,6 +25,7 @@ import 'screens/payment_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/interview_questions_screen.dart';
 import 'screens/notices_screen.dart';
+import 'screens/senior_pre_survey_screen.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -155,6 +156,7 @@ class IpsiLoungeApp extends StatelessWidget {
           '/payment': (context) => const PaymentScreen(),
           '/forgot-password': (context) => const ForgotPasswordScreen(),
           '/notices': (context) => const NoticesScreen(),
+          '/senior-pre-survey': (context) => const SeniorPreSurveyScreen(),
         },
         onGenerateRoute: (settings) {
           if (settings.name?.startsWith('/analysis/') == true) {

@@ -454,3 +454,29 @@ export async function listFamilyLinks(): Promise<{ items: FamilyLinkItem[] }> {
 export async function revokeFamilyLink(linkId: string): Promise<{ message: string }> {
   return request(`/api/family/links/${linkId}`, { method: "DELETE" });
 }
+
+// --- 선배 사전 설문 ---
+export async function getSeniorPreSurveySchema(sessionTiming?: string) {
+  const qs = sessionTiming ? `?session_timing=${sessionTiming}` : "";
+  return request(`/api/senior-pre-surveys/schema${qs}`);
+}
+
+export async function createSeniorPreSurvey(data: { session_number: number; session_timing?: string; booking_id?: string }) {
+  return request("/api/senior-pre-surveys", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function listSeniorPreSurveys() {
+  return request("/api/senior-pre-surveys");
+}
+
+export async function getSeniorPreSurvey(id: string) {
+  return request(`/api/senior-pre-surveys/${id}`);
+}
+
+export async function patchSeniorPreSurvey(id: string, answers: Record<string, unknown>) {
+  return request(`/api/senior-pre-surveys/${id}`, { method: "PATCH", body: JSON.stringify({ answers }) });
+}
+
+export async function submitSeniorPreSurvey(id: string) {
+  return request(`/api/senior-pre-surveys/${id}/submit`, { method: "POST" });
+}
