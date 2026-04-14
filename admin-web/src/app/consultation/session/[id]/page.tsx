@@ -170,29 +170,7 @@ interface SeniorNoteForCounselor {
   context_for_next: string | null;
 }
 
-type SessionTab = "checklist" | "notes" | "delta" | "senior-notes" | "guidebook";
-
-interface GuidebookItem {
-  id: string;
-  category: string;
-  title: string;
-  content: string;
-  sort_order: number;
-  session_timing: string | null;
-  is_active: boolean;
-}
-
-const GUIDEBOOK_CAT_LABELS: Record<string, string> = {
-  manual: "상담 진행 매뉴얼",
-  timing_guide: "시점별 상담 가이드",
-  caution: "주의 사항",
-};
-
-const GUIDEBOOK_CAT_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  manual: { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF" },
-  timing_guide: { bg: "#F5F3FF", border: "#DDD6FE", text: "#5B21B6" },
-  caution: { bg: "#FEF3C7", border: "#FDE68A", text: "#92400E" },
-};
+type SessionTab = "checklist" | "notes" | "delta" | "senior-notes";
 
 export default function ConsultationSessionPage() {
   const router = useRouter();
@@ -229,8 +207,8 @@ export default function ConsultationSessionPage() {
   const [noteSaved, setNoteSaved] = useState(false);
 
   // ── 선배 상담 기록 폼 상태 ──
-  const [snCoreTopics, setSnCoreTopics] = useState<{ topic: string; progress_status: string; student_reaction: string; key_content: string }[]>([]);
-  const [snOptionalTopics, setSnOptionalTopics] = useState<{ topic: string; covered: boolean; note: string }[]>([]);
+  const [snCoreTopics, setSnCoreTopics] = useState<{ topicId: string; topic: string; progress_status: string; student_reaction: string; key_content: string }[]>([]);
+  const [snOptionalTopics, setSnOptionalTopics] = useState<{ topicId: string; topic: string; covered: boolean; note: string }[]>([]);
   const [snStudentQuestions, setSnStudentQuestions] = useState("");
   const [snSeniorAnswers, setSnSeniorAnswers] = useState("");
   const [snStudentMood, setSnStudentMood] = useState("");
@@ -255,10 +233,9 @@ export default function ConsultationSessionPage() {
   const [seniorNotes, setSeniorNotes] = useState<SeniorNoteForCounselor[]>([]);
   const [seniorNotesLoading, setSeniorNotesLoading] = useState(false);
 
-  // 가이드북
-  const [guidebookItems, setGuidebookItems] = useState<GuidebookItem[]>([]);
-  const [guidebookCat, setGuidebookCat] = useState<string>("manual");
-  const [guidebookExpanded, setGuidebookExpanded] = useState<Record<string, boolean>>({});
+  // 가이드북 (topic_id → content 맵)
+  const [guidebookMap, setGuidebookMap] = useState<Record<string, string>>({});
+  const [guideOpen, setGuideOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -315,8 +292,8 @@ export default function ConsultationSessionPage() {
           const topics = TIMING_TOPICS[timing];
           const coreItems = topics.filter(t => t.category === "핵심 주제");
           const optItems = topics.filter(t => t.category === "선택 주제");
-          setSnCoreTopics(coreItems.map(t => ({ topic: t.label, progress_status: "미진행", student_reaction: "", key_content: "" })));
-          setSnOptionalTopics(optItems.map(t => ({ topic: t.label, covered: false, note: "" })));
+          setSnCoreTopics(coreItems.map(t => ({ topicId: t.id, topic: t.label, progress_status: "미진행", student_reaction: "", key_content: "" })));
+          setSnOptionalTopics(optItems.map(t => ({ topicId: t.id, topic: t.label, covered: false, note: "" })));
         }
 
         // 세션 번호 추정 (timing S1→1, S2→2 등, 없으면 1)
@@ -331,12 +308,18 @@ export default function ConsultationSessionPage() {
           }
         }
 
-        // 가이드북 로드
-        try {
-          const gbRes = await getGuidebooks();
-          setGuidebookItems(gbRes.guidebooks || []);
-        } catch {
-          // 가이드북 로드 실패 무시
+        // 가이드북 로드 (현재 시점에 해당하는 가이드만)
+        if (timing) {
+          try {
+            const gbRes = await getGuidebooks(timing);
+            const gbMap: Record<string, string> = {};
+            for (const g of (gbRes.guidebooks || [])) {
+              if (g.topic_id) gbMap[g.topic_id] = g.content;
+            }
+            setGuidebookMap(gbMap);
+          } catch {
+            // 가이드북 로드 실패 무시
+          }
         }
       }
       // 상담사인 경우 선배 기록 로드
@@ -773,7 +756,6 @@ export default function ConsultationSessionPage() {
             const tabs: SessionTab[] = ["checklist", "notes"];
             if (deltaData?.has_previous) tabs.push("delta");
             if (!isSenior && seniorNotes.length > 0) tabs.push("senior-notes");
-            if (isSenior && guidebookItems.length > 0) tabs.push("guidebook");
             return tabs;
           })()).map((tab) => (
             <button
@@ -790,7 +772,6 @@ export default function ConsultationSessionPage() {
               {tab === "checklist" ? `주제 가이드 (${checkedCount}/${checklist.length})`
                 : tab === "notes" ? "상담 기록"
                 : tab === "delta" ? "변화 추적"
-                : tab === "guidebook" ? "가이드북"
                 : `선배 기록 (${seniorNotes.length})`}
             </button>
           ))}
@@ -1034,9 +1015,26 @@ export default function ConsultationSessionPage() {
                     ) : (
                       snCoreTopics.map((topic, i) => (
                         <div key={i} style={{ marginBottom: 20, paddingBottom: 20, borderBottom: i < snCoreTopics.length - 1 ? "1px solid #F3F4F6" : "none" }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-                            {i + 1}. {topic.topic}
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span>{i + 1}. {topic.topic}</span>
+                            {guidebookMap[topic.topicId] && (
+                              <button
+                                onClick={() => setGuideOpen(prev => ({ ...prev, [topic.topicId]: !prev[topic.topicId] }))}
+                                style={{
+                                  padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 500,
+                                  border: "1px solid #DDD6FE", background: guideOpen[topic.topicId] ? "#7C3AED" : "#F5F3FF",
+                                  color: guideOpen[topic.topicId] ? "#FFF" : "#7C3AED", cursor: "pointer",
+                                }}
+                              >
+                                {guideOpen[topic.topicId] ? "가이드 닫기" : "가이드 보기"}
+                              </button>
+                            )}
                           </div>
+                          {guideOpen[topic.topicId] && guidebookMap[topic.topicId] && (
+                            <div style={{ padding: "10px 14px", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 8, marginBottom: 10, fontSize: 13, color: "#5B21B6", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                              {guidebookMap[topic.topicId]}
+                            </div>
+                          )}
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 8 }}>
                             <div>
                               <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 4 }}>진행 상태</label>
@@ -1102,19 +1100,38 @@ export default function ConsultationSessionPage() {
                     <div style={{ padding: 20 }}>
                       {snOptionalTopics.map((topic, i) => (
                         <div key={i} style={{ marginBottom: 12 }}>
-                          <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 4 }}>
-                            <input
-                              type="checkbox"
-                              checked={topic.covered}
-                              onChange={() => {
-                                const updated = [...snOptionalTopics];
-                                updated[i] = { ...updated[i], covered: !updated[i].covered };
-                                setSnOptionalTopics(updated);
-                              }}
-                              style={{ width: 16, height: 16 }}
-                            />
-                            <span style={{ fontSize: 13, fontWeight: 500 }}>{topic.topic}</span>
-                          </label>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                              <input
+                                type="checkbox"
+                                checked={topic.covered}
+                                onChange={() => {
+                                  const updated = [...snOptionalTopics];
+                                  updated[i] = { ...updated[i], covered: !updated[i].covered };
+                                  setSnOptionalTopics(updated);
+                                }}
+                                style={{ width: 16, height: 16 }}
+                              />
+                              <span style={{ fontSize: 13, fontWeight: 500 }}>{topic.topic}</span>
+                            </label>
+                            {guidebookMap[topic.topicId] && (
+                              <button
+                                onClick={() => setGuideOpen(prev => ({ ...prev, [topic.topicId]: !prev[topic.topicId] }))}
+                                style={{
+                                  padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 500,
+                                  border: "1px solid #FDE68A", background: guideOpen[topic.topicId] ? "#F59E0B" : "#FFFBEB",
+                                  color: guideOpen[topic.topicId] ? "#FFF" : "#92400E", cursor: "pointer",
+                                }}
+                              >
+                                {guideOpen[topic.topicId] ? "가이드 닫기" : "가이드 보기"}
+                              </button>
+                            )}
+                          </div>
+                          {guideOpen[topic.topicId] && guidebookMap[topic.topicId] && (
+                            <div style={{ padding: "10px 14px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, marginBottom: 6, marginLeft: 26, fontSize: 13, color: "#92400E", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                              {guidebookMap[topic.topicId]}
+                            </div>
+                          )}
                           {topic.covered && (
                             <textarea
                               value={topic.note}
@@ -1573,101 +1590,6 @@ export default function ConsultationSessionPage() {
           </div>
         )}
 
-        {/* 가이드북 패널 (선배 전용) */}
-        {sessionTab === "guidebook" && isSenior && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* 카테고리 필터 */}
-            <div style={{ display: "flex", gap: 8 }}>
-              {Object.entries(GUIDEBOOK_CAT_LABELS).map(([cat, label]) => {
-                const colors = GUIDEBOOK_CAT_COLORS[cat];
-                const count = guidebookItems.filter(g => g.category === cat).length;
-                const isActive = guidebookCat === cat;
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => setGuidebookCat(cat)}
-                    style={{
-                      padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: isActive ? 600 : 400,
-                      border: `1px solid ${isActive ? colors.border : "#E5E7EB"}`,
-                      background: isActive ? colors.bg : "#FFF",
-                      color: isActive ? colors.text : "#6B7280",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {label} ({count})
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* 시점 필터 안내 (timing_guide인 경우) */}
-            {guidebookCat === "timing_guide" && currentTiming && (
-              <div style={{ padding: "8px 14px", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 8, fontSize: 13, color: "#5B21B6" }}>
-                현재 상담 시점: <strong>{currentTiming}</strong> — 해당 시점 가이드가 상단에 표시됩니다.
-              </div>
-            )}
-
-            {/* 가이드북 항목들 */}
-            {(() => {
-              let filtered = guidebookItems.filter(g => g.category === guidebookCat);
-              // timing_guide이고 현재 시점이 있으면 해당 시점 먼저, 나머지 뒤
-              if (guidebookCat === "timing_guide" && currentTiming) {
-                const seniorTiming = `S${currentTiming.replace(/\D/g, "")}`;
-                const matched = filtered.filter(g => g.session_timing === seniorTiming || g.session_timing === currentTiming);
-                const general = filtered.filter(g => !g.session_timing);
-                const others = filtered.filter(g => g.session_timing && g.session_timing !== seniorTiming && g.session_timing !== currentTiming);
-                filtered = [...matched, ...general, ...others];
-              }
-              if (filtered.length === 0) {
-                return <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF", fontSize: 14 }}>이 카테고리에 등록된 가이드가 없습니다.</div>;
-              }
-              return filtered.map((g) => {
-                const isExpanded = guidebookExpanded[g.id];
-                const colors = GUIDEBOOK_CAT_COLORS[g.category] || GUIDEBOOK_CAT_COLORS.manual;
-                const isTimingMatch = guidebookCat === "timing_guide" && currentTiming && (g.session_timing === `S${currentTiming.replace(/\D/g, "")}` || g.session_timing === currentTiming);
-                return (
-                  <div
-                    key={g.id}
-                    style={{
-                      background: "#FFF",
-                      border: isTimingMatch ? `2px solid ${colors.border}` : "1px solid #E5E7EB",
-                      borderRadius: 10,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <button
-                      onClick={() => setGuidebookExpanded(prev => ({ ...prev, [g.id]: !prev[g.id] }))}
-                      style={{
-                        width: "100%", padding: "14px 20px", border: "none", background: isTimingMatch ? colors.bg : "#FAFAFA",
-                        cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{g.title}</span>
-                        {g.session_timing && (
-                          <span style={{ fontSize: 11, padding: "2px 8px", background: colors.bg, color: colors.text, borderRadius: 10, border: `1px solid ${colors.border}` }}>
-                            {g.session_timing}
-                          </span>
-                        )}
-                        {isTimingMatch && (
-                          <span style={{ fontSize: 11, padding: "2px 8px", background: "#DCFCE7", color: "#166534", borderRadius: 10 }}>현재 시점</span>
-                        )}
-                      </div>
-                      <span style={{ fontSize: 16, color: "#9CA3AF", transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
-                    </button>
-                    {isExpanded && (
-                      <div style={{ padding: "16px 20px", borderTop: "1px solid #E5E7EB" }}>
-                        <pre style={{ fontSize: 13, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.7, margin: 0, fontFamily: "inherit" }}>
-                          {g.content}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        )}
       </main>
     </div>
   );

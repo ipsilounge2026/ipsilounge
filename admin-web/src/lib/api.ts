@@ -422,17 +422,13 @@ export async function getSeniorCumulativeSummary(userId: string) {
 }
 
 // --- 가이드북 관리 ---
-export async function getGuidebooks(category?: string) {
-  const params = category ? `?category=${category}` : "";
+export async function getGuidebooks(timing?: string) {
+  const params = timing ? `?timing=${timing}` : "";
   return request(`/api/admin/guidebooks${params}`);
 }
 
-export async function createGuidebook(data: { category: string; title: string; content: string; sort_order?: number; session_timing?: string; is_active?: boolean }) {
-  return request("/api/admin/guidebooks", { method: "POST", body: JSON.stringify(data) });
-}
-
-export async function updateGuidebook(id: string, data: { category?: string; title?: string; content?: string; sort_order?: number; session_timing?: string; is_active?: boolean }) {
-  return request(`/api/admin/guidebooks/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export async function bulkSaveGuidebooks(timing: string, items: { topic_id: string; title: string; content: string }[]) {
+  return request("/api/admin/guidebooks/bulk", { method: "PUT", body: JSON.stringify({ timing, items }) });
 }
 
 export async function deleteGuidebook(id: string) {

@@ -1,11 +1,11 @@
 """
 가이드북 관리 API (관리자 전용)
 
-- GET    /api/admin/guidebooks           전체 목록
-- POST   /api/admin/guidebooks           생성
-- PUT    /api/admin/guidebooks/{id}      수정
-- DELETE /api/admin/guidebooks/{id}      삭제
-- PUT    /api/admin/guidebooks/reorder   정렬 순서 변경
+시점별(T1-T4) + 상담 항목별 가이드 관리
+
+- GET    /api/admin/guidebooks              전체 또는 시점별 목록
+- PUT    /api/admin/guidebooks/bulk         시점별 일괄 저장 (upsert)
+- DELETE /api/admin/guidebooks/{id}         개별 삭제
 """
 
 import uuid
@@ -22,44 +22,28 @@ from app.utils.dependencies import get_current_admin
 
 router = APIRouter(prefix="/api/admin/guidebooks", tags=["가이드북 관리"])
 
-VALID_CATEGORIES = ("manual", "timing_guide", "caution")
+VALID_TIMINGS = ("T1", "T2", "T3", "T4")
 
 
-class GuidebookCreate(BaseModel):
-    category: str
+class BulkSaveItem(BaseModel):
+    topic_id: str
     title: str
     content: str
-    sort_order: int = 0
-    session_timing: str | None = None
-    is_active: bool = True
 
 
-class GuidebookUpdate(BaseModel):
-    category: str | None = None
-    title: str | None = None
-    content: str | None = None
-    sort_order: int | None = None
-    session_timing: str | None = None
-    is_active: bool | None = None
-
-
-class ReorderItem(BaseModel):
-    id: str
-    sort_order: int
-
-
-class ReorderRequest(BaseModel):
-    items: list[ReorderItem]
+class BulkSaveRequest(BaseModel):
+    timing: str
+    items: list[BulkSaveItem]
 
 
 def _to_dict(g: Guidebook) -> dict:
     return {
         "id": str(g.id),
-        "category": g.category,
+        "timing": g.category,
+        "topic_id": g.session_timing,
         "title": g.title,
         "content": g.content,
         "sort_order": g.sort_order,
-        "session_timing": g.session_timing,
         "is_active": g.is_active,
         "created_at": g.created_at.isoformat() if g.created_at else None,
         "updated_at": g.updated_at.isoformat() if g.updated_at else None,
@@ -68,14 +52,14 @@ def _to_dict(g: Guidebook) -> dict:
 
 @router.get("")
 async def list_guidebooks(
-    category: str | None = None,
+    timing: str | None = None,
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """가이드북 전체 목록 (관리자: 전체, 선배: active만)"""
+    """가이드북 목록 (시점별 필터 가능)"""
     q = select(Guidebook).order_by(Guidebook.category, Guidebook.sort_order, Guidebook.created_at)
-    if category:
-        q = q.where(Guidebook.category == category)
+    if timing:
+        q = q.where(Guidebook.category == timing)
     if admin.role == "senior":
         q = q.where(Guidebook.is_active == True)  # noqa: E712
 
@@ -84,66 +68,48 @@ async def list_guidebooks(
     return {"guidebooks": [_to_dict(g) for g in items]}
 
 
-@router.post("")
-async def create_guidebook(
-    data: GuidebookCreate,
+@router.put("/bulk")
+async def bulk_save_guidebooks(
+    data: BulkSaveRequest,
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """가이드북 생성 (관리자만)"""
-    if admin.role == "senior":
-        raise HTTPException(status_code=403, detail="관리자만 가이드북을 생성할 수 있습니다")
-    if data.category not in VALID_CATEGORIES:
-        raise HTTPException(status_code=400, detail=f"유효하지 않은 카테고리: {data.category}")
-
-    g = Guidebook(
-        category=data.category,
-        title=data.title,
-        content=data.content,
-        sort_order=data.sort_order,
-        session_timing=data.session_timing,
-        is_active=data.is_active,
-    )
-    db.add(g)
-    await db.commit()
-    await db.refresh(g)
-    return _to_dict(g)
-
-
-@router.put("/{guidebook_id}")
-async def update_guidebook(
-    guidebook_id: uuid.UUID,
-    data: GuidebookUpdate,
-    admin: Admin = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """가이드북 수정 (관리자만)"""
+    """시점별 가이드 일괄 저장 (upsert: 내용 있으면 생성/수정, 빈 내용이면 삭제)"""
     if admin.role == "senior":
         raise HTTPException(status_code=403, detail="관리자만 가이드북을 수정할 수 있습니다")
+    if data.timing not in VALID_TIMINGS:
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 시점: {data.timing}")
 
-    result = await db.execute(select(Guidebook).where(Guidebook.id == guidebook_id))
-    g = result.scalar_one_or_none()
-    if not g:
-        raise HTTPException(status_code=404, detail="가이드북을 찾을 수 없습니다")
+    for idx, item in enumerate(data.items):
+        result = await db.execute(
+            select(Guidebook).where(
+                Guidebook.category == data.timing,
+                Guidebook.session_timing == item.topic_id,
+            )
+        )
+        existing = result.scalar_one_or_none()
 
-    if data.category is not None:
-        if data.category not in VALID_CATEGORIES:
-            raise HTTPException(status_code=400, detail=f"유효하지 않은 카테고리: {data.category}")
-        g.category = data.category
-    if data.title is not None:
-        g.title = data.title
-    if data.content is not None:
-        g.content = data.content
-    if data.sort_order is not None:
-        g.sort_order = data.sort_order
-    if data.session_timing is not None:
-        g.session_timing = data.session_timing
-    if data.is_active is not None:
-        g.is_active = data.is_active
+        if existing:
+            if item.content.strip():
+                existing.title = item.title
+                existing.content = item.content
+                existing.sort_order = idx
+            else:
+                await db.delete(existing)
+        else:
+            if item.content.strip():
+                g = Guidebook(
+                    category=data.timing,
+                    title=item.title,
+                    content=item.content,
+                    session_timing=item.topic_id,
+                    sort_order=idx,
+                    is_active=True,
+                )
+                db.add(g)
 
     await db.commit()
-    await db.refresh(g)
-    return _to_dict(g)
+    return {"ok": True}
 
 
 @router.delete("/{guidebook_id}")
@@ -152,7 +118,7 @@ async def delete_guidebook(
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """가이드북 삭제 (관리자만)"""
+    """가이드북 개별 삭제 (관리자만)"""
     if admin.role == "senior":
         raise HTTPException(status_code=403, detail="관리자만 가이드북을 삭제할 수 있습니다")
 
@@ -162,27 +128,5 @@ async def delete_guidebook(
         raise HTTPException(status_code=404, detail="가이드북을 찾을 수 없습니다")
 
     await db.delete(g)
-    await db.commit()
-    return {"ok": True}
-
-
-@router.put("/reorder")
-async def reorder_guidebooks(
-    data: ReorderRequest,
-    admin: Admin = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """가이드북 정렬 순서 일괄 변경 (관리자만)"""
-    if admin.role == "senior":
-        raise HTTPException(status_code=403, detail="관리자만 정렬 순서를 변경할 수 있습니다")
-
-    for item in data.items:
-        result = await db.execute(
-            select(Guidebook).where(Guidebook.id == uuid.UUID(item.id))
-        )
-        g = result.scalar_one_or_none()
-        if g:
-            g.sort_order = item.sort_order
-
     await db.commit()
     return {"ok": True}
