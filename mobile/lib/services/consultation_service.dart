@@ -51,6 +51,26 @@ class ConsultationService {
     });
   }
 
+  /// 내 담당 선배 조회
+  static Future<Map<String, dynamic>> getMySenior() async {
+    return Map<String, dynamic>.from(
+      await ApiService.get('/consultation/my-senior'),
+    );
+  }
+
+  /// 선배 변경 요청
+  static Future<Map<String, dynamic>> requestSeniorChange({
+    String? requestedSeniorId,
+    required String reason,
+  }) async {
+    return Map<String, dynamic>.from(
+      await ApiService.post('/consultation/change-senior-request', {
+        'requested_senior_id': requestedSeniorId,
+        'reason': reason,
+      }),
+    );
+  }
+
   static Future<List<ConsultationSlot>> getAvailableSlots(
       int year, int month, {String? adminId}) async {
     String url = '/consultation/slots?year=$year&month=$month';

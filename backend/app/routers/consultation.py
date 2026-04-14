@@ -397,6 +397,25 @@ async def get_my_counselor(
     return {"assigned": False, "counselor": None}
 
 
+@router.get("/my-senior")
+async def get_my_senior(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """내 담당 선배 조회"""
+    result = await db.execute(
+        select(SeniorStudentAssignment).where(SeniorStudentAssignment.user_id == user.id)
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        return {"assigned": False, "senior": None}
+    admin = await db.get(Admin, row.senior_id)
+    return {
+        "assigned": True,
+        "senior": {"id": str(admin.id), "name": admin.name} if admin else None,
+    }
+
+
 @router.get("/available-counselors")
 async def get_available_counselors(
     user: User = Depends(get_current_user),

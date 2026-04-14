@@ -54,6 +54,11 @@ class _MypageScreenState extends State<MypageScreen> {
   Counselor? _myCounselor;
   bool _counselorLoading = true;
 
+  // 담당 선배 관련
+  bool _seniorAssigned = false;
+  Map<String, dynamic>? _mySenior;
+  bool _seniorLoading = true;
+
   // 설문 관련
   List<Map<String, dynamic>> _surveys = [];
 
@@ -69,9 +74,11 @@ class _MypageScreenState extends State<MypageScreen> {
     final memberType = user?.memberType ?? 'student';
     if (memberType != 'branch_manager') {
       _loadCounselor();
+      _loadSenior();
       _loadSurveys();
     } else {
       _counselorLoading = false;
+      _seniorLoading = false;
     }
   }
 
@@ -102,6 +109,107 @@ class _MypageScreenState extends State<MypageScreen> {
       final list = await SurveyService.listMy();
       setState(() => _surveys = list);
     } catch (_) {}
+  }
+
+  Future<void> _loadSenior() async {
+    try {
+      final res = await ConsultationService.getMySenior();
+      setState(() {
+        _seniorAssigned = res['assigned'] == true;
+        if (res['senior'] != null) {
+          _mySenior = Map<String, dynamic>.from(res['senior']);
+        }
+        _seniorLoading = false;
+      });
+    } catch (_) {
+      setState(() => _seniorLoading = false);
+    }
+  }
+
+  Future<void> _showSeniorChangeRequestDialog() async {
+    final reasonCtrl = TextEditingController();
+    bool isSubmitting = false;
+
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: 20, right: 20, top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('선배 변경 요청',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              const Text('변경 사유', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: reasonCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(hintText: '선배 변경을 요청하는 사유를 입력해주세요'),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: isSubmitting ? null : () async {
+                        if (reasonCtrl.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(content: Text('변경 사유를 입력해주세요.')),
+                          );
+                          return;
+                        }
+                        setSheetState(() => isSubmitting = true);
+                        try {
+                          await ConsultationService.requestSeniorChange(
+                            reason: reasonCtrl.text.trim(),
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            setState(() => _message = '선배 변경 요청이 접수되었습니다. 관리자 확인 후 처리됩니다.');
+                          }
+                        } catch (e) {
+                          setSheetState(() => isSubmitting = false);
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text(e.toString())),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF7C3AED),
+                      ),
+                      child: isSubmitting
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text('변경 요청 제출'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('취소'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -568,6 +676,61 @@ class _MypageScreenState extends State<MypageScreen> {
                   else
                     const Text(
                       '아직 배정된 담당자가 없습니다.\n상담 예약 시 자동 배정됩니다.',
+                      style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF), height: 1.5),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // 담당 선배
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('담당 선배', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 12),
+                  if (_seniorLoading)
+                    const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                  else if (_seniorAssigned && _mySenior != null)
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: const Color(0xFF7C3AED),
+                          child: Text(
+                            (_mySenior!['name'] as String? ?? '?').isNotEmpty
+                                ? (_mySenior!['name'] as String)[0]
+                                : '?',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(_mySenior!['name'] as String? ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: _showSeniorChangeRequestDialog,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text('선배 변경 요청', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    const Text(
+                      '아직 배정된 담당 선배가 없습니다.\n선배 상담 예약 시 자동 배정됩니다.',
                       style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF), height: 1.5),
                     ),
                 ],

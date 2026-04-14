@@ -26,6 +26,7 @@ import 'screens/forgot_password_screen.dart';
 import 'screens/interview_questions_screen.dart';
 import 'screens/notices_screen.dart';
 import 'screens/senior_pre_survey_screen.dart';
+import 'screens/satisfaction_survey_screen.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -159,6 +160,12 @@ class IpsiLoungeApp extends StatelessWidget {
           '/senior-pre-survey': (context) => const SeniorPreSurveyScreen(),
         },
         onGenerateRoute: (settings) {
+          if (settings.name?.startsWith('/satisfaction-survey/') == true) {
+            final id = settings.name!.split('/').last;
+            return MaterialPageRoute(
+              builder: (context) => SatisfactionSurveyScreen(surveyId: id),
+            );
+          }
           if (settings.name?.startsWith('/analysis/') == true) {
             final parts = settings.name!.split('/');
             // /analysis/:id/interview

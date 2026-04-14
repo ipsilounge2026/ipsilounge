@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FamilyLinkSection from "@/components/FamilyLinkSection";
-import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange, listMySurveys, deleteSurvey } from "@/lib/api";
+import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange, getMySenior, requestSeniorChange, listMySurveys, deleteSurvey } from "@/lib/api";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 interface User {
@@ -96,6 +96,13 @@ export default function MyPage() {
   const [changeReason, setChangeReason] = useState("");
   const [changeLoading, setChangeLoading] = useState(false);
 
+  // 담당 선배 관련
+  const [mySenior, setMySenior] = useState<{id: string; name: string} | null>(null);
+  const [isSeniorAssigned, setIsSeniorAssigned] = useState(false);
+  const [showSeniorChangeRequest, setShowSeniorChangeRequest] = useState(false);
+  const [seniorChangeReason, setSeniorChangeReason] = useState("");
+  const [seniorChangeLoading, setSeniorChangeLoading] = useState(false);
+
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
     getMe().then((u) => {
@@ -115,6 +122,11 @@ export default function MyPage() {
       getMyCounselor().then((res) => {
         setIsAssigned(res.assigned);
         setMyCounselor(res.counselor);
+      }).catch(() => {});
+      // 담당 선배 조회
+      getMySenior().then((res) => {
+        setIsSeniorAssigned(res.assigned);
+        setMySenior(res.senior);
       }).catch(() => {});
     }
   }, []);
@@ -173,6 +185,24 @@ export default function MyPage() {
       setMessage(err.message);
     } finally {
       setChangeLoading(false);
+    }
+  };
+
+  const handleSubmitSeniorChange = async () => {
+    if (!seniorChangeReason.trim()) {
+      setMessage("변경 사유를 입력해주세요.");
+      return;
+    }
+    setSeniorChangeLoading(true);
+    try {
+      await requestSeniorChange({ requested_senior_id: null, reason: seniorChangeReason });
+      setMessage("선배 변경 요청이 접수되었습니다. 관리자 확인 후 처리됩니다.");
+      setShowSeniorChangeRequest(false);
+      setSeniorChangeReason("");
+    } catch (err: any) {
+      setMessage(err.message);
+    } finally {
+      setSeniorChangeLoading(false);
     }
   };
 
@@ -473,6 +503,44 @@ export default function MyPage() {
                   )}
                 </div>
               )}
+
+              {/* 담당 선배 정보 (학생/학부모만) */}
+              {memberType !== "branch_manager" && (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--gray-100)" }}>
+                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 6 }}>담당 선배</div>
+                  {isSeniorAssigned && mySenior ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: "50%",
+                        background: "#7C3AED", display: "flex", alignItems: "center", justifyContent: "center",
+                        fontWeight: 700, color: "#fff", fontSize: 14,
+                      }}>
+                        {mySenior.name.charAt(0)}
+                      </div>
+                      <span style={{ fontWeight: 600, fontSize: 15 }}>{mySenior.name}</span>
+                      <button
+                        onClick={() => setShowSeniorChangeRequest(true)}
+                        style={{
+                          marginLeft: "auto",
+                          fontSize: 12,
+                          padding: "4px 12px",
+                          borderRadius: 6,
+                          border: "1px solid #E5E7EB",
+                          background: "#fff",
+                          color: "#6B7280",
+                          cursor: "pointer",
+                        }}
+                      >
+                        선배 변경 요청
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 14, color: "#9CA3AF" }}>
+                      아직 배정된 선배가 없습니다. 선배 상담 예약 시 자동 배정됩니다.
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -509,6 +577,33 @@ export default function MyPage() {
                 {changeLoading ? "요청 중..." : "변경 요청 제출"}
               </button>
               <button className="btn btn-outline" onClick={() => setShowChangeRequest(false)}>취소</button>
+            </div>
+          </div>
+        )}
+
+        {/* 선배 변경 요청 모달 */}
+        {showSeniorChangeRequest && (
+          <div className="card" style={{ marginBottom: 16, border: "1px solid #DDD6FE", background: "#F5F3FF" }}>
+            <h3 style={{ fontSize: 15, marginBottom: 12 }}>선배 변경 요청</h3>
+            <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 12 }}>
+              관리자가 적합한 선배를 새로 배정해드립니다.
+            </p>
+            <div className="form-group">
+              <label>변경 사유</label>
+              <textarea
+                className="form-control"
+                value={seniorChangeReason}
+                onChange={e => setSeniorChangeReason(e.target.value)}
+                placeholder="선배 변경을 요청하는 사유를 입력해주세요"
+                rows={3}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-primary" onClick={handleSubmitSeniorChange} disabled={seniorChangeLoading}
+                style={{ background: "#7C3AED", borderColor: "#7C3AED" }}>
+                {seniorChangeLoading ? "요청 중..." : "변경 요청 제출"}
+              </button>
+              <button className="btn btn-outline" onClick={() => setShowSeniorChangeRequest(false)}>취소</button>
             </div>
           </div>
         )}

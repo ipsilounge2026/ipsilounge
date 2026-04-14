@@ -480,3 +480,33 @@ export async function patchSeniorPreSurvey(id: string, answers: Record<string, u
 export async function submitSeniorPreSurvey(id: string) {
   return request(`/api/senior-pre-surveys/${id}/submit`, { method: "POST" });
 }
+
+// --- 만족도 설문 ---
+export async function getSatisfactionSurveySchema(surveyType: string) {
+  return request(`/api/satisfaction-surveys/schema?survey_type=${surveyType}`);
+}
+
+export async function listSatisfactionSurveys() {
+  return request("/api/satisfaction-surveys");
+}
+
+export async function getSatisfactionSurvey(id: string) {
+  return request(`/api/satisfaction-surveys/${id}`);
+}
+
+export async function patchSatisfactionSurvey(id: string, data: { scores?: Record<string, number>; free_text?: Record<string, string> }) {
+  return request(`/api/satisfaction-surveys/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function submitSatisfactionSurvey(id: string) {
+  return request(`/api/satisfaction-surveys/${id}/submit`, { method: "POST" });
+}
+
+// --- 선배 변경 요청 ---
+export async function getMySenior() {
+  return request("/api/consultation/my-senior");
+}
+
+export async function requestSeniorChange(data: { requested_senior_id: string | null; reason: string }) {
+  return request("/api/consultation/change-senior-request", { method: "POST", body: JSON.stringify(data) });
+}

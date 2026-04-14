@@ -37,6 +37,7 @@ from app.routers import (
     admin_senior_consultation,
     admin_guidebook,
     notice,
+    satisfaction_survey,
     senior_pre_survey,
     universities,
 )
@@ -102,6 +103,7 @@ app.include_router(admin_notice.router)
 app.include_router(admin_senior_consultation.router)
 app.include_router(admin_guidebook.router)
 app.include_router(notice.router)
+app.include_router(satisfaction_survey.router)
 app.include_router(senior_pre_survey.router)
 app.include_router(universities.router)
 
@@ -133,6 +135,7 @@ async def startup():
         family_invite,
         senior_change_request,
         senior_consultation_note,
+        satisfaction_survey as satisfaction_survey_model,
         senior_pre_survey as senior_pre_survey_model,
         guidebook,
     )
