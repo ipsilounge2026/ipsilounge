@@ -667,6 +667,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
         return _careerSelect(catId, qId, answer as Map<String, dynamic>?, q);
       case 'composite':
         return _compositeInput(catId, qId, answer as Map<String, dynamic>?, q);
+      case 'subject_study_method_panel':
+        return _subjectStudyMethodPanel(catId, qId, answer as Map<String, dynamic>?, q);
       case 'group':
         final children = (q['children'] as List?)?.cast<Map<String, dynamic>>() ?? [];
         return Column(
@@ -1100,6 +1102,368 @@ class _SurveyScreenState extends State<SurveyScreen> {
           );
         }
       }).toList(),
+    );
+  }
+
+  // ===== subject_study_method_panel (D7 과목별 학습법, 3분지 분기 지원) =====
+  Widget _subjectStudyMethodPanel(String catId, String qId, Map<String, dynamic>? value, Map<String, dynamic> q) {
+    final data = Map<String, dynamic>.from(value ?? {});
+    final defaultSubjects = ((q['default_subjects'] as List?)?.cast<String>()) ?? const ['국어', '수학', '영어'];
+    // D6.weakest 에서 취약 과목 추가
+    final d6 = _answers['D']?['D6'] as Map<String, dynamic>?;
+    final weakest = (d6?['weakest'] as List?)?.cast<String>() ?? const [];
+    final allSubjects = <String>{...defaultSubjects, ...weakest, ...data.keys.where((k) => k != '_meta')}.toList();
+
+    final perSubject = (q['questions_per_subject'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+    final isDelta = q['delta'] == 'diff_view_change_check';
+
+    void writeSubject(String subject, Map<String, dynamic> next) {
+      final updated = Map<String, dynamic>.from(data);
+      updated[subject] = next;
+      _setAnswer(catId, qId, updated);
+    }
+
+    void setChangeStatus(String subject, String status) {
+      final cur = Map<String, dynamic>.from(data[subject] as Map? ?? {});
+      if (status == '완전변경') {
+        // 모든 필드 초기화 후 _change_status 만 유지
+        writeSubject(subject, {'_change_status': status});
+      } else {
+        cur['_change_status'] = status;
+        writeSubject(subject, cur);
+      }
+    }
+
+    void resetChangeStatus(String subject) {
+      final cur = Map<String, dynamic>.from(data[subject] as Map? ?? {});
+      cur.remove('_change_status');
+      writeSubject(subject, cur);
+    }
+
+    Widget statusPill(String label, String desc, Color bg, Color border, Color color, VoidCallback onTap) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(
+              color: bg,
+              border: Border.all(color: border, width: 2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+                const SizedBox(height: 2),
+                Text(desc, style: TextStyle(fontSize: 10, color: color.withOpacity(0.7))),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: allSubjects.map((subject) {
+        final subData = Map<String, dynamic>.from(data[subject] as Map? ?? {});
+        final changeStatus = subData['_change_status'] as String?;
+        final hasPrevData = isDelta &&
+            subData.entries.any((e) => e.key != '_change_status' && e.value != null);
+        final readOnly = isDelta && changeStatus == '유지';
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 과목 헤더
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF9FAFB),
+                  border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+                ),
+                child: Text(subject, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E40AF))),
+              ),
+              // Delta 3분지 분기 선택
+              if (isDelta && hasPrevData && changeStatus == null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFFBEB),
+                    border: Border(bottom: BorderSide(color: Color(0xFFFDE68A))),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('이전 상담에서 입력한 학습 방법이 있습니다. 변경 사항을 확인해주세요.',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF92400E))),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          statusPill('그대로 유지', '이전과 동일',
+                              const Color(0xFFF0FDF4), const Color(0xFFBBF7D0), const Color(0xFF166534),
+                              () => setChangeStatus(subject, '유지')),
+                          statusPill('일부 변경', '일부 항목 수정',
+                              const Color(0xFFEFF6FF), const Color(0xFFBFDBFE), const Color(0xFF1E40AF),
+                              () => setChangeStatus(subject, '일부변경')),
+                          statusPill('완전히 바꿈', '처음부터 다시',
+                              const Color(0xFFFEF2F2), const Color(0xFFFECACA), const Color(0xFF991B1B),
+                              () => setChangeStatus(subject, '완전변경')),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              // 변경 상태 표시 + 재선택
+              if (isDelta && changeStatus != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: changeStatus == '유지'
+                        ? const Color(0xFFF0FDF4)
+                        : changeStatus == '일부변경'
+                            ? const Color(0xFFEFF6FF)
+                            : const Color(0xFFFEF2F2),
+                    border: const Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        changeStatus == '유지'
+                            ? '이전 학습법 유지'
+                            : changeStatus == '일부변경'
+                                ? '일부 항목 변경 중'
+                                : '새로 입력 중',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: changeStatus == '유지'
+                              ? const Color(0xFF166534)
+                              : changeStatus == '일부변경'
+                                  ? const Color(0xFF1E40AF)
+                                  : const Color(0xFF991B1B),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => resetChangeStatus(subject),
+                        child: const Text('다시 선택',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF6B7280), decoration: TextDecoration.underline)),
+                      ),
+                    ],
+                  ),
+                ),
+              // 과목별 입력 필드
+              IgnorePointer(
+                ignoring: readOnly,
+                child: AnimatedOpacity(
+                  opacity: readOnly ? 0.5 : 1.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: perSubject.map((field) {
+                        return _subjectStudyMethodField(field, subData, (next) {
+                          writeSubject(subject, next);
+                        });
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _subjectStudyMethodField(
+    Map<String, dynamic> field,
+    Map<String, dynamic> subData,
+    void Function(Map<String, dynamic> nextSubData) onChanged,
+  ) {
+    final name = field['name'] as String;
+    final type = field['type'] as String;
+    final label = field['label'] as String? ?? '';
+
+    void update(dynamic val) {
+      final next = Map<String, dynamic>.from(subData);
+      next[name] = val;
+      onChanged(next);
+    }
+
+    Widget fieldHeader(String text) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+        );
+
+    if (type == 'checkboxes') {
+      final options = (field['options'] as List).cast<Map<String, dynamic>>();
+      final values = (subData[name] as List?)?.cast<String>() ?? [];
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            fieldHeader(label),
+            ...options.map((opt) {
+              final v = opt['value'] as String;
+              return CheckboxListTile(
+                title: Text(opt['label'] as String, style: const TextStyle(fontSize: 13)),
+                value: values.contains(v),
+                onChanged: (checked) {
+                  final next = List<String>.from(values);
+                  if (checked == true) {
+                    next.add(v);
+                  } else {
+                    next.remove(v);
+                  }
+                  update(next);
+                },
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+              );
+            }),
+          ],
+        ),
+      );
+    }
+
+    if (type == 'radio') {
+      final options = (field['options'] as List).cast<Map<String, dynamic>>();
+      final cur = subData[name] as String?;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            fieldHeader(label),
+            ...options.map((opt) => RadioListTile<String>(
+                  title: Text(opt['label'] as String, style: const TextStyle(fontSize: 13)),
+                  value: opt['value'] as String,
+                  groupValue: cur,
+                  onChanged: (val) => update(val),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                )),
+          ],
+        ),
+      );
+    }
+
+    if (type == 'text') {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            fieldHeader(label),
+            TextFormField(
+              initialValue: subData[name] as String? ?? '',
+              decoration: InputDecoration(
+                hintText: field['placeholder'] as String?,
+                border: const OutlineInputBorder(),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              onChanged: update,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (type == 'composite') {
+      // lecture: { status: radio, instructor_platform: text(show_when status=="듣고있음") }
+      final fields = (field['fields'] as List).cast<Map<String, dynamic>>();
+      final compVal = Map<String, dynamic>.from((subData[name] as Map?) ?? {});
+
+      void compUpdate(String fName, dynamic v) {
+        final next = Map<String, dynamic>.from(compVal);
+        next[fName] = v;
+        update(next);
+      }
+
+      final children = <Widget>[];
+      for (final f in fields) {
+        final fName = f['name'] as String;
+        final fType = f['type'] as String;
+        final fLabel = f['label'] as String? ?? '';
+        // show_when 처리
+        final showWhen = f['show_when'] as Map<String, dynamic>?;
+        if (showWhen != null) {
+          final dependField = showWhen['field'] as String;
+          final equals = showWhen['equals'];
+          if (compVal[dependField] != equals) continue;
+        }
+
+        if (fType == 'radio') {
+          final options = (f['options'] as List).cast<Map<String, dynamic>>();
+          children.add(Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (fLabel.isNotEmpty) Text(fLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                ...options.map((opt) => RadioListTile<String>(
+                      title: Text(opt['label'] as String, style: const TextStyle(fontSize: 13)),
+                      value: opt['value'] as String,
+                      groupValue: compVal[fName] as String?,
+                      onChanged: (val) => compUpdate(fName, val),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    )),
+              ],
+            ),
+          ));
+        } else if (fType == 'text') {
+          children.add(Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (fLabel.isNotEmpty) Text(fLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                const SizedBox(height: 4),
+                TextFormField(
+                  initialValue: compVal[fName] as String? ?? '',
+                  decoration: InputDecoration(
+                    hintText: f['placeholder'] as String?,
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  onChanged: (v) => compUpdate(fName, v),
+                ),
+              ],
+            ),
+          ));
+        }
+      }
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            fieldHeader(label),
+            ...children,
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text('지원하지 않는 필드 타입: $type', style: const TextStyle(color: Colors.grey, fontSize: 12)),
     );
   }
 }

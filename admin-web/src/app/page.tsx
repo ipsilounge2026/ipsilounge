@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import SatisfactionTrendsCard from "@/components/SatisfactionTrendsCard";
 import { getDashboard, getChangeRequests, processChangeRequest, getAdmins } from "@/lib/api";
 import { isLoggedIn, hasMenuAccess, getDefaultRoute, getAdminInfo } from "@/lib/auth";
 
@@ -212,6 +213,16 @@ export default function DashboardPage() {
               <StatCard label={`${period.year - 1}년 매출`} value={formatMoney(data.revenue.prev_year)} color="#6B7280" />
               <StatCard label={`${period.year - 1}년 ${period.month}월 매출`} value={formatMoney(data.revenue.prev_year_month)} color="#6B7280" />
             </div>
+          </>
+        )}
+
+        {/* ================================================================
+            최고관리자 전용: 상담 만족도 추이 (M1~M3 / C1~C3)
+           ================================================================ */}
+        {isSuperAdmin && (
+          <>
+            <SectionTitle title="상담 만족도 추이" />
+            <SatisfactionTrendsCard />
           </>
         )}
 

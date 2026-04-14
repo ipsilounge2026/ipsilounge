@@ -11,6 +11,7 @@
 관리자 엔드포인트:
 - GET    /api/admin/satisfaction-surveys           전체 설문 목록
 - GET    /api/admin/satisfaction-surveys/stats     통계 (상담사/선배별)
+- GET    /api/admin/satisfaction-surveys/trends    시점별 추이 (월별, 최고관리자 전용)
 """
 
 import uuid
@@ -370,6 +371,113 @@ async def admin_survey_stats(
         "stats": result,
         "overall_item_averages": overall_item_avgs,
         "timing_averages": timing_avgs,
+    }
+
+
+@router.get("/api/admin/satisfaction-surveys/trends")
+async def admin_survey_trends(
+    months: int = Query(6, ge=1, le=24),
+    survey_type: str | None = Query(None, description="senior | counselor (None=둘 다)"),
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """관리자(최고관리자 전용): 만족도 시점별(월별) 추이.
+
+    응답:
+      {
+        "months": ["2025-11", "2025-12", ...],
+        "senior": [
+          {"month": "2025-11", "M1": 8.4, "M2": 8.6, "M3": 8.2, "overall": 8.4, "count": 12},
+          ...
+        ],
+        "counselor": [
+          {"month": "2025-11", "C1": 8.1, "C2": 8.3, "C3": 8.0, "overall": 8.1, "count": 9},
+          ...
+        ]
+      }
+    """
+    if admin.role != "super_admin":
+        raise HTTPException(status_code=403, detail="최고관리자 전용 통계입니다")
+
+    # 제출된 설문 + 상담일 조회
+    q = (
+        select(
+            SatisfactionSurvey.survey_type,
+            SatisfactionSurvey.scores,
+            ConsultationBooking.slot_date,
+        )
+        .join(ConsultationBooking, SatisfactionSurvey.booking_id == ConsultationBooking.id)
+        .where(SatisfactionSurvey.status == "submitted")
+    )
+    if survey_type in ("senior", "counselor"):
+        q = q.where(SatisfactionSurvey.survey_type == survey_type)
+
+    rows = (await db.execute(q)).all()
+
+    # 최근 N개월 라벨 (오래된 → 최신)
+    today = datetime.now().date()
+    month_labels: list[str] = []
+    y, m = today.year, today.month
+    for _ in range(months):
+        month_labels.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    month_labels.reverse()
+    month_set = set(month_labels)
+
+    # 집계: type -> month -> {key -> {sum, count}, overall {sum, count}, count}
+    buckets: dict[str, dict[str, dict]] = {"senior": {}, "counselor": {}}
+
+    for stype, scores, slot_date in rows:
+        if not slot_date or stype not in buckets:
+            continue
+        ym = f"{slot_date.year:04d}-{slot_date.month:02d}"
+        if ym not in month_set:
+            continue
+        if not isinstance(scores, dict):
+            continue
+
+        bucket = buckets[stype].setdefault(ym, {"items": {}, "overall": {"sum": 0.0, "count": 0}, "count": 0})
+        bucket["count"] += 1
+
+        score_vals: list[float] = []
+        for k, v in scores.items():
+            if isinstance(v, (int, float)):
+                bucket["items"].setdefault(k, {"sum": 0.0, "count": 0})
+                bucket["items"][k]["sum"] += v
+                bucket["items"][k]["count"] += 1
+                score_vals.append(float(v))
+        if score_vals:
+            bucket["overall"]["sum"] += sum(score_vals) / len(score_vals)
+            bucket["overall"]["count"] += 1
+
+    def _series(stype: str, item_keys: list[str]) -> list[dict]:
+        out = []
+        for ym in month_labels:
+            b = buckets[stype].get(ym)
+            row: dict = {"month": ym, "count": b["count"] if b else 0}
+            if b:
+                for k in item_keys:
+                    d = b["items"].get(k)
+                    row[k] = round(d["sum"] / d["count"], 2) if d and d["count"] > 0 else None
+                row["overall"] = (
+                    round(b["overall"]["sum"] / b["overall"]["count"], 2)
+                    if b["overall"]["count"] > 0
+                    else None
+                )
+            else:
+                for k in item_keys:
+                    row[k] = None
+                row["overall"] = None
+            out.append(row)
+        return out
+
+    return {
+        "months": month_labels,
+        "senior": _series("senior", ["M1", "M2", "M3"]),
+        "counselor": _series("counselor", ["C1", "C2", "C3"]),
     }
 
 

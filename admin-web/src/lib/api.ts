@@ -555,6 +555,10 @@ export async function getSuneungMinimumSimulation(id: string) {
   return request(`/api/admin/surveys/${id}/suneung-minimum-simulation`);
 }
 
+export async function getCourseRequirementMatch(id: string) {
+  return request(`/api/admin/surveys/${id}/course-requirement-match`);
+}
+
 export async function updateSurveyMemo(id: string, adminMemo: string) {
   return request(`/api/admin/surveys/${id}/memo`, {
     method: "PUT",
@@ -666,4 +670,11 @@ export async function listAllSatisfactionSurveys(params?: { survey_type?: string
   if (params?.status) qs.set("status", params.status);
   const suffix = qs.toString() ? `?${qs}` : "";
   return request(`/api/admin/satisfaction-surveys${suffix}`);
+}
+
+export async function getSatisfactionTrends(params?: { months?: number; survey_type?: "senior" | "counselor" }) {
+  const qs = new URLSearchParams();
+  qs.set("months", String(params?.months ?? 6));
+  if (params?.survey_type) qs.set("survey_type", params.survey_type);
+  return request(`/api/admin/satisfaction-surveys/trends?${qs}`);
 }
