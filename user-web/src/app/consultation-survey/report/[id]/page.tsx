@@ -16,7 +16,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Cell, LineChart, Line, Legend, PieChart, Pie,
 } from "recharts";
-import { getSurveyComputed, getSurvey, getStudyMethodMatrix, getSuneungMinimumSimulation } from "@/lib/api";
+import { getSurveyComputed, getSurvey, getStudyMethodMatrix, getSuneungMinimumSimulation, getSubjectCompetitiveness } from "@/lib/api";
 
 // ── 색상/등급 상수 ──
 
@@ -101,6 +101,7 @@ export default function ReportPage() {
   const [computed, setComputed] = useState<any>(null);
   const [studyMatrix, setStudyMatrix] = useState<any>(null);
   const [suneungSim, setSuneungSim] = useState<any>(null);
+  const [subjComp, setSubjComp] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -118,6 +119,8 @@ export default function ReportPage() {
         getStudyMethodMatrix(surveyId).then(setStudyMatrix).catch(() => {});
         // Load suneung minimum simulation (non-blocking, high only)
         getSuneungMinimumSimulation(surveyId).then(setSuneungSim).catch(() => {});
+        // Load subject competitiveness (non-blocking, high only)
+        getSubjectCompetitiveness(surveyId).then(setSubjComp).catch(() => {});
       } catch (e: any) {
         setError(e?.message || "리포트를 불러올 수 없습니다");
       } finally {
@@ -191,6 +194,11 @@ export default function ReportPage() {
       {/* 내신 vs 모의 비교 (고등학생만) */}
       {!isPreheigh1 && computed?.grade_trend && computed?.mock_trend && (
         <NaesinMockCompareSection gradeTrend={computed.grade_trend} mockTrend={computed.mock_trend} />
+      )}
+
+      {/* 과목별 경쟁력 (고등학생만) */}
+      {!isPreheigh1 && subjComp && subjComp.subjects && Object.keys(subjComp.subjects).length > 0 && (
+        <SubjectCompetitivenessSection data={subjComp} />
       )}
 
       {/* 과목별 준비율 차트 (예비고1만) */}
@@ -1628,6 +1636,224 @@ function SuneungMinimumSection({ data }: { data: any }) {
         * 최신 모의고사 등급 기준 시뮬레이션 결과입니다. 실제 수능 성적과 다를 수 있습니다.
         <br />
         * 한국사는 대부분 4등급 이내 충족 가정으로 시뮬레이션합니다.
+      </div>
+    </div>
+  );
+}
+
+// ── 과목별 경쟁력 섹션 (고등학생) ──
+
+const TREND_META: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  improving: { label: "상승", color: "#059669", bg: "#ECFDF5", icon: "▲" },
+  declining: { label: "하락", color: "#DC2626", bg: "#FEF2F2", icon: "▼" },
+  stable:    { label: "유지", color: "#4B5563", bg: "#F3F4F6", icon: "—" },
+  insufficient: { label: "데이터 부족", color: "#9CA3AF", bg: "#F9FAFB", icon: "·" },
+};
+
+function gradeTone(grade: number | null | undefined): { color: string; bg: string } {
+  if (grade == null) return { color: "#9CA3AF", bg: "#F9FAFB" };
+  if (grade <= 2.0) return { color: "#059669", bg: "#ECFDF5" };
+  if (grade <= 3.5) return { color: "#D97706", bg: "#FFF7ED" };
+  return { color: "#DC2626", bg: "#FEF2F2" };
+}
+
+function gapTone(gap: number | null | undefined): { color: string; bg: string; label: string } {
+  if (gap == null) return { color: "#9CA3AF", bg: "#F9FAFB", label: "—" };
+  if (gap <= 0) return { color: "#059669", bg: "#ECFDF5", label: `목표 달성 (${gap.toFixed(1)})` };
+  if (gap <= 1.0) return { color: "#D97706", bg: "#FFF7ED", label: `+${gap.toFixed(1)}등급` };
+  return { color: "#DC2626", bg: "#FEF2F2", label: `+${gap.toFixed(1)}등급` };
+}
+
+function SubjectCompetitivenessSection({ data }: { data: any }) {
+  const subjects = data.subjects || {};
+  const targetGrade = data.target_grade;
+  const targetLevel = data.target_level;
+  const focus = data.strategy?.focus || [];
+  const maintain = data.strategy?.maintain || [];
+  const consider = data.strategy?.consider || [];
+
+  const subjectOrder = ["ko", "ma", "en", "sc1", "sc2", "so"];
+  const orderedKeys = subjectOrder.filter((k) => subjects[k]);
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>과목별 경쟁력</h2>
+      <p style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 14, lineHeight: 1.5 }}>
+        내신·모의고사 등급을 목표와 비교하여 강점/약점 과목을 분류합니다.
+      </p>
+
+      {/* 목표 등급 요약 */}
+      {targetGrade != null && (
+        <div style={{
+          padding: "10px 12px", marginBottom: 12, borderRadius: 10,
+          background: "#EEF2FF", border: "1px solid #C7D2FE",
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+        }}>
+          <div style={{ fontSize: 12, color: "#4338CA" }}>
+            목표 대학 수준{targetLevel ? `: ${targetLevel}` : ""}
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#4338CA" }}>
+            목표 등급 ≈ {targetGrade.toFixed(1)}
+          </div>
+        </div>
+      )}
+
+      {/* 과목별 카드 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {orderedKeys.map((key) => {
+          const s = subjects[key];
+          const cur = s.current_grade;
+          const avg = s.avg_grade;
+          const mockCur = s.mock_current;
+          const trend = TREND_META[s.trend] || TREND_META.insufficient;
+          const curTone = gradeTone(cur);
+          const gap = gapTone(s.gap);
+          const isStrongest = (data.strongest_subjects || []).includes(s.name);
+          const isWeakest = (data.weakest_subjects || []).includes(s.name);
+
+          return (
+            <div key={key} style={{
+              border: "1px solid var(--gray-200)", borderRadius: 12, padding: "12px 14px",
+              background: "white",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#1F2937" }}>{s.name}</div>
+                {isStrongest && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
+                    color: "#059669", background: "#ECFDF5", border: "1px solid #6EE7B7",
+                  }}>강점</span>
+                )}
+                {isWeakest && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
+                    color: "#DC2626", background: "#FEF2F2", border: "1px solid #FCA5A5",
+                  }}>약점</span>
+                )}
+                <span style={{
+                  marginLeft: "auto", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
+                  color: trend.color, background: trend.bg,
+                }}>
+                  {trend.icon} {trend.label}
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 8 }}>
+                <MetricCell label="현재 내신" value={cur != null ? `${cur}` : "—"} tone={curTone} />
+                <MetricCell label="내신 평균" value={avg != null ? `${avg}` : "—"} />
+                <MetricCell label="최근 모의" value={mockCur != null ? `${mockCur}` : "—"} />
+              </div>
+
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
+                background: gap.bg,
+              }}>
+                <span style={{ fontSize: 11, color: "var(--gray-500)" }}>목표 대비</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: gap.color }}>{gap.label}</span>
+                {s.within_plus_minus_1 && (
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#059669", fontWeight: 600 }}>
+                    ±1등급 이내
+                  </span>
+                )}
+              </div>
+
+              {s.weakness_types && s.weakness_types.length > 0 && (
+                <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  <span style={{ fontSize: 11, color: "var(--gray-500)", marginRight: 4 }}>취약 유형:</span>
+                  {s.weakness_types.slice(0, 5).map((t: string) => (
+                    <span key={t} style={{
+                      fontSize: 11, padding: "2px 8px", borderRadius: 999,
+                      background: "#F3F4F6", color: "#374151",
+                    }}>{t}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 전략 과목 분류 */}
+      {(focus.length > 0 || maintain.length > 0 || consider.length > 0) && (
+        <div style={{ marginTop: 18 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "#1F2937" }}>전략 과목 분류</div>
+          {focus.length > 0 && (
+            <StrategyBlock
+              title="집중 공략" subtitle="목표 달성 가능성이 높은 과목"
+              entries={focus} accent={{ color: "#D97706", bg: "#FFF7ED", border: "#FCD34D" }}
+            />
+          )}
+          {maintain.length > 0 && (
+            <StrategyBlock
+              title="유지 관리" subtitle="이미 목표 이내인 과목"
+              entries={maintain} accent={{ color: "#059669", bg: "#ECFDF5", border: "#6EE7B7" }}
+            />
+          )}
+          {consider.length > 0 && (
+            <StrategyBlock
+              title="전략적 배분 고려" subtitle="목표 차이가 크고 본인도 어려운 과목"
+              entries={consider} accent={{ color: "#DC2626", bg: "#FEF2F2", border: "#FCA5A5" }}
+            />
+          )}
+        </div>
+      )}
+
+      <div style={{ fontSize: 11, color: "var(--gray-400)", marginTop: 12, lineHeight: 1.5 }}>
+        * 목표 등급은 응답한 목표 대학 수준에서 추정한 참고값입니다.
+      </div>
+    </div>
+  );
+}
+
+function MetricCell({ label, value, tone }: { label: string; value: string; tone?: { color: string; bg: string } }) {
+  return (
+    <div style={{
+      padding: "8px 10px", borderRadius: 8, textAlign: "center",
+      background: tone?.bg || "#F9FAFB",
+    }}>
+      <div style={{ fontSize: 11, color: "var(--gray-500)", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: tone?.color || "#1F2937" }}>{value}</div>
+    </div>
+  );
+}
+
+function StrategyBlock({
+  title, subtitle, entries, accent,
+}: {
+  title: string; subtitle: string; entries: any[];
+  accent: { color: string; bg: string; border: string };
+}) {
+  return (
+    <div style={{
+      marginBottom: 10, padding: "10px 12px", borderRadius: 10,
+      background: accent.bg, border: `1px solid ${accent.border}`,
+    }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: accent.color }}>{title}</span>
+        <span style={{ fontSize: 11, color: "var(--gray-500)" }}>{subtitle}</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {entries.map((e, i) => (
+          <div key={`${e.key}-${i}`} style={{
+            background: "white", borderRadius: 8, padding: "8px 10px",
+            border: "1px solid var(--gray-200)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#1F2937" }}>{e.name}</span>
+              {e.current_grade != null && (
+                <span style={{ fontSize: 11, color: "var(--gray-500)" }}>현재 {e.current_grade}등급</span>
+              )}
+              {e.gap != null && (
+                <span style={{ fontSize: 11, color: accent.color, fontWeight: 600 }}>
+                  · 갭 {e.gap > 0 ? `+${e.gap}` : e.gap}
+                </span>
+              )}
+            </div>
+            {e.tip && (
+              <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.5 }}>{e.tip}</div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
