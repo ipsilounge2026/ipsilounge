@@ -421,6 +421,24 @@ export async function getSeniorCumulativeSummary(userId: string) {
   return request(`/api/admin/senior-consultation/student/${userId}/cumulative-summary`);
 }
 
+// --- 가이드북 관리 ---
+export async function getGuidebooks(category?: string) {
+  const params = category ? `?category=${category}` : "";
+  return request(`/api/admin/guidebooks${params}`);
+}
+
+export async function createGuidebook(data: { category: string; title: string; content: string; sort_order?: number; session_timing?: string; is_active?: boolean }) {
+  return request("/api/admin/guidebooks", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateGuidebook(id: string, data: { category?: string; title?: string; content?: string; sort_order?: number; session_timing?: string; is_active?: boolean }) {
+  return request(`/api/admin/guidebooks/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function deleteGuidebook(id: string) {
+  return request(`/api/admin/guidebooks/${id}`, { method: "DELETE" });
+}
+
 // --- 설명회 관리 ---
 export async function getSeminarDashboard(scheduleId?: string) {
   const params = new URLSearchParams();

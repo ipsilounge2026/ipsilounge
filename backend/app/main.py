@@ -35,6 +35,7 @@ from app.routers import (
     admin_seminar,
     admin_notice,
     admin_senior_consultation,
+    admin_guidebook,
     notice,
     senior_pre_survey,
     universities,
@@ -99,6 +100,7 @@ app.include_router(seminar.router)
 app.include_router(admin_seminar.router)
 app.include_router(admin_notice.router)
 app.include_router(admin_senior_consultation.router)
+app.include_router(admin_guidebook.router)
 app.include_router(notice.router)
 app.include_router(senior_pre_survey.router)
 app.include_router(universities.router)
@@ -132,6 +134,7 @@ async def startup():
         senior_change_request,
         senior_consultation_note,
         senior_pre_survey as senior_pre_survey_model,
+        guidebook,
     )
 
     async with engine.begin() as conn:
