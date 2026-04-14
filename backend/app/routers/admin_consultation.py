@@ -63,10 +63,10 @@ async def list_counselors(
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """상담 가능한 관리자/상담자 목록"""
+    """상담 가능한 관리자/상담자/선배 목록"""
     if admin.role == "super_admin":
         result = await db.execute(
-            select(Admin).where(Admin.is_active == True, Admin.role.in_(["admin", "counselor"]))
+            select(Admin).where(Admin.is_active == True, Admin.role.in_(["admin", "counselor", "senior"]))
         )
         admins = result.scalars().all()
         items = [{"id": str(a.id), "name": a.name, "role": a.role} for a in admins]

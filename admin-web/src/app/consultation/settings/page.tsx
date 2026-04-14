@@ -201,8 +201,13 @@ export default function ConsultationSettingsPage() {
             {isSuperAdmin && counselors.length > 0 && (
               <div style={{ marginBottom: 12 }}>
                 <select className="form-control" value={filterAdminId} onChange={e => setFilterAdminId(e.target.value)}>
-                  <option value="">전체 상담자</option>
-                  {counselors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  <option value="">전체 상담자/선배</option>
+                  <optgroup label="상담자">
+                    {counselors.filter(c => c.role !== "senior").map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </optgroup>
+                  <optgroup label="선배">
+                    {counselors.filter(c => c.role === "senior").map(c => <option key={c.id} value={c.id}>{c.name} (선배)</option>)}
+                  </optgroup>
                 </select>
               </div>
             )}
@@ -280,12 +285,19 @@ export default function ConsultationSettingsPage() {
                     <div style={{ padding: 16, background: "#F9FAFB", borderRadius: 8, marginBottom: 16, border: "1px solid #E5E7EB" }}>
                       {isSuperAdmin && counselors.length > 0 && (
                         <div className="form-group" style={{ marginBottom: 12 }}>
-                          <label>상담자</label>
+                          <label>상담자 / 선배</label>
                           <select className="form-control" value={createForm.admin_id} onChange={e => setCreateForm({ ...createForm, admin_id: e.target.value })}>
                             <option value="">본인 ({adminInfo?.name})</option>
-                            {counselors.filter(c => c.id !== adminInfo?.id).map(c => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
+                            <optgroup label="상담자">
+                              {counselors.filter(c => c.id !== adminInfo?.id && c.role !== "senior").map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="선배">
+                              {counselors.filter(c => c.id !== adminInfo?.id && c.role === "senior").map(c => (
+                                <option key={c.id} value={c.id}>{c.name} (선배)</option>
+                              ))}
+                            </optgroup>
                           </select>
                         </div>
                       )}
@@ -396,11 +408,21 @@ export default function ConsultationSettingsPage() {
                             <span style={{ fontWeight: 600, fontSize: 14 }}>
                               {slot.start_time.slice(0, 5)} ~ {slot.end_time.slice(0, 5)}
                             </span>
-                            {slot.admin_name && (
-                              <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: "#EFF6FF", color: "#2563EB" }}>
-                                {slot.admin_name}
-                              </span>
-                            )}
+                            {slot.admin_name && (() => {
+                              const c = counselors.find(cc => cc.id === slot.admin_id);
+                              const isSenior = c?.role === "senior";
+                              return (
+                                <span style={{
+                                  fontSize: 11,
+                                  padding: "2px 6px",
+                                  borderRadius: 4,
+                                  background: isSenior ? "#FEF3C7" : "#EFF6FF",
+                                  color: isSenior ? "#92400E" : "#2563EB",
+                                }}>
+                                  {slot.admin_name}{isSenior ? " (선배)" : ""}
+                                </span>
+                              );
+                            })()}
                             {slot.repeat_group_id && (
                               <span style={{ fontSize: 10, padding: "2px 5px", borderRadius: 4, background: "#F3E8FF", color: "#7C3AED" }}>반복</span>
                             )}
