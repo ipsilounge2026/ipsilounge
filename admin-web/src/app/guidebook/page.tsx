@@ -158,9 +158,9 @@ export default function GuidebookPage() {
   };
 
   return (
-    <div className="layout">
+    <div className="admin-layout">
       <Sidebar />
-      <main className="main-content" style={{ paddingLeft: 32 }}>
+      <main className="admin-main">
         <div className="page-header" style={{ marginBottom: 24 }}>
           <h1>가이드북 관리</h1>
           <p style={{ color: "#6b7280", marginTop: 4, fontSize: 14 }}>
