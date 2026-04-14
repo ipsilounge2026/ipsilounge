@@ -31,6 +31,8 @@ export default function GuidebookPage() {
   const [guideContents, setGuideContents] = useState<Record<string, string>>({});
   // 서버에서 로드한 원본 (변경 감지용)
   const [savedContents, setSavedContents] = useState<Record<string, string>>({});
+  // 편집 모드 (탭별)
+  const [editMode, setEditMode] = useState<Record<TimingKey, boolean>>({ T1: true, T2: true, T3: true, T4: true });
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
@@ -55,12 +57,25 @@ export default function GuidebookPage() {
       }
       setGuideContents({ ...contentMap });
       setSavedContents({ ...contentMap });
+
+      // 저장된 내용이 있는 탭은 읽기 모드로 시작
+      const newEditMode: Record<TimingKey, boolean> = { T1: true, T2: true, T3: true, T4: true };
+      for (const timing of ["T1", "T2", "T3", "T4"] as TimingKey[]) {
+        const cautionKey = `caution_${timing}`;
+        const hasAnyContent = TIMING_TOPICS[timing].some((t) => (contentMap[t.id] || "").trim().length > 0) || (contentMap[cautionKey] || "").trim().length > 0;
+        if (hasAnyContent) {
+          newEditMode[timing] = false;
+        }
+      }
+      setEditMode(newEditMode);
     } catch {
       setMessage({ type: "error", text: "데이터를 불러오지 못했습니다." });
     } finally {
       setLoading(false);
     }
   };
+
+  const cautionKey = `caution_${activeTab}`;
 
   const handleSave = async () => {
     const topics = TIMING_TOPICS[activeTab];
@@ -69,6 +84,12 @@ export default function GuidebookPage() {
       title: t.label,
       content: guideContents[t.id] || "",
     }));
+    // 주의사항도 함께 저장
+    items.push({
+      topic_id: cautionKey,
+      title: `${activeTab} 주의사항`,
+      content: guideContents[cautionKey] || "",
+    });
 
     setSaving(true);
     try {
@@ -83,6 +104,7 @@ export default function GuidebookPage() {
         }
       }
       setSavedContents(newSaved);
+      setEditMode((prev) => ({ ...prev, [activeTab]: false }));
       setMessage({ type: "success", text: `${activeTab} 가이드가 저장되었습니다.` });
     } catch {
       setMessage({ type: "error", text: "저장에 실패했습니다." });
@@ -94,13 +116,22 @@ export default function GuidebookPage() {
   const topics = TIMING_TOPICS[activeTab];
   const coreTopics = topics.filter((t) => t.isCore);
   const optionalTopics = topics.filter((t) => !t.isCore);
+  const isEditing = editMode[activeTab];
 
   // 현재 탭에서 변경사항이 있는지
-  const hasChanges = topics.some((t) => (guideContents[t.id] || "") !== (savedContents[t.id] || ""));
+  const hasChanges = topics.some((t) => (guideContents[t.id] || "") !== (savedContents[t.id] || ""))
+    || (guideContents[cautionKey] || "") !== (savedContents[cautionKey] || "");
 
-  // 각 시점별 작성된 가이드 수
+  // 각 시점별 작성된 가이드 수 (주의사항 포함)
   const countByTiming = (timing: TimingKey) => {
-    return TIMING_TOPICS[timing].filter((t) => (savedContents[t.id] || "").trim()).length;
+    const ck = `caution_${timing}`;
+    const topicCount = TIMING_TOPICS[timing].filter((t) => (savedContents[t.id] || "").trim()).length;
+    const cautionCount = (savedContents[ck] || "").trim() ? 1 : 0;
+    return topicCount + cautionCount;
+  };
+
+  const totalByTiming = (timing: TimingKey) => {
+    return TIMING_TOPICS[timing].length + 1; // +1 for 주의사항
   };
 
   return (
@@ -130,7 +161,7 @@ export default function GuidebookPage() {
         <div style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: "2px solid #e5e7eb" }}>
           {(["T1", "T2", "T3", "T4"] as TimingKey[]).map((t) => {
             const count = countByTiming(t);
-            const total = TIMING_TOPICS[t].length;
+            const total = totalByTiming(t);
             return (
               <button
                 key={t}
@@ -185,13 +216,19 @@ export default function GuidebookPage() {
                         )}
                       </div>
                       <div style={{ padding: 16 }}>
-                        <textarea
-                          value={content}
-                          onChange={(e) => setGuideContents((prev) => ({ ...prev, [topic.id]: e.target.value }))}
-                          placeholder="이 항목에 대한 상담 가이드를 작성하세요. 선배가 상담 기록 작성 시 이 내용이 표시됩니다."
-                          rows={4}
-                          style={{ width: "100%", padding: "10px 12px", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 13, lineHeight: 1.6, resize: "vertical", fontFamily: "inherit" }}
-                        />
+                        {isEditing ? (
+                          <textarea
+                            value={content}
+                            onChange={(e) => setGuideContents((prev) => ({ ...prev, [topic.id]: e.target.value }))}
+                            placeholder="이 항목에 대한 상담 가이드를 작성하세요. 선배가 상담 기록 작성 시 이 내용이 표시됩니다."
+                            rows={4}
+                            style={{ width: "100%", padding: "10px 12px", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 13, lineHeight: 1.6, resize: "vertical", fontFamily: "inherit" }}
+                          />
+                        ) : (
+                          <div style={{ fontSize: 13, lineHeight: 1.6, color: content.trim() ? "#374151" : "#9CA3AF", whiteSpace: "pre-wrap", minHeight: 40 }}>
+                            {content.trim() || "작성된 가이드가 없습니다."}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -212,19 +249,30 @@ export default function GuidebookPage() {
                   return (
                     <div key={topic.id} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 10, overflow: "hidden" }}>
                       <div style={{ padding: "12px 16px", background: hasSaved ? "#FFFBEB" : "#F9FAFB", borderBottom: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{topic.label}</div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{topic.label}</div>
+                          {topic.detail && (
+                            <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>{topic.detail}</div>
+                          )}
+                        </div>
                         {hasSaved && (
                           <span style={{ fontSize: 11, padding: "2px 10px", background: "#FEF3C7", color: "#92400E", borderRadius: 10 }}>작성됨</span>
                         )}
                       </div>
                       <div style={{ padding: 16 }}>
-                        <textarea
-                          value={content}
-                          onChange={(e) => setGuideContents((prev) => ({ ...prev, [topic.id]: e.target.value }))}
-                          placeholder="이 선택 항목에 대한 상담 가이드를 작성하세요."
-                          rows={3}
-                          style={{ width: "100%", padding: "10px 12px", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 13, lineHeight: 1.6, resize: "vertical", fontFamily: "inherit" }}
-                        />
+                        {isEditing ? (
+                          <textarea
+                            value={content}
+                            onChange={(e) => setGuideContents((prev) => ({ ...prev, [topic.id]: e.target.value }))}
+                            placeholder="이 선택 항목에 대한 상담 가이드를 작성하세요."
+                            rows={3}
+                            style={{ width: "100%", padding: "10px 12px", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 13, lineHeight: 1.6, resize: "vertical", fontFamily: "inherit" }}
+                          />
+                        ) : (
+                          <div style={{ fontSize: 13, lineHeight: 1.6, color: content.trim() ? "#374151" : "#9CA3AF", whiteSpace: "pre-wrap", minHeight: 32 }}>
+                            {content.trim() || "작성된 가이드가 없습니다."}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -232,22 +280,69 @@ export default function GuidebookPage() {
               </div>
             </div>
 
-            {/* 저장 버튼 */}
+            {/* 주의사항 */}
+            <div style={{ marginBottom: 28 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: "#DC2626", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#EF4444" }} />
+                주의사항
+              </h3>
+              <div style={{ background: "#fff", border: "1px solid #FECACA", borderRadius: 10, overflow: "hidden" }}>
+                <div style={{ padding: "12px 16px", background: (savedContents[cautionKey] || "").trim() ? "#FEF2F2" : "#F9FAFB", borderBottom: "1px solid #FECACA", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>반드시 피해야 할 것</div>
+                    <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>이 시점 상담에서 선배가 주의해야 할 사항을 작성합니다.</div>
+                  </div>
+                  {(savedContents[cautionKey] || "").trim() && (
+                    <span style={{ fontSize: 11, padding: "2px 10px", background: "#FEE2E2", color: "#991B1B", borderRadius: 10 }}>작성됨</span>
+                  )}
+                </div>
+                <div style={{ padding: 16 }}>
+                  {isEditing ? (
+                    <textarea
+                      value={guideContents[cautionKey] || ""}
+                      onChange={(e) => setGuideContents((prev) => ({ ...prev, [cautionKey]: e.target.value }))}
+                      placeholder={"예: 특정 교사에 대한 험담 금지, 부정확한 대입 정보 전달 금지, 연락처 교환 금지 등"}
+                      rows={5}
+                      style={{ width: "100%", padding: "10px 12px", border: "1px solid #FECACA", borderRadius: 8, fontSize: 13, lineHeight: 1.6, resize: "vertical", fontFamily: "inherit" }}
+                    />
+                  ) : (
+                    <div style={{ fontSize: 13, lineHeight: 1.6, color: (guideContents[cautionKey] || "").trim() ? "#374151" : "#9CA3AF", whiteSpace: "pre-wrap", minHeight: 40 }}>
+                      {(guideContents[cautionKey] || "").trim() || "작성된 주의사항이 없습니다."}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 저장/수정 버튼 */}
             <div style={{ position: "sticky", bottom: 0, padding: "16px 0", background: "#F9FAFB", borderTop: "1px solid #E5E7EB", display: "flex", justifyContent: "flex-end", gap: 12 }}>
-              {hasChanges && (
+              {isEditing && hasChanges && (
                 <span style={{ fontSize: 13, color: "#F59E0B", alignSelf: "center" }}>저장하지 않은 변경사항이 있습니다</span>
               )}
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                style={{
-                  padding: "10px 32px", borderRadius: 8, border: "none",
-                  background: "#7C3AED", color: "white", fontSize: 14, fontWeight: 600,
-                  cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1,
-                }}
-              >
-                {saving ? "저장 중..." : `${activeTab} 가이드 저장`}
-              </button>
+              {isEditing ? (
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  style={{
+                    padding: "10px 32px", borderRadius: 8, border: "none",
+                    background: "#7C3AED", color: "white", fontSize: 14, fontWeight: 600,
+                    cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1,
+                  }}
+                >
+                  {saving ? "저장 중..." : `${activeTab} 가이드 저장`}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setEditMode((prev) => ({ ...prev, [activeTab]: true }))}
+                  style={{
+                    padding: "10px 32px", borderRadius: 8, border: "1px solid #7C3AED",
+                    background: "white", color: "#7C3AED", fontSize: 14, fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {activeTab} 가이드 수정
+                </button>
+              )}
             </div>
           </>
         )}
