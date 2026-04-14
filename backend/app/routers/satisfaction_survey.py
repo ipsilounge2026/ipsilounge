@@ -262,16 +262,72 @@ async def admin_survey_stats(
 
     # admin_id -> 통계 집계
     stats: dict[str, dict] = {}
+    # 항목별 전체 평균 집계
+    item_totals: dict[str, dict] = {}  # key -> {"sum": float, "count": int}
+    # 세션 타이밍별 집계 (booking -> timing mapping needed)
+    timing_totals: dict[str, dict] = {}  # timing -> {"sum": float, "count": int}
+
+    # booking_id -> timing 매핑을 위해 booking 정보 조회
+    booking_ids = [survey.booking_id for survey, _ in survey_rows]
+    booking_timing_map: dict[str, str | None] = {}
+    booking_date_map: dict[str, str | None] = {}
+    if booking_ids:
+        booking_q = select(
+            ConsultationBooking.id,
+            ConsultationBooking.type,
+            ConsultationBooking.slot_date,
+        ).where(ConsultationBooking.id.in_(booking_ids))
+        booking_rows = (await db.execute(booking_q)).all()
+        for row in booking_rows:
+            # type 필드에 session timing이 있을 수 있음 (S1, S2 등)
+            booking_timing_map[str(row.id)] = row.type
+            booking_date_map[str(row.id)] = row.slot_date.isoformat() if row.slot_date else None
+
     for survey, admin_id in survey_rows:
         aid = str(admin_id) if admin_id else "unassigned"
         if aid not in stats:
-            stats[aid] = {"admin_id": aid, "count": 0, "total_score": 0.0, "scores_count": 0}
+            stats[aid] = {
+                "admin_id": aid, "count": 0,
+                "total_score": 0.0, "scores_count": 0,
+                "item_scores": {},  # key -> {"sum": float, "count": int}
+                "last_date": None,
+            }
         stats[aid]["count"] += 1
         scores = survey.scores or {}
-        for val in scores.values():
+
+        # 최근 상담일 추적
+        bid = str(survey.booking_id) if survey.booking_id else None
+        if bid and booking_date_map.get(bid):
+            d = booking_date_map[bid]
+            if not stats[aid]["last_date"] or d > stats[aid]["last_date"]:
+                stats[aid]["last_date"] = d
+
+        # 세션 타이밍별 집계
+        timing = booking_timing_map.get(bid, None) if bid else None
+
+        for key, val in scores.items():
             if isinstance(val, (int, float)):
                 stats[aid]["total_score"] += val
                 stats[aid]["scores_count"] += 1
+                # per-admin per-item
+                if key not in stats[aid]["item_scores"]:
+                    stats[aid]["item_scores"][key] = {"sum": 0.0, "count": 0}
+                stats[aid]["item_scores"][key]["sum"] += val
+                stats[aid]["item_scores"][key]["count"] += 1
+                # 전체 항목별 평균
+                if key not in item_totals:
+                    item_totals[key] = {"sum": 0.0, "count": 0}
+                item_totals[key]["sum"] += val
+                item_totals[key]["count"] += 1
+
+        # 타이밍별 전체 평균 (전체 점수 평균)
+        if timing:
+            if timing not in timing_totals:
+                timing_totals[timing] = {"sum": 0.0, "count": 0}
+            score_vals = [v for v in scores.values() if isinstance(v, (int, float))]
+            if score_vals:
+                timing_totals[timing]["sum"] += sum(score_vals) / len(score_vals)
+                timing_totals[timing]["count"] += 1
 
     # 평균 계산 + Admin 이름 조회
     admin_ids = [s["admin_id"] for s in stats.values() if s["admin_id"] != "unassigned"]
@@ -286,15 +342,35 @@ async def admin_survey_stats(
     result = []
     for s in stats.values():
         avg = s["total_score"] / s["scores_count"] if s["scores_count"] > 0 else 0.0
+        item_avgs = {}
+        for key, d in s["item_scores"].items():
+            item_avgs[key] = round(d["sum"] / d["count"], 2) if d["count"] > 0 else 0
         result.append({
             "admin_id": s["admin_id"],
             "admin_name": admin_map.get(s["admin_id"], "미지정"),
             "survey_count": s["count"],
             "average_score": round(avg, 2),
+            "item_averages": item_avgs,
+            "last_date": s["last_date"],
         })
 
     result.sort(key=lambda x: x["average_score"], reverse=True)
-    return {"stats": result}
+
+    # 전체 항목별 평균
+    overall_item_avgs = {}
+    for key, d in item_totals.items():
+        overall_item_avgs[key] = round(d["sum"] / d["count"], 2) if d["count"] > 0 else 0
+
+    # 타이밍별 평균
+    timing_avgs = {}
+    for timing, d in timing_totals.items():
+        timing_avgs[timing] = round(d["sum"] / d["count"], 2) if d["count"] > 0 else 0
+
+    return {
+        "stats": result,
+        "overall_item_averages": overall_item_avgs,
+        "timing_averages": timing_avgs,
+    }
 
 
 # ============================================================

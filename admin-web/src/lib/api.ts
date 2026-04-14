@@ -654,3 +654,16 @@ export async function updateNotice(id: string, data: Record<string, any>) {
 export async function deleteNotice(id: string) {
   return request(`/api/admin/notices/${id}`, { method: "DELETE" });
 }
+
+// --- 만족도 설문 ---
+export async function getSatisfactionStats() {
+  return request("/api/admin/satisfaction-surveys/stats");
+}
+
+export async function listAllSatisfactionSurveys(params?: { survey_type?: string; status?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.survey_type) qs.set("survey_type", params.survey_type);
+  if (params?.status) qs.set("status", params.status);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request(`/api/admin/satisfaction-surveys${suffix}`);
+}

@@ -15,6 +15,13 @@ from app.utils.security import (
 
 
 async def register_user(data: UserRegister, db: AsyncSession) -> User:
+    # 약관 동의 검증
+    if not data.agree_terms or not data.agree_privacy:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이용약관과 개인정보처리방침에 모두 동의해야 합니다",
+        )
+
     result = await db.execute(select(User).where(User.email == data.email))
     if result.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이미 등록된 이메일입니다")
@@ -22,7 +29,7 @@ async def register_user(data: UserRegister, db: AsyncSession) -> User:
     # 지점 담당자는 관리자 승인 전까지 비활성 상태
     is_active = data.member_type != "branch_manager"
 
-    from datetime import date as date_type
+    from datetime import date as date_type, datetime as datetime_type
 
     user = User(
         email=data.email,
@@ -38,6 +45,10 @@ async def register_user(data: UserRegister, db: AsyncSession) -> User:
         grade_year=date_type.today().year if data.grade is not None else None,
         branch_name=data.branch_name,
         is_academy_student=data.is_academy_student,
+        agreed_terms=True,
+        agreed_privacy=True,
+        agreed_at=datetime_type.utcnow(),
+        terms_version="2026-04-13",
         is_active=is_active,
     )
     db.add(user)

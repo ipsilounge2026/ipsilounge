@@ -43,6 +43,8 @@ class AuthService {
     if (studentName != null && studentName.isNotEmpty) body['student_name'] = studentName;
     if (studentBirth != null && studentBirth.isNotEmpty) body['student_birth'] = studentBirth;
     if (branchName != null && branchName.isNotEmpty) body['branch_name'] = branchName;
+    body['agree_terms'] = true;
+    body['agree_privacy'] = true;
 
     await ApiService.post('/auth/register', body, auth: false);
   }

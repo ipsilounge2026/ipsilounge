@@ -160,6 +160,8 @@ export default function RegisterPage() {
         name: form.name,
         phone: form.phone || undefined,
         member_type: form.member_type,
+        agree_terms: true,
+        agree_privacy: true,
       };
 
       if (form.member_type === "student" || form.member_type === "parent") {

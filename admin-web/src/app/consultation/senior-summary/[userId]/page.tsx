@@ -8,6 +8,7 @@ import { getSeniorCumulativeSummary } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 interface SessionSummary {
+  note_id?: string;
   session_number: number;
   session_timing: string | null;
   consultation_date: string | null;
@@ -78,6 +79,7 @@ export default function SeniorCumulativeSummaryPage() {
   const [data, setData] = useState<CumulativeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expandedSessions, setExpandedSessions] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -164,53 +166,88 @@ export default function SeniorCumulativeSummaryPage() {
         <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20, marginBottom: 20 }}>
           <h3 style={{ fontSize: 15, margin: "0 0 16px 0", color: "#374151" }}>세션별 타임라인</h3>
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(data.sessions.length, 4)}, 1fr)`, gap: 12 }}>
-            {data.sessions.map((s) => (
-              <div key={s.session_number} style={{
-                border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden",
-                borderTop: `3px solid ${s.review_status === "reviewed" ? "#10B981" : s.review_status === "pending" ? "#F59E0B" : "#6B7280"}`,
-              }}>
-                <div style={{ padding: "10px 14px", background: "#F9FAFB", borderBottom: "1px solid #F3F4F6" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "#5B21B6" }}>{s.session_timing || `S${s.session_number}`}</span>
-                    <span style={{
-                      fontSize: 10, padding: "2px 6px", borderRadius: 3,
-                      background: s.review_status === "reviewed" ? "#D1FAE5" : "#FEF3C7",
-                      color: s.review_status === "reviewed" ? "#065F46" : "#92400E",
-                    }}>
-                      {s.review_status === "reviewed" ? "검토완료" : s.review_status === "pending" ? "검토대기" : s.review_status}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>{s.consultation_date}</div>
-                </div>
-                <div style={{ padding: 14, fontSize: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ color: "#6B7280" }}>핵심 주제</span>
-                    <span style={{ fontWeight: 600 }}>{s.core_topics_covered}/{s.core_topics_count}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ color: "#6B7280" }}>선택 주제</span>
-                    <span>{s.optional_topics_covered}개</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ color: "#6B7280" }}>실천 사항</span>
-                    <span>{s.action_items_count}개</span>
-                  </div>
-                  {s.student_mood && (
-                    <div style={{ marginTop: 8, padding: "4px 8px", borderRadius: 4, background: "#F9FAFB", display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: MOOD_COLORS[s.student_mood] || "#6B7280" }} />
-                      <span style={{ fontSize: 11, color: "#6B7280" }}>{s.student_mood}</span>
+            {data.sessions.map((s) => {
+              const isExpanded = expandedSessions.has(s.session_number);
+              return (
+                <div key={s.session_number} style={{
+                  border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden",
+                  borderTop: `3px solid ${s.review_status === "reviewed" ? "#10B981" : s.review_status === "pending" ? "#F59E0B" : "#6B7280"}`,
+                  cursor: s.note_id ? "pointer" : "default",
+                  transition: "box-shadow 0.15s",
+                }}
+                  onMouseEnter={(e) => { if (s.note_id) e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; }}
+                >
+                  <div style={{ padding: "10px 14px", background: "#F9FAFB", borderBottom: "1px solid #F3F4F6" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: "#5B21B6" }}>{s.session_timing || `S${s.session_number}`}</span>
+                      <span style={{
+                        fontSize: 10, padding: "2px 6px", borderRadius: 3,
+                        background: s.review_status === "reviewed" ? "#D1FAE5" : "#FEF3C7",
+                        color: s.review_status === "reviewed" ? "#065F46" : "#92400E",
+                      }}>
+                        {s.review_status === "reviewed" ? "검토완료" : s.review_status === "pending" ? "검토대기" : s.review_status}
+                      </span>
                     </div>
-                  )}
-                  {s.key_content_summary.length > 0 && (
-                    <div style={{ marginTop: 8, fontSize: 11, color: "#6B7280", lineHeight: 1.5 }}>
-                      {s.key_content_summary.map((kc, i) => (
-                        <div key={i} style={{ marginBottom: 2 }}>· {kc.length > 40 ? kc.slice(0, 40) + "..." : kc}</div>
-                      ))}
+                    <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>{s.consultation_date}</div>
+                  </div>
+                  <div style={{ padding: 14, fontSize: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ color: "#6B7280" }}>핵심 주제</span>
+                      <span style={{ fontWeight: 600 }}>{s.core_topics_covered}/{s.core_topics_count}</span>
                     </div>
-                  )}
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ color: "#6B7280" }}>선택 주제</span>
+                      <span>{s.optional_topics_covered}개</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ color: "#6B7280" }}>실천 사항</span>
+                      <span>{s.action_items_count}개</span>
+                    </div>
+                    {s.student_mood && (
+                      <div style={{ marginTop: 8, padding: "4px 8px", borderRadius: 4, background: "#F9FAFB", display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: MOOD_COLORS[s.student_mood] || "#6B7280" }} />
+                        <span style={{ fontSize: 11, color: "#6B7280" }}>{s.student_mood}</span>
+                      </div>
+                    )}
+                    {s.key_content_summary.length > 0 && (
+                      <div style={{ marginTop: 8, fontSize: 11, color: "#6B7280", lineHeight: 1.5 }}>
+                        {s.key_content_summary.map((kc, i) => (
+                          <div key={i} style={{ marginBottom: 2 }}>
+                            · {!isExpanded && kc.length > 40 ? kc.slice(0, 40) + "..." : kc}
+                          </div>
+                        ))}
+                        {s.key_content_summary.some(kc => kc.length > 40) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedSessions(prev => {
+                                const next = new Set(prev);
+                                if (next.has(s.session_number)) next.delete(s.session_number);
+                                else next.add(s.session_number);
+                                return next;
+                              });
+                            }}
+                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#7C3AED", fontWeight: 600, padding: "4px 0 0", marginTop: 2 }}
+                          >
+                            {isExpanded ? "접기" : "더보기"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {s.note_id ? (
+                      <Link
+                        href={`/consultation/senior-review/${s.note_id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ display: "block", marginTop: 10, fontSize: 11, color: "#7C3AED", fontWeight: 600, textDecoration: "none" }}
+                      >
+                        상세 기록 보기 &rarr;
+                      </Link>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

@@ -26,6 +26,10 @@ class User(Base):
     branch_name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # branch_manager: 담당 지점 / student·parent: 재원생 지점
     is_academy_student: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # 학생/학부모: 재원생 여부
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    agreed_terms: Mapped[bool] = mapped_column(Boolean, default=False)
+    agreed_privacy: Mapped[bool] = mapped_column(Boolean, default=False)
+    agreed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

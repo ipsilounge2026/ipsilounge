@@ -17,6 +17,8 @@ class UserRegister(BaseModel):
     grade: int | None = None
     branch_name: str | None = None
     is_academy_student: bool = False
+    agree_terms: bool = False
+    agree_privacy: bool = False
 
     @model_validator(mode="after")
     def validate_by_member_type(self):

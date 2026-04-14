@@ -57,6 +57,8 @@ export async function register(data: {
   school_name?: string;
   grade?: number;
   branch_name?: string;
+  agree_terms?: boolean;
+  agree_privacy?: boolean;
 }) {
   return request("/api/auth/register", {
     method: "POST",

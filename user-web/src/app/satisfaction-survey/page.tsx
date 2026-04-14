@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -35,7 +35,7 @@ const SCORE_HINTS: Record<number, string> = {
   10: "매우 만족",
 };
 
-export default function SatisfactionSurveyPage() {
+function SatisfactionSurveyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const bookingId = searchParams.get("booking_id") || "";
@@ -346,5 +346,13 @@ export default function SatisfactionSurveyPage() {
       </div>
       <Footer />
     </>
+  );
+}
+
+export default function SatisfactionSurveyPage() {
+  return (
+    <Suspense fallback={<><Navbar /><div style={{ minHeight: "60vh", display: "flex", justifyContent: "center", alignItems: "center" }}><p style={{ color: "#9CA3AF" }}>로딩 중...</p></div><Footer /></>}>
+      <SatisfactionSurveyContent />
+    </Suspense>
   );
 }

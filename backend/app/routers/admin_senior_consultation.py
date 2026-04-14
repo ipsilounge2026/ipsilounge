@@ -422,6 +422,7 @@ async def get_cumulative_summary(
     for note in notes:
         nd = _note_to_dict(note)
         session_summary = {
+            "note_id": str(note.id),
             "session_number": note.session_number,
             "session_timing": note.session_timing,
             "consultation_date": note.consultation_date.isoformat() if note.consultation_date else None,
