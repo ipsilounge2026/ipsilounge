@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,8 +10,10 @@ from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.admin import Admin, AdminStudentAssignment, SeniorStudentAssignment
+from app.models.analysis_order import AnalysisOrder
 from app.models.consultation_booking import ConsultationBooking
 from app.models.consultation_slot import ConsultationSlot
+from app.models.consultation_survey import ConsultationSurvey
 from app.models.counselor_change_request import CounselorChangeRequest
 from app.models.senior_change_request import SeniorChangeRequest
 from app.models.user import User
@@ -39,6 +41,114 @@ async def _get_assigned_admin(user_id, db: AsyncSession):
         select(Admin).where(Admin.id == assignment.admin_id, Admin.is_active == True)
     )
     return admin_result.scalar_one_or_none()
+
+
+async def _get_assigned_senior(user_id, db: AsyncSession):
+    """사용자에게 매칭된 선배 조회 (선배상담 전용)"""
+    result = await db.execute(
+        select(SeniorStudentAssignment).where(SeniorStudentAssignment.user_id == user_id)
+    )
+    assignment = result.scalar_one_or_none()
+    if not assignment:
+        return None
+    senior_result = await db.execute(
+        select(Admin).where(
+            Admin.id == assignment.senior_id,
+            Admin.is_active == True,
+            Admin.role == "senior",
+        )
+    )
+    return senior_result.scalar_one_or_none()
+
+async def _check_lead_time(
+    consultation_type: str,
+    owner_id,
+    slot_date: date,
+    db: AsyncSession,
+) -> None:
+    """기획서 §4-8-2: 상담 유형별 예약 리드타임(7일) 검증.
+
+    - 학생부분석:  학생부 업로드 + 7일 이후 슬롯만 허용
+    - 학종전략:    학종 학생부 업로드 + 7일 이후 슬롯만 허용
+    - 학습상담:    사전 설문 제출 + 7일 이후 슬롯만 허용
+    - 선배상담:    매칭된 선배 슬롯만 허용 (리드타임 없음)
+    - 심리상담/기타: 리드타임 없음
+    """
+    if consultation_type in ("심리상담", "기타"):
+        return
+
+    # 선배상담 — 매칭 필수 (리드타임 없음)
+    if consultation_type == "선배상담":
+        senior = await _get_assigned_senior(owner_id, db)
+        if not senior:
+            raise HTTPException(
+                status_code=400,
+                detail="선배와 매칭이 필요합니다. 학원에 문의해주세요.",
+            )
+        return
+
+    # 학생부분석 / 학종전략 — 학생부 업로드 기준
+    type_to_service = {
+        "학생부분석": "학생부라운지",
+        "학종전략": "학종라운지",
+    }
+    service_type = type_to_service.get(consultation_type)
+    if service_type:
+        upload_result = await db.execute(
+            select(AnalysisOrder)
+            .where(
+                AnalysisOrder.user_id == owner_id,
+                AnalysisOrder.service_type == service_type,
+                AnalysisOrder.status.in_(["uploaded", "processing", "completed"]),
+                AnalysisOrder.uploaded_at.isnot(None),
+            )
+            .order_by(AnalysisOrder.uploaded_at.asc())
+        )
+        orders = upload_result.scalars().all()
+        if not orders:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{consultation_type} 상담을 위해 먼저 학생부를 업로드해주세요.",
+            )
+        latest_upload = orders[-1].uploaded_at
+        earliest = (latest_upload + timedelta(days=7)).date()
+        if slot_date < earliest:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{consultation_type} 상담은 학생부 업로드일({latest_upload.date().isoformat()}) 기준 "
+                    f"7일 이후({earliest.isoformat()})부터 예약 가능합니다."
+                ),
+            )
+        return
+
+    # 학습상담 — 사전 설문 제출 기준
+    if consultation_type == "학습상담":
+        survey_result = await db.execute(
+            select(ConsultationSurvey)
+            .where(
+                ConsultationSurvey.user_id == owner_id,
+                ConsultationSurvey.status == "submitted",
+                ConsultationSurvey.survey_type.in_(["high", "preheigh1"]),
+            )
+            .order_by(ConsultationSurvey.submitted_at.desc())
+        )
+        survey = survey_result.scalar_one_or_none()
+        if not survey or not survey.submitted_at:
+            raise HTTPException(
+                status_code=400,
+                detail="학습상담 예약을 위해 먼저 사전 설문을 제출해주세요.",
+            )
+        earliest = (survey.submitted_at + timedelta(days=7)).date()
+        if slot_date < earliest:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"학습상담은 사전 설문 제출일({survey.submitted_at.date().isoformat()}) 기준 "
+                    f"7일 이후({earliest.isoformat()})부터 예약 가능합니다."
+                ),
+            )
+
 
 router = APIRouter(prefix="/api/consultation", tags=["상담예약"])
 
@@ -100,6 +210,43 @@ async def get_counselors(
             counselors.append({"id": str(admin.id), "name": admin.name})
 
     return {"assigned": False, "counselors": counselors, "has_slots": True}
+
+
+@router.get("/seniors")
+async def get_seniors(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """선배상담용 매칭된 선배 조회
+
+    - 매칭된 선배가 있으면 해당 선배만 반환 (+ 활성 슬롯 존재 여부)
+    - 매칭 안 됐으면 빈 리스트 + assigned=False + 안내 메시지
+      (학습상담과 달리 '아무나 선택' 경로 없음 — 매칭 전제 조건)
+    """
+    assigned_senior = await _get_assigned_senior(user.id, db)
+
+    if not assigned_senior:
+        return {
+            "assigned": False,
+            "seniors": [],
+            "has_slots": False,
+            "message": "선배와 매칭이 필요합니다. 학원에 문의해주세요.",
+        }
+
+    slot_check = await db.execute(
+        select(ConsultationSlot.id).where(
+            ConsultationSlot.admin_id == str(assigned_senior.id),
+            ConsultationSlot.is_active == True,
+            ConsultationSlot.date >= date.today(),
+        ).limit(1)
+    )
+    has_slots = slot_check.scalar_one_or_none() is not None
+    return {
+        "assigned": True,
+        "seniors": [{"id": str(assigned_senior.id), "name": assigned_senior.name}],
+        "has_slots": has_slots,
+        "message": None,
+    }
 
 
 @router.get("/slots", response_model=list[AvailableSlotResponse])
@@ -190,6 +337,9 @@ async def book_consultation(
             )
 
     slot = await check_slot_available(data.slot_id, db)
+
+    # 기획서 §4-8-2: 상담 유형별 7일 리드타임 검증
+    await _check_lead_time(data.type, owner_id, slot.date, db)
 
     # 동일 시간대 중복 예약 확인 (owner 기준)
     existing = await db.execute(

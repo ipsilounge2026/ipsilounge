@@ -24,6 +24,12 @@ class ConsultationService {
     return Map<String, dynamic>.from(res);
   }
 
+  /// 선배 조회 (선배상담 전용, 매칭된 선배만 반환)
+  static Future<Map<String, dynamic>> getSeniorsWithAssignment() async {
+    final res = await ApiService.get('/consultation/seniors');
+    return Map<String, dynamic>.from(res);
+  }
+
   /// 기존 상담자 목록 (하위 호환 - 새 API 형식 래핑)
   static Future<List<Counselor>> getCounselors() async {
     final res = await getCounselorsWithAssignment();

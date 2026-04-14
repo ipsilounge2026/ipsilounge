@@ -46,6 +46,11 @@ const _consultationTypes = [
     description: '기타 입시 관련 상담',
     icon: Icons.help_outline, requiresUpload: false,
   ),
+  _ConsultationType(
+    value: '선배상담', label: '선배 상담',
+    description: '매칭된 재학생/졸업생 선배와 진학 경험 상담 (매칭 필요)',
+    icon: Icons.group_outlined, requiresUpload: false,
+  ),
 ];
 
 class ConsultationScreen extends StatefulWidget {
@@ -66,6 +71,11 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   String? _eligibilityReason;
   String? _earliestDate;
   bool _needsSurvey = false;
+
+  // 분석 결과 검증 상태 (blocked 시 상담 진행 차단)
+  String? _analysisStatus; // pass / repaired / warn / blocked
+  bool _analysisBlocked = false;
+  String? _analysisBlockReason;
 
   // 상담자
   List<Counselor> _counselors = [];
@@ -119,6 +129,13 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
         _checkingEligibility = true;
       });
       _checkEligibility(type.value);
+    } else if (type.value == '선배상담') {
+      // 선배상담 → 매칭 여부 확인 (매칭 안 되면 안내만 표시)
+      setState(() {
+        _step = 'check';
+        _checkingEligibility = true;
+      });
+      _checkEligibility(type.value);
     } else {
       // 학습/심리/기타 → 사전조사
       setState(() => _step = 'survey');
@@ -134,6 +151,9 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
         _eligibilityReason = result['reason'];
         _earliestDate = result['earliest_date'];
         _needsSurvey = result['needs_survey'] == true;
+        _analysisStatus = result['analysis_status'] as String?;
+        _analysisBlocked = result['analysis_blocked'] == true;
+        _analysisBlockReason = result['analysis_block_reason'] as String?;
         _checkingEligibility = false;
       });
       if (_eligible) {
@@ -151,8 +171,31 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   // === Step: survey → booking ===
   void _goToBooking() {
     setState(() => _step = 'booking');
-    _loadCounselors();
+    if (_selectedType?.value == '선배상담') {
+      _loadSeniors();
+    } else {
+      _loadCounselors();
+    }
     _checkBookingCooldown();
+  }
+
+  // 학습상담: 사전 조사 제출 후 예약 자격(리드타임 + 분석검증 상태) 확인
+  Future<void> _handleSurveyComplete() async {
+    if (_selectedType?.value == '학습상담') {
+      try {
+        final result =
+            await ConsultationService.checkEligibleByType('학습상담');
+        setState(() {
+          _earliestDate = result['earliest_date'];
+          _analysisStatus = result['analysis_status'] as String?;
+          _analysisBlocked = result['analysis_blocked'] == true;
+          _analysisBlockReason = result['analysis_block_reason'] as String?;
+        });
+      } catch (_) {
+        // 조회 실패 시 기본 동작으로 이동
+      }
+    }
+    _goToBooking();
   }
 
   Future<void> _loadCounselors() async {
@@ -169,6 +212,26 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       });
 
       // 담당자가 배정되어 있고 1명이면 자동 선택
+      if (assigned && items.length == 1) {
+        _selectCounselor(items.first);
+      }
+    } catch (_) {}
+  }
+
+  /// 선배상담 — 매칭된 선배만 단건 자동 선택
+  Future<void> _loadSeniors() async {
+    try {
+      final res = await ConsultationService.getSeniorsWithAssignment();
+      final assigned = res['assigned'] == true;
+      final items = (res['seniors'] as List)
+          .map((e) => Counselor.fromJson(e))
+          .toList();
+
+      setState(() {
+        _counselors = items;
+        _isAssigned = assigned;
+      });
+
       if (assigned && items.length == 1) {
         _selectCounselor(items.first);
       }
@@ -412,7 +475,14 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            if (_eligibilityReason != null && _eligibilityReason!.contains('업로드를 완료')) ...[
+            if (_selectedType?.value == '선배상담') ...[
+              const Text(
+                '선배 상담은 학원에서 먼저 선배를 매칭해드린 후\n예약이 가능합니다. 매칭 후 다시 방문해주세요.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.6),
+              ),
+              const SizedBox(height: 24),
+            ] else if (_eligibilityReason != null && _eligibilityReason!.contains('업로드를 완료')) ...[
               const Text(
                 '신청은 완료되었습니다. 학생부 파일을 업로드하면\n상담 예약이 가능합니다.',
                 textAlign: TextAlign.center,
@@ -500,8 +570,8 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                           ),
                         ),
                       );
-                      // 설문 완료 후 예약 단계로
-                      if (result == true) _goToBooking();
+                      // 설문 완료 후 예약 단계로 (학습상담은 리드타임/검증 확인)
+                      if (result == true) await _handleSurveyComplete();
                     },
                     child: const Text('예비고1 사전 조사 작성'),
                   ),
@@ -520,7 +590,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                           ),
                         ),
                       );
-                      if (result == true) _goToBooking();
+                      if (result == true) await _handleSurveyComplete();
                     },
                     child: const Text('고등학생 사전 조사 작성'),
                   ),
@@ -562,7 +632,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
           },
         ),
 
-        // earliest_date 안내
+        // earliest_date 안내 (리드타임)
         if (_earliestDate != null && _earliestDate!.compareTo(todayStr) > 0)
           Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -573,8 +643,36 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              '${_earliestDate!.replaceAll('-', '.')} 이후 날짜부터 예약 가능합니다.',
+              _selectedType?.value == '학습상담'
+                  ? '사전 설문 제출일 기준 7일 이후(${_earliestDate!.replaceAll('-', '.')})부터 예약 가능합니다. (상담사 분석 검토 시간 확보)'
+                  : '${_earliestDate!.replaceAll('-', '.')} 이후 날짜부터 예약 가능합니다.',
               style: const TextStyle(fontSize: 13, color: Color(0xFF1E40AF), height: 1.5),
+            ),
+          ),
+
+        // 분석 결과 검증 실패 (blocked) 안내
+        if (_analysisBlocked)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEE2E2),
+              border: Border.all(color: const Color(0xFFFCA5A5)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '🔒 분석 결과 점검 중',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF991B1B)),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _analysisBlockReason ?? '분석 결과 검증 오류가 발견되어 상담사가 점검 중입니다. 잠시 후 다시 시도해주세요.',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF991B1B), height: 1.5),
+                ),
+              ],
             ),
           ),
 
@@ -693,7 +791,10 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                       color: const Color(0xFFD1FAE5),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text('담당 상담자', style: TextStyle(fontSize: 10, color: Color(0xFF065F46), fontWeight: FontWeight.w600)),
+                    child: Text(
+                      _selectedType?.value == '선배상담' ? '매칭된 선배' : '담당 상담자',
+                      style: const TextStyle(fontSize: 10, color: Color(0xFF065F46), fontWeight: FontWeight.w600),
+                    ),
                   )
                 else
                   const Text('상담자', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
@@ -880,11 +981,15 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                   SizedBox(
                     width: double.infinity, height: 48,
                     child: ElevatedButton(
-                      onPressed: (_isLoading || !_canBook || _noChildren) ? null : _book,
+                      onPressed: (_isLoading || !_canBook || _noChildren || _analysisBlocked) ? null : _book,
                       child: _isLoading
                           ? const SizedBox(width: 20, height: 20,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : Text(!_canBook ? '쿨다운 기간' : '상담 예약 신청'),
+                          : Text(
+                              _analysisBlocked
+                                  ? '🔒 분석 점검 중'
+                                  : (!_canBook ? '쿨다운 기간' : '상담 예약 신청'),
+                            ),
                     ),
                   ),
                 ],

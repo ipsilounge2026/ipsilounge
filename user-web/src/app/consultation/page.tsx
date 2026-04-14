@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getAvailableSlots, getCounselors, bookConsultation, checkConsultationEligible, checkBookingCooldown, listMySurveys } from "@/lib/api";
+import { getAvailableSlots, getCounselors, getSeniors, bookConsultation, checkConsultationEligible, checkBookingCooldown, listMySurveys } from "@/lib/api";
 import ChildSelector from "@/components/ChildSelector";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
@@ -29,6 +29,10 @@ interface EligibilityResult {
   reason: string | null;
   earliest_date: string | null;
   needs_survey: boolean;
+  // 기획서 §4-8-1: 자동 분석 검증 차단 상태 (학습상담 전용)
+  analysis_status?: string | null;
+  analysis_blocked?: boolean;
+  analysis_block_reason?: string | null;
 }
 
 const CONSULTATION_TYPES = [
@@ -37,6 +41,7 @@ const CONSULTATION_TYPES = [
   { value: "학습상담", label: "학습 상담", description: "학습 방법, 성적 향상 전략 상담", requiresUpload: false },
   { value: "심리상담", label: "심리 상담", description: "입시 스트레스, 진로 고민 등 심리 상담", requiresUpload: false },
   { value: "기타", label: "기타 상담", description: "그 외 입시 관련 상담", requiresUpload: false },
+  { value: "선배상담", label: "선배 상담", description: "매칭된 재학생/졸업생 선배와 진학 경험 상담 (매칭 필요)", requiresUpload: false },
 ];
 
 export default function ConsultationPage() {
@@ -124,6 +129,23 @@ export default function ConsultationPage() {
       } catch {
         setSurveyStatus("none");
       }
+    } else if (typeValue === "선배상담") {
+      // 선배상담 → 매칭 여부 확인 (매칭 안 되면 예약 불가 안내만 표시)
+      setStep("check");
+      setCheckingEligibility(true);
+      try {
+        const result = await checkConsultationEligible("선배상담");
+        setEligibility(result);
+        if (result.eligible) {
+          setStep("booking");
+          loadSeniors();
+          checkBookingCooldown().then(setBookingCooldown).catch(() => {});
+        }
+      } catch {
+        setEligibility({ eligible: false, reason: "선배 매칭 확인에 실패했습니다.", earliest_date: null, needs_survey: false });
+      } finally {
+        setCheckingEligibility(false);
+      }
     } else {
       // 심리/기타 → 전용 사전 조사 추후 추가 예정. 현재는 바로 예약 단계로 진입
       setStep("booking");
@@ -147,8 +169,30 @@ export default function ConsultationPage() {
     }
   };
 
+  // 선배 조회 (선배상담 전용) — 매칭된 선배만 단건 자동 선택
+  const loadSeniors = async () => {
+    try {
+      const data = await getSeniors();
+      const seniors = data.seniors || [];
+      setCounselors(seniors);
+      setIsAssigned(data.assigned || false);
+      if (data.assigned && seniors.length === 1) {
+        setSelectedCounselor(seniors[0]);
+      }
+    } catch {
+      setCounselors([]);
+    }
+  };
+
   // 사전조사 완료 후 예약으로 이동
-  const handleSurveyComplete = () => {
+  const handleSurveyComplete = async () => {
+    // 기획서 §4-8-2: 학습상담도 7일 리드타임 → 백엔드 자격 확인으로 earliest_date 수령
+    try {
+      const result = await checkConsultationEligible("학습상담");
+      setEligibility(result);
+    } catch {
+      setEligibility(null);
+    }
     setStep("booking");
     loadCounselors();
     checkBookingCooldown().then(setBookingCooldown).catch(() => {});
@@ -284,6 +328,21 @@ export default function ConsultationPage() {
               </p>
             </div>
             {(() => {
+              // 선배상담 — 매칭 미완료: 학원 문의 안내만 표시
+              if (selectedType === "선배상담") {
+                return (
+                  <>
+                    <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 20, lineHeight: 1.6 }}>
+                      선배 상담은 학원에서 먼저 선배를 매칭해드린 후<br />
+                      예약이 가능합니다. 매칭 후 다시 방문해주세요.
+                    </p>
+                    <div>
+                      <button onClick={handleBack} className="btn btn-outline">다른 상담 유형 선택</button>
+                    </div>
+                  </>
+                );
+              }
+
               // 상담 유형 → 필요한 라운지 매핑
               const requiredService = selectedType === "학생부분석" ? "학생부라운지" : selectedType === "학종전략" ? "학종라운지" : null;
               const serviceLabel = requiredService === "학생부라운지" ? "학생부 라운지" : requiredService === "학종라운지" ? "학종 라운지" : null;
@@ -501,7 +560,7 @@ export default function ConsultationPage() {
               }}
             />
 
-            {/* earliest_date 안내 배너 */}
+            {/* earliest_date 안내 배너 (7일 리드타임) */}
             {earliestDate && earliestDate > today && (
               <div style={{
                 padding: "12px 16px",
@@ -513,7 +572,30 @@ export default function ConsultationPage() {
                 color: "#1E40AF",
                 lineHeight: 1.6,
               }}>
-                학생부 분석 후 상담 진행을 위해 <strong>{earliestDate.replace(/-/g, ".")}</strong> 이후 날짜부터 예약 가능합니다.
+                {selectedType === "학습상담"
+                  ? <>사전 설문 분석 및 상담사 검토를 위해 <strong>{earliestDate.replace(/-/g, ".")}</strong> 이후 날짜부터 예약 가능합니다.</>
+                  : <>학생부 분석 후 상담 진행을 위해 <strong>{earliestDate.replace(/-/g, ".")}</strong> 이후 날짜부터 예약 가능합니다.</>
+                }
+              </div>
+            )}
+
+            {/* 기획서 §4-8-1: 자동 분석 검증 차단 상태 안내 */}
+            {eligibility?.analysis_blocked && (
+              <div style={{
+                padding: "12px 16px",
+                background: "#FEF2F2",
+                border: "1px solid #FECACA",
+                borderRadius: 8,
+                marginBottom: 16,
+                fontSize: 13,
+                color: "#991B1B",
+                lineHeight: 1.6,
+              }}>
+                <strong>⚠️ 분석 결과 점검 중</strong>
+                <div style={{ marginTop: 4 }}>
+                  {eligibility.analysis_block_reason ||
+                    "자동 분석 결과 검증에 실패하여 점검 중입니다. 예약은 가능하지만 상담 진행은 점검 완료 후 가능합니다."}
+                </div>
               </div>
             )}
 
@@ -605,7 +687,7 @@ export default function ConsultationPage() {
                     </div>
                     <span style={{ fontWeight: 600 }}>{selectedCounselor.name}</span>
                     <span style={{ fontSize: 13, color: isAssigned ? "#166534" : "#6B7280" }}>
-                      {isAssigned ? "담당 상담자" : "상담자"}
+                      {selectedType === "선배상담" ? "매칭된 선배" : (isAssigned ? "담당 상담자" : "상담자")}
                     </span>
                   </div>
                   {!isAssigned && (

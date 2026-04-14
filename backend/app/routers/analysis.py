@@ -185,14 +185,89 @@ async def check_consultation_eligible(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """상담 예약 가능 여부 확인 (유형별 분기)"""
-    # 학습상담/심리상담/기타는 라운지 신청 불필요 → 바로 eligible
-    if consultation_type in ("학습상담", "심리상담", "기타"):
+    """상담 예약 가능 여부 확인 (유형별 분기)
+
+    기획서 §4-8-2: 학습상담도 학생부/학종 라운지와 동일한 7일 리드타임 적용.
+    - 학생부/학종: 학생부 업로드 + 7일
+    - 학습상담:   사전질문(submitted) + 7일
+    - 심리상담/기타: 즉시 가능
+    """
+    from datetime import timedelta
+
+    # 학습상담 — 사전질문 제출 기준 7일 리드타임
+    if consultation_type == "학습상담":
+        from app.models.consultation_survey import ConsultationSurvey
+        # 사용자의 가장 최근 submitted 설문 조회 (high + preheigh1)
+        survey_result = await db.execute(
+            select(ConsultationSurvey)
+            .where(
+                ConsultationSurvey.user_id == user.id,
+                ConsultationSurvey.status == "submitted",
+                ConsultationSurvey.survey_type.in_(["high", "preheigh1"]),
+            )
+            .order_by(ConsultationSurvey.submitted_at.desc())
+        )
+        survey = survey_result.scalar_one_or_none()
+
+        if not survey or not survey.submitted_at:
+            return {
+                "eligible": False,
+                "reason": "학습상담 예약을 위해 먼저 사전 설문을 제출해주세요.",
+                "earliest_date": None,
+                "needs_survey": True,
+                "required_service": "학습상담_설문",
+            }
+
+        # 차단(blocked) 상태 설문 — 예약은 허용하나 상담 진행은 잠김 (§4-8-1)
+        analysis_blocked = (survey.analysis_status == "blocked")
+
+        eligible_date = (survey.submitted_at + timedelta(days=7)).date()
+        return {
+            "eligible": True,
+            "reason": None,
+            "earliest_date": eligible_date.isoformat(),
+            "needs_survey": False,
+            "required_service": "학습상담",
+            "analysis_status": survey.analysis_status,
+            "analysis_blocked": analysis_blocked,
+            "analysis_block_reason": (
+                "자동 분석 결과 검증에 실패하여 슈퍼관리자 점검 중입니다. "
+                "상담 예약은 가능하나 상담 진행은 점검 완료 후 가능합니다."
+                if analysis_blocked else None
+            ),
+        }
+
+    # 심리상담/기타 — 리드타임 없음
+    if consultation_type in ("심리상담", "기타"):
         return {
             "eligible": True,
             "reason": None,
             "earliest_date": None,
             "needs_survey": True,
+        }
+
+    # 선배상담 — 리드타임 없음, 단 선배-학생 매칭 필수
+    if consultation_type == "선배상담":
+        from app.models.admin import SeniorStudentAssignment
+        assignment_result = await db.execute(
+            select(SeniorStudentAssignment).where(
+                SeniorStudentAssignment.user_id == user.id
+            )
+        )
+        assignment = assignment_result.scalar_one_or_none()
+        if not assignment:
+            return {
+                "eligible": False,
+                "reason": "선배와 매칭이 필요합니다. 학원에 문의해주세요.",
+                "earliest_date": None,
+                "needs_survey": False,
+                "required_service": "선배매칭",
+            }
+        return {
+            "eligible": True,
+            "reason": None,
+            "earliest_date": None,
+            "needs_survey": False,
         }
 
     # 학생부분석 → 학생부라운지 / 학종전략 → 학종라운지로 매핑

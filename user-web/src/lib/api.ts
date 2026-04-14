@@ -160,6 +160,10 @@ export async function getCounselors() {
   return request("/api/consultation/counselors");
 }
 
+export async function getSeniors() {
+  return request("/api/consultation/seniors");
+}
+
 export async function getAvailableSlots(year: number, month: number, adminId?: string) {
   const params = new URLSearchParams({ year: String(year), month: String(month) });
   if (adminId) params.set("admin_id", adminId);
