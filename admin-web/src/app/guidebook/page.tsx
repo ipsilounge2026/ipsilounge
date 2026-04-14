@@ -5,64 +5,10 @@ import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { isLoggedIn, getAdminInfo } from "@/lib/auth";
 import { getGuidebooks, bulkSaveGuidebooks } from "@/lib/api";
+import { SENIOR_TIMING_TOPICS, SENIOR_TIMING_LABELS } from "@/lib/senior-topics";
 
-// ── 시점별 상담 주제 정의 (session page와 동일) ──
-
-interface TopicDef {
-  id: string;
-  label: string;
-  isCore: boolean;
-  detail?: string;
-}
-
-const TIMING_TOPICS: Record<string, TopicDef[]> = {
-  T1: [
-    { id: "t1c1", label: "첫 학기 종합 진단 (내신 + 모의고사 결합 분석)", isCore: true, detail: "첫 내신 결과를 목표 대비 해석, 내신 vs 모의 비교, 예상과 실제 차이 원인 분석" },
-    { id: "t1c2", label: "학습 방법 전환 진단 ★", isCore: true, detail: "중학교식 공부법 잔존 여부, 예습·복습·수업 활용도 점검, 과목별 학습법 적절성 평가" },
-    { id: "t1c3", label: "과목별 취약 유형 정밀 진단", isCore: true, detail: "국어: 문학/비문학, 수학: 계산 실수/고난도/단원, 영어: 어휘·독해·시간" },
-    { id: "t1c4", label: "컨디션·심리 점검 + 여름방학 전략", isCore: true, detail: "심리·컨디션, 첫 학기 번아웃, 수면 패턴, 여름방학 학습 계획" },
-    { id: "t1o1", label: "자기주도 비율 조정 (학원 의존도 높을 경우)", isCore: false },
-    { id: "t1o2", label: "오답 관리 루틴 재설계", isCore: false },
-    { id: "t1o3", label: "진로 탐색 심화 (미정 시)", isCore: false },
-  ],
-  T2: [
-    { id: "t2c1", label: "1년치 성적 데이터 종합 분석", isCore: true, detail: "1학기→2학기 내신 추이, 모의 4회 추이, 내신-모의 Gap 변화" },
-    { id: "t2c2", label: "확정된 선택과목 학습 준비도 점검 ★", isCore: true, detail: "선택과목 목록 확인, 준비 수준 점검, 진로·권장과목 정합성, 수능 선택과목 연계" },
-    { id: "t2c3", label: "과목별 학습법 최적화 (1년 데이터 검증)", isCore: true, detail: "T1 학습법 효과 검증, 안 바뀐 습관 체크, 재조정" },
-    { id: "t2c4", label: "전형 방향 초기 탐색", isCore: true, detail: "수시·정시 가능성 탐색, 내신형/수능형/균형형 판단" },
-    { id: "t2c5", label: "겨울방학 로드맵 + 고2 진입 전략", isCore: true, detail: "선택과목 선행 계획, 수능 기초 시작 여부, 피로 관리" },
-    { id: "t2o1", label: "내신-모의 Gap 심화 분석", isCore: false },
-    { id: "t2o2", label: "학부모 소통 방법 (갈등 시)", isCore: false },
-    { id: "t2o3", label: "진로 구체화 심화 (방향 없을 경우)", isCore: false },
-  ],
-  T3: [
-    { id: "t3c1", label: "선택과목 첫 성적 분석", isCore: true, detail: "예상 vs 실제 차이, 경쟁 강도, 목표 대학 라인 영향" },
-    { id: "t3c2", label: "수시 vs 정시 방향 탐색 ★", isCore: true, detail: "1.5년치 내신+모의 비교, 내신형/수능형/균형형 탐색" },
-    { id: "t3c3", label: "수능 최저 정밀 시뮬레이션", isCore: true, detail: "목표 대학별 수능 최저 기준, 충족 가능성, 부족 영역" },
-    { id: "t3c4", label: "과목별 학습법 최종 조정", isCore: true, detail: "시험 전략 점검, 내신·수능 학습 비율 재조정" },
-    { id: "t3c5", label: "여름방학 집중 전략", isCore: true, detail: "방향에 맞춘 계획, 취약 보강, 체력·멘탈 관리" },
-    { id: "t3o1", label: "모의고사 취약 유형 심화 분석", isCore: false },
-    { id: "t3o2", label: "학습 습관 고착화 여부 재점검", isCore: false },
-    { id: "t3o3", label: "진로 방향성 재검토", isCore: false },
-  ],
-  T4: [
-    { id: "t4c1", label: "2년치 종합 진단 — 나를 명확히 이해하기 ★", isCore: true, detail: "내신 패턴 확정, 모의 영역별 추이, 학습법 안정화" },
-    { id: "t4c2", label: "수시 vs 정시 최종 결정 ★", isCore: true, detail: "T3 방향 확정, 2년 데이터 기반 최종 판단" },
-    { id: "t4c3", label: "진학 가능성 확인 (대학 라인)", isCore: true, detail: "현실적 대학 수준 확인, 도전 vs 안전 라인" },
-    { id: "t4c4", label: "고3 학습 로드맵 확정 ★", isCore: true, detail: "월 단위 계획 (3월~수능), 주간 시간 배분" },
-    { id: "t4c5", label: "체력·멘탈 관리 + 겨울방학 집중 전략", isCore: true, detail: "고3 체력 관리, 번아웃 대비, 생활 리듬 전환" },
-    { id: "t4o1", label: "학부모와의 소통 전략", isCore: false },
-    { id: "t4o2", label: "지난 2년 복기 (성찰)", isCore: false },
-    { id: "t4o3", label: "모의고사 시험 전략 최적화", isCore: false },
-  ],
-};
-
-const TIMING_LABELS: Record<string, string> = {
-  T1: "T1 — 고1-1학기 말 (7월)",
-  T2: "T2 — 고1-2학기 말 (2월)",
-  T3: "T3 — 고2-1학기 말 (7월)",
-  T4: "T4 — 고2-2학기 말 (2월)",
-};
+const TIMING_TOPICS = SENIOR_TIMING_TOPICS;
+const TIMING_LABELS = SENIOR_TIMING_LABELS;
 
 interface GuidebookItem {
   id: string;

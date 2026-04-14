@@ -6,6 +6,7 @@ import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import { getBookingDetail, updateBookingStatus, createConsultationNote, getCounselorSummaryForSenior, getSeniorNotesForCounselor, getSurveyDelta, createSeniorNote, getSeniorPrevCheckpoints, getGuidebooks } from "@/lib/api";
 import { isLoggedIn, getAdminInfo } from "@/lib/auth";
+import { SENIOR_TIMING_TOPICS } from "@/lib/senior-topics";
 
 interface BookingDetail {
   id: string;
@@ -287,11 +288,11 @@ export default function ConsultationSessionPage() {
           // 상담사 설문 없으면 무시
         }
 
-        // 시점에 맞는 핵심/선택 주제 초기화
-        if (timing && TIMING_TOPICS[timing]) {
-          const topics = TIMING_TOPICS[timing];
-          const coreItems = topics.filter(t => t.category === "핵심 주제");
-          const optItems = topics.filter(t => t.category === "선택 주제");
+        // 시점에 맞는 핵심/선택 주제 초기화 (선배 상담용 주제 사용)
+        if (timing && SENIOR_TIMING_TOPICS[timing]) {
+          const seniorTopics = SENIOR_TIMING_TOPICS[timing];
+          const coreItems = seniorTopics.filter(t => t.isCore);
+          const optItems = seniorTopics.filter(t => !t.isCore);
           setSnCoreTopics(coreItems.map(t => ({ topicId: t.id, topic: t.label, progress_status: "미진행", student_reaction: "", key_content: "" })));
           setSnOptionalTopics(optItems.map(t => ({ topicId: t.id, topic: t.label, covered: false, note: "" })));
         }
