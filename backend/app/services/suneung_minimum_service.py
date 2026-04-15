@@ -13,10 +13,12 @@ from typing import Any
 
 import openpyxl
 
+from ..config import settings
+
 # ── DB 캐시 ──
 
 _DB_CACHE: list[dict] | None = None
-_DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "수능최저_db.xlsx"
+_DB_PATH = settings.DATA_ROOT / "수능최저_db.xlsx"
 
 
 def _load_db() -> list[dict]:

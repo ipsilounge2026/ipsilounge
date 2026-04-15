@@ -16,6 +16,8 @@ import functools
 import logging
 from typing import Any
 
+from ..config import settings
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -54,20 +56,15 @@ TIER_LABELS = {
 
 def _get_admission_db_path() -> str:
     """admission_db.xlsx 경로."""
-    # 환경변수 우선, 없으면 school-record-analyzer 상대경로
+    # 환경변수(ADMISSION_DB_PATH) 우선 — 단일 파일 오버라이드용
     env_path = os.environ.get("ADMISSION_DB_PATH")
     if env_path and os.path.exists(env_path):
         return env_path
 
-    # 프로젝트 상위 디렉토리에서 탐색
-    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    candidates = [
-        os.path.join(base, "data", "admission_db.xlsx"),
-        os.path.join(base, "..", "school-record-analyzer", "data", "admission_db.xlsx"),
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
+    # 기본: 공용 데이터 루트(SHARED_DATA_ROOT) — school-record-analyzer/data
+    shared = settings.DATA_ROOT / "admission_db.xlsx"
+    if shared.exists():
+        return str(shared)
 
     return ""
 

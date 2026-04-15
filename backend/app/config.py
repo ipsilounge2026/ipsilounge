@@ -1,4 +1,15 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
+
+
+# 공용 데이터 루트 (xlsx DB 파일 위치)
+# - 기본값: ipsilounge/ 와 같은 레벨의 school-record-analyzer/data/
+# - 운영(EC2) 등에서는 SHARED_DATA_ROOT 환경변수로 재지정
+# 경로 계산: config.py → app → backend → ipsilounge → (parent) → school-record-analyzer/data
+_DEFAULT_DATA_ROOT = (
+    Path(__file__).resolve().parents[3] / "school-record-analyzer" / "data"
+)
 
 
 class Settings(BaseSettings):
@@ -53,7 +64,14 @@ class Settings(BaseSettings):
     # 학교 검색 (NEIS 교육정보 개방포털 API)
     NEIS_API_KEY: str = ""
 
+    # 공용 데이터 루트 (수능최저_db.xlsx, admission_db.xlsx, course_requirements.xlsx 위치)
+    SHARED_DATA_ROOT: str = str(_DEFAULT_DATA_ROOT)
+
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @property
+    def DATA_ROOT(self) -> Path:
+        return Path(self.SHARED_DATA_ROOT)
 
 
 settings = Settings()
