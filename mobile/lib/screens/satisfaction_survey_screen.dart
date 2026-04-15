@@ -178,6 +178,19 @@ class _SatisfactionSurveyScreenState extends State<SatisfactionSurveyScreen> {
                 '상담은 어떠셨나요?\n솔직한 의견을 남겨주세요.',
                 style: TextStyle(fontSize: 14, color: Colors.black54),
               ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '🔒 응답자 정보는 상담사에게 노출되지 않습니다.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF374151)),
+                ),
+              ),
               const SizedBox(height: 24),
               // Score questions
               ..._scoreQuestions.map(_buildScoreQuestion),

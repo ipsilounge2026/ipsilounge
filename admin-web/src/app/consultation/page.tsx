@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import StatusBadge from "@/components/StatusBadge";
-import { getBookings, updateBookingStatus, searchUsersForBooking, createManualBooking, updateBookingMode } from "@/lib/api";
+import { getBookings, updateBookingStatus, searchUsersForBooking, createManualBooking, updateBookingMode, getOverdueBookingCount } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 
 interface Booking {
@@ -43,6 +43,7 @@ export default function ConsultationPage() {
   const router = useRouter();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
+  const [overdueCount, setOverdueCount] = useState(0);
   const [message, setMessage] = useState("");
 
   // 직접 예약 모달 상태
@@ -75,6 +76,10 @@ export default function ConsultationPage() {
     try {
       const res = await getBookings(statusFilter || undefined);
       setBookings(res.items);
+    } catch {}
+    try {
+      const od = await getOverdueBookingCount();
+      setOverdueCount(od.count || 0);
     } catch {}
   };
 
@@ -191,8 +196,29 @@ export default function ConsultationPage() {
             <option value="confirmed">확정</option>
             <option value="completed">완료</option>
             <option value="cancelled">취소</option>
+            <option value="overdue">완료 미처리</option>
           </select>
           <span style={{ color: "var(--gray-600)", fontSize: 14 }}>총 {bookings.length}건</span>
+          {overdueCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter("overdue")}
+              style={{
+                marginLeft: 8,
+                padding: "6px 12px",
+                background: "#fef3c7",
+                color: "#92400e",
+                border: "1px solid #f59e0b",
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+              title="과거 일정 + 확정 상태 (완료 처리 필요)"
+            >
+              ⚠️ 완료 미처리 {overdueCount}건
+            </button>
+          )}
         </div>
 
         <div className="table-wrapper">

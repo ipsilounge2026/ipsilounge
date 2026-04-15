@@ -280,7 +280,15 @@ async def list_bookings(
     if admin.role != "super_admin":
         query = query.where(ConsultationSlot.admin_id == str(admin.id))
 
-    if status_filter:
+    if status_filter == "overdue":
+        # 완료 미처리: 슬롯 날짜가 지났는데 아직 confirmed 상태인 예약
+        query = query.where(
+            and_(
+                ConsultationBooking.status == "confirmed",
+                ConsultationSlot.date < date.today(),
+            )
+        )
+    elif status_filter:
         query = query.where(ConsultationBooking.status == status_filter)
 
     if year and month:
@@ -321,6 +329,31 @@ async def list_bookings(
     ]
 
     return {"items": items, "total": len(items)}
+
+
+@router.get("/bookings/overdue-count")
+async def overdue_bookings_count(
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """완료 미처리 예약 건수 (과거 일정 + confirmed 상태). 대시보드 뱃지용."""
+    from sqlalchemy import func as _func
+
+    q = (
+        select(_func.count(ConsultationBooking.id))
+        .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
+        .where(
+            and_(
+                ConsultationBooking.status == "confirmed",
+                ConsultationSlot.date < date.today(),
+            )
+        )
+    )
+    if admin.role != "super_admin":
+        q = q.where(ConsultationSlot.admin_id == str(admin.id))
+
+    count = (await db.execute(q)).scalar() or 0
+    return {"count": int(count)}
 
 
 @router.get("/bookings/{booking_id}")
@@ -390,11 +423,28 @@ async def update_booking_status(
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """예약 상태 변경"""
+    """예약 상태 변경
+
+    권한:
+    - super_admin / admin: 모든 예약 상태 변경 가능
+    - counselor / senior: 자신이 담당하는 슬롯의 예약만 변경 가능
+    """
     result = await db.execute(select(ConsultationBooking).where(ConsultationBooking.id == booking_id))
     booking = result.scalar_one_or_none()
     if booking is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="예약을 찾을 수 없습니다")
+
+    # 슬롯 + 담당자 확인 (권한 가드 + 후속 알림용)
+    slot_result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == booking.slot_id))
+    slot = slot_result.scalar_one_or_none()
+
+    if admin.role not in ("super_admin", "admin"):
+        # counselor / senior: 본인 슬롯만
+        if not slot or str(slot.admin_id) != str(admin.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="본인이 담당하는 예약만 상태를 변경할 수 있습니다",
+            )
 
     booking.status = data.status
     if data.status == "cancelled" and data.cancel_reason:
@@ -406,8 +456,6 @@ async def update_booking_status(
         if user:
             await send_booking_confirmed_notification(user, db)
             # 확정 이메일 발송
-            slot_result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == booking.slot_id))
-            slot = slot_result.scalar_one_or_none()
             if slot:
                 from app.services.email_service import send_consultation_confirmed_email
                 await send_consultation_confirmed_email(
@@ -435,8 +483,6 @@ async def update_booking_status(
             await delete_consultation_event(booking.google_event_id)
             booking.google_event_id = None
 
-        slot_result = await db.execute(select(ConsultationSlot).where(ConsultationSlot.id == booking.slot_id))
-        slot = slot_result.scalar_one_or_none()
         if slot and slot.current_bookings > 0:
             slot.current_bookings -= 1
         # 취소 이메일 발송
@@ -450,8 +496,83 @@ async def update_booking_status(
                 data.cancel_reason,
             )
 
+    if data.status == "completed":
+        # 만족도 설문 자동 발송 (기획서 §10-2)
+        await _trigger_satisfaction_survey(booking, slot, db)
+
     await db.commit()
     return {"message": f"예약 상태가 '{data.status}'로 변경되었습니다"}
+
+
+async def _trigger_satisfaction_survey(
+    booking: ConsultationBooking,
+    slot: ConsultationSlot | None,
+    db: AsyncSession,
+) -> None:
+    """상담 완료 시 만족도 설문 레코드 생성 + 응답 메일 발송.
+
+    - 이미 설문이 존재하면 중복 생성하지 않음 (booking_id unique).
+    - survey_type 결정: 슬롯 담당자(role=senior) → senior, 그 외 → counselor.
+      (담당자 미지정 시 booking.type='선배상담' 이면 senior, 아니면 counselor.)
+    - 메일 발송 실패는 무시하고 레코드 생성은 유지.
+    """
+    from datetime import datetime, timedelta
+    from app.config import settings
+    from app.models.satisfaction_survey import SatisfactionSurvey
+    from app.services.email_service import send_satisfaction_survey_invite_email
+
+    # 중복 방지 (booking_id unique constraint)
+    existing = await db.execute(
+        select(SatisfactionSurvey).where(SatisfactionSurvey.booking_id == booking.id)
+    )
+    if existing.scalar_one_or_none() is not None:
+        return
+
+    # survey_type 결정
+    survey_type = "counselor"
+    if slot and slot.admin_id:
+        try:
+            aid = uuid.UUID(slot.admin_id)
+            assigned = (await db.execute(select(Admin).where(Admin.id == aid))).scalar_one_or_none()
+            if assigned and assigned.role == "senior":
+                survey_type = "senior"
+        except (ValueError, TypeError):
+            pass
+    elif booking.type == "선배상담":
+        survey_type = "senior"
+
+    expires_at = datetime.utcnow() + timedelta(days=7)
+
+    survey = SatisfactionSurvey(
+        user_id=booking.user_id,
+        booking_id=booking.id,
+        survey_type=survey_type,
+        status="pending",
+        scores={},
+        free_text={},
+        expires_at=expires_at,
+    )
+    db.add(survey)
+    await db.flush()  # id 확보
+
+    # 응답 메일 발송
+    user = (await db.execute(select(User).where(User.id == booking.user_id))).scalar_one_or_none()
+    if user and user.email:
+        survey_url = (
+            f"{settings.FRONTEND_URL}/satisfaction-survey"
+            f"?booking_id={booking.id}&type={survey_type}"
+        )
+        try:
+            await send_satisfaction_survey_invite_email(
+                to=user.email,
+                name=user.name,
+                survey_url=survey_url,
+                survey_type=survey_type,
+                expires_at_str=expires_at.strftime("%Y-%m-%d %H:%M"),
+            )
+        except Exception:
+            # 메일 실패해도 설문 레코드는 유지 (앱/웹에서 응답 가능)
+            pass
 
 
 from pydantic import BaseModel as _BaseModel

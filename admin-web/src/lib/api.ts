@@ -163,6 +163,10 @@ export async function getBookingDetail(id: string) {
   return request(`/api/admin/consultation/bookings/${id}`);
 }
 
+export async function getOverdueBookingCount(): Promise<{ count: number }> {
+  return request(`/api/admin/consultation/bookings/overdue-count`);
+}
+
 export async function updateBookingStatus(id: string, status: string, cancelReason?: string) {
   const payload: any = { status };
   if (cancelReason) payload.cancel_reason = cancelReason;

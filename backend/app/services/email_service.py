@@ -257,3 +257,37 @@ async def send_consultation_reminder_email(
     </div>
     """
     return await _send_email(to, subject, html)
+
+
+async def send_satisfaction_survey_invite_email(
+    to: str,
+    name: str,
+    survey_url: str,
+    survey_type: str,
+    expires_at_str: str,
+) -> bool:
+    """상담 완료 후 만족도 설문 응답 안내 메일"""
+    type_label = "선배 상담" if survey_type == "senior" else "상담"
+    subject = f"[입시라운지] {type_label} 만족도 설문에 응답해주세요"
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">{type_label} 만족도 설문</h2>
+      <p>안녕하세요, <strong>{name}</strong>님.</p>
+      <p>방금 진행한 {type_label}은 어떠셨나요?<br>
+         더 나은 서비스를 위해 짧은 만족도 설문(약 2~3분)을 부탁드립니다.</p>
+      <p>
+        <a href="{survey_url}"
+           style="display:inline-block; padding:12px 24px; background:#7C3AED;
+                  color:#fff; text-decoration:none; border-radius:6px; font-size:15px;">
+          설문 응답하러 가기
+        </a>
+      </p>
+      <p style="color:#6b7280; font-size:13px;">
+        응답 기한: <strong>{expires_at_str}까지</strong> (상담일로부터 7일).<br>
+        응답자 정보는 상담사에게 노출되지 않습니다.
+      </p>
+      <hr style="border:none; border-top:1px solid #e5e7eb; margin: 24px 0;">
+      <p style="color:#9ca3af; font-size:12px;">입시라운지 | ipsilounge.com</p>
+    </div>
+    """
+    return await _send_email(to, subject, html)

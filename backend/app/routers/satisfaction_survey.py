@@ -209,7 +209,15 @@ async def admin_list_surveys(
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """관리자: 전체 만족도 설문 목록"""
+    """관리자: 전체 만족도 설문 목록.
+
+    무기명 정책(B 옵션): 개별 응답 raw 데이터는 super_admin / admin 만 조회 가능.
+    counselor / senior 등 상담사 본인은 자신의 응답 데이터를 직접 볼 수 없음
+    (집계 통계는 /stats, /trends 별도 권한 처리).
+    """
+    if admin.role not in ("super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="개별 응답 조회 권한이 없습니다.")
+
     q = select(SatisfactionSurvey)
     if survey_type:
         q = q.where(SatisfactionSurvey.survey_type == survey_type)

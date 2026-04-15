@@ -280,7 +280,7 @@ function SatisfactionSurveyContent() {
                 fontSize: 13,
                 color: "#7C3AED",
                 fontWeight: 600,
-                marginBottom: 28,
+                marginBottom: 12,
                 padding: "8px 12px",
                 background: "#F5F3FF",
                 borderRadius: 8,
@@ -288,6 +288,20 @@ function SatisfactionSurveyContent() {
               }}
             >
               {surveyType === "senior" ? "선배 상담 만족도" : "상담 만족도"}
+            </div>
+
+            <div
+              style={{
+                fontSize: 13,
+                color: "#374151",
+                marginBottom: 28,
+                padding: "10px 14px",
+                background: "#F9FAFB",
+                border: "1px solid #E5E7EB",
+                borderRadius: 8,
+              }}
+            >
+              🔒 응답자 정보는 상담사에게 노출되지 않습니다.
             </div>
 
             {questions.map((q) => renderQuestion(q))}
