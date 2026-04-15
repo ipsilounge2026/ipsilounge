@@ -32,6 +32,8 @@ node_modules/
 build/
 android/.gradle/
 android/local.properties
+mobile/android/.gradle/
+mobile/android/local.properties
 *.apk
 *.aab
 
@@ -42,7 +44,14 @@ nginx/ssl/
 .idea/
 .vscode/
 *.iml
+.claude/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# 임시 파일
+temp_*.png
+temp_*.jpg
+temp_*.jpeg
+*.tmp
