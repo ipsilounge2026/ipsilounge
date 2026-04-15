@@ -56,6 +56,20 @@ class ConsultationSurvey(Base):
     # "draft"     — 작성 중
     # "submitted" — 학생이 제출 완료 (상담사 확인 가능)
 
+    # 자동 분석 결과 자체 검증 상태 (기획서 §4-8-1)
+    analysis_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", index=True
+    )
+    # "pending"  — 미검증 (아직 자동 분석 결과 조회 전)
+    # "pass"     — P1/P2 모두 통과
+    # "repaired" — 자동 보정 후 P1 통과 (상담사에게 보정 내역 안내)
+    # "warn"     — P2 경고 잔존 (상담사 검토 권장하나 진행 가능)
+    # "blocked"  — P1 FAIL 자동 보정 실패 (상담 진행 차단, 슈퍼관리자 점검 필요)
+
+    # 검증 스냅샷 (마지막 검증 결과 전문)
+    # { "status", "auto_repaired", "repair_log", "p1_issues", "p2_issues", "p3_issues", "validated_at" }
+    analysis_validation: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     # 마지막 작업 위치 (이어쓰기 시 사용)
     last_category: Mapped[str | None] = mapped_column(String(4), nullable=True)
     last_question: Mapped[str | None] = mapped_column(String(20), nullable=True)

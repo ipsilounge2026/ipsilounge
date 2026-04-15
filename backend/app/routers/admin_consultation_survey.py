@@ -85,6 +85,7 @@ async def list_surveys(
             "timing": s.timing,
             "mode": s.mode,
             "status": s.status,
+            "analysis_status": s.analysis_status,
             "has_admin_memo": bool(s.admin_memo),
             "created_at": s.created_at.isoformat(),
             "updated_at": s.updated_at.isoformat(),
@@ -147,6 +148,8 @@ async def get_survey_detail(
         "counselor_checklist": survey.counselor_checklist,
         "source_survey_id": str(survey.source_survey_id) if survey.source_survey_id else None,
         "preserved_data": survey.preserved_data,
+        "analysis_status": survey.analysis_status,
+        "analysis_validation": survey.analysis_validation,
         "created_at": survey.created_at.isoformat(),
         "updated_at": survey.updated_at.isoformat(),
         "submitted_at": survey.submitted_at.isoformat() if survey.submitted_at else None,
@@ -163,7 +166,7 @@ async def get_computed_stats(
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """설문 답변 기반 자동 계산 결과 (상담사 override 포함)"""
+    """설문 답변 기반 자동 계산 결과 (상담사 override 포함) + 자체 검증 결과"""
     result = await db.execute(
         select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
     )
@@ -172,7 +175,25 @@ async def get_computed_stats(
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
 
     computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
-    return _merge_overrides(computed, survey.counselor_overrides)
+    merged = _merge_overrides(computed, survey.counselor_overrides)
+
+    # 기획서 §4-8-1: 상담사 전달 전 자동 분석 결과 자체 검증 + 자동 보정
+    from app.services.survey_qa_validator import validate_with_repair
+    qa = validate_with_repair(
+        merged,
+        survey.survey_type,
+        answers=survey.answers,
+        timing=survey.timing,
+    )
+    merged["qa_validation"] = qa
+
+    # 검증 상태를 설문 레코드에 영속화 (상담 진행 차단 판정에 사용)
+    if survey.analysis_status != qa["status"]:
+        survey.analysis_status = qa["status"]
+    survey.analysis_validation = qa
+    await db.commit()
+
+    return merged
 
 
 # ---- Delta Diff ----
@@ -247,6 +268,29 @@ async def get_suneung_minimum_simulation_admin(
     return simulate_suneung_minimum(survey.answers or {})
 
 
+@router.get("/{survey_id}/course-requirement-match")
+async def get_course_requirement_match(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """권장 이수 과목 매칭 결과 (관리자용).
+
+    학생의 E2 목표 대학/학과 + B1_B4 이수 과목 + E5 수강 예정 과목을 기반으로
+    권장과목 DB와 매칭하여 이수 완료/미이수 과목을 반환한다.
+    """
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    from app.services.course_requirement_service import build_matching
+
+    return build_matching(survey.answers or {})
+
+
 # ---- 상담사 메모 ----
 
 class MemoRequest(BaseModel):
@@ -307,6 +351,16 @@ async def download_report_pdf(
     survey = result.scalar_one_or_none()
     if not survey:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    # 기획서 §4-8-1: 검증 차단 상태에서는 학생에게 전달되는 리포트 생성 불가
+    if admin.role != "super_admin" and survey.analysis_status == "blocked":
+        raise HTTPException(
+            status_code=423,
+            detail=(
+                "자동 분석 결과 검증 실패로 리포트 생성이 잠겨 있습니다. "
+                "슈퍼관리자의 점검 완료 후 생성 가능합니다."
+            ),
+        )
 
     uresult = await db.execute(select(User).where(User.id == survey.user_id))
     user = uresult.scalar_one_or_none()
@@ -396,6 +450,16 @@ async def update_action_plan(
     survey = result.scalar_one_or_none()
     if not survey:
         raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    # 기획서 §4-8-1: 자동 분석 검증 차단 상태에서는 상담 진행(액션 플랜 작성) 불가
+    if admin.role != "super_admin" and survey.analysis_status == "blocked":
+        raise HTTPException(
+            status_code=423,  # Locked
+            detail=(
+                "자동 분석 결과 검증 실패로 상담 진행이 잠겨 있습니다. "
+                "슈퍼관리자의 점검 완료 후 진행 가능합니다."
+            ),
+        )
 
     # 각 아이템에 ID 부여
     items = []

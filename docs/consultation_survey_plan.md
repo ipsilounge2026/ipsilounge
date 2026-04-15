@@ -363,4 +363,98 @@ DynamicSurvey (컨테이너)
 3. **이어쓰기로 플랫폼 경계 허물기** — 모바일 사용자도 Feature 완결성 확보.
 4. **무거운 입력은 웹에서** — UX 우선, 억지로 모바일에 구겨넣지 않음.
 5. **카테고리 순서 강제** — 기획서의 피로도 설계 존중.
+
+---
+
+## 6. 예약 리드타임 정책 (공통)
+
+학생부분석·학종전략·학습상담 **3개 상담 유형 모두 동일 원칙: 사전 자료 제출일 기준 7일 이후부터 예약 가능**.
+
+| 상담 유형 | 기준일 | 산식 | 근거 |
+|---|---|---|---|
+| 학생부분석 라운지 | 학생부 PDF 업로드일 (`AnalysisOrder.created_at`) | uploaded_at + 7 days | 상담사 분석·리포트 준비 시간 |
+| 학종전략 라운지 | 학생부 PDF 업로드일 (`AnalysisOrder.created_at`) | uploaded_at + 7 days | 상담사 분석·입결 조회 시간 |
+| **학습상담 라운지** | **사전 설문 제출일** (`ConsultationSurvey.submitted_at`) | **submitted_at + 7 days** | **상담사가 자동 계산 결과를 검토·분석 코멘트 작성할 시간** |
+
+**구현 위치:**
+- 자격 사전 조회: `GET /api/analysis/consultation-eligible?type=학습상담` → `earliest_date` 반환
+- 예약 시 강제 검증: `POST /api/consultation/book` 내부 `_check_lead_time()` (backend/app/routers/consultation.py)
+- 위반 시 HTTP 400 + 한국어 사유 메시지
+
+**UI 표시:**
+- 예약 캘린더 상단 파란색 배너에 "${earliest_date} 이후부터 예약 가능" 안내
+- 학습상담의 경우 문구를 "사전 설문 제출일 기준 7일 이후(${earliest_date})부터 예약 가능합니다. (상담사 분석 검토 시간 확보)"로 변형
+- 캘린더에서 `earliest_date` 이전 날짜는 선택 불가(회색)
+
+---
+
+## 7. 자동 분석 결과 검증 규칙 (Auto-Repair + 4-State)
+
+### 7.1 문제의식
+
+상담사가 관리자 웹에서 자동 계산 결과를 확인할 때 점수·등급·코멘트 불일치가 발견되는 경우가 있다. **상담사가 일일이 override로 덮어쓰는 방식은 비효율적이며, 오류가 리포트에 그대로 실리는 사고를 낳는다.** 따라서 **시스템이 자동 복구를 시도하고, 복구 불가한 항목만 상담 진행을 차단**하는 구조로 전환한다.
+
+### 7.2 4-상태 모델
+
+| 상태 | 의미 | 상담사 UI | 상담 진행 | 리포트 작성 | 학생 전달 |
+|---|---|---|---|---|---|
+| `pass` | 모든 검증 통과 | 초록 뱃지 | ✅ | ✅ | ✅ |
+| `repaired` | P1/P2 이슈를 자동 복구 완료 | 파란 뱃지 + 복구 로그 표시 | ✅ | ✅ | ✅ |
+| `warn` | 자동 복구 후에도 P2 이슈 잔존 | 노랑 뱃지 + 점프 링크 | ✅ (주의) | ✅ | ⚠️ 상담사 승인 후 |
+| `blocked` | P1(필수) 이슈가 자동 복구 실패 | 빨강 뱃지 + 잠금 메시지 | 🔒 차단 | 🔒 차단 | 🔒 차단 |
+
+### 7.3 자동 복구 대상
+
+`modules/survey_qa_validator.py`의 `try_auto_repair()`:
+
+| 이슈 코드 | 복구 방식 |
+|---|---|
+| `score_out_of_range` | 0~100 범위로 clamp |
+| `grade_inconsistent` | score로부터 등급 재계산 (S≥8.5/A≥7.0/B≥5.0/C≥3.5) |
+| `overall_score_mismatch` | 4개 영역 평균으로 재계산 |
+| `comment_missing` / `comment_too_short` | `comment_generation_service`로 재생성 |
+
+복구는 **최대 1회 재시도**. 재시도 후에도 P1이 남으면 `blocked`.
+
+### 7.4 P1(필수) vs P2(권장)
+
+- **P1 (blocked 트리거)**: 구조 완전성, 점수 범위, 가중합 수학 검증, 등급-점수 정합
+- **P2 (warn 트리거)**: 코멘트 최소 글자수, 핵심 근거 문장 존재, 교차 참조 일관성
+
+### 7.5 데이터 모델
+
+`consultation_surveys` 테이블:
+- `analysis_status VARCHAR(20) DEFAULT 'pending'` — pending/pass/repaired/warn/blocked (인덱스)
+- `analysis_validation JSONB` — 검증 상세(상태, 이슈 리스트, 복구 로그, 타임스탬프)
+
+자동 계산(`GET /api/admin/consultation-surveys/{id}/computed`) 응답 시점에 계산 후 저장.
+
+### 7.6 차단 cascade
+
+`analysis_status == 'blocked'`일 때:
+
+| 동작 | 차단 방식 | super_admin 예외 |
+|---|---|---|
+| 상담 예약(학습상담) | `analysis_blocked: true`로 클라이언트 비활성화 | ❌ 동일 차단 |
+| 상담사 액션플랜 저장 | HTTP 423 Locked | ✅ 통과 |
+| 리포트 PDF 다운로드 | HTTP 423 Locked | ✅ 통과 |
+| 학생에게 자동 공개 | 비활성 | ✅ 수동 공개 가능 |
+
+### 7.7 상담사 UI (관리자 웹 `/surveys/[id]`)
+
+- 상단 `QaValidationBadge` 4-상태 컬러 팔레트
+- `repaired`일 때: "어떤 필드가 자동 복구되었는지" 리스트 + 점프 링크
+- `warn`/`blocked`일 때: 문제 필드 클릭 시 해당 섹션으로 스크롤 + 하이라이트 (1.5초)
+  - `radar_scores.*` → `#section-radar-scores`
+  - `auto_comments.X` → `#comment-X`
+  - `roadmap.*` → `#section-roadmap`
+  - `c4_type` → `#section-c4-type`
+- `blocked` 시 "🔒 상담 진행 잠김", "🔒 리포트 잠김" 버튼
+
+### 7.8 운영 지침
+
+1. `blocked` 발생 시 상담사는 override가 아닌 **원본 답변을 재점검**. 실제 데이터 오류면 학생에게 수정 요청.
+2. `repaired`는 `pass`와 동일하게 진행 가능. 복구 로그는 감사 추적용으로 DB에 남음.
+3. `warn` 상태는 상담사가 코멘트/근거 수정으로 `pass`로 올릴 수 있음 (override 후 재검증).
+4. `super_admin`만 긴급 상황에서 `blocked`를 우회 가능 — 일반 상담사는 불가.
 6. **점진적 배포보다 일괄 완성 후 런칭** — 사용자가 "반쪽짜리 기능"을 보지 않도록.

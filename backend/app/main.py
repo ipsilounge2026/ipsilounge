@@ -207,6 +207,22 @@ async def startup():
                 if "action_plan" not in survey_columns:
                     connection.execute(text("ALTER TABLE consultation_surveys ADD COLUMN action_plan JSONB"))
                     logger.info("consultation_surveys 테이블에 action_plan 컬럼 추가 완료")
+                # 기획서 §4-8-1: 자동 분석 결과 자체 검증 상태
+                if "analysis_status" not in survey_columns:
+                    connection.execute(text(
+                        "ALTER TABLE consultation_surveys ADD COLUMN analysis_status "
+                        "VARCHAR(20) NOT NULL DEFAULT 'pending'"
+                    ))
+                    connection.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_consultation_surveys_analysis_status "
+                        "ON consultation_surveys(analysis_status)"
+                    ))
+                    logger.info("consultation_surveys 테이블에 analysis_status 컬럼 추가 완료")
+                if "analysis_validation" not in survey_columns:
+                    connection.execute(text(
+                        "ALTER TABLE consultation_surveys ADD COLUMN analysis_validation JSONB"
+                    ))
+                    logger.info("consultation_surveys 테이블에 analysis_validation 컬럼 추가 완료")
 
             # consultation_bookings 테이블에 cancel_reason 컬럼 추가
             if inspector.has_table("consultation_bookings"):

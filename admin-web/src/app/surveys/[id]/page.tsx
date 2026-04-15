@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan, updateSurveyOverrides, deleteSurveyOverrides, updateSurveyChecklist, deleteSurveyChecklist, convertPreheigh1ToHigh, getSuneungMinimumSimulation } from "@/lib/api";
+import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan, updateSurveyOverrides, deleteSurveyOverrides, updateSurveyChecklist, deleteSurveyChecklist, convertPreheigh1ToHigh, getSuneungMinimumSimulation, getCourseRequirementMatch } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 import { GradeTrendChart, MockTrendChart, StudyAnalysisChart, RadarScoreChart, RadarDetailTable } from "@/components/SurveyCharts";
 
@@ -174,7 +174,7 @@ interface ActionPlan {
   updated_at?: string;
 }
 
-type TabType = "answers" | "computed" | "delta" | "memo" | "checklist" | "action_plan" | "suneung";
+type TabType = "answers" | "computed" | "delta" | "memo" | "checklist" | "action_plan" | "suneung" | "course_req";
 
 export default function SurveyDetailPage() {
   const router = useRouter();
@@ -214,6 +214,10 @@ export default function SurveyDetailPage() {
   // Suneung minimum simulation state
   const [suneungSim, setSuneungSim] = useState<any>(null);
   const [suneungLoading, setSuneungLoading] = useState(false);
+
+  // Course requirement match state
+  const [courseReq, setCourseReq] = useState<any>(null);
+  const [courseReqLoading, setCourseReqLoading] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -273,6 +277,19 @@ export default function SurveyDetailPage() {
     }
   };
 
+  const loadCourseReq = async () => {
+    if (courseReq) return;
+    setCourseReqLoading(true);
+    try {
+      const data = await getCourseRequirementMatch(id);
+      setCourseReq(data);
+    } catch {
+      setCourseReq({ available: false, reason: "권장과목 매칭 조회에 실패했습니다.", results: [] });
+    } finally {
+      setCourseReqLoading(false);
+    }
+  };
+
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     if (tab === "delta" && !delta) {
@@ -283,6 +300,9 @@ export default function SurveyDetailPage() {
     }
     if (tab === "suneung" && !suneungSim) {
       loadSuneungSim();
+    }
+    if (tab === "course_req" && !courseReq) {
+      loadCourseReq();
     }
   };
 
@@ -716,6 +736,7 @@ export default function SurveyDetailPage() {
     { key: "computed", label: "자동 분석" },
     { key: "delta", label: "변경 비교" },
     ...(survey.survey_type === "high" ? [{ key: "suneung" as TabType, label: "수능최저 시뮬레이션" }] : []),
+    ...(survey.survey_type === "high" ? [{ key: "course_req" as TabType, label: "권장과목 이수현황" }] : []),
     { key: "memo", label: `메모${survey.admin_memo ? " *" : ""}` },
     { key: "checklist", label: `체크리스트${survey.counselor_checklist?.items?.length ? " *" : ""}` },
     { key: "action_plan", label: "액션 플랜" },
@@ -742,18 +763,27 @@ export default function SurveyDetailPage() {
               </span>
             </h1>
           </div>
-          <button
-            onClick={handleDownloadPdf}
-            disabled={pdfDownloading}
-            style={{
-              padding: "8px 20px", borderRadius: 6, border: "1px solid #3B82F6",
-              background: pdfDownloading ? "#93C5FD" : "#3B82F6", color: "white",
-              fontSize: 13, cursor: pdfDownloading ? "default" : "pointer",
-              display: "flex", alignItems: "center", gap: 6,
-            }}
-          >
-            {pdfDownloading ? "생성 중..." : "PDF 리포트 다운로드"}
-          </button>
+          {(() => {
+            const analysisBlocked = (survey as any)?.analysis_status === "blocked";
+            const disabled = pdfDownloading || analysisBlocked;
+            return (
+              <button
+                onClick={handleDownloadPdf}
+                disabled={disabled}
+                title={analysisBlocked ? "검증 차단 상태 — 슈퍼관리자 점검 완료 후 생성 가능" : undefined}
+                style={{
+                  padding: "8px 20px", borderRadius: 6,
+                  border: analysisBlocked ? "1px solid #9CA3AF" : "1px solid #3B82F6",
+                  background: analysisBlocked ? "#E5E7EB" : (pdfDownloading ? "#93C5FD" : "#3B82F6"),
+                  color: analysisBlocked ? "#6B7280" : "white",
+                  fontSize: 13, cursor: disabled ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                {analysisBlocked ? "🔒 리포트 잠김" : (pdfDownloading ? "생성 중..." : "PDF 리포트 다운로드")}
+              </button>
+            );
+          })()}
         </div>
 
         {/* 기본 정보 카드 */}
@@ -929,6 +959,11 @@ export default function SurveyDetailPage() {
 
         {activeTab === "computed" && (
           <div>
+            {/* 자체 검증 결과 배지 (기획서 §4-8-1) */}
+            {(survey.computed as any)?.qa_validation && (
+              <QaValidationBadge qa={(survey.computed as any).qa_validation} />
+            )}
+
             {/* 상담사 수정 상태 배너 */}
             {(survey.computed as any)?.has_overrides && (
               <div style={{ background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 8, padding: 12, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -968,12 +1003,12 @@ export default function SurveyDetailPage() {
 
             {/* 4각형 레이더 — 종합 진단 (고등학생만) */}
             {survey.survey_type === "high" && survey.computed?.radar_scores && (
-              <>
+              <div id="section-radar-scores">
                 <RadarScoreChart computed={survey.computed} />
                 <div style={{ marginBottom: 20 }}>
                   <RadarDetailTable computed={survey.computed} />
                 </div>
-              </>
+              </div>
             )}
 
             <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
@@ -985,7 +1020,7 @@ export default function SurveyDetailPage() {
 
                   {/* C4 유형 판정 (입결 기반) */}
                   {survey.survey_type === "high" && (survey.computed as any)?.c4_type && (
-                    <div style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
+                    <div id="section-c4-type" style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
                       <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>📊 C4. 내신 vs 모의고사 비교 — 유형 ���정</h4>
                       <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>입결 DB 기반으로 수시/정시 가능 대학 라인을 비교하여 자동 판정된 결과입니다. 상담사가 검토 후 수정할 수 있습니다.</div>
 
@@ -1071,7 +1106,7 @@ export default function SurveyDetailPage() {
                   )}
 
                   {/* 6개 영역 상담사 분석 코멘트 */}
-                  <div style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
+                  <div id="section-auto-comments" style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
                     <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>✏️ 상담사 분석 코멘트</h4>
                     <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 16 }}>자동 생성된 초안을 검토하고 필요 시 수정하세요. 이 내용은 리포트에 반���됩니다.</div>
 
@@ -1082,7 +1117,7 @@ export default function SurveyDetailPage() {
                       { key: "subject_competitiveness_comment", label: "과목별 경쟁력 분석", icon: "📚" },
                       { key: "study_method_comment", label: "학습 방법 진단", icon: "🎯" },
                     ].map(({ key, label, icon }) => (
-                      <div key={key} style={{ marginBottom: 16 }}>
+                      <div key={key} id={`comment-${key}`} style={{ marginBottom: 16 }}>
                         <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>{icon} {label}</label>
                         <textarea
                           defaultValue={
@@ -1113,7 +1148,7 @@ export default function SurveyDetailPage() {
 
                   {/* 맞춤 전략 로드맵 (Phase × 4트랙) */}
                   {survey.survey_type === "high" && (survey.computed as any)?.roadmap?.matrix && (
-                    <div style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
+                    <div id="section-roadmap" style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
                       <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🗺️ 맞춤 전략 로드맵</h4>
                       <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>
                         자동 생성된 로드맵 초안입니다. 각 셀을 클릭하여 내용을 수정할 수 있습니다.
@@ -1343,6 +1378,24 @@ export default function SurveyDetailPage() {
           </div>
         )}
 
+        {activeTab === "course_req" && (
+          <div id="section-course-req" style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
+            <h3 style={{ fontSize: 15, margin: 0, marginBottom: 4 }}>권장 이수 과목 매칭 결과</h3>
+            <p style={{ fontSize: 12, color: "#6B7280", marginBottom: 16 }}>
+              학생의 목표 대학·학과(E2) + 이수 과목(B1~B4) + 수강 예정 과목(E5)을 권장과목 DB와 대조한 결과입니다.
+            </p>
+            {courseReqLoading ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF" }}>로딩 중...</div>
+            ) : courseReq ? (
+              <CourseRequirementMatch data={courseReq} />
+            ) : (
+              <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+                데이터가 없습니다.
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "action_plan" && (
           <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -1456,21 +1509,202 @@ export default function SurveyDetailPage() {
                   마지막 저장: {new Date(actionPlan.updated_at).toLocaleString("ko-KR")}
                 </span>
               )}
-              <button
-                onClick={handleSaveActionPlan}
-                disabled={actionPlanSaving}
-                style={{
-                  padding: "8px 24px", borderRadius: 6, border: "none", background: "#3B82F6",
-                  color: "white", fontSize: 13, cursor: "pointer",
-                  opacity: actionPlanSaving ? 0.5 : 1,
-                }}
-              >
-                {actionPlanSaving ? "저장 중..." : "저장"}
-              </button>
+              {(() => {
+                const analysisBlocked = (survey as any)?.analysis_status === "blocked";
+                const disabled = actionPlanSaving || analysisBlocked;
+                return (
+                  <button
+                    onClick={handleSaveActionPlan}
+                    disabled={disabled}
+                    title={analysisBlocked ? "검증 차단 상태 — 슈퍼관리자 점검 완료 후 저장 가능" : undefined}
+                    style={{
+                      padding: "8px 24px", borderRadius: 6, border: "none",
+                      background: analysisBlocked ? "#9CA3AF" : "#3B82F6",
+                      color: "white", fontSize: 13,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      opacity: actionPlanSaving ? 0.5 : 1,
+                    }}
+                  >
+                    {analysisBlocked ? "🔒 상담 진행 잠김" : (actionPlanSaving ? "저장 중..." : "저장")}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+// ── 자동 분석 결과 자체 검증 배지 (기획서 §4-8-1) ──
+
+function QaValidationBadge({ qa }: { qa: any }) {
+  const [expanded, setExpanded] = useState(false);
+  const status: string = qa?.status || "pass";
+  const p1 = (qa?.p1_issues || []) as Array<{ code: string; field: string; message: string }>;
+  const p2 = (qa?.p2_issues || []) as Array<{ code: string; field: string; message: string }>;
+  const p3 = (qa?.p3_issues || []) as Array<{ code: string; field: string; message: string }>;
+  const repairLog = (qa?.repair_log || []) as Array<{ code: string; field: string; action: string }>;
+  const autoRepaired: boolean = !!qa?.auto_repaired;
+  const total = p1.length + p2.length + p3.length + repairLog.length;
+
+  // 기획서 §4-8-1: pass / repaired / warn / blocked 4상태 팔레트
+  const palette = status === "blocked"
+    ? { bg: "#FEF2F2", border: "#FCA5A5", fg: "#991B1B", sub: "#B91C1C", icon: "🔒", label: "상담 진행 잠김" }
+    : status === "warn"
+    ? { bg: "#FFFBEB", border: "#FCD34D", fg: "#92400E", sub: "#A16207", icon: "⚠️", label: "주의 필요" }
+    : status === "repaired"
+    ? { bg: "#EFF6FF", border: "#93C5FD", fg: "#1E40AF", sub: "#2563EB", icon: "🔧", label: "자동 보정 완료" }
+    : { bg: "#F0FDF4", border: "#86EFAC", fg: "#166534", sub: "#15803D", icon: "✅", label: "검증 완료" };
+
+  // 필드 → 스크롤 대상 요소 ID 매핑 (점프 기능)
+  const fieldToAnchor = (field: string): string | null => {
+    if (!field) return null;
+    if (field.startsWith("radar_scores")) return "section-radar-scores";
+    if (field.startsWith("auto_comments")) {
+      const key = field.split(".")[1];
+      if (key) return `comment-${key}`;
+      return "section-auto-comments";
+    }
+    if (field.startsWith("roadmap")) return "section-roadmap";
+    if (field === "c4_type") return "section-c4-type";
+    return null;
+  };
+
+  const jumpTo = (field: string) => {
+    const anchor = fieldToAnchor(field);
+    if (!anchor) return;
+    const el = document.getElementById(anchor);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      // 잠깐 하이라이트
+      const orig = el.style.outline;
+      el.style.outline = "2px solid #F59E0B";
+      el.style.outlineOffset = "4px";
+      setTimeout(() => { el.style.outline = orig; el.style.outlineOffset = ""; }, 2000);
+    }
+  };
+
+  const renderIssues = (issues: typeof p1, severity: "P1" | "P2" | "P3") => {
+    if (issues.length === 0) return null;
+    const color = severity === "P1" ? "#DC2626" : severity === "P2" ? "#D97706" : "#6B7280";
+    return (
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color, marginBottom: 6 }}>
+          {severity} {severity === "P1" ? "필수" : severity === "P2" ? "중요" : "참고"} ({issues.length})
+        </div>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#374151" }}>
+          {issues.map((iss, i) => {
+            const anchor = fieldToAnchor(iss.field);
+            return (
+              <li key={i} style={{ marginBottom: 4 }}>
+                {anchor ? (
+                  <button
+                    onClick={() => jumpTo(iss.field)}
+                    style={{
+                      background: "#F3F4F6", padding: "1px 6px", borderRadius: 3, fontSize: 11,
+                      color: "#2563EB", border: "none", cursor: "pointer", textDecoration: "underline",
+                    }}
+                    title="해당 항목으로 이동"
+                  >
+                    {iss.field} ↗
+                  </button>
+                ) : (
+                  <code style={{ background: "#F3F4F6", padding: "1px 4px", borderRadius: 3, fontSize: 11, color: "#6B7280" }}>{iss.field}</code>
+                )}
+                <span style={{ marginLeft: 6 }}>{iss.message}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  };
+
+  const renderRepairLog = () => {
+    if (repairLog.length === 0) return null;
+    return (
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#2563EB", marginBottom: 6 }}>
+          🔧 자동 보정 내역 ({repairLog.length})
+        </div>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#374151" }}>
+          {repairLog.map((r, i) => (
+            <li key={i} style={{ marginBottom: 4 }}>
+              <code style={{ background: "#EFF6FF", padding: "1px 4px", borderRadius: 3, fontSize: 11, color: "#1E40AF" }}>{r.field}</code>
+              <span style={{ marginLeft: 6 }}>{r.action}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  return (
+    <div
+      style={{
+        background: palette.bg,
+        border: `1px solid ${palette.border}`,
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 16,
+      }}
+    >
+      <div
+        onClick={() => total > 0 && setExpanded(!expanded)}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          cursor: total > 0 ? "pointer" : "default",
+        }}
+      >
+        <div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: palette.fg }}>
+            {palette.icon} 자동 분석 결과 자체 검증: {palette.label}
+          </span>
+          <span style={{ fontSize: 12, color: palette.sub, marginLeft: 10 }}>
+            {autoRepaired && `보정 ${repairLog.length} · `}
+            필수 {p1.length} · 중요 {p2.length} · 참고 {p3.length}
+          </span>
+          {qa?.validated_at && (
+            <span style={{ fontSize: 11, color: "#9CA3AF", marginLeft: 10 }}>
+              {new Date(qa.validated_at).toLocaleString("ko-KR")}
+            </span>
+          )}
+        </div>
+        {total > 0 && (
+          <span style={{ fontSize: 12, color: palette.sub }}>
+            {expanded ? "▲ 접기" : "▼ 상세 보기"}
+          </span>
+        )}
+      </div>
+
+      {status === "blocked" && (
+        <div style={{ marginTop: 8, padding: "8px 10px", background: "#FEE2E2", borderRadius: 6, fontSize: 12, color: "#991B1B", lineHeight: 1.6 }}>
+          자동 보정으로 해결할 수 없는 오류가 있어 상담 진행이 차단되었습니다. 슈퍼관리자의 점검 완료 전까지 상담 시작/리포트 작성/학생 전달이 제한됩니다.
+        </div>
+      )}
+      {status === "repaired" && !expanded && (
+        <div style={{ marginTop: 8, fontSize: 11, color: palette.sub }}>
+          자동 보정된 값이 적용되었습니다. 상세 내역은 펼쳐 확인하세요.
+        </div>
+      )}
+
+      {expanded && total > 0 && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${palette.border}` }}>
+          {renderRepairLog()}
+          {renderIssues(p1, "P1")}
+          {renderIssues(p2, "P2")}
+          {renderIssues(p3, "P3")}
+          <div style={{ marginTop: 10, fontSize: 11, color: palette.sub }}>
+            {status === "blocked"
+              ? "P1 오류는 프로그램 또는 입력 데이터 결함일 수 있습니다. 슈퍼관리자에게 점검을 요청하세요."
+              : "보정된 값은 자동 저장됩니다. 필드명을 클릭하면 해당 영역으로 바로 이동합니다."}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1597,6 +1831,159 @@ function AdminSuneungSimulation({ data }: { data: any }) {
       <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 12, lineHeight: 1.5 }}>
         * 최신 모의고사 등급 기준 시뮬레이션 결과이며, 실제 수능 성적과 다를 수 있습니다.
       </div>
+    </div>
+  );
+}
+
+
+// ── 권장 이수 과목 매칭 (관리자용) ──
+function CourseRequirementMatch({ data }: { data: any }) {
+  if (!data) return null;
+
+  if (data.available === false) {
+    return (
+      <div style={{
+        padding: 20, background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 6,
+        fontSize: 13, color: "#92400E",
+      }}>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>매칭 불가</div>
+        <div>{data.reason || "매칭을 수행할 수 없습니다."}</div>
+      </div>
+    );
+  }
+
+  const results = Array.isArray(data.results) ? data.results : [];
+  if (results.length === 0) {
+    return (
+      <div style={{ padding: 20, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
+        매칭 대상이 없습니다.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {results.map((r: any, i: number) => (
+        <CourseRequirementCard key={i} result={r} />
+      ))}
+
+      {results.some((r: any) => r.학생_과목) && (
+        <div style={{
+          marginTop: 8, padding: 12, background: "#F9FAFB", border: "1px solid #E5E7EB",
+          borderRadius: 6, fontSize: 12, color: "#4B5563",
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>학생 입력 과목</div>
+          <div style={{ marginBottom: 4 }}>
+            <span style={{ color: "#6B7280" }}>이수 완료 (B1~B4):</span>{" "}
+            {results[0]?.학생_과목?.completed?.length
+              ? results[0].학생_과목.completed.join(", ")
+              : "—"}
+          </div>
+          <div>
+            <span style={{ color: "#6B7280" }}>수강 예정 (E5):</span>{" "}
+            {results[0]?.학생_과목?.planned?.length
+              ? results[0].학생_과목.planned.join(", ")
+              : "—"}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function CourseRequirementCard({ result }: { result: any }) {
+  const found = result.found === true;
+  const title = result.대학 && result.모집단위
+    ? `${result.대학} ${result.모집단위}`
+    : result.target || "(대학·학과 미지정)";
+
+  if (!found) {
+    return (
+      <div style={{
+        padding: 14, border: "1px dashed #D1D5DB", borderRadius: 6, background: "#FAFAFA",
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 12, color: "#9CA3AF" }}>
+          {result.reason || "DB에 등록된 권장과목 정보가 없습니다."}
+        </div>
+      </div>
+    );
+  }
+
+  const coreMatched: string[] = result.핵심_이수 || [];
+  const coreMissing: string[] = result.핵심_미이수 || [];
+  const recMatched: string[] = result.권장_이수 || [];
+  const recMissing: string[] = result.권장_미이수 || [];
+
+  const coreTotal = coreMatched.length + coreMissing.length;
+  const coreRate = coreTotal > 0 ? Math.round((coreMatched.length / coreTotal) * 100) : null;
+  const recTotal = recMatched.length + recMissing.length;
+  const recRate = recTotal > 0 ? Math.round((recMatched.length / recTotal) * 100) : null;
+
+  const renderRow = (label: string, items: string[], color: string, icon: string) => (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
+      <div style={{ minWidth: 120, fontSize: 12, color: "#6B7280", paddingTop: 2 }}>
+        {icon} {label}
+      </div>
+      <div style={{ flex: 1, fontSize: 13, color }}>
+        {items.length > 0 ? items.join(", ") : <span style={{ color: "#9CA3AF" }}>—</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ padding: 16, border: "1px solid #E5E7EB", borderRadius: 6, background: "white" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <h4 style={{ fontSize: 14, margin: 0, color: "#111827" }}>{title}</h4>
+        <div style={{ display: "flex", gap: 8, fontSize: 11 }}>
+          {coreRate !== null && (
+            <span style={{
+              padding: "2px 8px", borderRadius: 10,
+              background: coreMissing.length === 0 ? "#D1FAE5" : "#FEE2E2",
+              color: coreMissing.length === 0 ? "#065F46" : "#991B1B",
+              fontWeight: 600,
+            }}>
+              핵심 {coreMatched.length}/{coreTotal} ({coreRate}%)
+            </span>
+          )}
+          {recRate !== null && (
+            <span style={{
+              padding: "2px 8px", borderRadius: 10,
+              background: recMissing.length === 0 ? "#D1FAE5" : "#FEF3C7",
+              color: recMissing.length === 0 ? "#065F46" : "#92400E",
+              fontWeight: 600,
+            }}>
+              권장 {recMatched.length}/{recTotal} ({recRate}%)
+            </span>
+          )}
+        </div>
+      </div>
+
+      {renderRow("핵심 · 이수 완료", coreMatched, "#059669", "✅")}
+      {coreMissing.length > 0 && renderRow("핵심 · 미이수", coreMissing, "#DC2626", "❌")}
+      {renderRow("권장 · 이수 완료", recMatched, "#059669", "✅")}
+      {recMissing.length > 0 && renderRow("권장 · 미이수", recMissing, "#D97706", "⚠️")}
+
+      {result.비고 && (
+        <div style={{
+          marginTop: 10, padding: 8, background: "#F3F4F6", borderRadius: 4,
+          fontSize: 11, color: "#6B7280",
+        }}>
+          비고: {result.비고}
+        </div>
+      )}
+
+      {coreMissing.length > 0 && (
+        <div style={{
+          marginTop: 10, padding: 8, background: "#FEF2F2", border: "1px solid #FCA5A5",
+          borderRadius: 4, fontSize: 12, color: "#991B1B",
+        }}>
+          ⚠️ 핵심과목 미이수 {coreMissing.length}건 — 상담 시 우선 논의가 필요합니다.
+        </div>
+      )}
     </div>
   );
 }
