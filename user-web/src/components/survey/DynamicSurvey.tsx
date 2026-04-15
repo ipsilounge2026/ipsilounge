@@ -46,6 +46,57 @@ function detectIsMobile(): boolean {
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 }
 
+/**
+ * 카테고리별로 분리 저장된 root answers에서 특정 question id의 값을 찾아낸다.
+ * (예: answers["A"]["A4"] 같이 카테고리 ID 안에 중첩 저장되어 있음)
+ */
+function findAnswerById(
+  rootAnswers: Record<string, any>,
+  schema: SurveySchema,
+  questionId: string,
+): any {
+  for (const cat of schema.categories || []) {
+    for (const q of (cat.questions as any[]) || []) {
+      if (q?.id === questionId) {
+        return rootAnswers?.[cat.id]?.[questionId];
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * heavy 컴포넌트(school_grade_matrix, mock_exam_session_grid)는
+ * 스키마의 *_generation_rules + 현재 A4(상담시점) 답변에 의존한다.
+ * QuestionRenderer 시그니처를 유지하기 위해 question 객체에
+ * `resolved_*` 필드를 사전 주입한다.
+ */
+function resolveDynamicQuestion(
+  q: any,
+  schema: SurveySchema,
+  rootAnswers: Record<string, any>,
+): any {
+  if (!q || typeof q !== "object") return q;
+  if (q.type !== "school_grade_matrix" && q.type !== "mock_exam_session_grid") {
+    return q;
+  }
+  const a4 = findAnswerById(rootAnswers, schema, "A4");
+  const s: any = schema; // 스키마는 type 정의보다 풍부한 필드를 가짐 (semester_generation_rules 등)
+
+  if (q.type === "school_grade_matrix") {
+    return {
+      ...q,
+      resolved_semesters: a4 ? s.semester_generation_rules?.[a4] ?? [] : [],
+      resolved_subject_courses: s.subject_courses ?? {},
+    };
+  }
+  // mock_exam_session_grid
+  return {
+    ...q,
+    resolved_sessions: a4 ? s.mock_exam_generation_rules?.[a4] ?? [] : [],
+  };
+}
+
 // ===== 검증 유틸 =====
 function isEmptyValue(v: any): boolean {
   if (v === null || v === undefined) return true;
@@ -613,6 +664,8 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
           <CategoryQuestions
             category={{ ...currentCategory, questions: currentStep.questions }}
             answers={answers[currentCategory.id] || {}}
+            rootAnswers={answers}
+            schema={schema}
             onChange={updateAnswer}
             readOnly={isCurrentReadOnly}
             isDelta={isDelta}
@@ -693,12 +746,16 @@ export default function DynamicSurvey({ schema, survey, onSubmitted, memberType,
 function CategoryQuestions({
   category,
   answers,
+  rootAnswers,
+  schema,
   onChange,
   readOnly,
   isDelta,
 }: {
   category: Category;
   answers: Record<string, any>;
+  rootAnswers: Record<string, any>;
+  schema: SurveySchema;
   onChange: (id: string, v: any) => void;
   readOnly?: boolean;
   isDelta?: boolean;
@@ -776,7 +833,7 @@ function CategoryQuestions({
             {/* 질문 본체: 변경 없음이면 비활성화 */}
             <div style={isUnchanged ? { opacity: 0.5, pointerEvents: "none", transition: "opacity 0.15s" } : undefined}>
               <QuestionRenderer
-                question={q}
+                question={resolveDynamicQuestion(q, schema, rootAnswers)}
                 value={answers[q.id]}
                 onChange={(v) => onChange(q.id, v)}
               />

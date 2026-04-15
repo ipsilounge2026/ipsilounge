@@ -14,6 +14,9 @@ import { evaluateShowWhen } from "@/lib/surveyTypes";
 import { SemesterGradeMatrix } from "./heavy/SemesterGradeMatrix";
 import { WeeklySchedule } from "./heavy/WeeklySchedule";
 import { SubjectSection } from "./heavy/SubjectSection";
+import { SchoolGradeMatrix } from "./heavy/SchoolGradeMatrix";
+import { MockExamSessionGrid } from "./heavy/MockExamSessionGrid";
+import { WeakTypePerSubject } from "./heavy/WeakTypePerSubject";
 
 interface RendererProps {
   question: any;
@@ -99,6 +102,12 @@ export function QuestionRenderer({ question, value, onChange }: RendererProps) {
       return <SubjectSection question={question} value={value} onChange={onChange} />;
     case "subject_study_method_panel":
       return <SubjectStudyMethodPanel question={question} value={value} onChange={onChange} />;
+    case "school_grade_matrix":
+      return <SchoolGradeMatrix question={question} value={value} onChange={onChange} />;
+    case "mock_exam_session_grid":
+      return <MockExamSessionGrid question={question} value={value} onChange={onChange} />;
+    case "weak_type_per_subject":
+      return <WeakTypePerSubject question={question} value={value} onChange={onChange} />;
     default:
       return (
         <div style={{ padding: 12, background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 8, fontSize: 12, color: "#92400E" }}>
