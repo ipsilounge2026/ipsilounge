@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { getSeniorNote, updateSeniorNoteReview } from "@/lib/api";
@@ -65,6 +65,117 @@ const DEFAULT_CONTENT_CHECKLIST = [
   { label: "부적절한 표현 없음", checked: false },
   { label: "프로그램 가이드라인 위반 없음", checked: false },
 ];
+
+// ============================================================
+// 민감정보 자동 탐지 (기획서 §7)
+// D8: 심리/정신건강, F: 재정, G: 가족/가정사
+// ============================================================
+const D8_KEYWORDS = ["우울", "불안", "자해", "자살", "패닉", "공황", "번아웃", "상담센터", "정신과", "약물"];
+const F_KEYWORDS = ["학원비", "등록금", "경제적", "가정 형편", "빚", "대출", "아르바이트로 학비"];
+const G_KEYWORDS = ["이혼", "별거", "사별", "가정불화", "폭력", "학대", "입원"];
+
+interface SensitiveCategoryConfig {
+  key: "D8" | "F" | "G";
+  label: string;
+  description: string;
+  keywords: string[];
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  markBg: string;
+}
+
+const SENSITIVE_CATEGORIES: SensitiveCategoryConfig[] = [
+  {
+    key: "D8",
+    label: "D8 (심리/정신건강)",
+    description: "심리 상태 관련",
+    keywords: D8_KEYWORDS,
+    badgeBg: "#FEE2E2",
+    badgeBorder: "#FCA5A5",
+    badgeText: "#991B1B",
+    markBg: "#FCA5A5",
+  },
+  {
+    key: "F",
+    label: "F (재정)",
+    description: "재정 관련",
+    keywords: F_KEYWORDS,
+    badgeBg: "#FED7AA",
+    badgeBorder: "#FDBA74",
+    badgeText: "#9A3412",
+    markBg: "#FDBA74",
+  },
+  {
+    key: "G",
+    label: "G (가족)",
+    description: "가족/가정사 관련",
+    keywords: G_KEYWORDS,
+    badgeBg: "#EDE9FE",
+    badgeBorder: "#C4B5FD",
+    badgeText: "#5B21B6",
+    markBg: "#C4B5FD",
+  },
+];
+
+function collectScanText(note: SeniorNoteDetail | null): string {
+  if (!note) return "";
+  const parts: string[] = [];
+  if (note.special_observations) parts.push(note.special_observations);
+  if (note.context_for_next) parts.push(note.context_for_next);
+  if (note.operator_notes) parts.push(note.operator_notes);
+  if (note.student_questions) parts.push(note.student_questions);
+  if (note.senior_answers) parts.push(note.senior_answers);
+  if (note.student_mood) parts.push(note.student_mood);
+  if (note.study_attitude) parts.push(note.study_attitude);
+  if (note.review_notes) parts.push(note.review_notes);
+  (note.core_topics || []).forEach((t) => {
+    if (t.key_content) parts.push(t.key_content);
+    if (t.student_reaction) parts.push(t.student_reaction);
+  });
+  (note.optional_topics || []).forEach((t) => { if (t.note) parts.push(t.note); });
+  (note.action_items || []).forEach((a) => { if (a.action) parts.push(a.action); });
+  (note.next_checkpoints || []).forEach((c) => { if (c.checkpoint) parts.push(c.checkpoint); });
+  (note.addenda || []).forEach((a) => { if (a.content) parts.push(a.content); });
+  return parts.join("\n");
+}
+
+function detectKeywords(text: string, keywords: string[]): string[] {
+  if (!text) return [];
+  const found: string[] = [];
+  for (const kw of keywords) {
+    if (text.includes(kw) && !found.includes(kw)) {
+      found.push(kw);
+    }
+  }
+  return found;
+}
+
+// 본문 내 키워드를 <mark> 태그로 하이라이트 (React 엘리먼트 배열 반환)
+function highlightKeywords(
+  text: string | null | undefined,
+  allMatches: { keyword: string; bg: string }[],
+): React.ReactNode {
+  if (!text) return text;
+  if (allMatches.length === 0) return text;
+  // 긴 키워드 우선 매칭
+  const sorted = [...allMatches].sort((a, b) => b.keyword.length - a.keyword.length);
+  const pattern = sorted.map((m) => m.keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  if (!pattern) return text;
+  const regex = new RegExp(`(${pattern})`, "g");
+  const parts = text.split(regex);
+  return parts.map((part, i) => {
+    const match = sorted.find((m) => m.keyword === part);
+    if (match) {
+      return (
+        <mark key={i} style={{ background: match.bg, padding: "1px 3px", borderRadius: 3 }}>
+          {part}
+        </mark>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
 
 export default function SeniorReviewDetailPage() {
   const router = useRouter();
@@ -159,6 +270,16 @@ export default function SeniorReviewDetailPage() {
   const sectionStyle = { background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20, marginBottom: 16 };
   const headerStyle = { fontSize: 14, fontWeight: 600 as const, color: "#374151", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 };
 
+  // --- 민감정보 자동 탐지 ---
+  const scanText = collectScanText(note);
+  const detectionResults = SENSITIVE_CATEGORIES.map((cat) => ({
+    ...cat,
+    matches: detectKeywords(scanText, cat.keywords),
+  }));
+  const allMatchesForHighlight = detectionResults.flatMap((r) =>
+    r.matches.map((kw) => ({ keyword: kw, bg: r.markBg }))
+  );
+
   return (
     <div className="admin-layout">
       <Sidebar />
@@ -203,6 +324,38 @@ export default function SeniorReviewDetailPage() {
               <div style={{ fontSize: 11, color: "#9CA3AF" }}>상태</div>
               <div style={{ fontSize: 14 }}>{note.review_status}</div>
             </div>
+          </div>
+        </div>
+
+        {/* 민감정보 자동 탐지 배지 (기획서 §7) */}
+        <div style={sectionStyle}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#374151", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+            🔍 민감정보 자동 탐지
+            <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 400 }}>
+              (보조 도구입니다. 최종 판단은 검토자가 수행하세요)
+            </span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {detectionResults.map((r) => (
+              <div
+                key={r.key}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  background: r.matches.length > 0 ? r.badgeBg : "#F3F4F6",
+                  border: `1px solid ${r.matches.length > 0 ? r.badgeBorder : "#E5E7EB"}`,
+                  color: r.matches.length > 0 ? r.badgeText : "#6B7280",
+                  fontWeight: r.matches.length > 0 ? 600 : 400,
+                }}
+              >
+                {r.matches.length > 0 ? (
+                  <>⚠️ {r.label} 의심 표현 감지: {r.matches.join(", ")}</>
+                ) : (
+                  <>✅ {r.label} 자동 감지 없음</>
+                )}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -298,7 +451,7 @@ export default function SeniorReviewDetailPage() {
                 </div>
                 {note.special_observations && (
                   <div style={{ padding: "8px 12px", background: "#FEF3C7", borderRadius: 6, fontSize: 13 }}>
-                    <strong>특이사항:</strong> {note.special_observations}
+                    <strong>특이사항:</strong> {highlightKeywords(note.special_observations, allMatchesForHighlight)}
                   </div>
                 )}
               </div>
@@ -349,7 +502,7 @@ export default function SeniorReviewDetailPage() {
                   다음 상담사에게 전달할 맥락
                 </div>
                 <div style={{ padding: 12, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 6, fontSize: 13, lineHeight: 1.6 }}>
-                  {note.context_for_next}
+                  {highlightKeywords(note.context_for_next, allMatchesForHighlight)}
                 </div>
               </div>
             )}
@@ -364,7 +517,7 @@ export default function SeniorReviewDetailPage() {
                   학원 운영자 공유 내용
                 </div>
                 <div style={{ padding: 12, background: "#FFF5F5", border: "1px solid #FCA5A5", borderRadius: 6, fontSize: 13 }}>
-                  {note.operator_notes}
+                  {highlightKeywords(note.operator_notes, allMatchesForHighlight)}
                 </div>
               </div>
             )}

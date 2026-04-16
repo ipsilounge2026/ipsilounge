@@ -18,11 +18,11 @@ interface GuidebookItem {
   content: string;
 }
 
-type TimingKey = "T1" | "T2" | "T3" | "T4";
+type TimingKey = "S1" | "S2" | "S3" | "S4";
 
 export default function GuidebookPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TimingKey>("T1");
+  const [activeTab, setActiveTab] = useState<TimingKey>("S1");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -32,7 +32,7 @@ export default function GuidebookPage() {
   // 서버에서 로드한 원본 (변경 감지용)
   const [savedContents, setSavedContents] = useState<Record<string, string>>({});
   // 편집 모드 (탭별)
-  const [editMode, setEditMode] = useState<Record<TimingKey, boolean>>({ T1: true, T2: true, T3: true, T4: true });
+  const [editMode, setEditMode] = useState<Record<TimingKey, boolean>>({ S1: true, S2: true, S3: true, S4: true });
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
@@ -59,8 +59,8 @@ export default function GuidebookPage() {
       setSavedContents({ ...contentMap });
 
       // 저장된 내용이 있는 탭은 읽기 모드로 시작
-      const newEditMode: Record<TimingKey, boolean> = { T1: true, T2: true, T3: true, T4: true };
-      for (const timing of ["T1", "T2", "T3", "T4"] as TimingKey[]) {
+      const newEditMode: Record<TimingKey, boolean> = { S1: true, S2: true, S3: true, S4: true };
+      for (const timing of ["S1", "S2", "S3", "S4"] as TimingKey[]) {
         const cautionKey = `caution_${timing}`;
         const hasAnyContent = TIMING_TOPICS[timing].some((t) => (contentMap[t.id] || "").trim().length > 0) || (contentMap[cautionKey] || "").trim().length > 0;
         if (hasAnyContent) {
@@ -159,7 +159,7 @@ export default function GuidebookPage() {
 
         {/* 시점 탭 */}
         <div style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: "2px solid #e5e7eb" }}>
-          {(["T1", "T2", "T3", "T4"] as TimingKey[]).map((t) => {
+          {(["S1", "S2", "S3", "S4"] as TimingKey[]).map((t) => {
             const count = countByTiming(t);
             const total = totalByTiming(t);
             return (

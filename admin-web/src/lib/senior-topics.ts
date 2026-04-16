@@ -13,7 +13,7 @@ export interface SeniorTopicDef {
 }
 
 export const SENIOR_TIMING_TOPICS: Record<string, SeniorTopicDef[]> = {
-  T1: [
+  S1: [
     // ── 핵심 주제 (4개) ── 고1-1학기 초 (3월): 고등학교 적응 & 서바이벌
     {
       id: "st1c1",
@@ -60,7 +60,7 @@ export const SENIOR_TIMING_TOPICS: Record<string, SeniorTopicDef[]> = {
     },
   ],
 
-  T2: [
+  S2: [
     // ── 핵심 주제 (4개) ── 고1-2학기 초 (8월 말): 1학기 복기 & 고2 선택과목 결정
     {
       id: "st2c1",
@@ -113,7 +113,7 @@ export const SENIOR_TIMING_TOPICS: Record<string, SeniorTopicDef[]> = {
     },
   ],
 
-  T3: [
+  S3: [
     // ── 핵심 주제 (3개) ── 고2-1학기 초 (3월): 고2 전환 & 학생부 관리 실전
     {
       id: "st3c1",
@@ -154,7 +154,7 @@ export const SENIOR_TIMING_TOPICS: Record<string, SeniorTopicDef[]> = {
     },
   ],
 
-  T4: [
+  S4: [
     // ── 핵심 주제 (3개) ── 고2-2학기 초 (8월 말): 고3 진입 준비 & 수시·정시 결정
     {
       id: "st4c1",
@@ -197,8 +197,8 @@ export const SENIOR_TIMING_TOPICS: Record<string, SeniorTopicDef[]> = {
 };
 
 export const SENIOR_TIMING_LABELS: Record<string, string> = {
-  T1: "T1 — 고1-1학기 초 (3월): 고등학교 적응 & 서바이벌",
-  T2: "T2 — 고1-2학기 초 (8월 말): 1학기 복기 & 고2 선택과목 결정",
-  T3: "T3 — 고2-1학기 초 (3월): 고2 전환 & 학생부 관리 실전",
-  T4: "T4 — 고2-2학기 초 (8월 말): 고3 진입 준비 & 수시·정시 결정",
+  S1: "S1 — 고1-1학기 초 (3월): 고등학교 적응 & 서바이벌",
+  S2: "S2 — 고1-2학기 초 (8월 말): 1학기 복기 & 고2 선택과목 결정",
+  S3: "S3 — 고2-1학기 초 (3월): 고2 전환 & 학생부 관리 실전",
+  S4: "S4 — 고2-2학기 초 (8월 말): 고3 진입 준비 & 수시·정시 결정",
 };

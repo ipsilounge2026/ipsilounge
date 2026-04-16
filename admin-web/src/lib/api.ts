@@ -421,6 +421,19 @@ export async function getSeniorPrevCheckpoints(userId: string, sessionNumber: nu
   return request(`/api/admin/senior-consultation/student/${userId}/prev-checkpoints?session_number=${sessionNumber}`);
 }
 
+// 선배 사전 설문 (관리자) — 기획서 §3
+export async function getSeniorPreSurveyList(params?: { userId?: string; sessionTiming?: string }) {
+  const sp = new URLSearchParams();
+  if (params?.userId) sp.set("user_id", params.userId);
+  if (params?.sessionTiming) sp.set("session_timing", params.sessionTiming);
+  const qs = sp.toString();
+  return request(`/api/admin/senior-consultation/pre-surveys${qs ? `?${qs}` : ""}`);
+}
+
+export async function getSeniorPreSurvey(id: string) {
+  return request(`/api/admin/senior-consultation/pre-surveys/${id}`);
+}
+
 export async function getSeniorCumulativeSummary(userId: string) {
   return request(`/api/admin/senior-consultation/student/${userId}/cumulative-summary`);
 }
