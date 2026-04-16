@@ -164,9 +164,18 @@ export async function getSeniors() {
   return request("/api/consultation/seniors");
 }
 
-export async function getAvailableSlots(year: number, month: number, adminId?: string) {
+export async function getAvailableSlots(
+  year: number,
+  month: number,
+  adminId?: string,
+  consultationType?: string,
+  ownerUserId?: string,
+) {
   const params = new URLSearchParams({ year: String(year), month: String(month) });
   if (adminId) params.set("admin_id", adminId);
+  // 기획서 §4-8-2: 상담 유형을 넘기면 슬롯별 available/unavailable_reason 반환
+  if (consultationType) params.set("consultation_type", consultationType);
+  if (ownerUserId) params.set("owner_user_id", ownerUserId);
   return request(`/api/consultation/slots?${params}`);
 }
 

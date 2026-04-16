@@ -90,6 +90,69 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
   );
 }
 
+// ── 분석 차단(blocked) 상태 안내 ──
+// 기획서 §4-8-1: 자동 분석 결과 자체 검증(P1) 자동 보정 실패 시, 학생에게는
+// 리포트 본문을 노출하지 않고 "점검 중" 안내만 표시한다. 슈퍼관리자가 점검 후
+// 재검증 통과 시 자동 해제된다.
+function BlockedReportScreen({ onBack }: { onBack: () => void }) {
+  return (
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "20px 16px 80px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <button
+          onClick={onBack}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--gray-500)" }}
+        >
+          &larr;
+        </button>
+        <span style={{ fontSize: 13, color: "var(--gray-500)" }}>분석 리포트</span>
+      </div>
+
+      <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 24px" }}>분석 리포트</h1>
+
+      {/* consultation/page.tsx L582~600 배너 패턴 재사용 (#FEF2F2 + #FECACA) */}
+      <div
+        style={{
+          padding: "20px 20px",
+          background: "#FEF2F2",
+          border: "1px solid #FECACA",
+          borderRadius: 12,
+          marginBottom: 16,
+          color: "#991B1B",
+          lineHeight: 1.7,
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
+          ⚠️ 분석 결과 점검 중
+        </div>
+        <div style={{ fontSize: 13, marginBottom: 12 }}>
+          사전질문 자동 분석에 시스템 오류가 발견되어 점검 중입니다. 복구 즉시 안내드립니다.
+        </div>
+        <div style={{ fontSize: 12, color: "#7F1D1D" }}>
+          · 점검 완료 후 본 페이지에서 자동으로 리포트가 표시됩니다.
+          <br />· 상담 예약은 정상 진행 가능하나, 상담 자체는 점검 완료 후 진행됩니다.
+          <br />· 문의: 입시라운지 고객센터 또는 담당 상담사에게 연락 주세요.
+        </div>
+      </div>
+
+      {/* 본문 마스킹: 실제 점수/레이더/로드맵 등 모든 콘텐츠 숨김.
+          placeholder 카드만 노출하여 "페이지는 존재하나 현재 잠금" 임을 시각적으로 전달. */}
+      <div
+        style={{
+          padding: "40px 20px",
+          background: "#F9FAFB",
+          border: "1px dashed #E5E7EB",
+          borderRadius: 12,
+          textAlign: "center",
+          color: "#9CA3AF",
+          fontSize: 13,
+        }}
+      >
+        분석 결과는 점검 완료 후 표시됩니다.
+      </div>
+    </div>
+  );
+}
+
 // ── 메인 페이지 ──
 
 export default function ReportPage() {
@@ -144,6 +207,13 @@ export default function ReportPage() {
         <button onClick={() => router.back()} style={linkBtnStyle}>돌아가기</button>
       </div>
     );
+  }
+
+  // 기획서 §4-8-1: 자동 분석 결과 자체 검증 실패 상태 (P1 FAIL 보정 실패).
+  // URL 직접 진입으로 학생이 blocked 상태 결과를 보는 것을 차단하고 안내만 노출.
+  const analysisStatus: string = survey?.analysis_status ?? "pending";
+  if (analysisStatus === "blocked") {
+    return <BlockedReportScreen onBack={() => router.back()} />;
   }
 
   const isPreheigh1 = survey?.survey_type === "preheigh1";

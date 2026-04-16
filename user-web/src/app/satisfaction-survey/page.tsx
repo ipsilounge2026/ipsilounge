@@ -69,7 +69,7 @@ function SatisfactionSurveyContent() {
       const surveys = listRes.surveys || listRes.items || [];
       const draft = surveys.find(
         (s: { status: string; booking_id?: string; survey_type?: string }) =>
-          s.status === "draft" &&
+          s.status === "pending" &&
           (!bookingId || s.booking_id === bookingId)
       );
 
@@ -79,9 +79,19 @@ function SatisfactionSurveyContent() {
         setFreeText(draft.free_text || {});
       }
 
-      // Load schema
+      // Load schema — API returns common_items/type_items/free_text_items
       const schema = await getSatisfactionSurveySchema(surveyType);
-      setQuestions(schema.questions || []);
+      const qs: Question[] = [];
+      for (const item of (schema.common_items || [])) {
+        qs.push({ id: item.key, type: "scale", label: item.question, required: true });
+      }
+      for (const item of (schema.type_items || [])) {
+        qs.push({ id: item.key, type: "scale", label: item.question, required: true });
+      }
+      for (const item of (schema.free_text_items || [])) {
+        qs.push({ id: item.key, type: "textarea", label: item.question, required: item.required !== false ? true : false, max_length: 500 } as TextQuestion);
+      }
+      setQuestions(qs.length > 0 ? qs : (schema.questions || []));
     } catch {
       // ignore
     } finally {

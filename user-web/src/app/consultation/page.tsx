@@ -22,6 +22,9 @@ interface Slot {
   remaining: number;
   admin_id: string | null;
   admin_name: string | null;
+  // 기획서 §4-8-2: 리드타임/매칭으로 인한 비활성 여부
+  available?: boolean;
+  unavailable_reason?: string | null;
 }
 
 interface EligibilityResult {
@@ -201,11 +204,20 @@ export default function ConsultationPage() {
   // 상담자 선택 시 슬롯 로드
   useEffect(() => {
     if (selectedCounselor) {
-      getAvailableSlots(year, month, selectedCounselor.id).then(setSlots).catch(() => {});
+      // 기획서 §4-8-2: 유형/자녀(owner) 를 같이 넘겨 리드타임 마킹된 응답 수신
+      getAvailableSlots(
+        year,
+        month,
+        selectedCounselor.id,
+        selectedType ?? undefined,
+        selectedChild ?? undefined,
+      )
+        .then(setSlots)
+        .catch(() => {});
     } else {
       setSlots([]);
     }
-  }, [year, month, selectedCounselor]);
+  }, [year, month, selectedCounselor, selectedType, selectedChild]);
 
   // 달력 데이터
   const firstDay = new Date(year, month - 1, 1).getDay();
@@ -734,6 +746,28 @@ export default function ConsultationPage() {
                   </div>
                 </div>
 
+                {/* 기획서 §4-8-2: 리드타임 안내 배너 (슬롯에 비활성 사유가 있으면 노출) */}
+                {(() => {
+                  const leadReason = slots.find((s) => s.available === false && s.unavailable_reason)?.unavailable_reason;
+                  if (!leadReason) return null;
+                  return (
+                    <div
+                      style={{
+                        background: "#FFF7ED",
+                        border: "1px solid #FDBA74",
+                        borderRadius: 8,
+                        padding: "10px 14px",
+                        marginBottom: 12,
+                        color: "#9A3412",
+                        fontSize: 13,
+                      }}
+                    >
+                      <strong>예약 가능 시점 안내</strong>
+                      <div style={{ marginTop: 4 }}>{leadReason}</div>
+                    </div>
+                  );
+                })()}
+
                 {/* 시간대 선택 */}
                 {selectedDate && (
                   <div className="card" style={{ marginBottom: 16 }}>
@@ -744,16 +778,30 @@ export default function ConsultationPage() {
                       <p style={{ color: "var(--gray-500)" }}>이 날짜에 예약 가능한 시간이 없습니다</p>
                     ) : (
                       <div className="slot-grid">
-                        {slotsForDate.sort((a, b) => a.start_time.localeCompare(b.start_time)).map((slot) => (
-                          <div
-                            key={slot.id}
-                            className={`slot-btn ${selectedSlot?.id === slot.id ? "selected" : ""} ${slot.remaining === 0 ? "disabled" : ""}`}
-                            onClick={() => { if (slot.remaining > 0) setSelectedSlot(slot); }}
-                          >
-                            <div className="slot-time">{slot.start_time.slice(0, 5)} ~ {slot.end_time.slice(0, 5)}</div>
-                            <div className="slot-remaining">{slot.remaining > 0 ? `${slot.remaining}자리 남음` : "마감"}</div>
-                          </div>
-                        ))}
+                        {slotsForDate.sort((a, b) => a.start_time.localeCompare(b.start_time)).map((slot) => {
+                          const leadBlocked = slot.available === false;
+                          const fullyBooked = slot.remaining === 0;
+                          const disabled = leadBlocked || fullyBooked;
+                          const leadTip = leadBlocked ? slot.unavailable_reason ?? "예약 불가 기간" : "";
+                          return (
+                            <div
+                              key={slot.id}
+                              title={leadTip}
+                              className={`slot-btn ${selectedSlot?.id === slot.id ? "selected" : ""} ${disabled ? "disabled" : ""}`}
+                              onClick={() => { if (!disabled) setSelectedSlot(slot); }}
+                              style={leadBlocked ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
+                            >
+                              <div className="slot-time">{slot.start_time.slice(0, 5)} ~ {slot.end_time.slice(0, 5)}</div>
+                              <div className="slot-remaining">
+                                {leadBlocked
+                                  ? "예약 불가"
+                                  : fullyBooked
+                                    ? "마감"
+                                    : `${slot.remaining}자리 남음`}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
