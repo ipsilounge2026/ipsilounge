@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/consultation.dart';
 import '../services/consultation_service.dart';
+import '../services/senior_pre_survey_service.dart';
 import '../widgets/child_selector.dart';
 import 'survey_screen.dart';
 import 'high_survey_timing_screen.dart';
@@ -170,7 +171,17 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
   }
 
   // === Step: survey → booking ===
-  void _goToBooking() {
+  void _goToBooking() async {
+    // 선배상담: 사전 설문 제출 여부 확인 (미제출이면 안내 다이얼로그)
+    if (_selectedType?.value == '선배상담') {
+      final hasSubmitted = await _hasSubmittedSeniorPreSurvey();
+      if (!mounted) return;
+      if (!hasSubmitted) {
+        await _showSeniorPreSurveyRequiredDialog();
+        return;
+      }
+    }
+
     setState(() => _step = 'booking');
     if (_selectedType?.value == '선배상담') {
       _loadSeniors();
@@ -178,6 +189,53 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
       _loadCounselors();
     }
     _checkBookingCooldown();
+  }
+
+  /// 선배 사전 설문 중 submitted 상태의 설문이 1건 이상 존재하는지 확인
+  Future<bool> _hasSubmittedSeniorPreSurvey() async {
+    try {
+      final list = await SeniorPreSurveyService.listMy();
+      return list.any((s) => (s['status'] as String?) == 'submitted');
+    } catch (_) {
+      // 조회 실패 시 차단하지 않고 통과시키면 백엔드 검증에서 걸러짐
+      return true;
+    }
+  }
+
+  Future<void> _showSeniorPreSurveyRequiredDialog() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('사전 설문 필요'),
+        content: const Text(
+          '선배 상담 예약 전에 사전 설문을 먼저 작성해야 합니다.\n'
+          '설문 제출 후 돌아오시면 예약이 진행됩니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await Navigator.pushNamed(context, '/senior-pre-survey');
+              // 복귀 후 재검증
+              if (!mounted) return;
+              final hasSubmitted = await _hasSubmittedSeniorPreSurvey();
+              if (!mounted) return;
+              if (hasSubmitted) {
+                setState(() => _step = 'booking');
+                _loadSeniors();
+                _checkBookingCooldown();
+              }
+            },
+            child: const Text('작성하러 가기'),
+          ),
+        ],
+      ),
+    );
   }
 
   // 학습상담: 사전 조사 제출 후 예약 자격(리드타임 + 분석검증 상태) 확인

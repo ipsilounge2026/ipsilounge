@@ -733,6 +733,39 @@ class _MypageScreenState extends State<MypageScreen> {
                       '아직 배정된 담당 선배가 없습니다.\n선배 상담 예약 시 자동 배정됩니다.',
                       style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF), height: 1.5),
                     ),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: () => Navigator.pushNamed(
+                        context, '/consultation/senior-notes'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F3FF),
+                        border: Border.all(color: const Color(0xFFDDD6FE)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.history_edu,
+                              size: 18, color: Color(0xFF7C3AED)),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              '내 선배 상담 기록 보기',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF5B21B6)),
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right,
+                              size: 18, color: Color(0xFF9CA3AF)),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
