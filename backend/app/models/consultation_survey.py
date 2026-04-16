@@ -154,6 +154,13 @@ class ConsultationSurvey(Base):
         nullable=True,
     )
 
+    # --- 학생 사후 철회 (V1 §10-1, §10-2) ---
+    # 학생이 본인 동의를 사후 철회하면 이 타임스탬프가 세팅된다.
+    # senior_review_status 는 건드리지 않고, revoked_at NULL 체크만으로 선배 노출을 막는다.
+    # (학생이 다시 복구하는 경우 revoked_at 만 None 으로 되돌림)
+    senior_sharing_revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    senior_sharing_revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

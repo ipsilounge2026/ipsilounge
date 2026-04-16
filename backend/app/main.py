@@ -42,6 +42,7 @@ from app.routers import (
     satisfaction_survey,
     senior_pre_survey,
     universities,
+    user_consultation_sharing,
 )
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 from app.utils.security import hash_password
@@ -110,6 +111,7 @@ app.include_router(notice.router)
 app.include_router(satisfaction_survey.router)
 app.include_router(senior_pre_survey.router)
 app.include_router(universities.router)
+app.include_router(user_consultation_sharing.router)
 
 # DEV_MODE 전용 라우터 (운영에서는 마운트되지 않음)
 # spec: ipsilounge/docs/test-environment-spec.md §4
@@ -285,6 +287,31 @@ async def startup():
                     ("senior_sharing_settings", "JSONB"),
                     ("senior_reviewed_at", "TIMESTAMP"),
                     ("senior_reviewer_admin_id", "UUID REFERENCES admins(id) ON DELETE SET NULL"),
+                ]:
+                    if col not in cols:
+                        connection.execute(text(
+                            f"ALTER TABLE consultation_notes ADD COLUMN {col} {ddl}"
+                        ))
+                        logger.info(f"consultation_notes.{col} 컬럼 추가")
+
+            # 연계규칙 V1 §10-1, §10-2: 학생 사후 철회 타임스탬프/사유
+            if inspector.has_table("consultation_surveys"):
+                cols = [c["name"] for c in inspector.get_columns("consultation_surveys")]
+                for col, ddl in [
+                    ("senior_sharing_revoked_at", "TIMESTAMP"),
+                    ("senior_sharing_revoke_reason", "TEXT"),
+                ]:
+                    if col not in cols:
+                        connection.execute(text(
+                            f"ALTER TABLE consultation_surveys ADD COLUMN {col} {ddl}"
+                        ))
+                        logger.info(f"consultation_surveys.{col} 컬럼 추가")
+
+            if inspector.has_table("consultation_notes"):
+                cols = [c["name"] for c in inspector.get_columns("consultation_notes")]
+                for col, ddl in [
+                    ("senior_sharing_revoked_at", "TIMESTAMP"),
+                    ("senior_sharing_revoke_reason", "TEXT"),
                 ]:
                     if col not in cols:
                         connection.execute(text(

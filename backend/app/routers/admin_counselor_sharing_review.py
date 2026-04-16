@@ -69,6 +69,11 @@ class CounselorSharingReviewUpdate(BaseModel):
     sharing_settings: dict | None = None
 
 
+class SharingPreviewRequest(BaseModel):
+    # V1 §6 UX: 저장 없이 토글만 바꾸었을 때의 선배 노출 모습
+    sharing_settings: dict
+
+
 # ============================================================
 # 내부 직렬화 헬퍼
 # ============================================================
@@ -319,3 +324,65 @@ async def submit_counselor_sharing_review(
     await db.commit()
     await db.refresh(note)
     return _note_to_dict(note)
+
+
+# ============================================================
+# POST /{source_type}/{id}/preview — 실시간 미리보기 (V1 §6 UX 개선)
+# ============================================================
+
+@router.post("/{source_type}/{item_id}/preview")
+async def preview_counselor_sharing(
+    source_type: Literal["survey", "note"],
+    item_id: uuid.UUID,
+    data: SharingPreviewRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """저장 없이 현재 체크박스 상태에서 선배가 실제로 보게 될 결과를 반환.
+
+    V1 §6 UX: 관리자가 토글을 만지작거리는 동안 DB 에 저장하지 않고도
+    변경사항을 즉시 확인할 수 있도록 순수 계산 엔드포인트로 분리한다.
+    DB write 는 수행하지 않는다.
+    """
+    _require_counselor_access(admin)
+
+    sharing = data.sharing_settings or {}
+
+    if source_type == "survey":
+        result = await db.execute(
+            select(ConsultationSurvey).where(ConsultationSurvey.id == item_id)
+        )
+        survey = result.scalar_one_or_none()
+        if not survey:
+            raise HTTPException(status_code=404, detail="상담사 설문을 찾을 수 없습니다")
+
+        radar = compute_radar_scores(survey.answers or {}, survey.timing)
+        preview = abstract_consultation_for_senior(
+            answers=survey.answers or {},
+            radar_scores=radar,
+            timing=survey.timing,
+            sharing=sharing,
+        )
+        return {"preview_for_senior": preview}
+
+    # note
+    result = await db.execute(
+        select(ConsultationNote).where(ConsultationNote.id == item_id)
+    )
+    note = result.scalar_one_or_none()
+    if not note:
+        raise HTTPException(status_code=404, detail="상담사 상담 기록을 찾을 수 없습니다")
+
+    note_dict = _note_to_dict(note)
+    preview = filter_note_for_senior(note_dict, sharing)
+    # preview 에는 검토 메타는 노출하지 않음 (기존 GET /{source_type}/{id} 와 동일 규칙)
+    for meta_key in (
+        "senior_review_status",
+        "senior_review_notes",
+        "senior_sharing_settings",
+        "senior_reviewed_at",
+        "senior_reviewer_admin_id",
+        "admin_private_notes",
+    ):
+        preview.pop(meta_key, None)
+    return {"preview_for_senior": preview}

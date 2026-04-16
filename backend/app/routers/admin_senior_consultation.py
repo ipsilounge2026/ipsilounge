@@ -616,13 +616,15 @@ async def get_counselor_summary_for_senior(
     """
     uid = uuid.UUID(user_id)
 
-    # 학생의 최신 submitted + senior_review='reviewed' 상담사 설문 조회
+    # 학생의 최신 submitted + senior_review='reviewed' + 학생 철회되지 않은 상담사 설문 조회
+    # V1 §10-1: 학생이 사후 철회한 경우 revoked_at 세팅 → 선배 비노출
     survey_q = (
         select(ConsultationSurvey)
         .where(
             ConsultationSurvey.user_id == uid,
             ConsultationSurvey.status == "submitted",
             ConsultationSurvey.senior_review_status == "reviewed",
+            ConsultationSurvey.senior_sharing_revoked_at.is_(None),
         )
         .order_by(ConsultationSurvey.submitted_at.desc())
         .limit(1)
@@ -663,12 +665,14 @@ async def get_counselor_summary_for_senior(
     prev_note = note_result.scalar_one_or_none()
 
     # V1 §6: 상담사 ConsultationNote — senior_review_status='reviewed' + next_senior_context 토글 ON
+    # V1 §10-1: 학생이 사후 철회한 경우 revoked_at 세팅 → 선배 비노출
     # (is_visible_to_user 는 학생 공개 플래그이므로 사용하지 않는다)
     counselor_note_q = (
         select(ConsultationNote)
         .where(
             ConsultationNote.user_id == uid,
             ConsultationNote.senior_review_status == "reviewed",
+            ConsultationNote.senior_sharing_revoked_at.is_(None),
         )
         .order_by(ConsultationNote.consultation_date.desc())
         .limit(1)
@@ -718,6 +722,158 @@ async def get_counselor_summary_for_senior(
         "counselor_next_senior_context": counselor_next_senior_context,
         "counselor_note_date": counselor_note_date,
         "counselor_note_category": counselor_note_category,
+    }
+
+
+# ============================================================
+# 상담사 측 타임라인 조회 (V1 §10-2 — 공유 추적/철회 범위 식별)
+# ============================================================
+
+# 시점 라벨 → 정렬 순서 (T1~T4 / S1~S4 공통)
+_TIMING_ORDER: dict[str, int] = {
+    "T1": 1, "T2": 2, "T3": 3, "T4": 4,
+    "S1": 1, "S2": 2, "S3": 3, "S4": 4,
+}
+
+
+def _timing_sort_key(timing: str | None) -> int:
+    """timing 문자열을 정렬 키로 변환. 알 수 없는 값은 뒤로."""
+    if not timing:
+        return 99
+    return _TIMING_ORDER.get(timing, 99)
+
+
+@router.get("/student/{user_id}/counselor-timeline")
+async def get_counselor_timeline_for_senior(
+    user_id: str,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    학생 1명에 대해 **현재 선배에게 공유되고 있는 상담사 측 데이터의 시점 순 타임라인**.
+
+    연계규칙 V1 §10-2:
+    - 선배가 "어떤 시점의 데이터가 공유 중인지" 한눈에 파악하고,
+      학생이 철회했을 때 어느 범위가 숨어야 하는지 식별할 수 있도록 한다.
+    - 응답에는 effectively_visible (review=reviewed AND revoked_at IS NULL) 를 함께 반환.
+
+    권한:
+    - super_admin / admin / counselor : 모든 학생 조회 가능
+    - senior : 본인 담당 학생(SeniorStudentAssignment) 만
+    """
+    uid = uuid.UUID(user_id)
+
+    # 선배 역할은 담당 학생 검증
+    if admin.role == "senior":
+        assign_result = await db.execute(
+            select(SeniorStudentAssignment).where(
+                SeniorStudentAssignment.senior_id == admin.id,
+                SeniorStudentAssignment.user_id == uid,
+            )
+        )
+        if assign_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=403, detail="담당 학생이 아닙니다")
+
+    items: list[dict] = []
+
+    # 상담사 설문 (submitted + reviewed — 철회 포함하여 반환하되 effectively_visible 로 구분)
+    survey_q = (
+        select(ConsultationSurvey)
+        .where(
+            ConsultationSurvey.user_id == uid,
+            ConsultationSurvey.status == "submitted",
+            ConsultationSurvey.senior_review_status == "reviewed",
+        )
+    )
+    for survey in (await db.execute(survey_q)).scalars().all():
+        items.append({
+            "source_type": "survey",
+            "id": str(survey.id),
+            "timing": survey.timing,
+            "consultation_date": None,
+            "submitted_at": (
+                survey.submitted_at.isoformat() if survey.submitted_at else None
+            ),
+            "senior_review_status": survey.senior_review_status,
+            "senior_reviewed_at": (
+                survey.senior_reviewed_at.isoformat()
+                if survey.senior_reviewed_at else None
+            ),
+            "revoked_at": (
+                survey.senior_sharing_revoked_at.isoformat()
+                if survey.senior_sharing_revoked_at else None
+            ),
+            "effectively_visible": survey.senior_sharing_revoked_at is None,
+            "sharing_settings": survey.senior_sharing_settings,
+            "created_at": (
+                survey.created_at.isoformat() if survey.created_at else None
+            ),
+            # 정렬 보조
+            "_timing_sort": _timing_sort_key(survey.timing),
+            "_date_sort": survey.submitted_at or survey.created_at or datetime.min,
+        })
+
+    # 상담사 노트 (reviewed)
+    note_q = (
+        select(ConsultationNote)
+        .where(
+            ConsultationNote.user_id == uid,
+            ConsultationNote.senior_review_status == "reviewed",
+        )
+    )
+    for note in (await db.execute(note_q)).scalars().all():
+        note_dt = datetime.combine(note.consultation_date, datetime.min.time()) \
+            if note.consultation_date else (note.created_at or datetime.min)
+        items.append({
+            "source_type": "note",
+            "id": str(note.id),
+            "timing": note.timing,
+            "consultation_date": (
+                note.consultation_date.isoformat() if note.consultation_date else None
+            ),
+            "submitted_at": None,
+            "senior_review_status": note.senior_review_status,
+            "senior_reviewed_at": (
+                note.senior_reviewed_at.isoformat()
+                if note.senior_reviewed_at else None
+            ),
+            "revoked_at": (
+                note.senior_sharing_revoked_at.isoformat()
+                if note.senior_sharing_revoked_at else None
+            ),
+            "effectively_visible": note.senior_sharing_revoked_at is None,
+            "sharing_settings": note.senior_sharing_settings,
+            "category": note.category,
+            "created_at": (
+                note.created_at.isoformat() if note.created_at else None
+            ),
+            "_timing_sort": _timing_sort_key(note.timing),
+            "_date_sort": note_dt,
+        })
+
+    # 정렬: timing → 날짜(submitted_at / consultation_date) → created_at (오래된 순)
+    items.sort(key=lambda it: (it["_timing_sort"], it["_date_sort"]))
+
+    # 내부 정렬 키 제거
+    for it in items:
+        it.pop("_timing_sort", None)
+        it.pop("_date_sort", None)
+
+    # 감사 로그
+    await log_consultation_data_access(
+        db,
+        viewer_admin_id=admin.id,
+        viewer_role=admin.role,
+        target_user_id=uid,
+        access_type="senior_views_counselor_timeline",
+        source_type=None,
+        source_id=None,
+        meta={"item_count": len(items)},
+    )
+
+    return {
+        "user_id": user_id,
+        "items": items,
     }
 
 
