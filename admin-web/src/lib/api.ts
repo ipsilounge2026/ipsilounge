@@ -438,6 +438,46 @@ export async function getSeniorCumulativeSummary(userId: string) {
   return request(`/api/admin/senior-consultation/student/${userId}/cumulative-summary`);
 }
 
+// --- 상담사→선배 공유 검토 (연계규칙 V1 §6) ---
+export async function getCounselorSharingPending() {
+  return request("/api/admin/counselor-sharing/pending");
+}
+
+export async function getCounselorSharingDetail(sourceType: "survey" | "note", id: string) {
+  return request(`/api/admin/counselor-sharing/${sourceType}/${id}`);
+}
+
+export async function updateCounselorSharingReview(
+  sourceType: "survey" | "note",
+  id: string,
+  body: {
+    review_status: "reviewed" | "revision_requested";
+    review_notes?: string | null;
+    sharing_settings?: Record<string, boolean> | null;
+  },
+) {
+  return request(`/api/admin/counselor-sharing/${sourceType}/${id}/review`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+// --- 상담 데이터 열람 감사 로그 (연계규칙 V1 §10-2, super_admin 전용) ---
+export async function getConsultationDataAccessLogs(params?: {
+  target_user_id?: string;
+  viewer_role?: string;
+  access_type?: string;
+  limit?: number;
+}) {
+  const qs = new URLSearchParams();
+  if (params?.target_user_id) qs.set("target_user_id", params.target_user_id);
+  if (params?.viewer_role) qs.set("viewer_role", params.viewer_role);
+  if (params?.access_type) qs.set("access_type", params.access_type);
+  if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request(`/api/admin/audit/consultation-data-access${suffix}`);
+}
+
 // --- 가이드북 관리 ---
 export async function getGuidebooks(timing?: string) {
   const params = timing ? `?timing=${timing}` : "";

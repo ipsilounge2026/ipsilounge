@@ -19,6 +19,8 @@ import {
   FiBarChart2,
   FiAlertTriangle,
   FiUser,
+  FiShield,
+  FiActivity,
 } from "react-icons/fi";
 
 const allMenuItems = [
@@ -29,8 +31,12 @@ const allMenuItems = [
   // HSGAP-P2-senior-counselor-context-share-ui: 선배 전용 담당 학생 요약
   { key: "my_students_senior", href: "/my-students", label: "담당 학생 요약", icon: FiUser, seniorOnly: true },
   { key: "surveys", href: "/surveys", label: "사전설문 관리", icon: FiClipboard },
+  // 연계규칙 V1 §6: 상담사→선배 공유 검토 (super_admin/admin 노출)
+  { key: "counselor_sharing_review", href: "/consultation/counselor-sharing", label: "상담사→선배 공유 검토", icon: FiShield },
   // 기획서 §4-8-1: 슈퍼관리자 QA 이슈 큐 (blocked/repaired/warn 설문 점검)
   { key: "super_admin_issues", href: "/super-admin/issues", label: "QA 이슈 큐", icon: FiAlertTriangle, superAdminOnly: true },
+  // 연계규칙 V1 §10-2: 상담 데이터 열람 감사 로그 (super_admin 전용)
+  { key: "consultation_access_logs", href: "/super-admin/access-logs", label: "열람 감사 로그", icon: FiActivity, superAdminOnly: true },
   { key: "users", href: "/users", label: "회원 관리", icon: FiUsers },
   { key: "payments", href: "/payments", label: "결제 현황", icon: FiDollarSign },
   { key: "admins", href: "/admins", label: "담당자 관리", icon: FiUserCheck },
