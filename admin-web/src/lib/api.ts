@@ -535,12 +535,30 @@ export async function getSeminarMailLogDetail(id: string) {
 }
 
 // --- 사전 상담 설문 ---
-export async function getSurveys(page = 1, surveyType?: string, status?: string, search?: string) {
+export async function getSurveys(
+  page = 1,
+  surveyType?: string,
+  status?: string,
+  search?: string,
+  analysisStatus?: string,
+) {
   const params = new URLSearchParams({ page: String(page), size: "20" });
   if (surveyType) params.set("survey_type", surveyType);
   if (status) params.set("status", status);
   if (search) params.set("search", search);
+  if (analysisStatus) params.set("analysis_status", analysisStatus);
   return request(`/api/admin/surveys?${params}`);
+}
+
+// 기획서 §4-8-1: 슈퍼관리자 QA 이슈 큐 (blocked/repaired/warn)
+export async function getQAIssueQueue(statuses: string = "blocked,repaired,warn") {
+  const params = new URLSearchParams({ statuses });
+  return request(`/api/admin/surveys/qa-issues?${params}`);
+}
+
+// 슈퍼관리자가 수동으로 재검증 트리거 (잠금 해제 판정)
+export async function revalidateSurvey(id: string) {
+  return request(`/api/admin/surveys/${id}/revalidate`, { method: "POST" });
 }
 
 export async function getSurveyDetail(id: string) {
@@ -613,6 +631,26 @@ export async function updateSurveyOverrides(id: string, overrides: Record<string
 
 export async function deleteSurveyOverrides(id: string) {
   return request(`/api/admin/surveys/${id}/overrides`, { method: "DELETE" });
+}
+
+// --- 상담사 4영역 점수 직접 수정 (HSGAP-P2-counselor-score-override) ---
+export interface ScoreOverridePayload {
+  naesin?: number | null;
+  mock?: number | null;
+  study?: number | null;
+  career?: number | null;
+  reason?: string | null;
+}
+
+export async function updateSurveyScoreOverrides(id: string, payload: ScoreOverridePayload) {
+  return request(`/api/admin/surveys/${id}/scores`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function clearSurveyScoreOverrides(id: string) {
+  return request(`/api/admin/surveys/${id}/scores`, { method: "DELETE" });
 }
 
 // --- 상담사 체크리스트 ---

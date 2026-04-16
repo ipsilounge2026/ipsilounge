@@ -154,6 +154,7 @@ interface Note {
   category: string; consultation_date: string; student_grade: string | null;
   timing?: string | null; goals: string | null; main_content: string;
   advice_given: string | null; next_steps: string | null; next_topic: string | null;
+  next_senior_context?: string | null;
   topic_notes?: Record<string, string> | null;
   admin_private_notes: string | null; is_visible_to_user: boolean;
   addenda: Addendum[]; created_at: string;
@@ -206,6 +207,7 @@ function ConsultationNotesInner() {
     main_content: "",
     next_steps: "",
     next_topic: "",
+    next_senior_context: "",
     topic_notes: {} as Record<string, string>,
     admin_private_notes: "",
     is_visible_to_user: false,
@@ -252,7 +254,7 @@ function ConsultationNotesInner() {
       user_id: "", user_name: "", booking_id: "", category: "academic",
       consultation_date: new Date().toISOString().split("T")[0],
       student_grade: "", timing: "", goals: "", main_content: "",
-      next_steps: "", next_topic: "", topic_notes: {},
+      next_steps: "", next_topic: "", next_senior_context: "", topic_notes: {},
       admin_private_notes: "", is_visible_to_user: false,
     });
     setShowForm(false);
@@ -288,6 +290,7 @@ function ConsultationNotesInner() {
         main_content: form.main_content || "",
         next_steps: form.next_steps || undefined,
         next_topic: form.next_topic || undefined,
+        next_senior_context: form.next_senior_context || undefined,
         topic_notes: hasTopicNotes ? form.topic_notes : undefined,
         admin_private_notes: form.admin_private_notes || undefined,
         is_visible_to_user: form.is_visible_to_user,
@@ -497,6 +500,23 @@ function ConsultationNotesInner() {
               </div>
             </div>
 
+            {/* 선배 상담사 인수인계 (HSGAP-P2-senior-counselor-context-share-ui) */}
+            <div className="form-group" style={{ marginBottom: 12 }}>
+              <label>
+                선배 상담사에게 전달할 맥락
+                <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 8, fontWeight: 400 }}>
+                  (선배의 "담당 학생 요약" 페이지에 노출 · 학생 공개 체크 필요)
+                </span>
+              </label>
+              <textarea
+                className="form-control"
+                rows={2}
+                value={form.next_senior_context}
+                onChange={e => setForm(prev => ({ ...prev, next_senior_context: e.target.value }))}
+                placeholder="예: '이번 상담에서 진로 방향을 공학→의학으로 전환 결정. 과목 선택 재검토 필요.' (민감정보 제외)"
+              />
+            </div>
+
             {/* 관리자 메모 */}
             <div className="form-group" style={{ marginBottom: 16 }}>
               <label>관리자 메모 (학생 비공개)</label>
@@ -670,6 +690,21 @@ function NoteCard({ note, expanded, onToggle, onVisibilityToggle,
               </div>
             )}
           </div>
+
+          {/* 선배 상담사에게 전달할 맥락 (HSGAP-P2) */}
+          {note.next_senior_context && (
+            <div style={{ marginBottom: 12, background: "#FFFBEB", padding: 12, borderRadius: 6, border: "1px solid #FDE68A" }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#92400E", marginBottom: 4 }}>
+                🎓 선배 상담사에게 전달할 맥락
+                {!note.is_visible_to_user && (
+                  <span style={{ marginLeft: 8, fontSize: 11, color: "#B45309" }}>
+                    (학생 비공개 상태 — 선배 페이지에 노출 안 됨)
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 14, whiteSpace: "pre-wrap", color: "#78350F" }}>{note.next_senior_context}</div>
+            </div>
+          )}
 
           {note.admin_private_notes && (
             <div style={{ marginBottom: 12, background: "#fdf2f8", padding: 12, borderRadius: 6, border: "1px solid #f9a8d4" }}>

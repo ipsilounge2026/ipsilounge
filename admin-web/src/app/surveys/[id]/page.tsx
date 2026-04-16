@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan, updateSurveyOverrides, deleteSurveyOverrides, updateSurveyChecklist, deleteSurveyChecklist, convertPreheigh1ToHigh, getSuneungMinimumSimulation, getCourseRequirementMatch } from "@/lib/api";
+import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan, updateSurveyOverrides, deleteSurveyOverrides, updateSurveyChecklist, deleteSurveyChecklist, convertPreheigh1ToHigh, getSuneungMinimumSimulation, getCourseRequirementMatch, updateSurveyScoreOverrides, clearSurveyScoreOverrides } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
 import { GradeTrendChart, MockTrendChart, StudyAnalysisChart, RadarScoreChart, RadarDetailTable } from "@/components/SurveyCharts";
 
@@ -454,6 +454,66 @@ export default function SurveyDetailPage() {
       alert("초기화에 실패했습니다.");
     } finally {
       setOverrideSaving(false);
+    }
+  };
+
+  // ── 4영역 점수 직접 수정 (HSGAP-P2-counselor-score-override) ──
+
+  const [scoreInput, setScoreInput] = useState<{ naesin: string; mock: string; study: string; career: string; reason: string }>({
+    naesin: "", mock: "", study: "", career: "", reason: "",
+  });
+  const [scoreSaving, setScoreSaving] = useState(false);
+
+  const handleRecomputeScores = async () => {
+    const toNum = (v: string): number | null => {
+      const t = v.trim();
+      if (t === "") return null;
+      const n = Number(t);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        alert("각 점수는 0~100 사이 정수여야 합니다.");
+        throw new Error("invalid score");
+      }
+      return Math.round(n);
+    };
+    let payload;
+    try {
+      payload = {
+        naesin: toNum(scoreInput.naesin),
+        mock: toNum(scoreInput.mock),
+        study: toNum(scoreInput.study),
+        career: toNum(scoreInput.career),
+        reason: scoreInput.reason.trim() || null,
+      };
+    } catch {
+      return;
+    }
+    if (payload.naesin === null && payload.mock === null && payload.study === null && payload.career === null) {
+      alert("최소 1개 영역 이상 점수를 입력해야 합니다.");
+      return;
+    }
+    setScoreSaving(true);
+    try {
+      await updateSurveyScoreOverrides(id, payload);
+      await loadSurvey();
+      alert("점수를 재산출하고 QA 재검증을 완료했습니다.");
+    } catch {
+      alert("점수 재산출에 실패했습니다.");
+    } finally {
+      setScoreSaving(false);
+    }
+  };
+
+  const handleClearScores = async () => {
+    if (!confirm("4영역 점수 오버라이드를 해제하고 자동 산출값으로 복원하시겠습니까?")) return;
+    setScoreSaving(true);
+    try {
+      await clearSurveyScoreOverrides(id);
+      setScoreInput({ naesin: "", mock: "", study: "", career: "", reason: "" });
+      await loadSurvey();
+    } catch {
+      alert("초기화에 실패했습니다.");
+    } finally {
+      setScoreSaving(false);
     }
   };
 
@@ -1008,6 +1068,97 @@ export default function SurveyDetailPage() {
                 <div style={{ marginBottom: 20 }}>
                   <RadarDetailTable computed={survey.computed} />
                 </div>
+
+                {/* 상담사 4영역 점수 직접 수정 (HSGAP-P2) */}
+                {(() => {
+                  const radar = (survey.computed as any)?.radar_scores?.radar || {};
+                  const isManual = Boolean((survey.computed as any)?.radar_scores?.manual_override);
+                  const curOverride = (survey.counselor_overrides as any)?.score_overrides || {};
+                  const axes: { key: string; label: string; field: "naesin" | "mock" | "study" | "career" }[] = [
+                    { key: "내신_경쟁력", label: "내신 경쟁력", field: "naesin" },
+                    { key: "모의고사_역량", label: "모의고사 역량", field: "mock" },
+                    { key: "학습습관_전략", label: "학습 습관·전략", field: "study" },
+                    { key: "진로전형_전략", label: "진로·전형 전략", field: "career" },
+                  ];
+                  const gradeOf = (s: number): string => {
+                    if (s >= 90) return "S";
+                    if (s >= 75) return "A";
+                    if (s >= 55) return "B";
+                    if (s >= 35) return "C";
+                    return "D";
+                  };
+                  return (
+                    <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: 16, marginBottom: 20 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <div>
+                          <h4 style={{ fontSize: 14, fontWeight: 600, color: "#92400E", margin: 0 }}>✏️ 상담사 점수 직접 수정</h4>
+                          <div style={{ fontSize: 12, color: "#92400E", marginTop: 4 }}>
+                            4영역 점수(0~100)를 수정하면 등급·종합점수가 자동 재산출되고 QA 재검증이 실행됩니다. 비워두면 해당 영역은 자동 산출값 유지.
+                          </div>
+                        </div>
+                        {isManual && (
+                          <span style={{ fontSize: 11, color: "#92400E", background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 4, padding: "2px 8px", whiteSpace: "nowrap" }}>상담사 수동 조정</span>
+                        )}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+                        {axes.map(({ key, label, field }) => {
+                          const auto = radar?.[key]?.score;
+                          const prevOverride = curOverride?.[field];
+                          const placeholder = auto != null ? `자동: ${Math.round(auto)}` : "0~100";
+                          const val = scoreInput[field];
+                          const preview = val.trim() !== "" && !Number.isNaN(Number(val))
+                            ? gradeOf(Number(val))
+                            : (radar?.[key]?.grade || "-");
+                          return (
+                            <div key={field}>
+                              <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }}>
+                                {label} {prevOverride != null && <span style={{ color: "#D97706" }}>(수정됨: {prevOverride})</span>}
+                              </label>
+                              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  value={val}
+                                  placeholder={placeholder}
+                                  onChange={(e) => setScoreInput((p) => ({ ...p, [field]: e.target.value }))}
+                                  style={{ flex: 1, padding: "6px 10px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13 }}
+                                />
+                                <span style={{ fontSize: 13, fontWeight: 700, color: "#6B7280", minWidth: 24, textAlign: "center" }}>{preview}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <textarea
+                        value={scoreInput.reason}
+                        placeholder="수정 사유 (감사 로그 기록용, 선택)"
+                        onChange={(e) => setScoreInput((p) => ({ ...p, reason: e.target.value }))}
+                        style={{ width: "100%", minHeight: 44, padding: 8, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, resize: "vertical", fontFamily: "inherit", marginBottom: 8 }}
+                      />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={handleRecomputeScores}
+                          disabled={scoreSaving}
+                          style={{ padding: "8px 16px", background: "#D97706", color: "white", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: scoreSaving ? "not-allowed" : "pointer", opacity: scoreSaving ? 0.6 : 1 }}
+                        >
+                          {scoreSaving ? "처리 중..." : "🔁 재산출 + QA 재검증"}
+                        </button>
+                        {isManual && (
+                          <button
+                            type="button"
+                            onClick={handleClearScores}
+                            disabled={scoreSaving}
+                            style={{ padding: "8px 16px", background: "white", color: "#92400E", border: "1px solid #FCD34D", borderRadius: 6, fontSize: 13, cursor: scoreSaving ? "not-allowed" : "pointer" }}
+                          >
+                            자동 산출값으로 복원
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

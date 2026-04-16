@@ -396,6 +396,26 @@ export default function ConsultationPage() {
                   <option value="심리상담">심리 상담</option>
                   <option value="기타">기타</option>
                 </select>
+                {/* 기획서 §4-8-2: 학습상담/학생부분석/학종전략은 7일 리드타임 */}
+                {(manualType === "학습상담" || manualType === "학생부분석" || manualType === "학종전략") && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: "8px 10px",
+                      background: "#FFF7ED",
+                      border: "1px solid #FDBA74",
+                      borderRadius: 6,
+                      color: "#9A3412",
+                      fontSize: 12,
+                    }}
+                  >
+                    ※ {manualType === "학습상담"
+                      ? "학습상담은 사전 설문 제출 후 7일 뒤부터 예약 가능합니다."
+                      : `${manualType} 상담은 학생부 업로드 후 7일 뒤부터 예약 가능합니다.`}
+                    <br />
+                    직접 예약은 관리자가 수동으로 등록하는 경로이므로 필요 시 리드타임 외에도 등록됩니다.
+                  </div>
+                )}
               </div>
 
               {/* 상담 방식 */}

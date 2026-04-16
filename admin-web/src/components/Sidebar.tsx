@@ -17,6 +17,8 @@ import {
   FiClipboard,
   FiBook,
   FiBarChart2,
+  FiAlertTriangle,
+  FiUser,
 } from "react-icons/fi";
 
 const allMenuItems = [
@@ -24,7 +26,11 @@ const allMenuItems = [
   { key: "analysis", href: "/analysis", label: "분석 관리", icon: FiFileText },
   { key: "consultation", href: "/consultation", label: "상담 관리", icon: FiCalendar },
   { key: "senior-quality", href: "/senior-quality", label: "선배 상담 품질", icon: FiBarChart2 },
+  // HSGAP-P2-senior-counselor-context-share-ui: 선배 전용 담당 학생 요약
+  { key: "my_students_senior", href: "/my-students", label: "담당 학생 요약", icon: FiUser, seniorOnly: true },
   { key: "surveys", href: "/surveys", label: "사전설문 관리", icon: FiClipboard },
+  // 기획서 §4-8-1: 슈퍼관리자 QA 이슈 큐 (blocked/repaired/warn 설문 점검)
+  { key: "super_admin_issues", href: "/super-admin/issues", label: "QA 이슈 큐", icon: FiAlertTriangle, superAdminOnly: true },
   { key: "users", href: "/users", label: "회원 관리", icon: FiUsers },
   { key: "payments", href: "/payments", label: "결제 현황", icon: FiDollarSign },
   { key: "admins", href: "/admins", label: "담당자 관리", icon: FiUserCheck },
@@ -41,6 +47,14 @@ export default function Sidebar() {
 
   const visibleMenus = allMenuItems.filter((item) => {
     if (!adminInfo) return item.key === "dashboard";
+    // super_admin 전용 메뉴는 super_admin 에게만 노출
+    if ((item as { superAdminOnly?: boolean }).superAdminOnly) {
+      return adminInfo.role === "super_admin";
+    }
+    // HSGAP-P2: senior 전용 메뉴는 role === "senior"에게만 노출 (super_admin에는 노출 안 함)
+    if ((item as { seniorOnly?: boolean }).seniorOnly) {
+      return adminInfo.role === "senior";
+    }
     if (adminInfo.role === "super_admin") return true;
     return adminInfo.allowed_menus.includes(item.key);
   });
