@@ -525,3 +525,43 @@ export async function getMySenior() {
 export async function requestSeniorChange(data: { requested_senior_id: string | null; reason: string }) {
   return request("/api/consultation/change-senior-request", { method: "POST", body: JSON.stringify(data) });
 }
+
+// 선배 변경 요청 이력 조회 (마이페이지 표시용)
+// TODO(backend): `GET /api/consultation/change-senior-request/my` 엔드포인트 구현 필요.
+//   응답 스키마: { items: Array<{
+//     id: string;
+//     current_senior_id: string | null;
+//     current_senior_name: string | null;
+//     requested_senior_id: string | null;
+//     requested_senior_name: string | null;
+//     reason: string;
+//     status: "pending" | "approved" | "rejected";
+//     admin_memo: string | null;
+//     created_at: string; // ISO
+//     processed_at: string | null; // ISO
+//   }> }
+// 현재는 엔드포인트가 미구현이므로, 404/미연결 시 빈 배열 반환 (UI에 "이력 없음" 표기)
+export interface SeniorChangeRequestHistoryItem {
+  id: string;
+  current_senior_id: string | null;
+  current_senior_name: string | null;
+  requested_senior_id: string | null;
+  requested_senior_name: string | null;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  admin_memo: string | null;
+  created_at: string;
+  processed_at: string | null;
+}
+
+export async function getMySeniorChangeRequests(): Promise<{ items: SeniorChangeRequestHistoryItem[] }> {
+  try {
+    return await request("/api/consultation/change-senior-request/my");
+  } catch (err: any) {
+    // 백엔드 미구현 단계 fallback
+    if (err?.status === 404) {
+      return { items: [] };
+    }
+    throw err;
+  }
+}

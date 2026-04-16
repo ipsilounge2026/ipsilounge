@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { getAvailableSlots, getCounselors, getSeniors, bookConsultation, checkConsultationEligible, checkBookingCooldown, listMySurveys } from "@/lib/api";
+import { getAvailableSlots, getCounselors, getSeniors, bookConsultation, checkConsultationEligible, checkBookingCooldown, listMySurveys, listSeniorPreSurveys } from "@/lib/api";
 import ChildSelector from "@/components/ChildSelector";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
@@ -77,6 +77,10 @@ export default function ConsultationPage() {
   const [selectedChild, setSelectedChild] = useState<string | null>(null);
   const [noChildren, setNoChildren] = useState(false);
 
+  // 선배상담 전용 사전 설문 게이트 (기획서 §3, §9-5)
+  // null: 확인 중 / "submitted": 최근 회차 제출 완료 / "missing": 미제출(또는 draft)
+  const [seniorPreSurveyStatus, setSeniorPreSurveyStatus] = useState<"submitted" | "missing" | null>(null);
+
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
   }, []);
@@ -143,6 +147,8 @@ export default function ConsultationPage() {
           setStep("booking");
           loadSeniors();
           checkBookingCooldown().then(setBookingCooldown).catch(() => {});
+          // 기획서 §3, §9-5: 선배상담 예약 전 사전 설문 제출 여부 확인
+          refreshSeniorPreSurveyStatus();
         }
       } catch {
         setEligibility({ eligible: false, reason: "선배 매칭 확인에 실패했습니다.", earliest_date: null, needs_survey: false });
@@ -172,7 +178,10 @@ export default function ConsultationPage() {
     }
   };
 
-  // 선배 조회 (선배상담 전용) — 매칭된 선배만 단건 자동 선택
+  // 선배 조회 (선배상담 전용)
+  // - 1명: 자동 선택 + 매칭된 선배 배지 노출
+  // - 2명 이상: 카드 목록으로 표시하여 학생이 직접 선택
+  // - 0명: check 단계에서 안내 (여기에는 진입하지 않음)
   const loadSeniors = async () => {
     try {
       const data = await getSeniors();
@@ -181,9 +190,28 @@ export default function ConsultationPage() {
       setIsAssigned(data.assigned || false);
       if (data.assigned && seniors.length === 1) {
         setSelectedCounselor(seniors[0]);
+      } else {
+        // 2명 이상 매칭: 자동 선택하지 않고 카드 목록에서 선택하도록 대기
+        setSelectedCounselor(null);
       }
     } catch {
       setCounselors([]);
+    }
+  };
+
+  // 선배상담 사전 설문 상태 재조회
+  // - surveys 배열 중 status === "submitted" 가 하나라도 있으면 통과
+  // - 없으면 "missing" 으로 판정하여 게이트 차단
+  const refreshSeniorPreSurveyStatus = async () => {
+    setSeniorPreSurveyStatus(null);
+    try {
+      const res = await listSeniorPreSurveys();
+      const surveys = (res?.surveys || []) as Array<{ id: string; status: string; session_number: number; session_timing: string | null }>;
+      const hasSubmitted = surveys.some((s) => s.status === "submitted");
+      setSeniorPreSurveyStatus(hasSubmitted ? "submitted" : "missing");
+    } catch {
+      // 조회 실패 시 보수적으로 missing 처리 (예약 게이트 유지)
+      setSeniorPreSurveyStatus("missing");
     }
   };
 
@@ -264,6 +292,7 @@ export default function ConsultationPage() {
     setSelectedType(null);
     setEligibility(null);
     setSurveyStatus(null);
+    setSeniorPreSurveyStatus(null);
     setSelectedCounselor(null);
     setSelectedDate(null);
     setSelectedSlot(null);
@@ -611,6 +640,57 @@ export default function ConsultationPage() {
               </div>
             )}
 
+            {/* 기획서 §3, §9-5: 선배상담 사전 설문 게이트 배너 */}
+            {selectedType === "선배상담" && seniorPreSurveyStatus === "missing" && (
+              <div style={{
+                padding: "14px 16px",
+                background: "#FEF3C7",
+                border: "1px solid #FDE68A",
+                borderRadius: 8,
+                marginBottom: 16,
+                color: "#92400E",
+                lineHeight: 1.6,
+              }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>⚠️ 사전 설문 제출이 필요합니다</div>
+                <div style={{ fontSize: 13, marginBottom: 10 }}>
+                  선배상담 예약을 위해서는 먼저 사전 설문을 제출해야 합니다. 상담의 질을 높이기 위한 필수 절차입니다.
+                </div>
+                <button
+                  onClick={() => {
+                    const seniorQuery = selectedCounselor ? `?senior_id=${selectedCounselor.id}` : "";
+                    router.push(`/senior-pre-survey${seniorQuery}`);
+                  }}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 6,
+                    border: "none",
+                    background: "#D97706",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  사전 설문 작성하기 →
+                </button>
+                <button
+                  onClick={refreshSeniorPreSurveyStatus}
+                  style={{
+                    marginLeft: 8,
+                    padding: "8px 14px",
+                    borderRadius: 6,
+                    border: "1px solid #D97706",
+                    background: "#fff",
+                    color: "#92400E",
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                >
+                  제출 여부 새로고침
+                </button>
+              </div>
+            )}
+
             {/* 쿨다운 배너 */}
             {bookingCooldown && !bookingCooldown.can_book && (
               <div style={{
@@ -636,11 +716,23 @@ export default function ConsultationPage() {
             {/* 상담자 선택 */}
             {!selectedCounselor ? (
               <div className="card" style={{ marginBottom: 16 }}>
-                <h2 style={{ fontSize: 16, marginBottom: 4 }}>상담자 선택</h2>
-                <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 16 }}>상담을 진행할 상담자를 선택해주세요</p>
+                <h2 style={{ fontSize: 16, marginBottom: 4 }}>
+                  {selectedType === "선배상담" ? "선배 선택" : "상담자 선택"}
+                </h2>
+                <p style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 16 }}>
+                  {selectedType === "선배상담"
+                    ? (counselors.length >= 2
+                        ? "매칭된 선배가 여러 명입니다. 상담을 진행할 선배를 선택해주세요"
+                        : "상담을 진행할 선배를 선택해주세요")
+                    : "상담을 진행할 상담자를 선택해주세요"}
+                </p>
 
                 {counselors.length === 0 ? (
-                  <p style={{ color: "var(--gray-500)", textAlign: "center", padding: 20 }}>현재 예약 가능한 상담자가 없습니다</p>
+                  <p style={{ color: "var(--gray-500)", textAlign: "center", padding: 20 }}>
+                    {selectedType === "선배상담"
+                      ? "매칭된 선배가 없습니다. 학원에 문의해주세요."
+                      : "현재 예약 가능한 상담자가 없습니다"}
+                  </p>
                 ) : (
                   <div style={{ display: "grid", gap: 12 }}>
                     {counselors.map((c) => (
@@ -820,8 +912,31 @@ export default function ConsultationPage() {
                       <textarea className="form-control" value={memo} onChange={(e) => setMemo(e.target.value)}
                         placeholder="상담 전에 궁금한 점이 있으면 입력해주세요" />
                     </div>
-                    <button className="btn btn-primary btn-block btn-lg" onClick={handleBook} disabled={loading || bookingCooldown === null || !bookingCooldown.can_book || noChildren || (getMemberType() === "parent" && !selectedChild)}>
-                      {loading ? "예약 중..." : bookingCooldown === null ? "확인 중..." : !bookingCooldown.can_book ? "쿨다운 기간" : noChildren ? "자녀 연결 필요" : "상담 예약 신청"}
+                    <button
+                      className="btn btn-primary btn-block btn-lg"
+                      onClick={handleBook}
+                      disabled={
+                        loading ||
+                        bookingCooldown === null ||
+                        !bookingCooldown.can_book ||
+                        noChildren ||
+                        (getMemberType() === "parent" && !selectedChild) ||
+                        (selectedType === "선배상담" && seniorPreSurveyStatus !== "submitted")
+                      }
+                    >
+                      {loading
+                        ? "예약 중..."
+                        : bookingCooldown === null
+                          ? "확인 중..."
+                          : !bookingCooldown.can_book
+                            ? "쿨다운 기간"
+                            : noChildren
+                              ? "자녀 연결 필요"
+                              : selectedType === "선배상담" && seniorPreSurveyStatus === null
+                                ? "사전 설문 확인 중..."
+                                : selectedType === "선배상담" && seniorPreSurveyStatus === "missing"
+                                  ? "사전 설문 제출 필요"
+                                  : "상담 예약 신청"}
                     </button>
                   </div>
                 )}

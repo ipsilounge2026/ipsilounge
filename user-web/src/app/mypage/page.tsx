@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FamilyLinkSection from "@/components/FamilyLinkSection";
-import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange, getMySenior, requestSeniorChange, listMySurveys, deleteSurvey } from "@/lib/api";
+import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange, getMySenior, requestSeniorChange, listMySurveys, deleteSurvey, getMySeniorChangeRequests } from "@/lib/api";
+import type { SeniorChangeRequestHistoryItem } from "@/lib/api";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 interface User {
@@ -103,6 +104,10 @@ export default function MyPage() {
   const [seniorChangeReason, setSeniorChangeReason] = useState("");
   const [seniorChangeLoading, setSeniorChangeLoading] = useState(false);
 
+  // 선배 변경 요청 이력 (기획서 §9-4)
+  const [seniorChangeHistory, setSeniorChangeHistory] = useState<SeniorChangeRequestHistoryItem[]>([]);
+  const [seniorChangeHistoryLoaded, setSeniorChangeHistoryLoaded] = useState(false);
+
   useEffect(() => {
     if (!isLoggedIn()) { router.push("/login"); return; }
     getMe().then((u) => {
@@ -128,8 +133,21 @@ export default function MyPage() {
         setIsSeniorAssigned(res.assigned);
         setMySenior(res.senior);
       }).catch(() => {});
+      // 선배 변경 요청 이력 조회 (기획서 §9-4)
+      loadSeniorChangeHistory();
     }
   }, []);
+
+  const loadSeniorChangeHistory = async () => {
+    try {
+      const res = await getMySeniorChangeRequests();
+      setSeniorChangeHistory(res.items || []);
+    } catch {
+      setSeniorChangeHistory([]);
+    } finally {
+      setSeniorChangeHistoryLoaded(true);
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -199,6 +217,8 @@ export default function MyPage() {
       setMessage("선배 변경 요청이 접수되었습니다. 관리자 확인 후 처리됩니다.");
       setShowSeniorChangeRequest(false);
       setSeniorChangeReason("");
+      // 이력 재조회
+      loadSeniorChangeHistory();
     } catch (err: any) {
       setMessage(err.message);
     } finally {
@@ -539,6 +559,92 @@ export default function MyPage() {
                       아직 배정된 선배가 없습니다. 선배 상담 예약 시 자동 배정됩니다.
                     </div>
                   )}
+
+                  {/* 기획서 §9-4: 선배 변경 요청 이력 */}
+                  {(() => {
+                    const pending = seniorChangeHistory.find((r) => r.status === "pending");
+                    return (
+                      <div style={{ marginTop: 14 }}>
+                        {pending && (
+                          <div style={{
+                            padding: "10px 12px",
+                            background: "#FEF3C7",
+                            border: "1px solid #FDE68A",
+                            borderRadius: 8,
+                            marginBottom: 10,
+                            fontSize: 13,
+                            color: "#92400E",
+                            lineHeight: 1.5,
+                          }}>
+                            <strong>⏳ 변경 요청이 검토 중입니다</strong>
+                            <div style={{ marginTop: 4, fontSize: 12 }}>
+                              {new Date(pending.created_at).toLocaleDateString("ko-KR")} 제출 · 관리자 확인을 기다리고 있습니다.
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 6 }}>
+                          변경 요청 이력
+                        </div>
+                        {!seniorChangeHistoryLoaded ? (
+                          <div style={{ fontSize: 13, color: "#9CA3AF" }}>이력 조회 중...</div>
+                        ) : seniorChangeHistory.length === 0 ? (
+                          <div style={{ fontSize: 13, color: "#9CA3AF" }}>변경 요청 이력 없음</div>
+                        ) : (
+                          <div style={{ display: "grid", gap: 8 }}>
+                            {seniorChangeHistory.map((r) => {
+                              const statusLabel =
+                                r.status === "pending" ? "대기" : r.status === "approved" ? "승인" : "거절";
+                              const statusColor =
+                                r.status === "pending" ? "#F59E0B" : r.status === "approved" ? "#10B981" : "#9CA3AF";
+                              return (
+                                <div
+                                  key={r.id}
+                                  style={{
+                                    padding: "10px 12px",
+                                    border: "1px solid var(--gray-200)",
+                                    borderRadius: 8,
+                                    background: "#fff",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                                    <span style={{ fontSize: 12, color: "var(--gray-500)" }}>
+                                      {new Date(r.created_at).toLocaleDateString("ko-KR")} 요청
+                                    </span>
+                                    <span style={{
+                                      padding: "2px 8px",
+                                      borderRadius: 10,
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: "#fff",
+                                      background: statusColor,
+                                    }}>
+                                      {statusLabel}
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: 13, color: "var(--gray-700)", marginBottom: 4, lineHeight: 1.5 }}>
+                                    <strong style={{ color: "#6B7280", fontWeight: 600, fontSize: 12 }}>사유: </strong>
+                                    {r.reason}
+                                  </div>
+                                  {r.processed_at && (
+                                    <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 4 }}>
+                                      처리일: {new Date(r.processed_at).toLocaleDateString("ko-KR")}
+                                    </div>
+                                  )}
+                                  {r.admin_memo && (
+                                    <div style={{ fontSize: 12, color: "var(--gray-600)", marginTop: 4, background: "#F9FAFB", padding: 8, borderRadius: 6 }}>
+                                      <strong style={{ fontWeight: 600 }}>관리자 코멘트: </strong>
+                                      {r.admin_memo}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </>
