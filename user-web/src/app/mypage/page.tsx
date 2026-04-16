@@ -651,6 +651,38 @@ export default function MyPage() {
           )}
         </div>
 
+        {/* 선배상담 연계 관리 진입점 (학생만, V1 §10-1) */}
+        {memberType === "student" && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", marginBottom: 4 }}>
+                  🔗 선배상담 연계 관리
+                </div>
+                <div style={{ fontSize: 12, color: "#6B7280", lineHeight: 1.5 }}>
+                  상담사와의 상담 내용 중 관리자 검토를 통과한 내용만 담당 선배에게 공유됩니다.<br />
+                  개별 건별로 공유를 중단하거나 다시 허용할 수 있습니다.
+                </div>
+              </div>
+              <button
+                onClick={() => router.push("/mypage/senior-sharing")}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 6,
+                  border: "1px solid #D1D5DB",
+                  background: "white",
+                  color: "#374151",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                연계 관리 열기 →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 담당자 변경 요청 모달 */}
         {showChangeRequest && (
           <div className="card" style={{ marginBottom: 16, border: "1px solid #FDE68A", background: "#FFFBEB" }}>
