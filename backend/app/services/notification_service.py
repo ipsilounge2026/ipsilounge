@@ -70,6 +70,28 @@ async def send_booking_reminder_notification(user: User, db: AsyncSession):
     )
 
 
+async def send_satisfaction_survey_notification(user: User, db: AsyncSession):
+    """상담 완료 시 만족도 설문 응답 요청 푸시 (기획서 §10)."""
+    await send_push_notification(
+        user=user,
+        title="상담 만족도 설문",
+        body="상담이 완료되었습니다. 서비스 개선을 위해 만족도 설문에 응답해주세요.",
+        notification_type="satisfaction_survey",
+        db=db,
+    )
+
+
+async def send_report_ready_notification(user: User, db: AsyncSession):
+    """사전 설문 분석 리포트가 상담사 검토까지 완료되어 학생 열람 가능해졌을 때 (기획서 §7-1)."""
+    await send_push_notification(
+        user=user,
+        title="분석 리포트 준비 완료",
+        body="사전 설문 분석 리포트가 준비되었습니다. 앱에서 결과를 확인해보세요.",
+        notification_type="report_ready",
+        db=db,
+    )
+
+
 async def send_push_notification_by_token(token: str, title: str, body: str, data: dict = None):
     """FCM 토큰으로 직접 푸시 알림 발송 (DB 기록 없이, 스케줄러용)"""
     try:

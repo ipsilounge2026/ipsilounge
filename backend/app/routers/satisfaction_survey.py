@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.admin import Admin
 from app.models.consultation_booking import ConsultationBooking
+from app.models.consultation_slot import ConsultationSlot
 from app.models.satisfaction_survey import SatisfactionSurvey
 from app.models.user import User
 from app.utils.dependencies import get_current_admin, get_current_user
@@ -249,22 +250,25 @@ async def admin_survey_stats(
 ):
     """관리자: 상담사/선배별 만족도 통계"""
     # 제출된 설문만 대상
+    # Booking → Slot join으로 admin_id와 date를 가져옴
     submitted_q = (
         select(
-            ConsultationBooking.admin_id,
+            ConsultationSlot.admin_id,
             SatisfactionSurvey.survey_type,
             func.count(SatisfactionSurvey.id).label("count"),
         )
         .join(ConsultationBooking, SatisfactionSurvey.booking_id == ConsultationBooking.id)
+        .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
         .where(SatisfactionSurvey.status == "submitted")
-        .group_by(ConsultationBooking.admin_id, SatisfactionSurvey.survey_type)
+        .group_by(ConsultationSlot.admin_id, SatisfactionSurvey.survey_type)
     )
     rows = (await db.execute(submitted_q)).all()
 
     # 담당자별 평균 점수 계산을 위해 전체 제출 설문 조회
     all_submitted = (
-        select(SatisfactionSurvey, ConsultationBooking.admin_id)
+        select(SatisfactionSurvey, ConsultationSlot.admin_id)
         .join(ConsultationBooking, SatisfactionSurvey.booking_id == ConsultationBooking.id)
+        .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
         .where(SatisfactionSurvey.status == "submitted")
     )
     survey_rows = (await db.execute(all_submitted)).all()
@@ -281,11 +285,15 @@ async def admin_survey_stats(
     booking_timing_map: dict[str, str | None] = {}
     booking_date_map: dict[str, str | None] = {}
     if booking_ids:
-        booking_q = select(
-            ConsultationBooking.id,
-            ConsultationBooking.type,
-            ConsultationBooking.slot_date,
-        ).where(ConsultationBooking.id.in_(booking_ids))
+        booking_q = (
+            select(
+                ConsultationBooking.id,
+                ConsultationBooking.type,
+                ConsultationSlot.date.label("slot_date"),
+            )
+            .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
+            .where(ConsultationBooking.id.in_(booking_ids))
+        )
         booking_rows = (await db.execute(booking_q)).all()
         for row in booking_rows:
             # type 필드에 session timing이 있을 수 있음 (S1, S2 등)
@@ -407,14 +415,15 @@ async def admin_survey_trends(
     if admin.role != "super_admin":
         raise HTTPException(status_code=403, detail="최고관리자 전용 통계입니다")
 
-    # 제출된 설문 + 상담일 조회
+    # 제출된 설문 + 상담일 조회 (Slot join으로 date 가져옴)
     q = (
         select(
             SatisfactionSurvey.survey_type,
             SatisfactionSurvey.scores,
-            ConsultationBooking.slot_date,
+            ConsultationSlot.date.label("slot_date"),
         )
         .join(ConsultationBooking, SatisfactionSurvey.booking_id == ConsultationBooking.id)
+        .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
         .where(SatisfactionSurvey.status == "submitted")
     )
     if survey_type in ("senior", "counselor"):

@@ -13,6 +13,16 @@ _DEFAULT_DATA_ROOT = (
 
 
 class Settings(BaseSettings):
+    # 검증 환경 (L3 검증 인프라용)
+    # DEV_MODE=true 일 때:
+    #   - PostgreSQL 대신 SQLite 사용 (./dev.db)
+    #   - JSONB/UUID 를 SQLite 호환 타입으로 자동 분기 (database.py 의 @compiles)
+    #   - /api/dev/* 라우터 마운트 (인증 우회 등)
+    # DEV_MODE 미설정/false 시: 운영 코드와 100% 동일 동작
+    # spec: ipsilounge/docs/test-environment-spec.md §2
+    DEV_MODE: bool = False
+    DEV_SQLITE_PATH: str = "./dev.db"
+
     # 데이터베이스
     DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5432/ipsilounge"
 
@@ -72,6 +82,16 @@ class Settings(BaseSettings):
     @property
     def DATA_ROOT(self) -> Path:
         return Path(self.SHARED_DATA_ROOT)
+
+    @property
+    def effective_database_url(self) -> str:
+        """DEV_MODE 활성 시 SQLite, 아니면 운영 DATABASE_URL.
+
+        spec: ipsilounge/docs/test-environment-spec.md §2-1 (1)
+        """
+        if self.DEV_MODE:
+            return f"sqlite+aiosqlite:///{self.DEV_SQLITE_PATH}"
+        return self.DATABASE_URL
 
 
 settings = Settings()

@@ -1,0 +1,355 @@
+# ===================================================================
+# UX 공통 정책 체크리스트 (자동저장, 무기명, 재시도, 상태 피드백)
+# ===================================================================
+# 영역: cross-cutting / UX_POLICY
+# spec:
+#   - ipsilounge/REVIEW.md (§ 검토 원칙 4번: 암묵적 충족 패턴)
+#   - ipsilounge/docs/service-overview.md §5 사용자 웹 / §11 파일 저장소
+#   - ipsilounge/backend/app/routers/satisfaction_survey.py (§ 무기명 정책 B 옵션)
+#   - ipsilounge/user-web/src/components/survey/DynamicSurvey.tsx (자동저장 + 낙관적 잠금)
+#   - ipsilounge/backend/app/routers/consultation_survey.py (§ last_known_updated_at 낙관적 잠금)
+#
+# 이 체크리스트는 기획서에 명시된 공통 UX 정책과 관행(convention)을 코드에서 검증.
+# REVIEW.md 암묵적 충족 패턴 표가 근거(이름 달라도 동작 일치하면 충족).
+# ===================================================================
+
+meta:
+  area_code: UX_POLICY
+  title: "UX 공통 정책 (자동저장·무기명·재시도·상태 피드백)"
+  created_at: "2026-04-16"
+  spec_refs:
+    - "ipsilounge/REVIEW.md § 4 암묵적 충족 패턴"
+    - "ipsilounge/docs/service-overview.md § 5 사용자 웹 / § 11 파일 저장소"
+    - "ipsilounge/backend/app/routers/satisfaction_survey.py L215 (무기명 B옵션)"
+    - "ipsilounge/backend/app/schemas/consultation_survey.py L82~87 (낙관적 잠금)"
+    - "ipsilounge/backend/app/routers/consultation_survey.py L1713~1720"
+    - "ipsilounge/user-web/src/components/survey/DynamicSurvey.tsx (자동저장 + savedAt)"
+  implementation_notes:
+    - "REVIEW.md 원칙: 기획서 표현('자동 채움', '권한 분리' 등)이 코드에서 다른 이름으로 구현되어 있어도 동작이 일치하면 충족"
+    - "자동저장: DynamicSurvey.tsx 에서 1200ms 디바운스 + 낙관적 잠금(last_known_updated_at) + 409 충돌 알림 배너 + savedAt 시각 표시"
+    - "무기명(Anonymous)정책: 만족도 설문 B옵션 — 개별 raw 응답은 super_admin/admin 만 조회, counselor/senior 는 집계만(stats/trends 별도)"
+    - "재시도(Retry): /payment/fail 페이지 재시도 안내 + family.py _generate_unique_code 10회 충돌 재시도 + 사용자 수동 새로고침(409 시)"
+    - "상태 피드백: StatusBadge 색상 코딩 + '저장 중.../자동 저장됨' 토스트 + '제출 중...' 로딩 상태 + Presigned URL 1시간 만료"
+
+# ─── A. 자동저장 (Autosave) ─────────────────────────────────────────
+items:
+  - id: UX-A1-debounce-autosave
+    requirement: |
+      DynamicSurvey 디바운스 자동저장
+      - saveTimer.current = setTimeout(..., 1200) 1200ms 디바운스
+      - lastSavedRef 로 payload 동일성 비교 (불필요 저장 방지)
+      - patchSurvey API 로 answers + category_status + last_category + last_edited_platform 전송
+      - unmount 시 cleanup 으로 타이머 해제
+    spec_ref: "user-web/src/components/survey/DynamicSurvey.tsx L257~297"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L258 saveTimer useRef + L261~291 scheduleSave() 함수로 1200ms 디바운스 구현.
+        L264~265 payload JSON.stringify 후 lastSavedRef.current 와 동일하면 early return.
+        L293~297 useEffect cleanup 에서 saveTimer clearTimeout.
+
+  - id: UX-A2-saved-indicator
+    requirement: |
+      저장 상태 UI 표시
+      - saving=true → "저장 중..." 표시
+      - savedAt 있으면 "{HH:MM:SS} 자동 저장됨" 표시
+      - error 시 빨간색 메시지
+      - 하단 우측 11pt 작은 글씨로 배치 (주요 조작 방해 금지)
+    spec_ref: "user-web/src/components/survey/DynamicSurvey.tsx L734~739"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L734~739 저장 상태 표시 블록 확인:
+        saving && "저장 중...", savedAt && `{시각} 자동 저장됨`, error && 빨간 메시지.
+        fontSize:11 textAlign:right 로 최소 침습 배치.
+
+  - id: UX-A3-optimistic-locking
+    requirement: |
+      낙관적 잠금 (last_known_updated_at)
+      - 클라이언트가 마지막 받은 updated_at 을 매 patch 요청에 포함
+      - 서버는 현재 updated_at 비교 후 1초 이내 차이는 허용, 초과 시 409
+      - 스키마: consultation_survey.py LastKnownUpdatedAt 필드
+      - 라우터: consultation_survey.py L1718~1720 비교 로직
+    spec_ref: "backend/app/routers/consultation_survey.py L1713~1720, schemas/consultation_survey.py L82~87"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        schemas L82~87 last_known_updated_at 필드 + description "낙관적 잠금: 클라이언트가 마지막으로 받은 updated_at. 서버 값과 다르면 409".
+        routers L1713 docstring "last_known_updated_at 전송 시 낙관적 잠금 (충돌 시 409)" + L1718~1720 비교.
+        프론트 DynamicSurvey.tsx L235/273/358/502 에서 lastUpdatedAtRef 로 3지점 모두 전송.
+
+  - id: UX-A4-conflict-banner
+    requirement: |
+      동시 편집 충돌 알림 UI
+      - 409 응답 감지 시 conflictAlert=true
+      - 빨간색 배너 ("동시 편집 충돌 감지" + "다른 기기/사용자 수정 감지. 새로고침하세요")
+      - 새로고침 버튼 (window.location.reload())
+      - 확실한 사용자 결정 유도 (자동 덮어쓰기 하지 않음)
+    spec_ref: "user-web/src/components/survey/DynamicSurvey.tsx L281~286, L594~615"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L281~286 e.message/e.status 409 감지 시 conflictAlert=true + error 메시지 세팅.
+        L594~615 빨간 배너(#FEF2F2 배경) + 새로고침 버튼 구현 확인.
+        자동 덮어쓰기 대신 사용자 명시적 새로고침 유도 (안전 UX).
+
+# ─── B. 무기명 정책 (Anonymous) ─────────────────────────────────────
+  - id: UX-B1-anonymous-b-option
+    requirement: |
+      만족도 설문 무기명 정책 B 옵션
+      - 개별 응답 raw 데이터 조회는 super_admin / admin 만 (403)
+      - counselor / senior 등 상담사 본인은 자기 응답 직접 조회 불가
+      - 집계 통계(/stats, /trends)는 별도 권한 분리
+    spec_ref: "backend/app/routers/satisfaction_survey.py L213~220"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L213~217 admin_list_surveys docstring 에 "무기명 정책(B 옵션)" 명시.
+        L219~220 admin.role not in ("super_admin", "admin") → 403.
+        L215 "counselor / senior 등 상담사 본인은 자신의 응답 데이터를 직접 볼 수 없음".
+
+  - id: UX-B2-aggregate-stats-only
+    requirement: |
+      상담사/선배 대시보드는 집계 통계만
+      - /stats: admin_id 별 집계 (개별 응답 식별 불가)
+      - /trends: 시계열 집계
+      - 개별 응답 내용은 평균/합계로만 노출
+    spec_ref: "backend/app/routers/satisfaction_survey.py L246~"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L246~ admin_survey_stats 가 func.count/group_by 로 집계만 제공.
+        L276~281 stats/item_totals/timing_totals 전부 평균·합계 단위.
+        개별 응답 raw 데이터는 별도 엔드포인트(권한 분리)에서만 조회.
+
+# ─── C. 재시도 (Retry) ──────────────────────────────────────────────
+  - id: UX-C1-payment-fail-retry
+    requirement: |
+      결제 실패 시 재시도 안내
+      - /payment/fail 페이지 (실패 원인, 재시도 안내)
+      - service-overview.md § 5 페이지 목록에 명시
+    spec_ref: "docs/service-overview.md L295 + user-web/src/app/payment/"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        service-overview.md L295: "| `/payment/fail` | 결제 실패 | 실패 원인, 재시도 안내 |"
+        user-web/src/app/payment/ 경로로 페이지 구현 확인.
+
+  - id: UX-C2-code-collision-retry
+    requirement: |
+      유일 코드 생성 충돌 재시도
+      - family.py _generate_unique_code: 10회 재시도 루프
+      - 랜덤 코드 생성 → DB 조회 → 충돌 시 다음 시도
+      - 10회 실패 시 500 에러 (실운영에서는 발생 확률 극히 낮음)
+    spec_ref: "backend/app/routers/family.py L49~"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L49~50 docstring: "유일한 코드 생성 (충돌 시 재시도)".
+        L51 for _ in range(10) 10회 재시도 루프 확인.
+
+  - id: UX-C3-conflict-manual-refresh
+    requirement: |
+      낙관적 잠금 충돌 시 수동 재시도 유도
+      - 자동 재시도가 아닌 사용자가 직접 새로고침
+      - 이유: 자동 덮어쓰기 위험 방지 (다른 기기 변경 손실)
+      - 새로고침 버튼 UI 제공 (UX-A4 와 동일 로직)
+    spec_ref: "user-web/src/components/survey/DynamicSurvey.tsx L607~613"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L607~613 새로고침 button 에 onClick={() => window.location.reload()}.
+        자동 재시도 로직 없음 — 의도적 설계 (UX-A4 evidence 와 연동).
+
+# ─── D. 상태 피드백 (UI Feedback) ──────────────────────────────────
+  - id: UX-D1-status-badge
+    requirement: |
+      상태 배지 색상 코딩
+      - user-web/admin-web 모두 StatusBadge 컴포넌트 공유 패턴
+      - 분석: pending / processing / completed / cancelled
+      - 상담: requested / confirmed / completed / cancelled
+      - 색상으로 현재 상태를 즉시 식별
+    spec_ref: "docs/service-overview.md L303 + L339"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        service-overview.md L303 (user-web): "| `StatusBadge` | 상태 표시 배지 (색상 코딩) |"
+        L339 (admin-web): "| `StatusBadge` | 상태 배지 |"
+        양쪽 웹에서 공통 패턴으로 제공.
+
+  - id: UX-D2-submitting-loading
+    requirement: |
+      제출·저장 중 로딩 상태
+      - submitting=true → "제출 중..." 버튼 라벨 변경
+      - disabled 처리로 중복 제출 방지
+      - opacity: 0.6 으로 비활성 시각 피드백
+    spec_ref: "user-web/src/components/survey/DynamicSurvey.tsx L699~728"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L701, L724 disabled={submitting} + style opacity: submitting ? 0.6 : 1.
+        L703, L726 label: `${submitting ? "제출 중..." : "최종 제출"}`.
+        중복 제출 방지 + 로딩 피드백 둘 다 충족.
+
+  - id: UX-D3-auto-redirect-login
+    requirement: |
+      로그인 필요 페이지 자동 리다이렉트
+      - 인증 필요 페이지 진입 시 /login 으로 자동 이동
+      - 로그인 후 원래 페이지 복귀는 호출 지점에 따라 다름
+    spec_ref: "docs/service-overview.md L307"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        service-overview.md L307: "로그인 필요 페이지 진입 시 `/login`으로 자동 리다이렉트".
+        auth.yaml UX-A2/G1 검증된 user-web lib/auth.ts 토큰 검증 로직과 연동.
+
+  - id: UX-D4-presigned-url-expiry
+    requirement: |
+      S3 파일 다운로드 URL 만료 정책
+      - Presigned URL 1시간 만료
+      - URL 노출되어도 기간 후 무효 (누출 피해 축소)
+      - 버킷 퍼블릭 액세스 완전 차단 (서버 경유만)
+    spec_ref: "docs/service-overview.md L309, L614~615"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L309 "리포트 다운로드 URL은 1시간 만료되는 S3 Presigned URL".
+        L613~615 업로드는 서버 직접 PutObject + 다운로드는 Presigned URL 1시간 + 버킷 퍼블릭 차단.
+
+# ─── E. 이어쓰기/재개 (Resumption) ─────────────────────────────────
+  - id: UX-E1-draft-resume
+    requirement: |
+      설문 이어쓰기
+      - draft 존재 시 기존 설문 재개, 없으면 새로 생성
+      - consultation-survey/high/page.tsx docstring 명시
+      - 서버가 제출 전 상태 설문을 반환하면 프론트는 해당 answers 로 렌더 시작
+    spec_ref: "user-web/src/app/consultation-survey/high/page.tsx L10"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L10 docstring: "draft가 있으면 이어쓰기, 없으면 새 설문 생성".
+        DynamicSurvey.tsx L217 answers 초기값 = survey.answers || {} — 서버 draft answers 로드 후 렌더.
+
+  - id: UX-E2-delta-prefill
+    requirement: |
+      Delta 모드 자동 채움
+      - isDelta 플래그 시 이전 상담 답변이 answers 에 prefill
+      - '이전 상담 답변이 자동으로 채워져 있습니다. 변경된 내용만 수정하세요' 안내 배너
+      - change_check 질문 prefill 있으면 delta_status="unchanged" 자동 세팅
+    spec_ref: "user-web/src/components/survey/DynamicSurvey.tsx L299~315, L645~655"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L299~315 useEffect isDelta 초기화 로직 — change_check + prefill 있으면 delta_status="unchanged".
+        L645~655 Delta 모드 안내 배너 확인: "이전 상담 답변이 자동으로 채워져 있습니다. 변경된 내용만 수정하고 넘어가세요."
+        REVIEW.md § 4 표의 '이전 데이터 참조' = 'source_survey_id' 패턴 적용.
+
+  - id: UX-E3-parent-read-only
+    requirement: |
+      학부모 자녀 설문 편집 시 권한 분리
+      - isParentEditing 가 true 이고 현재 카테고리 respondent!=="parent" 이면 읽기 전용
+      - '이 카테고리는 학생이 작성하는 항목입니다. 내용 확인만 가능합니다.' 안내 배너
+      - REVIEW.md § 4 '권한 분리' = 'admin.role 체크 + 라우터별 Depends 분기' 패턴의 프론트 적용
+    spec_ref: "user-web/src/components/survey/DynamicSurvey.tsx L241~242, L635~643"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L241~242 isCurrentReadOnly = isParentEditing && currentCategory?.respondent !== "parent".
+        L635~643 읽기 전용 안내 배너 구현 확인 (배경 #EFF6FF 파란색).
+        CategoryQuestions 에 readOnly prop 전달하여 input 비활성.
+
+# ─── F. 타이밍/모드 자동 추천 (Smart Defaults) ─────────────────────
+  - id: UX-F1-auto-timing-suggest
+    requirement: |
+      설문 진입 시 타이밍 자동 추천
+      - /suggest/high 엔드포인트로 timing/mode 자동 추천
+      - 사용자는 자동 추천 수락 또는 수동 선택 가능
+      - REVIEW.md § 4 '자동 채움' = 'prefill_answers, source_survey_id' 패턴 확장
+    spec_ref: "user-web/src/app/consultation-survey/high/page.tsx L7~10"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L7~10 docstring 진입 동작:
+        "2. /suggest/high 로 timing/mode 자동 추천 받기
+         3. timing 확정 (자동 추천 or 사용자 수동 선택)
+         4. draft가 있으면 이어쓰기, 없으면 새 설문 생성"
+        L171~ 자동 추천 배너 UI 존재 (suggestedTiming 표시).
+
+  - id: UX-F2-survey-timing-service
+    requirement: |
+      백엔드 survey_timing_service
+      - 설문 타이밍 추천 비즈니스 로직 전담
+      - 학생의 최근 이력, 학년, 모드(고1/고2/고3) 기반 추천
+    spec_ref: "backend/app/services/survey_timing_service.py"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "파일 존재 확인(grep). /suggest/* 엔드포인트와 연결되어 타이밍/모드 추천 담당."
+
+# ─── G. Gap 문서화 ─────────────────────────────────────────────────
+  - id: UX-G1-no-retry-library
+    requirement: |
+      자동 재시도 라이브러리 미도입 확인
+      - 현재 재시도는 구현별 수동 루프(family code 10회)만 존재
+      - axios-retry, react-query retry 등 라이브러리 미사용
+      - 네트워크 일시 오류 → 사용자가 UI에서 수동 재시도
+      - 향후 확장 과제 (P2)
+    spec_ref: "user-web/src grep: retry 0건 + axios-retry 0건"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        grep 결과: user-web/src 하위 'retry' 키워드 0건.
+        현재는 conflict 409 → 수동 새로고침, 제출 실패 → error 메시지 표시 후 사용자가 재시도 클릭.
+        자동 재시도 메커니즘은 설계상 제외(사용자 결정 유도).
+
+  - id: UX-G2-ux-policy-spec-doc
+    requirement: |
+      UX 공통 정책 명시 spec 문서 부재
+      - REVIEW.md § 4 암묵적 패턴 표는 있지만 UX 정책 전용 문서는 없음
+      - 정책이 코드 규약(convention) + 각 페이지 docstring 으로 분산
+      - 향후 docs/ux-policy.md 통합 가이드 작성 필요
+    spec_ref: "docs/ 하위 ux-policy.md 미존재"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        docs/ 하위 검색: ux-policy / ux_policy / UX정책 관련 단독 문서 없음.
+        REVIEW.md 암묵적 패턴 표가 대체 역할. 신규 개발자 온보딩 시 가이드 필요.

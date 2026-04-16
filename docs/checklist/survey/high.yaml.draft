@@ -1,0 +1,1193 @@
+# ===================================================================
+# 고등학교 설문 (high.json) 체크리스트 — 자동 추출 후보 (.draft)
+# ===================================================================
+# ⚠️ 이 파일은 자동 추출된 검토 대기용 후보입니다.
+# 사용자 검토 후 정식 high.yaml 로 승격 필요.
+#
+# 생성일: 2026-04-15
+# 출처: ipsilounge/backend/app/surveys/schemas/high.json
+#        (sha256: 6190113239... 시점 — _index.yaml 참조)
+#
+# 추출 규칙:
+#   - high.json 의 모든 category.questions 를 enumerate
+#   - type 별 behavior_test 템플릿 적용
+#   - auto_calculated / derived 질문은 aspect=auto_calculate + needs_user_decision=true
+#   - 이미 high.yaml 에 존재하는 3개 샘플(A4/B1/B5)은 중복 포함하지 않음
+#     → 파일 끝 주석 참조
+# ===================================================================
+
+meta:
+  area_code: HIGH
+  title: "고등학교 설문 (high.json) — 자동 추출 후보"
+  schema_ref: "../_schema.yaml"
+  index_ref: "../_index.yaml"
+  source_specs:
+    - "ipsilounge/backend/app/surveys/schemas/high.json"
+  generated_at: "2026-04-15"
+  generated_by: "auto-enumeration (claude agent)"
+  notes: |
+    이 .draft 는 승격 전 검토용 후보 모음.
+    정식 yaml 로 승격 시:
+      1. priority 재조정 (현재 전부 P0)
+      2. check_method 타당성 검토
+      3. behavior_test 상세화 (현재 type 템플릿 기반 추상 서술)
+      4. needs_user_decision 항목은 해석 확정 후 blocked → 정상 상태로 전환
+
+items:
+
+  # ============================================================
+  # 카테고리 A · 기본 정보
+  # ============================================================
+
+  - id: HIGH-A-A1-input
+    category: A
+    question_id: A1
+    aspect: input
+    requirement: |
+      A1 (학생 이름) 질문이 화면에 렌더되고, 사용자가 text 입력으로
+      이름을 입력하면 응답 객체에 A1=문자열로 저장된다. required=true.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category A.questions[id=A1]"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "질문 가시화 / 텍스트 입력 → 응답 객체 저장 / required 시 빈 값 검증 동작"
+      - "placeholder '예: 홍길동' 표시"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-A-A2-input
+    category: A
+    question_id: A2
+    aspect: input
+    requirement: |
+      A2 (재학 고등학교) 질문이 화면에 렌더되고, 사용자가 text 입력으로
+      학교명을 입력하면 응답 객체에 A2=문자열로 저장된다. required=true.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category A.questions[id=A2]"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "질문 가시화 / 텍스트 입력 → 응답 객체 저장 / required 시 빈 값 검증 동작"
+      - "placeholder '예: 휘문고등학교' 표시"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-A-A3-input
+    category: A
+    question_id: A3
+    aspect: input
+    requirement: |
+      A3 (학교 유형) 질문이 화면에 렌더되고, 사용자가 일반고/자사고/특목고/기타
+      중 하나를 radio 로 선택하면 응답 객체에 A3=선택값으로 저장된다. required=true.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category A.questions[id=A3]"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "옵션 모두 렌더 / 선택 시 응답 저장 / required 검증"
+      - "옵션: 일반고 / 자사고 / 특목고 / 기타 4개 표시"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-A-A5-input
+    category: A
+    question_id: A5
+    aspect: input
+    requirement: |
+      A5 (계열) 질문이 화면에 렌더되고, 사용자가 인문/자연/예체능/미정 중
+      하나를 radio 로 선택하면 응답 저장. '미정' 옵션은 A4=T1 일 때만 노출됨.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category A.questions[id=A5]"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "옵션 모두 렌더 / 선택 시 응답 저장 / required 검증"
+      - "A4=T1 시 '미정' 옵션 노출, 그 외엔 숨김 (available_when 분기)"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-A-A6-input
+    category: A
+    question_id: A6
+    aspect: input
+    requirement: |
+      A6 (학교 한 학년 학생 수) 질문이 화면에 렌더되고, 사용자가 ~200명 /
+      200~300명 / 300~400명 / 400명 이상 중 하나를 radio 로 선택하면 응답 저장.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category A.questions[id=A6]"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "옵션 모두 렌더 / 선택 시 응답 저장 / required 검증"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  # ============================================================
+  # 카테고리 B · 내신 성적
+  # (B1_B4 = school_grade_matrix, B5 = auto_calculated 는 정식 yaml 의
+  #  HIGH-B-B1-matrix / HIGH-B-B5-calculate 샘플로 이미 존재 — 중복 제외)
+  # ============================================================
+
+  # (이 카테고리는 현재 질문이 2개뿐이며 모두 샘플로 다뤄짐)
+
+  # ============================================================
+  # 카테고리 C · 모의고사 성적
+  # ============================================================
+
+  - id: HIGH-C-C1-grid
+    category: C
+    question_id: C1
+    aspect: render+input
+    requirement: |
+      C1 (모의고사 성적) 질문이 MockExamSessionGrid 로 렌더되고,
+      A4 응답 기반 resolved_sessions (mock_exam_generation_rules[A4]) 만큼
+      회차가 자동 생성된다. 각 회차마다 국어/수학/영어/탐구1/탐구2 영역별로
+      등급·원점수·백분위를 입력한다. 영어는 절대평가로 백분위 없음.
+      탐구1/탐구2 는 with_subject_name=true 로 과목명 입력 필요.
+      absent_option=true 로 미응시 회차 토글 가능.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category C.questions[id=C1] (type=mock_exam_session_grid)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "A4 기반 resolved_sessions 산출 / 회차×영역 그리드 렌더"
+      - "영역별 입력 (등급 select 1~9, 원점수 number 0~100, 백분위 number 0~100)"
+      - "영어 영역에는 백분위 필드 없음 (절대평가 note 반영)"
+      - "탐구1/탐구2 영역에 subject_name 입력 필드 노출"
+      - "미응시 토글 시 해당 회차 모든 필드 비활성화"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-C-C2-weak_type
+    category: C
+    question_id: C2
+    aspect: render+input
+    requirement: |
+      C2 (영역 내 취약 유형 자가진단) 질문이 weak_type_per_subject 위젯으로
+      렌더되고, 국어/수학/영어/탐구 4개 과목 각각에 대해 취약 유형 옵션을
+      복수 선택할 수 있다. 응답 객체는 과목 키로 저장된다.
+      수학의 '특정 단원' 선택 시 단원명 text 입력 필드가 노출된다.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category C.questions[id=C2] (type=weak_type_per_subject)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "과목별 취약 유형 입력 가능 / 응답 객체에 과목 키로 저장"
+      - "수학에 '특정 단원' 선택 시 with_text 단원명 입력 필드 노출"
+      - "복수 선택 가능 (checkbox 형태)"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-C-C2_1-input
+    category: C
+    question_id: C2_1
+    aspect: input
+    requirement: |
+      C2_1 (모의고사 시험 전략) 질문이 composite 필드로 렌더되고, T3·T4 에서만
+      활성화된다. time_management(radio), solving_order(composite: has_order
+      radio + order_detail text) 하위 필드가 각각 렌더·입력 저장된다.
+      '있음' 선택 시에만 order_detail 필드가 show_when 으로 노출.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category C.questions[id=C2_1] (type=composite, timings=[T3,T4])"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "A4=T1/T2 인 경우 질문 자체 비활성화 (timings 필터)"
+      - "solving_order.has_order='있음' 선택 시에만 order_detail text 필드 노출"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-C-C3-calculate
+    category: C
+    question_id: C3
+    aspect: auto_calculate
+    requirement: |
+      C3 (모의고사 추이) 는 C1 입력 후 자동 산출. 영역별 등급 추이,
+      전 영역 평균 등급, 취약 영역 자동 식별(평균 대비 2등급+ 낮은 영역),
+      영어 절대평가 원점수 추이(90점 기준선), 주요 영역 백분위 추이 등 5개
+      calculation 이 제공되어야 한다. 산출 시점이 명시되지 않음 → 사용자 결정 필요.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category C.questions[id=C3] (type=auto_calculated)"
+    priority: P0
+    check_method: unit_test
+    needs_user_decision: true
+    interpretation_question: |
+      C3 자동산출 시점을 어느 쪽으로 정의할 것인가:
+        (a) 실시간 — C1 셀 변경마다 즉시 재계산하여 그래프 갱신
+        (b) 제출시점 1회 — 설문 제출 직전에 backend 가 계산
+        (c) 양쪽 모두 — frontend 미리보기 + backend 최종 확정
+      결정에 따라 behavior_test 와 시스템별 검증 범위가 달라짐.
+    user_decision: ""
+    behavior_test: []
+    backend:
+      status: blocked
+      blocked_by: "needs_user_decision (C3 산출 시점)"
+    user_web:
+      status: blocked
+      blocked_by: "needs_user_decision (C3 산출 시점)"
+    mobile:
+      status: blocked
+      blocked_by: "needs_user_decision (C3 산출 시점)"
+    admin_web:
+      status: na
+      reason: "관리자 화면에서 산출 책임 없음"
+
+  - id: HIGH-C-C4-info_only
+    category: C
+    question_id: C4
+    aspect: render+input
+    requirement: |
+      C4 (내신 vs 모의고사 비교) 는 type=info_only / shown_in_student_form=false
+      로 학생 설문 UI 에는 노출되지 않는다. respondent=system_and_counselor 이며
+      데이터는 시스템이 자동 정리, 유형 판정과 전형 추천은 상담사가 별도 입력.
+      학생 폼에서 렌더되지 않음을 검증해야 함.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category C.questions[id=C4] (type=info_only, shown_in_student_form=false)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "학생 설문 C 카테고리 진입 시 C4 질문 DOM 에 렌더되지 않아야 함"
+      - "관리자/상담사 전용 UI 에서만 노출 (존재 시)"
+      - "type=info_only 위젯 자체가 미정의인 경우 프론트 분기가 오류 없이 스킵되는지 확인"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "현재 관리자 화면에 본 질문 노출 UI 미존재 (기획서상 상담사 입력이나 구현 여부 별도 확인 필요)"
+
+  # ============================================================
+  # 카테고리 D · 학습 현황 & 심리
+  # ============================================================
+
+  - id: HIGH-D-D1-input
+    category: D
+    question_id: D1
+    aspect: render+input
+    requirement: |
+      D1 (일주일 학습 스케줄) composite 질문이 렌더되고, 하위에 weekly_schedule
+      위젯(요일×카테고리[학원수업/학원과제/자기주도]×과목·시간),
+      naesin_suneung_ratio(radio), suneung_status(radio),
+      suneung_methods(checkboxes) 4개 필드가 입력 가능. weekly_schedule 은
+      auto_calculations(주간 총 학습 시간, 비율, 과목 밸런스 지수 등)이 연동됨.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category D.questions[id=D1] (type=composite, weekly_schedule 포함)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "weekly_schedule 7일 × 3카테고리 그리드 렌더, 과목 select + 시간 number(0~24, step 0.5) 입력"
+      - "auto_calculations 값(주간 총 학습 시간 등)이 입력값 변화 시 갱신되는지 확인"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-D-D2-input
+    category: D
+    question_id: D2
+    aspect: input
+    requirement: |
+      D2 (학습 계획 및 실행력) composite 질문이 렌더되고, plan_execution(slider
+      1~10), test_prep_start(radio), subject_plan_detail(radio),
+      study_materials(checkboxes), past_exam_usage(radio) 5개 필드가 입력 저장.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category D.questions[id=D2] (type=composite)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "slider 1~10 범위 동작, radio·checkboxes 옵션 전체 노출"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-D-D3-input
+    category: D
+    question_id: D3
+    aspect: input
+    requirement: |
+      D3 (오답 관리 습관) composite 질문이 렌더되고, method(checkboxes),
+      review_frequency(radio), review_method(checkboxes) 3개 하위 필드가
+      입력 저장된다.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category D.questions[id=D3] (type=composite)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "method / review_method 는 다중 선택 가능"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-D-D4-input
+    category: D
+    question_id: D4
+    aspect: input
+    requirement: |
+      D4 (모르는 문제 해결 방법) checkboxes 질문이 렌더되고, 10개 옵션
+      (혼자 고민 / 답안지 확인 / 개념서 / 인터넷 / AI 도구 / 학원 선생님 /
+      학교 선생님 / 친구 / 부모님 / 그냥 넘어감) 중 복수 선택 후 응답에 배열로 저장.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category D.questions[id=D4] (type=checkboxes)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "다중 선택 가능 / 응답에 배열로 저장 / min/max 제약 동작"
+      - "옵션 10개 모두 노출"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-D-D5-input
+    category: D
+    question_id: D5
+    aspect: input
+    requirement: |
+      D5 (집중력이 가장 좋은 시간대) radio 질문이 렌더되고, 아침/오후/저녁/밤/
+      일정하지 않음 중 하나를 선택하여 응답 저장.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category D.questions[id=D5] (type=radio)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "옵션 모두 렌더 / 선택 시 응답 저장 / required 검증"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-D-D6-input
+    category: D
+    question_id: D6
+    aspect: render+input
+    requirement: |
+      D6 (과목별 학습 고민) composite 질문이 렌더되고, weakest(subject_pick,
+      상위 2개), weakest_reason(checkboxes), strongest(subject_pick, 상위 2개)
+      3개 하위 필드가 입력 저장. D6.weakest 값은 D7 의 extra_subjects_from
+      참조로 D7 활성 과목에 영향을 준다 (drives=activate_extra_subjects_in_D7).
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category D.questions[id=D6] (type=composite)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "subject_pick 최대 2개 선택 제약 동작 (max_picks=2)"
+      - "D6.weakest 변경 시 D7 의 활성 과목 리스트가 갱신됨"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-D-D7-panel
+    category: D
+    question_id: D7
+    aspect: render+input
+    requirement: |
+      D7 (과목별 학습 방법) subject_study_method_panel 위젯이 렌더되고,
+      default_subjects=국어/수학/영어 3과목은 항상 활성, D6.weakest 기반
+      추가 과목이 동적으로 활성화된다. 과목마다 study_method(checkboxes),
+      class_engagement(radio), main_textbook(text), lecture(composite:
+      status + instructor_platform text), satisfaction(radio) 5개 하위 질문이
+      노출된다. lecture.status='듣고있음' 일 때만 instructor_platform 필드 노출.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category D.questions[id=D7] (type=subject_study_method_panel)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "위젯 렌더 / 입력 → 응답 저장 (type=subject_study_method_panel)"
+      - "국어·수학·영어 기본 3과목 항상 활성"
+      - "D6.weakest 값이 포함한 과목이 추가로 활성화됨"
+      - "과목마다 5개 하위 질문(study_method/class_engagement/main_textbook/lecture/satisfaction) 렌더"
+      - "lecture.status='듣고있음' 선택 시 instructor_platform text 필드 노출 (show_when)"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-D-D8-input
+    category: D
+    question_id: D8
+    aspect: input
+    requirement: |
+      D8 (학습 심리 및 컨디션 진단) composite 질문이 렌더되고,
+      test_anxiety(radio), motivation(radio), study_load(radio),
+      subject_giveup(composite: has_giveup radio + subject_name text),
+      sleep_hours(radio) 5개 하위 필드가 입력 저장. has_giveup='고민중' 일 때만
+      subject_name 노출.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category D.questions[id=D8] (type=composite)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "subject_giveup.has_giveup='고민중' 선택 시에만 subject_name text 필드 노출"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  # ============================================================
+  # 카테고리 E · 진로 & 대입 전략
+  # ============================================================
+
+  - id: HIGH-E-E1-input
+    category: E
+    question_id: E1
+    aspect: render+input
+    requirement: |
+      E1 (희망 진로) career_select 위젯이 렌더되고, 10개 상위 카테고리
+      (인문·어문 / 사회·법 / 상경·경영 / 교육 / 자연과학 / 공학·IT / 의약·보건 /
+      예술·체육 / 기타 / 탐색 중) 각각에 subcategories 가 노출되어 복수 선택
+      가능. required=false (탐색 중 허용). 각 카테고리에는 mapped_track 정보 포함.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category E.questions[id=E1] (type=career_select)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "위젯 렌더 / 입력 → 응답 저장 (type=career_select)"
+      - "10개 상위 카테고리 + 각 subcategory 모두 노출"
+      - "복수 선택 가능 / '탐색 중' 선택 시 subcategories 없음"
+      - "선택값 저장 시 mapped_track 정보가 함께 전달되는지 확인 (기획 의도)"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-E-E2-input
+    category: E
+    question_id: E2
+    aspect: input
+    requirement: |
+      E2 (목표 대학·학과) composite 질문이 렌더되고, target_level(radio:
+      최상위 SKY / 상위 인서울 주요 / 인서울 / 수도권 / 지방거점 / 미정),
+      target_universities(text_list, max_items=3) 2개 하위 필드가 입력 저장.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category E.questions[id=E2] (type=composite)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "target_universities 최대 3개 까지만 추가 가능"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-E-E3-input
+    category: E
+    question_id: E3
+    aspect: input
+    requirement: |
+      E3 (대입 전형 전략) composite 질문이 렌더되고, understanding(slider 1~10),
+      main_track(radio: 수시/정시/미정) 2개 하위 필드가 입력 저장.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category E.questions[id=E3] (type=composite)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "slider 1~10 범위 / radio 3개 옵션 노출"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-E-E4-input
+    category: E
+    question_id: E4
+    aspect: input
+    requirement: |
+      E4 (수능 최저학력기준 대비) composite 질문이 렌더되고, T2 이후 시점에서만
+      활성화. awareness(radio), feasibility(radio),
+      focus_areas(checkboxes: 국어/수학/영어/탐구1/탐구2) 3개 하위 필드가 입력 저장.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category E.questions[id=E4] (type=composite, timings=[T2,T3,T4])"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "A4=T1 인 경우 질문 자체 비활성화 (timings 필터)"
+      - "focus_areas 다중 선택 가능"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-E-E5-input
+    category: E
+    question_id: E5
+    aspect: input
+    requirement: |
+      E5 (선택과목 전략) composite 질문이 렌더되고, T2 이후 시점에서만 활성화.
+      next_courses(text_list, max_items=10), recommended_check(radio) 2개
+      하위 필드가 입력 저장.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category E.questions[id=E5] (type=composite, timings=[T2,T3,T4])"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "A4=T1 인 경우 질문 자체 비활성화 (timings 필터)"
+      - "next_courses 최대 10개까지 추가 가능"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-E-E6-input
+    category: E
+    question_id: E6
+    aspect: input
+    requirement: |
+      E6 (학습 우선순위) rank 위젯이 렌더되고, 5개 옵션(내신등급관리/
+      수능모의고사대비/취약과목집중/선택과목전략/내신수능균형) 중 상위 3개에
+      순위를 부여하여 응답 저장 (max_picks=3).
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category E.questions[id=E6] (type=rank)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "위젯 렌더 / 입력 → 응답 저장 (type=rank)"
+      - "상위 3개까지만 순위 부여 가능 (max_picks=3)"
+      - "옵션별 description 표시"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  # ============================================================
+  # 카테고리 F · 학부모 관점 (선택, respondent=parent)
+  # ============================================================
+
+  - id: HIGH-F-F1-input
+    category: F
+    question_id: F1
+    aspect: input
+    requirement: |
+      F1 (현재 가장 걱정되는 점) textarea 질문이 렌더되고 (max_length=1000,
+      rows=4), 학부모 입력 시 응답 저장. required=false.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category F.questions[id=F1] (type=textarea, respondent=parent)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "질문 가시화 / 텍스트 입력 → 응답 객체 저장 / required 시 빈 값 검증 동작"
+      - "max_length=1000 제약 동작"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-F-F2-input
+    category: F
+    question_id: F2
+    aspect: input
+    requirement: |
+      F2 (자녀의 학습 상황 파악 수준) radio 질문이 렌더되고, 거의 모름 / 대략
+      알고 있음 / 구체적으로 파악 3개 옵션 중 하나 선택. required=false.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category F.questions[id=F2] (type=radio, respondent=parent)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "옵션 모두 렌더 / 선택 시 응답 저장 / required 검증"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-F-F3-input
+    category: F
+    question_id: F3
+    aspect: input
+    requirement: |
+      F3 (자녀와 학습·진로에 대해 대화 빈도) radio 질문이 렌더되고, 거의 안 함 /
+      가끔 / 자주 3개 옵션 중 하나 선택. required=false.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category F.questions[id=F3] (type=radio, respondent=parent)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "옵션 모두 렌더 / 선택 시 응답 저장 / required 검증"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-F-F4-input
+    category: F
+    question_id: F4
+    aspect: input
+    requirement: |
+      F4 (자녀의 학습 관리 방식) checkboxes 질문이 렌더되고, 자녀에게 맡김 /
+      학원 위탁 / 직접 관리 / 전문 컨설팅 중 복수 선택하여 배열 저장.
+      required=false.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category F.questions[id=F4] (type=checkboxes, respondent=parent)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "다중 선택 가능 / 응답에 배열로 저장 / min/max 제약 동작"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-F-F5-input
+    category: F
+    question_id: F5
+    aspect: input
+    requirement: |
+      F5 (학원/과외 변경 계획) radio 질문이 렌더되고, 현행 유지 / 확대 / 축소 /
+      자기주도 전환 4개 옵션 중 하나 선택. required=false.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category F.questions[id=F5] (type=radio, respondent=parent)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "옵션 모두 렌더 / 선택 시 응답 저장 / required 검증"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-F-F6-input
+    category: F
+    question_id: F6
+    aspect: input
+    requirement: |
+      F6 (상담에서 가장 알고 싶은 것) textarea 질문이 렌더되고 (max_length=1000,
+      rows=4), 학부모 입력 시 응답 저장. required=false.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category F.questions[id=F6] (type=textarea, respondent=parent)"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "질문 가시화 / 텍스트 입력 → 응답 객체 저장 / required 시 빈 값 검증 동작"
+      - "max_length=1000 제약 동작"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  # ============================================================
+  # 카테고리 G · T4 전용 — 고3 진입 준비 (timings=[T4])
+  # ============================================================
+
+  - id: HIGH-G-G1-input
+    category: G
+    question_id: G1
+    aspect: input
+    requirement: |
+      G1 (고3 각오·준비도) composite 질문이 렌더되고, T4 에서만 활성화.
+      mindset(radio), stamina(radio), regret(textarea max_length=500),
+      achievement(textarea max_length=500) 4개 하위 필드가 입력 저장.
+      regret 과 achievement 는 required=false.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category G.questions[id=G1] (type=composite, category timings=[T4])"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "A4=T1/T2/T3 인 경우 G 카테고리 전체 비활성화"
+      - "textarea max_length=500 제약 동작"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-G-G2-input
+    category: G
+    question_id: G2
+    aspect: input
+    requirement: |
+      G2 (고3 학습 스케줄 구상) composite 질문이 렌더되고, T4 에서만 활성화.
+      plan_specificity(radio), naesin_suneung_ratio(radio),
+      subject_strategy(composite: 국어/수학/영어 각각에 대해 내신 대비 textarea
+      + 수능 대비 textarea 6개 필드, max_length=300) 하위 필드가 입력 저장.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category G.questions[id=G2] (type=composite, category timings=[T4])"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "subject_strategy 하위 6개 textarea (국/수/영 × 내신/수능) 모두 렌더"
+      - "A4=T1/T2/T3 인 경우 비활성화"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+  - id: HIGH-G-G3-input
+    category: G
+    question_id: G3
+    aspect: input
+    requirement: |
+      G3 (전형 선택 확정 여부) composite 질문이 렌더되고, T4 에서만 활성화.
+      decision(radio: 수시/정시/고민중), decision_basis(textarea, max_length=500),
+      target_line(radio: 최상위/상위권/중상위권/중위권/아직모름) 3개 하위 필드가
+      입력 저장. decision_basis 는 required=false.
+    spec_ref:
+      file: "ipsilounge/backend/app/surveys/schemas/high.json"
+      section: "category G.questions[id=G3] (type=composite, category timings=[T4])"
+    priority: P0
+    check_method: preview_mcp
+    behavior_test:
+      - "하위 필드 모두 렌더 / 각 필드 입력 → 객체로 저장"
+      - "A4=T1/T2/T3 인 경우 비활성화"
+      - "decision_basis textarea max_length=500 제약 동작"
+    backend:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    user_web:
+      status: unverified
+      L1: { evidence: "" }
+      L2: { evidence: "" }
+      L3: { evidence: "" }
+    mobile:
+      status: unverified
+      note: "Flutter 미구현 영역 추정, 실제 확인 필요"
+    admin_web:
+      status: na
+      reason: "관리자 화면에는 학생 설문 입력 UI 없음"
+
+# ===================================================================
+# 이미 정식 high.yaml 에 존재하는 3개 샘플 (중복 포함하지 않음):
+#   - HIGH-A-A4-input       (A4 · radio · 상담 시점)
+#   - HIGH-B-B1-matrix      (B1_B4 · school_grade_matrix · 학기별 교과 성적)
+#   - HIGH-B-B5-calculate   (B5 · auto_calculated · 내신 추이, needs_user_decision)
+#
+# 승격 절차:
+#   1. 이 .draft 파일의 각 항목을 사용자가 검토
+#   2. priority / check_method / behavior_test 상세화
+#   3. needs_user_decision 항목은 해석 확정
+#   4. 정식 high.yaml 의 items: 블록에 병합
+#   5. .draft 파일 삭제 또는 빈 상태로 유지
+# ===================================================================

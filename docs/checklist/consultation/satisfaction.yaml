@@ -1,0 +1,187 @@
+# ===================================================================
+# 상담 후 만족도 설문 체크리스트
+# ===================================================================
+# spec: ipsilounge/backend/app/routers/satisfaction_survey.py (하드코딩 문항)
+#       ipsilounge/user-web/src/app/satisfaction-survey/page.tsx (프론트엔드)
+#       ipsilounge/backend/app/routers/admin_consultation.py (_trigger_satisfaction_survey)
+# 범위: 설문 스키마 · 페이지 렌더링 · 자동저장 · 제출 · 완료 · 관리자 API
+# ===================================================================
+
+meta:
+  area_code: SATISFACTION
+  title: "상담 후 만족도 설문"
+  created_at: "2026-04-16"
+  spec_refs:
+    - "ipsilounge/backend/app/routers/satisfaction_survey.py"
+    - "ipsilounge/user-web/src/app/satisfaction-survey/page.tsx"
+    - "ipsilounge/backend/app/routers/admin_consultation.py §_trigger_satisfaction_survey"
+  survey_structure:
+    common: "S1(전반만족도) S2(이해도) S3(분위기) S4(실행가능성) S5(재이용의향)"
+    counselor_only: "C1(데이터분석) C2(전략구체성) C3(진로조언)"
+    senior_only: "M1(경험공유) M2(경청공감) M3(실전정보)"
+    free_text: "F1(도움된부분,선택) F2(개선의견,선택)"
+    scale: "1~10"
+    status_flow: "pending → submitted"
+  bugs_fixed_during_verification:
+    - "page.tsx: schema.questions → common_items+type_items+free_text_items 변환 누락 수정"
+    - "page.tsx: draft 매칭 status='draft' → 'pending' 으로 수정 (백엔드는 pending 사용)"
+
+# ─── A. 스키마 & 문항 구조 ──────────────────────────────────────
+items:
+  - id: SAT-A1-schema_counselor
+    requirement: |
+      GET /api/satisfaction-surveys/schema?survey_type=counselor 호출 시
+      common(S1~S5) + counselor(C1~C3) + free_text(F1~F2) = 10개 문항 반환.
+      scale 문항은 common_items/type_items, free_text는 free_text_items.
+    spec_ref: "satisfaction_survey.py L40~90, get_schema()"
+    priority: P0
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "API 호출 → common_items 5개(S1~S5) + type_items 3개(C1~C3) + free_text_items 2개(F1~F2) = 10개. 프론트 렌더 확인: 8개 scale + 2개 textarea"
+
+  - id: SAT-A2-schema_senior
+    requirement: |
+      GET /api/satisfaction-surveys/schema?survey_type=senior 호출 시
+      common(S1~S5) + senior(M1~M3) + free_text(F1~F2) = 10개 문항 반환.
+    spec_ref: "satisfaction_survey.py L40~90, get_schema()"
+    priority: P0
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "type=senior 페이지: '선배 상담 만족도' 배지 + M1(경험담)/M2(경청)/M3(실전정보) 렌더. counselor 문항(C1~C3) 미표시. scaleGroupCount=8"
+
+  # ─── B. 페이지 렌더링 ──────────────────────────────────────────
+  - id: SAT-B1-page_header
+    requirement: |
+      /satisfaction-survey 진입 시:
+      - '만족도 설문' 타이틀 표시
+      - type badge ('선배 상담 만족도' 또는 '상담 만족도')
+      - 🔒 '응답자 정보는 상담사에게 노출되지 않습니다' 개인정보 안내
+    spec_ref: "satisfaction-survey/page.tsx L271~305"
+    priority: P0
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "counselor: '만족도 설문' h1 + '상담 만족도' 배지 + '🔒 응답자 정보는 상담사에게 노출되지 않습니다'. senior: '선배 상담 만족도' 배지 + '선배 상담에 대한 만족도를 평가해주세요' 설명"
+
+  - id: SAT-B2-scale_questions
+    requirement: |
+      scale 문항: 1~10 원형 버튼 렌더. 선택 시 보라색(#7C3AED) 활성.
+      하단 힌트: '매우 불만족' / '보통' / '매우 만족'.
+      required 문항에 * 마크 표시.
+    spec_ref: "satisfaction-survey/page.tsx L165~214, SCORE_HINTS"
+    priority: P0
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "8개 scale 문항 각각 1~10 버튼 렌더. 클릭 시 보라색 활성(background:#7C3AED). 힌트 '매우 불만족'/'보통'/'매우 만족'. requiredMarkerCount=8 (* 마크 8개)"
+
+  - id: SAT-B3-textarea_questions
+    requirement: |
+      textarea 문항 (F1, F2): placeholder '자유롭게 작성해주세요',
+      maxLength 500자, 0/500자 카운터 표시.
+      optional(required=false) 문항은 * 마크 없음.
+    spec_ref: "satisfaction-survey/page.tsx L216~245"
+    priority: P1
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "textarea 2개: placeholder='자유롭게 작성해주세요', maxLength=500, '/500자' 카운터 표시. freeTextLabels에 hasRequiredMark=false 확인"
+
+  # ─── C. 저장 & 복원 ────────────────────────────────────────────
+  - id: SAT-C1-draft_restore
+    requirement: |
+      페이지 로드 시 listSatisfactionSurveys()로 기존 설문 조회.
+      status="pending" 설문의 scores/free_text 복원 및 surveyId 설정.
+    spec_ref: "satisfaction-survey/page.tsx L66~89"
+    priority: P1
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "버그 수정 후(draft→pending 매칭) 페이지 로드 시 pending 설문 발견 → surveyId 설정 → auto-save 및 submit 정상 동작. 기존 scores/free_text 복원 로직 확인"
+      note: "원래 status='draft' 매칭이었으나 백엔드가 'pending' 사용 → 수정 후 pass"
+
+  - id: SAT-C2-auto_save
+    requirement: |
+      점수/텍스트 변경 시 1.5초 디바운스 자동저장.
+      PATCH /api/satisfaction-surveys/{id} 호출. status="pending"만 수정 가능.
+    spec_ref: "satisfaction-survey/page.tsx L93~112, satisfaction_survey.py L131~155"
+    priority: P1
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "PATCH API 직접 호출 200 OK → scores 8개 저장 확인. 백엔드: status!='pending' 시 400 반환. 프론트 scheduleAutoSave 1500ms setTimeout 구현 확인"
+
+  # ─── D. 제출 & 완료 ────────────────────────────────────────────
+  - id: SAT-D1-validation
+    requirement: |
+      required scale 문항 미선택 시 '"{label}" 항목에 점수를 선택해주세요' 에러.
+      required textarea 미입력 시 '"{label}" 항목을 입력해주세요' 에러.
+      에러 표시: 빨간색 텍스트.
+    spec_ref: "satisfaction-survey/page.tsx L130~147"
+    priority: P0
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "미입력 상태에서 '설문 제출' 클릭 → '"오늘 상담에 대한 전반적인 만족도는?" 항목에 점수를 선택해주세요.' 빨간색 에러 표시"
+
+  - id: SAT-D2-submit_flow
+    requirement: |
+      '설문 제출' 버튼 → PATCH(저장) → POST submit → step="done".
+      제출 중 버튼 비활성 + '제출 중...' 텍스트.
+      서버: 필수 키 S1~S5 + 타입별 키 전부 1~10 범위 검증.
+    spec_ref: "satisfaction-survey/page.tsx L130~161, satisfaction_survey.py L158~200"
+    priority: P0
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "PATCH 200(scores 8개 저장) → POST submit 200 → status='submitted', submitted_at 기록. scores={S1:8,S2:9,S3:7,S4:8,S5:9,C1:8,C2:7,C3:9}. 프론트 step='done' 전환"
+
+  - id: SAT-D3-done_ui
+    requirement: |
+      제출 완료 시: ✓ 아이콘 + '설문이 제출되었습니다' +
+      '소중한 의견 감사합니다' + '마이페이지로 이동' 버튼.
+    spec_ref: "satisfaction-survey/page.tsx L337~362"
+    priority: P1
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "snapshot: ✓ + '설문이 제출되었습니다' h2 + '소중한 의견 감사합니다. 더 나은 서비스를 위해 노력하겠습니다.' + '마이페이지로 이동' 버튼"
+
+  # ─── E. 트리거 & 관리자 ────────────────────────────────────────
+  - id: SAT-E1-trigger_on_complete
+    requirement: |
+      예약 상태 → "completed" 변경 시 만족도 설문 자동 생성.
+      survey_type 결정: slot admin_id role=senior → "senior", 그 외 → "counselor".
+      중복 방지: 동일 booking_id 설문 존재 시 생성 스킵.
+      expires_at: 7일 후.
+    spec_ref: "admin_consultation.py L499~570, _trigger_satisfaction_survey()"
+    priority: P0
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_a가 booking confirmed→completed 변경 → student_t1 설문 목록에 자동 생성. surveyType='counselor', status='pending', expiresAt='2026-04-23' (7일 후)"
+
+  - id: SAT-E2-admin_list
+    requirement: |
+      GET /api/admin/satisfaction-surveys: super_admin/admin만 접근.
+      status/survey_type 필터 지원. 설문 목록 + 총 개수 반환.
+    spec_ref: "satisfaction_survey.py L203~250"
+    priority: P2
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_a 토큰으로 조회 → count=1, status=submitted, type=counselor 확인"
+
+  - id: SAT-E3-admin_stats
+    requirement: |
+      GET /api/admin/satisfaction-surveys/stats: 상담사/선배별 평균 점수 통계.
+      survey_type 파라미터. 항목별(S1~S5,C1~C3/M1~M3) 평균 + 전체 평균.
+    spec_ref: "satisfaction_survey.py L252~350"
+    priority: P2
+    user_web:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "버그 수정 후 200 OK. admin_id별 survey_count=1, average_score=8.12, item_averages(S1:8,S2:9,S3:7,S4:8,S5:9,C1:8,C2:7,C3:9), last_date='2026-04-17', timing_averages 정상"
+      note: "ConsultationBooking→ConsultationSlot join 추가로 admin_id/date 참조 수정"

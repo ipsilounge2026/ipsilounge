@@ -1,0 +1,546 @@
+# ===================================================================
+# 고등학교 상담시스템 기획서 V3 — 잔여 구현 gap 추적
+# ===================================================================
+# 이 파일은 "검증 통과 증빙" 체크리스트가 아니라 **구현 todo 추적** 파일입니다.
+# 기존 *.yaml 들과 달리 status 필드는 모두 `fail` 또는 `partial` 로 시작하며,
+# 보완 작업이 완료되면 `pass` 로 승격 + evidence 필드 채움 + _runs/ 에 result JSON 기록.
+#
+# 감사 기준:
+#   - ipsilounge/고등학교 상담시스템_기획서_V3.md (1787 lines)
+#   - 2026-04-16 병렬 감사(backend/user-web/admin-web/mobile 4개 타겟)
+#     결과, 총 77개 요구사항 중 64 pass + 9 gap + 4 해석차이로 판정.
+#   - 9 gap 중 "설문 불변 락"은 사용자 확인 후 gap 아님으로 재분류
+#     (사전 설문은 수정 가능해야 한다는 정책 확정).
+#   - 최종 추적 대상 8건.
+#
+# 관련 기존 체크리스트 (이미 ready):
+#   - survey/high.yaml (설문 스키마 36항목)
+#   - consultation/booking.yaml (예약 흐름 15항목)
+#   - consultation/satisfaction.yaml (만족도 13항목)
+#   - cross-cutting/ux-policy.yaml (자동저장/무기명/재시도 20항목)
+#   → 이 4개 체크리스트가 커버하지 않는 기획서 V3 요구사항 8건을 본 파일에서 추적.
+# ===================================================================
+
+meta:
+  area_code: HIGH_CONSULT_V3
+  title: "고등학교 상담시스템 V3 — 잔여 gap 추적"
+  file_kind: "gap_tracking"   # (verification 이 아닌 todo 추적)
+  created_at: "2026-04-16"
+  spec_refs:
+    - "ipsilounge/고등학교 상담시스템_기획서_V3.md"
+  related_checklists:
+    - "survey/high.yaml"
+    - "consultation/booking.yaml"
+    - "consultation/satisfaction.yaml"
+    - "cross-cutting/ux-policy.yaml"
+  audit_source:
+    method: "code review (parallel 4-target agents)"
+    audited_at: "2026-04-16"
+    targets:
+      backend:
+        requirements: 27
+        pass: 21
+        partial: 5
+        fail: 1
+      user_web:
+        requirements: 18
+        pass: 17
+        partial: 1
+        fail: 0
+      admin_web:
+        requirements: 16
+        pass: 12
+        partial: 2
+        fail: 2
+      mobile:
+        requirements: 16
+        pass: 14
+        partial: 1
+        fail: 1
+    total_pass: 64
+    total_gap: 8   # (설문 불변 락 제외)
+    # 진행 현황 (2026-04-16 기준):
+    #   P0: 2/2 완료 (report-viewer-blocked-ui, fcm-push-activation — 후자는 코드 완료/Firebase 콘솔 설정 대기)
+    #   P1: 3/3 완료 (lead-time-booking-ui, super-admin-qa-issue-queue, pdf-report-missing-sections)
+    #   P2: 3/3 완료 (counselor-score-override, mobile-timing-select-ui, senior-counselor-context-share-ui)
+
+  resolution_policy:
+    - "각 item 은 P0 > P1 > P2 순서로 처리 권장"
+    - "P0 2건은 출시 전 필수. 완료 시 status → pass 로 승격 + resolved_at 기록"
+    - "P1 3건은 운영 안정화 단계. 완료 시 동일"
+    - "P2 3건은 기능 고도화 단계. 완료 시 동일"
+    - "gap 해결 PR 번호는 linked_pr 필드에 기록"
+    - "전 항목 pass 시 _index.yaml 에 등록 + status: ready 로 승격"
+
+# ─── P0: 출시 전 필수 ───────────────────────────────────────────────
+items:
+
+  - id: HSGAP-P0-fcm-push-activation
+    requirement: |
+      FCM 푸시 알림 활성화
+      - 상담 확정 (counselor 가 예약 confirmed 처리 시)
+      - 리포트 준비 완료 (QA 통과 후 상담사 검토 완료 시)
+      - 만족도 설문 발송 (상담 completed 트리거)
+      총 3개 트리거에서 학생에게 푸시 발송.
+    spec_ref: "고등학교 상담시스템_기획서_V3.md § 7-1 (알림 메뉴) + § 10 (만족도 자동 발송)"
+    priority: P0
+    target_systems: [mobile]
+    current_status: partial
+    current_evidence: |
+      [2026-04-16 보완] 코드 인프라 전 구간 완료, 런타임 활성화는 google-services.json 배치 후 kEnableFirebase 플래그 flip 만 남음.
+      - mobile/pubspec.yaml L29~33: firebase_core ^3.1.0 + firebase_messaging ^15.0.3 의존성 활성.
+      - mobile/lib/main.dart: _firebaseMessagingBackgroundHandler(top-level) + _initFirebase(requestPermission + onMessage 로컬알림 표시 + onMessageOpenedApp 라우팅 훅) 구현.
+      - mobile/lib/screens/home_screen.dart: initState → _initFCM() 호출, FirebaseMessaging.getToken() → AuthService.saveFcmToken() 자동 호출 + onTokenRefresh 리스너.
+      - backend/app/services/notification_service.py: send_satisfaction_survey_notification + send_report_ready_notification 추가.
+      - backend/app/routers/admin_consultation.py L524+L579~: 만족도 설문 생성 시 FCM 푸시 동시 발송.
+      - backend/app/routers/admin_consultation_survey.py L194~212: computed 엔드포인트에서 analysis_status pending→pass/repaired 최초 전환 시 "리포트 준비 완료" 푸시.
+      - 3개 트리거 전부 서버측 발송 코드 존재:
+        1) send_booking_confirmed_notification — admin_consultation.py L457 (기존)
+        2) send_report_ready_notification      — admin_consultation_survey.py 신규
+        3) send_satisfaction_survey_notification — admin_consultation.py 신규
+      → partial 이유: kEnableFirebase = false (main.dart) 기본값 + google-services.json 미배포. 실제 디바이스 수신은 Firebase 콘솔 설정 후.
+    fix_target:
+      - "(완료) pubspec.yaml: firebase_core + firebase_messaging 의존성 주석 해제"
+      - "(완료) main.dart _initFirebase() 복구: onBackgroundMessage, requestPermission, onMessage, onMessageOpenedApp 핸들러"
+      - "(완료) home_screen initState → FirebaseMessaging.instance.getToken() → PUT /users/me/fcm-token 자동 호출 + onTokenRefresh"
+      - "(완료) backend notification_service.py 3개 트리거 발송 함수 + 호출 지점 연결"
+      - "(남은 작업) Firebase 콘솔에서 Android 앱 등록 → google-services.json 다운로드 → mobile/android/app/ 배치"
+      - "(남은 작업) android/build.gradle + android/app/build.gradle 에 google-services 플러그인 적용"
+      - "(남은 작업) main.dart 의 kEnableFirebase = true 로 flip"
+      - "iOS (향후): APNs 인증서 설정 + Info.plist 권한 항목"
+    work_size: 중
+    blocker_for: ["출시 (Phase 6 배포)"]
+    resolved_at: null
+    linked_pr: null
+
+  - id: HSGAP-P0-report-viewer-blocked-ui
+    requirement: |
+      리포트 뷰어 qa_status=blocked 상태 잠금 UI
+      - consultation/page.tsx 에는 이미 analysis_blocked 배너 있음(L583~597)
+      - 그러나 report/[id]/page.tsx 본체에는 qa_status 기반 잠금 분기 없음
+      - 학생이 URL 직접 진입 시 blocked 상태 투명 노출 위험
+    spec_ref: "고등학교 상담시스템_기획서_V3.md § 4-8-1 (분석 화면 전체 잠금 + 점검 안내)"
+    priority: P0
+    target_systems: [user_web]
+    current_status: pass
+    current_evidence: |
+      [2026-04-16 구현 완료]
+      - backend/app/schemas/consultation_survey.py SurveyResponse 에 analysis_status / analysis_validation 필드 추가.
+      - user-web report/[id]/page.tsx L214~217: analysisStatus === 'blocked' 조기 분기 추가 (survey.analysis_status 참조).
+      - BlockedReportScreen 컴포넌트 신설 (report/[id]/page.tsx): consultation/page.tsx L582~600 의 배너 패턴(#FEF2F2/#FECACA) 재사용 + 본문 전체 마스킹(점선 placeholder) + 문의 경로 안내.
+      - 문구: "사전질문 자동 분석에 시스템 오류가 발견되어 점검 중입니다. 복구 즉시 안내드립니다." (기획서 § 4-8-1 원문).
+    fix_target:
+      - "(완료) report/[id]/page.tsx 상단에 survey.analysis_status === 'blocked' 분기 추가"
+      - "(완료) blocked 시 본문 전체 마스킹 + consultation/page.tsx 배너 패턴 재사용"
+      - "(완료) 기획서 § 4-8-1 원문 문구 반영"
+      - "(완료) 문의 경로 안내: 입시라운지 고객센터 / 담당 상담사"
+      - "(완료) backend SurveyResponse 스키마에 analysis_status 노출"
+    work_size: 소
+    blocker_for: ["출시 (실제 blocked 상태 학생 노출 시 UX 장애)"]
+    resolved_at: "2026-04-16"
+    linked_pr: null
+
+# ─── P1: 운영 안정화 ───────────────────────────────────────────────
+
+  - id: HSGAP-P1-super-admin-qa-issue-queue
+    requirement: |
+      슈퍼관리자 QA 이슈 큐 전용 페이지
+      - /admin/super-admin/issues (또는 유사 경로)
+      - blocked/repaired 설문 목록 + 영향 받는 상담 예약 (학생·일시·담당 상담사)
+      - 이슈 상세 (P1/P2/P3 분류, 필드명, before/after)
+      - 해당 필드로 점프 링크
+      - 수정 후 재배포 → 다음 조회 시 자동 재검증 → 통과 시 잠금 자동 해제
+    spec_ref: "고등학교 상담시스템_기획서_V3.md § 4-8-1 (슈퍼관리자 알림 + 디버깅)"
+    priority: P1
+    target_systems: [admin_web]
+    current_status: pass
+    current_evidence: |
+      [2026-04-16 구현 완료]
+      - backend/app/routers/admin_consultation_survey.py:
+          * GET /api/admin/surveys 쿼리에 analysis_status 필터 추가 (쉼표 구분 다중값)
+          * GET /api/admin/surveys/qa-issues 신설 (super_admin 전용 403 가드) — blocked/repaired/warn 설문 + 영향 받는 예약(booking + slot + counselor) + P1/P2/P3 분류 + repair_log 반환
+          * POST /api/admin/surveys/{id}/revalidate 신설 — 수동 재검증 후 pass/repaired 전환 시 기존 send_report_ready_notification 재사용하여 학생 푸시 발송
+      - admin-web/src/lib/api.ts: getQAIssueQueue + revalidateSurvey 래퍼 추가
+      - admin-web/src/app/super-admin/issues/page.tsx 신설 (≈300줄):
+          * 요약 카드(전체/blocked/repaired/warn)
+          * 상태 필터 select + 새로고침
+          * 카드별 P1/P2/P3 이슈 상세 펼침 + 자동 보정 로그 JSON + 영향 예약 테이블
+          * "재검증" 버튼(수동 트리거) + "설문 열기"(설문 상세 링크)
+      - admin-web/src/components/Sidebar.tsx: FiAlertTriangle 아이콘 + super_admin 전용 메뉴 "QA 이슈 큐" 추가, superAdminOnly 플래그 기반 visibility 필터.
+    fix_target:
+      - "(완료) admin-web/src/app/super-admin/issues/page.tsx 신설"
+      - "(완료) GET /api/admin/surveys/qa-issues 엔드포인트 + analysis_status 필터"
+      - "(완료) 영향 받는 상담 예약 조인 쿼리 (booking + slot + counselor)"
+      - "(완료) 이슈 상세 펼침 영역 + 설문 상세 링크"
+      - "(완료) Sidebar 메뉴에 super_admin 권한 가드로 추가"
+      - "(완료) 재검증 후 pass/repaired 전환 시 send_report_ready_notification 훅 재사용"
+    work_size: 중
+    resolved_at: "2026-04-16"
+    linked_pr: null
+
+  - id: HSGAP-P1-lead-time-booking-ui
+    requirement: |
+      학습상담 7일 리드타임 예약 UI
+      - 사전질문 submitted_at + 7일 이전 슬롯은 비활성/숨김
+      - 선택 시도 시 거부 + 명확한 안내 메시지
+      - 사전질문 미제출 상태에서는 학습상담 예약 자체 불가 (기존 규칙 유지)
+    spec_ref: "고등학교 상담시스템_기획서_V3.md § 4-8-2 (학습상담 예약 리드타임)"
+    priority: P1
+    target_systems: [admin_web, user_web]
+    current_status: pass
+    current_evidence: |
+      [2026-04-16 구현 완료]
+      - backend/app/schemas/consultation.py: AvailableSlotResponse 에 `available: bool` +
+        `unavailable_reason: str | None` 필드 추가.
+      - backend/app/routers/consultation.py:
+          * _compute_slot_availability 헬퍼 신설 — 기존 _check_lead_time 동일 규칙을
+            에러 raise 없이 계산하여 UI 가드용 결과 반환 (학생부분석/학종전략/학습상담/선배상담 전부 커버)
+          * GET /api/consultation/slots 가 consultation_type + owner_user_id 쿼리 파라미터 + get_current_user 의존성 수용.
+          * 슬롯별로 available/unavailable_reason 마킹하여 반환.
+      - user-web/src/lib/api.ts: getAvailableSlots(consultationType, ownerUserId) 시그니처 확장.
+      - user-web/src/app/consultation/page.tsx:
+          * Slot 인터페이스에 available/unavailable_reason 필드 추가
+          * 타입 · 자녀 선택 변경 시 슬롯 재조회
+          * 리드타임 이전 슬롯은 회색 opacity 0.45 + cursor not-allowed + title 툴팁 + "예약 불가" 라벨
+          * 상단 주황 배너로 unavailable_reason 요약 노출
+      - admin-web/src/app/consultation/page.tsx: 수동 예약 모달에서 학습상담/학생부분석/학종전략 선택 시
+        7일 리드타임 안내문구를 표시 (관리자 직접 예약은 리드타임 bypass 가능하다는 점 병기).
+    fix_target:
+      - "(완료) GET /api/consultation/slots 응답에 available + unavailable_reason 필드 추가"
+      - "(완료) user-web 슬롯 버튼 비활성 처리 + 배너 + 툴팁"
+      - "(완료) admin-web consultation/page.tsx 수동 예약 모달 안내 문구"
+      - "(완료) 사전질문 미제출 상태에서는 기존 _check_lead_time 규칙이 동일하게 가드"
+      - "(완료) 선배상담 매칭 누락 케이스까지 available=false 로 UI 가드"
+    work_size: 소
+    resolved_at: "2026-04-16"
+    linked_pr: null
+
+  - id: HSGAP-P1-pdf-report-missing-sections
+    requirement: |
+      PDF 리포트에 아래 4개 섹션 추가:
+      1. Phase × 4트랙 로드맵 (내신/모의/학습/진로 추천 전략)
+      2. 권장과목 이수 현황 (목표 대학·학과 매칭 결과)
+      3. 수능 최저 시뮬레이션 (목표 대학 라인별 충족 가능성)
+      4. 이전 대비 변화 (Delta 모드일 때 추이 비교)
+    spec_ref: "고등학교 상담시스템_기획서_V3.md § 4-7 (맞춤 전략 로드맵) + § 4-9 (권장과목) + § 5-4 E4 (수능최저) + § 7-2 (이전 상담 대비 변화 추적 L1611)"
+    priority: P1
+    target_systems: [backend]
+    current_status: pass
+    current_evidence: |
+      [2026-04-16 구현 완료]
+      - backend/app/services/survey_report_service.py:
+          * generate_survey_report_pdf() 시그니처에 `extras: dict | None = None` 추가
+          * computed["roadmap"] 존재 시 _render_roadmap 호출 (Phase × 4트랙 Platypus 테이블 +
+            Phase 제목/테마/셀 텍스트, 우선순위 '상' 항목 별도 리스트)
+          * extras["course_requirement_match"] 존재 시 _render_course_requirement 호출
+            (대학·학과별 핵심/권장 이수·미이수 테이블, 핵심 미이수 시 경고 문구)
+          * extras["suneung_minimum"] 존재 시 _render_suneung_minimum 호출
+            (학생 최신 모의고사 등급, 요약 통계, 대학·전형별 충족/근접/미충족/해당없음/참조 판정 테이블,
+             결과별 색상 구분)
+          * extras["delta_change"].has_previous=True 시 _render_delta_change 호출
+            (이전 설문 제출일, summary 요약, 카테고리별 이전→현재 값 + 변경 유형 색상 테이블)
+      - backend/app/routers/admin_consultation_survey.py:
+          * download_report_pdf 에서 survey_type=high 일 때 build_matching / simulate_suneung_minimum
+            / _compute_delta(+_summarize_delta) 실행 결과를 extras dict 에 수집하여 전달.
+          * Delta 모드(mode="delta")에서만 delta_change 포함 — 기획서 § 7-2 준수.
+      - 검증: python -c "from app.services.survey_report_service import generate_survey_report_pdf;
+        inspect.signature -> (survey, user_info, schema, computed, extras=None)" 통과.
+    fix_target:
+      - "(완료) survey_report_service.py 에 4개 섹션 렌더링 함수 추가"
+      - "(완료) reportlab Platypus Table + Paragraph 조합으로 섹션 구성"
+      - "(완료) Delta 모드: survey.mode=='delta' 일 때 이전 설문 lookup + 섹션 활성"
+      - "(완료) 각 섹션 데이터는 기존 서비스(build_matching/simulate_suneung_minimum/_compute_delta) 재사용"
+      - "(완료) PDF 페이지 레이아웃 확장 — PageBreak 로 각 섹션 분리"
+    work_size: 중
+    resolved_at: "2026-04-16"
+    linked_pr: null
+
+# ─── P2: 기능 고도화 ───────────────────────────────────────────────
+
+  - id: HSGAP-P2-counselor-score-override
+    requirement: |
+      상담사 점수 직접 편집 + 등급 자동 재산출
+      - 4영역(내신/모의/학습/진로) 점수 직접 수정
+      - 점수 수정 시 등급(S/A/B/C/D) 자동 재계산
+      - 종합 점수(overall_score) 자동 재평균
+      - 수정 후 qa_validation 재실행 (정합성 확보)
+    spec_ref: "고등학교 상담시스템_기획서_V3.md § 4-8 상담사 편집 가능 항목 표 '점수/등급 — 점수 직접 수정 → 등급 자동 재산출'"
+    priority: P2
+    target_systems: [admin_web, backend]
+    current_status: pass
+    current_evidence: |
+      [2026-04-16 구현 완료]
+      - backend/app/routers/admin_consultation_survey.py:
+          * ScoreOverrideRequest Pydantic 스키마 신설 (naesin/mock/study/career ge=0 le=100 + reason)
+          * PATCH /api/admin/surveys/{id}/scores 신설 — _compute_stats 로 기존 레이더 로드 후
+            입력 값으로 덮어쓰고 _grade_label() 로 축별 등급 재산출,
+            counselor_overrides["radar_scores"] 에 저장 (기존 _merge_overrides shallow-merge 활용) +
+            manual_override=True 플래그 + score_override_log(append-only, 최근 20건 유지) 에 이력 기록
+          * DELETE /api/admin/surveys/{id}/scores 신설 — radar_scores/score_overrides 키 제거 후 재검증
+          * 두 엔드포인트 모두 validate_with_repair() 재실행 → analysis_status / analysis_validation 즉시 갱신
+      - admin-web/src/lib/api.ts:
+          * ScoreOverridePayload 타입 + updateSurveyScoreOverrides / clearSurveyScoreOverrides 래퍼 추가
+      - admin-web/src/app/surveys/[id]/page.tsx:
+          * RadarDetailTable 아래 "상담사 직접 점수 편집" 블록 추가 (노란 경고 스타일 #FFFBEB / #FDE68A)
+          * 4축 그리드: naesin/mock/study/career 숫자 입력 + 실시간 등급 프리뷰(S/A/B/C/D)
+          * 변경 사유 textarea + "🔁 재산출 + QA 재검증" 버튼
+          * manual_override=True 시 "자동 산출값으로 복원" 버튼 조건부 노출
+          * 0~100 범위 검증 + 최소 1개 축 입력 요구하는 클라이언트 가드
+    fix_target:
+      - "(완료) backend: PATCH /api/admin/surveys/{id}/scores API 신설 (4영역 점수 수정)"
+      - "(완료) backend survey_scoring_service.py: _grade_label() 재사용하여 등급 자동 재산출"
+      - "(완료) backend: 점수 수정 후 validate_with_repair() 재실행 → analysis_status/analysis_validation 업데이트"
+      - "(완료) admin-web surveys/[id]/page.tsx: 레이더 차트 옆에 점수 input 4개 + '재산출' 버튼"
+      - "(완료) 변경 이력 로그 (reason/before/after/at) counselor_overrides.score_override_log 에 기록 (최근 20건)"
+    work_size: 중
+    rationale: |
+      기획서 명문 요구 (§ 4-8 표) 이지만 실운영에서 상담사가 점수 직접 편집을
+      자주 쓰는지는 검증 필요. 일단 구현해두되, 실사용 빈도 낮으면 숨김 처리 옵션 제공.
+    resolved_at: "2026-04-16"
+    linked_pr: null
+
+  - id: HSGAP-P2-mobile-timing-select-ui
+    requirement: |
+      모바일 T1~T4 시점 선택 UI + getSuggest() 호출
+      - 설문 진입 시 이전 이력 조회 → Full/Delta + suggested_timing 자동 판정
+      - 학생이 확정 시점(T1/T2/T3/T4) 선택 UI 제공
+      - 추천 배너 + 시점별 안내 (예: "T3: 수시 vs 정시 방향 탐색 단계")
+    spec_ref: "고등학교 상담시스템_기획서_V3.md § 7-2 (설문 타입 자동 판정) + § 3 시점별 주제"
+    priority: P2
+    target_systems: [mobile]
+    current_status: pass
+    current_evidence: |
+      [2026-04-16 구현 완료]
+      - mobile/lib/screens/high_survey_timing_screen.dart 신설 (StatefulWidget):
+          * _options: T1/T2/T3/T4 4개 카드 (value/label/desc 라벨 포함 — T3 "수시 vs 정시 방향 탐색 단계" 등 시점별 안내)
+          * initState → _loadSuggest(): SurveyService.getSuggest('high', ownerUserId) 호출
+          * 응답 파싱: suggested_timing / suggested_mode / reason / has_prior_submission
+          * _buildSuggestBanner(): 파란 배너에 "권장 시점: Tx" + reason 노출,
+            has_prior_submission=true 일 때 "이전 제출 이력 있음 (Delta 모드)" chip 추가
+          * _buildOptionCard(): 선택 시 파란 테두리(#1E40AF), suggested_timing 과 일치하는 카드에 "추천" 뱃지 표시
+          * 하단 파란 "설문 시작하기" 버튼 → Navigator.push SurveyScreen(surveyType='high', timing=selected, ownerUserId=...)
+          * user-web/src/app/consultation-survey/high/page.tsx L75~90 패턴 포팅
+      - mobile/lib/screens/consultation_screen.dart:
+          * import 'high_survey_timing_screen.dart' 추가
+          * 학습상담 섹션의 "사전질문 작성(high)" 버튼이 SurveyScreen 직접 진입 대신
+            HighSurveyTimingScreen(ownerUserId: _selectedChildId) 로 라우팅
+          * preheigh1(학생부분석 사전질문)은 timing 개념 없으므로 기존 경로 유지
+    fix_target:
+      - "(완료) consultation_screen.dart 에서 '상담 시점 선택' 화면으로 라우팅 교체 (T1/T2/T3/T4 카드)"
+      - "(완료) HighSurveyTimingScreen 진입 시 SurveyService.getSuggest(type='high', userId) 호출"
+      - "(완료) 응답의 suggested_timing → 기본 선택값, suggested_mode(has_prior_submission) → Delta 배지 표시"
+      - "(완료) reason 필드 → 추천 사유 배너 본문에 직접 노출"
+      - "(완료) user-web high/page.tsx L75~90 패턴 Flutter 이식"
+    work_size: 소
+    resolved_at: "2026-04-16"
+    linked_pr: null
+
+  - id: HSGAP-P2-senior-counselor-context-share-ui
+    requirement: |
+      선배-상담사 컨텍스트 공유 UI
+      - 상담사 상담 기록 작성 페이지에 "다음 선배에게 전달할 맥락" 필드 (기획서 예시)
+      - 선배 배정 시 상담사 기록의 추상화된 요약 조회 가능 (공유 O 항목만)
+      - 공유 X 항목(D8/F/G/상세 성적)은 UI 에서도 마스킹
+    spec_ref: "고등학교 상담시스템_기획서_V3.md § 9-3 + 『선배상담_상담사상담_연계규칙_V1.md』"
+    priority: P2
+    target_systems: [admin_web]
+    current_status: pass
+    current_evidence: |
+      [2026-04-16 구현 완료]
+      - backend/app/models/consultation_note.py:
+          * next_senior_context = Column(Text, nullable=True) 추가 — 다음 선배 상담사에게 전달할 요약 맥락
+      - backend/app/main.py startup _check_and_migrate:
+          * consultation_notes 테이블에 next_senior_context 컬럼 ALTER TABLE 추가 마이그레이션
+      - backend/app/routers/admin_consultation_notes.py:
+          * NoteCreate Pydantic 스키마에 next_senior_context: str | None 필드 추가
+          * _note_to_dict 응답에 getattr(note, "next_senior_context", None) 포함
+          * create_note 에서 data.next_senior_context 저장
+      - backend/app/routers/admin_senior_consultation.py:
+          * from app.models.consultation_note import ConsultationNote 추가
+          * get_counselor_summary_for_senior 가 is_visible_to_user=True 인 최신 ConsultationNote 조회하여
+            counselor_next_senior_context / counselor_note_date / counselor_note_category 를 응답에 병합
+      - admin-web/src/app/consultation/notes/page.tsx:
+          * Note interface + form state + resetForm + handleSubmit payload 에 next_senior_context 추가
+          * next_steps/next_topic 그리드 아래 "선배 상담사에게 전달할 맥락" textarea UI 신설
+          * 상담 기록 카드 내에서 next_senior_context 존재 시 노란 하이라이트 블록으로 표시,
+            is_visible_to_user=false 인 경우 "학생 비공개 상태 — 선배 페이지에 노출 안 됨" 경고 병기
+      - admin-web/src/components/Sidebar.tsx:
+          * FiUser 아이콘 import + "담당 학생 요약" 메뉴 (seniorOnly: true) 추가
+          * role === "senior" 일 때만 가시, super_admin 포함 타 역할은 숨김
+      - admin-web/src/app/my-students/page.tsx 신설 (≈250줄, senior 전용):
+          * getMyStudents() 로 담당 학생 목록 로드 (좌측 320px 패널)
+          * 학생 카드 선택 시 getCounselorSummaryForSenior(userId) 호출
+          * 우측 패널: 상담사 전달 맥락(노란 카드) → 이전 선배 컨텍스트(파란 카드) →
+            abstracted_summary 를 summaryLine() 헬퍼로 렌더 (naesin_tier/mock_tier/career_direction 등)
+          * 역할 가드: senior 가 아니면 "이 페이지는 선배 상담사 전용입니다." 에러 표기
+          * 하단 footnote: "※ 민감 영역(D8 / F / G 등)은 비공유 정책에 따라 본 요약에서 제외됩니다."
+      - senior_sharing_service.abstract_consultation_for_senior 기존 추상화 로직을 통해 D8/F/G 제외.
+    fix_target:
+      - "(완료) admin-web consultation/notes/page.tsx 에 '다음 선배 전달 맥락' 필드 추가"
+      - "(완료) 선배용 admin-web/src/app/my-students/page.tsx 에 담당 학생 요약 카드 신설"
+      - "(완료) 카드에는 공유 O 항목만 표시 (abstracted_summary: 내신/모의 티어·추이, 과목별 난점, 진로 방향, 과목 선택, 레이더 등급)"
+      - "(완료) senior 역할 사용자는 D8/F/G 필드 접근 시 abstract_consultation_for_senior 에서 이미 제외 처리 (백엔드 가드)"
+      - "(완료) 데이터 연계는 상담사 기록의 is_visible_to_user=True 인 건만 노출 → 비공개 시 선배에게 전달되지 않음"
+    work_size: 중
+    resolved_at: "2026-04-16"
+    linked_pr: null
+
+# ─── 작업 순서 권장 ────────────────────────────────────────────────
+work_plan:
+  stage_1_pre_launch:
+    priority: P0
+    items: [HSGAP-P0-fcm-push-activation, HSGAP-P0-report-viewer-blocked-ui]
+    estimated_days: 1~2
+    rationale: "출시 전 반드시 해결. 푸시 인프라는 배포 후 설치 번거롭고, blocked 노출은 실제 사용자 혼란 유발."
+
+  stage_2_stabilization:
+    priority: P1
+    items:
+      - HSGAP-P1-super-admin-qa-issue-queue
+      - HSGAP-P1-lead-time-booking-ui
+      - HSGAP-P1-pdf-report-missing-sections
+    estimated_days: 3~5
+    rationale: "출시 직후 운영 품질 확보. 슈퍼관리자 점검 동선 + 예약 실패 사전 방지 + 학부모 전달용 PDF 완성도."
+
+  stage_3_enhancement:
+    priority: P2
+    items:
+      - HSGAP-P2-counselor-score-override
+      - HSGAP-P2-mobile-timing-select-ui
+      - HSGAP-P2-senior-counselor-context-share-ui
+    estimated_days: 7
+    rationale: "핵심 흐름에는 영향 없음. 상담사 편의/모바일 UX 완성도/선배 연계 풍부도 순차 개선."
+
+# ─── 해결 이력 ─────────────────────────────────────────────────────
+resolution_log:
+  - item_id: HSGAP-P0-report-viewer-blocked-ui
+    resolved_at: "2026-04-16"
+    linked_pr: null
+    verified_by: "claude-session"
+    changes:
+      - "backend/app/schemas/consultation_survey.py: SurveyResponse 에 analysis_status + analysis_validation 추가"
+      - "user-web/src/app/consultation-survey/report/[id]/page.tsx: BlockedReportScreen 컴포넌트 + blocked 조기 분기"
+    notes: "코드 완료. 런타임 검증은 실제 blocked 상태 설문 샘플 생성 후 URL 직접 진입 테스트 필요."
+
+  - item_id: HSGAP-P0-fcm-push-activation
+    resolved_at: null   # partial — 코드 완료, Firebase 콘솔 설정 대기
+    linked_pr: null
+    verified_by: "claude-session"
+    changes:
+      - "mobile/pubspec.yaml: firebase_core ^3.1.0 + firebase_messaging ^15.0.3 활성"
+      - "mobile/lib/main.dart: _firebaseMessagingBackgroundHandler + _initFirebase 전체 구현 (requestPermission, onMessage 로컬알림 표시, onMessageOpenedApp)"
+      - "mobile/lib/screens/home_screen.dart: initState → _initFCM() → getToken() → AuthService.saveFcmToken + onTokenRefresh 리스너"
+      - "backend/app/services/notification_service.py: send_satisfaction_survey_notification + send_report_ready_notification 신규"
+      - "backend/app/routers/admin_consultation.py: 만족도 설문 생성 시 FCM 푸시 동시 발송"
+      - "backend/app/routers/admin_consultation_survey.py: computed 엔드포인트에서 analysis_status 최초 pass/repaired 전환 시 리포트 준비 완료 푸시"
+    notes: |
+      코드 측 인프라 전 구간 완료. 실제 디바이스 푸시 수신까지 남은 운영 작업:
+      1) Firebase 콘솔에서 Android 앱 등록 (package name: com.ipsilounge.app)
+      2) google-services.json → mobile/android/app/ 배치
+      3) android/{build.gradle, app/build.gradle}에 google-services 플러그인 적용
+      4) mobile/lib/main.dart 의 kEnableFirebase = true 로 flip
+      5) iOS 향후: APNs 인증서 + Info.plist 권한
+
+  - item_id: HSGAP-P1-lead-time-booking-ui
+    resolved_at: "2026-04-16"
+    linked_pr: null
+    verified_by: "claude-session"
+    changes:
+      - "backend/app/schemas/consultation.py: AvailableSlotResponse 에 available + unavailable_reason 필드 추가"
+      - "backend/app/routers/consultation.py: _compute_slot_availability 헬퍼 + GET /slots 가 consultation_type + owner_user_id 파라미터 + 슬롯별 available 마킹"
+      - "user-web/src/lib/api.ts: getAvailableSlots 시그니처 확장"
+      - "user-web/src/app/consultation/page.tsx: 리드타임 이전 슬롯 회색 처리 + 툴팁 + 상단 배너"
+      - "admin-web/src/app/consultation/page.tsx: 수동 예약 모달 리드타임 안내 문구"
+    notes: |
+      선배상담 매칭 누락 케이스까지 available=false 로 UI 가드 포함.
+      관리자 직접 예약은 리드타임 bypass 가능하다는 점을 안내 문구에 명시.
+
+  - item_id: HSGAP-P1-super-admin-qa-issue-queue
+    resolved_at: "2026-04-16"
+    linked_pr: null
+    verified_by: "claude-session"
+    changes:
+      - "backend/app/routers/admin_consultation_survey.py: GET /qa-issues + POST /{id}/revalidate 신설, list_surveys analysis_status 필터 추가"
+      - "admin-web/src/lib/api.ts: getQAIssueQueue + revalidateSurvey 래퍼 추가"
+      - "admin-web/src/app/super-admin/issues/page.tsx 신설 (요약 카드 + 이슈 상세 펼침 + 영향 예약 테이블 + 재검증 버튼)"
+      - "admin-web/src/components/Sidebar.tsx: super_admin 전용 QA 이슈 큐 메뉴 + superAdminOnly 플래그"
+    notes: |
+      super_admin 이 아닌 관리자가 /qa-issues 또는 /revalidate 호출 시 백엔드에서 403 반환.
+      재검증 후 blocked/pending → pass/repaired 전환 시 기존 send_report_ready_notification 재사용하여 학생 푸시 발송.
+
+  - item_id: HSGAP-P1-pdf-report-missing-sections
+    resolved_at: "2026-04-16"
+    linked_pr: null
+    verified_by: "claude-session"
+    changes:
+      - "backend/app/services/survey_report_service.py: generate_survey_report_pdf 시그니처에 extras kwarg 추가, _render_roadmap / _render_course_requirement / _render_suneung_minimum / _render_delta_change 4개 섹션 함수 신설"
+      - "backend/app/routers/admin_consultation_survey.py download_report_pdf: 고등학생 설문에 대해 build_matching + simulate_suneung_minimum + _compute_delta(Delta 모드만) 호출 결과를 extras 로 전달"
+    notes: |
+      각 섹션은 PageBreak 으로 분리되어 개별 페이지로 출력.
+      로드맵은 computed["roadmap"]의 matrix 구조(phases × tracks × cells)를 Platypus Table 로 렌더.
+      수능 최저는 결과(충족/근접/미충족/해당없음/참조)별 색상 구분 적용.
+      Delta 섹션은 survey.mode == "delta" + 이전 설문 존재 시에만 활성.
+
+  - item_id: HSGAP-P2-counselor-score-override
+    resolved_at: "2026-04-16"
+    linked_pr: null
+    verified_by: "claude-session"
+    changes:
+      - "backend/app/routers/admin_consultation_survey.py: ScoreOverrideRequest 스키마 + PATCH /api/admin/surveys/{id}/scores + DELETE /api/admin/surveys/{id}/scores 신설"
+      - "backend: 기존 _compute_stats 로 레이더 로드 → _grade_label 로 축별 등급 재산출 → counselor_overrides shallow-merge 저장 + manual_override=True + score_override_log(최근 20건) 기록 → validate_with_repair 재실행"
+      - "admin-web/src/lib/api.ts: ScoreOverridePayload + updateSurveyScoreOverrides + clearSurveyScoreOverrides 래퍼 추가"
+      - "admin-web/src/app/surveys/[id]/page.tsx: RadarDetailTable 아래 노란 경고 블록 — 4축 숫자 입력 + 실시간 등급 프리뷰 + reason textarea + '재산출 + QA 재검증' 버튼 + manual_override 시 '자동 산출값 복원' 버튼"
+    notes: |
+      4축(내신/모의/학습/진로)은 0~100 범위 제한, 최소 1개 축 입력 시만 PATCH 전송.
+      counselor_overrides["radar_scores"]에 전체 레이더 dict 를 저장하여 기존 _merge_overrides 패턴 그대로 활용.
+      점수 변경 이력은 counselor_overrides["score_override_log"]에 append-only 로 최근 20건 유지.
+      변경 직후 QA 재검증 결과가 analysis_status/analysis_validation 에 즉시 반영되어 QA 이슈 큐와 연계됨.
+
+  - item_id: HSGAP-P2-mobile-timing-select-ui
+    resolved_at: "2026-04-16"
+    linked_pr: null
+    verified_by: "claude-session"
+    changes:
+      - "mobile/lib/screens/high_survey_timing_screen.dart 신설 — T1/T2/T3/T4 카드 + SurveyService.getSuggest 연동 + 추천 배너(reason/Delta 배지) + suggested_timing 기본 선택 + SurveyScreen 라우팅"
+      - "mobile/lib/screens/consultation_screen.dart: high 설문 버튼을 HighSurveyTimingScreen 으로 라우팅 교체 (preheigh1 은 기존 경로 유지)"
+    notes: |
+      user-web/src/app/consultation-survey/high/page.tsx L75~90 의 /suggest/high 호출 + 추천 배지 + 사용자 확정 UX 패턴을 Flutter 로 포팅.
+      has_prior_submission=true 일 때 Delta 모드 chip 표시.
+      ownerUserId 는 자녀 선택 상태(_selectedChildId)를 그대로 전달하여 학부모 계정의 자녀별 설문 분리 유지.
+
+  - item_id: HSGAP-P2-senior-counselor-context-share-ui
+    resolved_at: "2026-04-16"
+    linked_pr: null
+    verified_by: "claude-session"
+    changes:
+      - "backend/app/models/consultation_note.py: next_senior_context(Text) 컬럼 추가"
+      - "backend/app/main.py startup: consultation_notes 테이블에 next_senior_context ALTER TABLE 마이그레이션"
+      - "backend/app/routers/admin_consultation_notes.py: NoteCreate 스키마 + _note_to_dict 응답 + create_note 저장 로직에 next_senior_context 반영"
+      - "backend/app/routers/admin_senior_consultation.py: get_counselor_summary_for_senior 응답에 counselor_next_senior_context / counselor_note_date / counselor_note_category 필드 추가 (is_visible_to_user=True 인 최신 ConsultationNote 만 조회)"
+      - "admin-web/src/app/consultation/notes/page.tsx: '선배 상담사에게 전달할 맥락' textarea 폼 + 기록 카드 노란 하이라이트 표시 + 학생 비공개 경고"
+      - "admin-web/src/components/Sidebar.tsx: '담당 학생 요약' 메뉴 (FiUser, seniorOnly: true) 추가 + role === 'senior' 가시성 필터"
+      - "admin-web/src/app/my-students/page.tsx 신설 (선배 전용): 담당 학생 목록 좌측 패널 + 상담사 전달 맥락(노란 카드) + 이전 선배 컨텍스트(파란 카드) + abstracted_summary 렌더 + senior 역할 가드 + D8/F/G 비공유 footnote"
+    notes: |
+      민감정보(D8/F/G) 마스킹은 기존 senior_sharing_service.abstract_consultation_for_senior 의 abstracted_summary 반환 로직으로 처리됨.
+      is_visible_to_user=false 인 상담 기록은 선배 페이지에 전달되지 않아 학생 비공개 정책과 정합.
+      super_admin 에게도 seniorOnly 메뉴는 숨김(선배 전용 페이지는 선배 역할일 때만 노출)하여 역할 분리 유지.
+
+# 항목 완료 시 아래 형식으로 append:
+# - item_id: HSGAP-P0-fcm-push-activation
+#   resolved_at: "YYYY-MM-DD"
+#   linked_pr: "PR #123"
+#   verified_by: "..."
+#   evidence_path: "docs/checklist/_runs/high-school-v3-gaps_YYYYMMDD.result.json"
+
+# ─── 참고: gap 재분류 이력 ────────────────────────────────────────
+reclassification_log:
+  - item_candidate: "설문 submitted 후 answers 불변 락"
+    initial_flag: "partial (ConsultationSurvey 수정 허용)"
+    final_decision: "gap 아님"
+    decided_at: "2026-04-16"
+    decided_by: "사용자"
+    rationale: |
+      기획서 § 4-8 '상담 기록 불변'은 상담사가 작성한 ConsultationNote 대상.
+      학생이 제출한 사전 설문(ConsultationSurvey)은 상담을 위한 자료이므로
+      제출 후에도 수정 가능해야 한다는 정책 확정.
+      → 현재 consultation_survey.py L1710 'submitted 상태에서도 수정 허용'은 올바름.

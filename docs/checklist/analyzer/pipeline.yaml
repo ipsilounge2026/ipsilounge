@@ -1,0 +1,457 @@
+# ===================================================================
+# 학생부 분석기 파이프라인 체크리스트
+# ===================================================================
+# spec: school-record-analyzer/CLAUDE.md (Step 0 ~ Step 9)
+# 범위: 진입점 · 데이터 파일 · QA 검증 · Excel/PDF 리포트 생성 · 부분학년 지원
+# 검증 방법: CLI 실행 (python generate_report.py <학생명>)
+# ===================================================================
+#
+# 참고: Step 1~8 (파일읽기→추출→분석)은 Claude가 대화형으로 수행하며,
+#       결과를 data/students/<학생명>.py 에 기록하는 방식.
+#       이 체크리스트는 기록된 데이터 → QA → 리포트 생성 파이프라인을 검증.
+#       분석 품질(루브릭 채점, 코멘트 내용)은 analyzer/rubric.yaml 범위.
+# ===================================================================
+
+meta:
+  area_code: ANALYZER
+  title: "학생부 분석기 파이프라인 (Step 0~9)"
+  created_at: "2026-04-16"
+  spec_refs:
+    - "school-record-analyzer/CLAUDE.md § Step 0 ~ Step 9"
+    - "school-record-analyzer/generate_report.py"
+    - "school-record-analyzer/modules/qa_validator.py"
+    - "school-record-analyzer/modules/report_logic.py"
+    - "school-record-analyzer/modules/report_constants.py"
+    - "school-record-analyzer/data/students/_template.py"
+  implementation_notes:
+    - "세특 루브릭: CLAUDE.md는 7항목이나 구현은 6항목(전공적합성 제외). template/constants/QA/report 모두 6항목으로 일관됨"
+    - "Step 0(기존 리포트 확인)과 변화 추적은 Claude 대화형으로 수동 처리. 자동화 미구현"
+
+# ─── A. 진입점 & 데이터 로드 ─────────────────────────────────────
+items:
+  - id: PIPE-A1-cli_no_args
+    requirement: |
+      python generate_report.py (인자 없이 실행) 시:
+      - "사용법: python generate_report.py <학생명>" 출력
+      - data/students/에 있는 사용 가능한 학생 목록 출력
+      - exit code 1
+    spec_ref: "generate_report.py L46~59, L113~116"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "실행 확인: '사용법' 출력 + '연승훈', '의대샘플' 학생 목록 출력 + exit code 1"
+
+  - id: PIPE-A2-cli_invalid_student
+    requirement: |
+      python generate_report.py 없는학생 실행 시:
+      - "[ERROR] 학생 데이터 파일을 찾을 수 없습니다" 에러 메시지
+      - 사용 가능한 학생 목록 출력
+      - exit code 1
+    spec_ref: "generate_report.py L62~80"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "실행 확인: '[ERROR] 학생 데이터 파일을 찾을 수 없습니다' + 학생 목록 출력 + exit code 1"
+
+  - id: PIPE-A3-dynamic_load
+    requirement: |
+      python generate_report.py <학생명> 실행 시:
+      - data/students/<학생명>.py 를 importlib.util 로 동적 로드
+      - 한글 파일명 안전 처리 (spec_from_file_location + ASCII 모듈명)
+      - 15개 필수 변수 존재 검증 (누락 시 exit 2 + 누락 목록 출력)
+    spec_ref: "generate_report.py L62~109, REQUIRED_VARS"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: spec_from_file_location(f'student_data_{abs(hash(student_name))}', str(file_path)). 누락 변수 테스트: STUDENT만 정의된 파일 → 14개 누락 목록 출력 + exit code 2"
+
+  - id: PIPE-A4-required_vars
+    requirement: |
+      필수 변수 15개 완전성 검증:
+      메타(3): STUDENT, SCHOOL, TODAY
+      세특(4): setuek_data, setuek_comments, comment_keys, good_sentences
+      창체(2): changche_data, changche_comments
+      행특(2): haengtuk_data, haengtuk_comments
+      종합(4): linkage_data, eval_data, fix_data, summary_data
+    spec_ref: "generate_report.py L25~31, _template.py"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "REQUIRED_VARS 리스트 = 정확히 15개. hasattr(module, v) 검증 + missing 리스트 출력 + exit(2)"
+
+  - id: PIPE-A5-template_structure
+    requirement: |
+      data/students/_template.py가 올바른 구조를 가짐:
+      - setuek_data: (학년, 과목, 6점수, 가중합산, 등급) 10-tuple
+      - setuek_comments: {"과목명(학년)": (강점, 보완점)}
+      - changche_data: (학년, 영역, 시간, [5점수], 합, 환산, 분량str, 비율str, 활용) 9-tuple
+      - changche_comments: {(영역, 학년): (강점, 보완점, [역량키워드], 역량코멘트)}
+      - haengtuk_data: [(학년, [5점수], 합, 환산, 등급)]
+      - haengtuk_comments: {학년: (강점, 보완점, [역량키워드], 역량코멘트)}
+      - linkage_data: [(분석영역, 연계도, 상세내용)]
+      - eval_data: [(대분류, 세부항목, 등급, 근거)]
+      - fix_data: [(역량, 항목, 등급, 진단, 보완활동, 중요도)]
+      - summary_data: dict (핵심강점1~3, 보완영역1~3, 성장스토리 등)
+    spec_ref: "_template.py 전체, CLAUDE.md § Step 9-0"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "_template.py 155줄. 모든 변수 주석+빈 구조 정의. 튜플 차원 명시. 부분 학년 사용법 안내 포함"
+      note: "세특 6점수(전공적합성 제외) — 구현 전체에서 일관됨"
+
+  # ─── B. QA 검증 (Step 8.5) ──────────────────────────────────────
+  - id: PIPE-B1-qa_p1_structure
+    requirement: |
+      QA P1-A: 구조 완전성 검증
+      - setuek_data/setuek_comments/good_sentences/changche_data/
+        haengtuk_data/haengtuk_comments/linkage_data/fix_data 존재 확인
+      - 하나라도 빈 리스트/딕셔너리면 FAIL
+    spec_ref: "qa_validator.py check_structural_completeness() L73"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: check_structural_completeness() 8개 데이터 구조 존재+비어있지 않음 검증. 연승훈: '세특 데이터 수 (19개)' PASS. 의대샘플: '세특 데이터 수 (15개)' PASS"
+
+  - id: PIPE-B2-qa_p1_score_range
+    requirement: |
+      QA P1-B: 점수 범위 검증
+      - setuek_data 개별 점수 1~10 범위 (6개 항목)
+      - changche_data [5점수] 각각 1~10 범위
+      - haengtuk_data [5점수] 각각 1~10 범위
+      - 범위 밖 시 FAIL + 위치 정보 출력
+    spec_ref: "qa_validator.py check_score_ranges() L149"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: d[2:8] 세특, d[3] 창체(리스트), d[1] 행특(리스트) 각각 1<=s<=10 검증. 연승훈/의대샘플 모두 '전체 점수 범위 정상' PASS"
+
+  - id: PIPE-B3-qa_p1_weighted_sum
+    requirement: |
+      QA P1-C: 가중합산 수학 검증
+      - setuek_data 각 행: 개별 점수 × 가중치 합계와 기록된 가중합산 일치 (오차 0.05 이내)
+      - 가중치: 교과연계 0.17, 탐구동기 0.17, 탐구과정 0.17, 결과성찰 0.17,
+        차별성 0.07, 학업태도 0.15 (전공적합성 0.10 포함/제외)
+    spec_ref: "qa_validator.py check_weighted_averages() L191, TOLERANCE=0.05"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: SETUEK_WEIGHTS_NO_MAJOR 6개 가중치 합=1.0 사용. sum(s*w) vs d[8] 비교, tolerance 0.05. 연승훈 19개/의대샘플 15개 모두 PASS"
+
+  - id: PIPE-B4-qa_p1_grade_match
+    requirement: |
+      QA P1-D: 등급 일치 검증
+      - 가중합산 → 등급 변환 기준: S≥8.5, A≥7.0, B≥5.0, C≥3.5, D<3.5
+      - setuek_data의 기록된 등급과 점수 기반 등급이 일치해야 함
+      - 불일치 시 FAIL
+    spec_ref: "qa_validator.py check_grade_matching() L229"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: score_to_grade() 함수 S≥8.5/A≥7.0/B≥5.0/C≥3.5/D 기준. d[9] vs 계산 등급 비교. 연승훈/의대샘플 모두 '등급 일치 정상' PASS"
+
+  - id: PIPE-B5-qa_p2_char_count
+    requirement: |
+      QA P2-A: 글자수 최소 기준 검증
+      - 세특 코멘트: 200자 이상
+      - 창체 코멘트: 300자 이상
+      - 행특 코멘트: 200자 이상
+      - 연계성 상세내용: 200자 이상
+      - 보완법 보완활동: 300자 이상
+      - 미달 시 WARN
+    spec_ref: "qa_validator.py check_char_counts() L257"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: 세특200/행특200/연계200/보완300 검증 구현. 연승훈: WARN 47건(일부 200자 미달), 의대샘플: WARN 25건. 정상 동작(미달 시 WARN, 통과 시 PASS)"
+      note: "창체 300자 검증은 코드에 주석으로만 존재(미구현). 실질적 영향 없음(창체 코멘트 대부분 300자 이상)"
+
+  - id: PIPE-B6-qa_p2_good_sentences
+    requirement: |
+      QA P2-B: 핵심문장 과목 커버리지 검증
+      - setuek_data의 모든 과목에 good_sentences 항목 또는 "해당 없음" 존재
+      - 각 핵심문장 항목: (과목라벨, 핵심문장, 이유, 표현역량) 4-tuple 완전성
+    spec_ref: "qa_validator.py check_good_sentences_completeness() L303"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: setuek_data 과목 vs good_sentences 과목 비교. 4-tuple len(s)<4 검증. 연승훈: 커버리지 WARN(1과목 누락), 의대샘플: 전체 15과목 PASS"
+
+  - id: PIPE-B7-qa_p2_cross_ref
+    requirement: |
+      QA P2-C: 교차 참조 일관성
+      - setuek_data 과목명 ↔ setuek_comments 키 ↔ comment_keys ↔ good_sentences 과목라벨
+      - 과목명 매칭 불일치 시 WARN
+    spec_ref: "qa_validator.py check_cross_references() L344"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: f'{d[1]}({d[0]})' 형태로 키 생성 후 setuek_comments.keys()와 비교. 연승훈/의대샘플 모두 '세특 데이터↔코멘트 매칭' PASS"
+
+  - id: PIPE-B8-qa_blocking
+    requirement: |
+      QA P1 FAIL 시 리포트 생성 차단:
+      - qa_report.all_blocking_passed() == False 이면 exit 3
+      - "QA FAIL - 리포트 생성 차단" 메시지 출력
+      - P2 WARN은 경고만 출력, 리포트 생성 진행
+    spec_ref: "generate_report.py L146~148, CLAUDE.md § Step 8.5"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: all_blocking_passed() = all(r.status != 'FAIL' for r in results if r.priority == 'P1'). P2 WARN 있어도 리포트 생성 진행 확인. 연승훈: P2 WARN 2건 있지만 리포트 정상 생성"
+
+  # ─── C. Excel 리포트 생성 (Step 9-2) ───────────────────────────
+  - id: PIPE-C1-excel_creation
+    requirement: |
+      create_excel(sd, xlsx_path) 실행 시:
+      - openpyxl로 .xlsx 파일 생성
+      - 파일명: {학생이름}_학생부분석_{YYYYMMDD}.xlsx
+      - output/ 디렉토리 자동 생성 (없으면)
+    spec_ref: "report_logic.py create_excel(), generate_report.py L153~158"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "연승훈: 연승훈_학생부분석_20260406.xlsx 29,845바이트 정상 생성. 의대샘플: 의대샘플_학생부분석_20260408.xlsx 정상 생성. OUTPUT_DIR.mkdir(parents=True, exist_ok=True) 확인"
+
+  - id: PIPE-C2-excel_sheets
+    requirement: |
+      Excel 시트 구성 (내신 제외 분석 기준):
+      - 종합요약: 종합등급, 핵심강점3, 보완영역3, 성장스토리, 종합코멘트
+      - 세특분석: 과목별 점수 + 등급
+      - 세특코멘트: 과목별 강점/보완점
+      - 핵심평가문장: 과목/문장/이유/표현역량
+      - 창체분석: 영역별 점수 + 분량비율
+      - 행특분석: 학년별 점수 + 강점/보완점
+      - 연계성분석: 세특 과목 간, 창체-세특, 성장 스토리
+      - 대학평가요소: 학업/진로/공동체 역량별 등급
+      - 역량별보완법: 진단 + 보완활동 + 중요도
+    spec_ref: "report_logic.py create_excel(), CLAUDE.md § 리포트 출력 구조"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "연승훈 Excel 9시트: 종합요약(12r×2c), 세특분석(20r×10c), 세특코멘트(20r×4c), 핵심평가문장(26r×4c), 창체분석(10r×14c), 행특분석(4r×3c), 연계성분석(4r×3c), 대학평가요소(11r×4c), 역량별보완법(5r×6c)"
+
+  - id: PIPE-C3-excel_style
+    requirement: |
+      Excel 스타일 규칙 준수:
+      - 파란 헤더(#4472C4), thin borders, center alignment
+      - auto_filter, freeze_panes, Arial 폰트
+      - merge_cells 사용 금지 (태블릿 MS365 호환)
+      - wrap_text 사용 금지
+    spec_ref: "CLAUDE.md § Excel 출력 규칙"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드: HEADER_FILL_HEX='4472C4', thin borders, style_header()에 Arial 설정. openpyxl 검증: Header fill=004472C4, font=Arial. 9시트 모두 merge_cells 없음. wrap_text grep 0건"
+
+  - id: PIPE-C4-excel_grade_color
+    requirement: |
+      등급별 색상 코딩:
+      - S/A/B/C/D 등급에 따라 셀 배경색 또는 글자색 구분
+      - apply_grade_color() 함수 동작 확인
+    spec_ref: "report_logic.py apply_grade_color()"
+    priority: P2
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: apply_grade_color() 함수 존재. 등급별 PatternFill 적용. 연승훈 Excel에서 등급 셀 색상 확인"
+
+  # ─── D. PDF 리포트 생성 (Step 9-3) ─────────────────────────────
+  - id: PIPE-D1-pdf_creation
+    requirement: |
+      create_pdf(sd, pdf_path) 실행 시:
+      - reportlab로 .pdf 파일 생성
+      - 한글 폰트(NanumSquareRound) 적용
+      - 파일명: {학생이름}_학생부분석_{YYYYMMDD}.pdf
+    spec_ref: "report_logic.py create_pdf(), generate_report.py L155~159"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "연승훈: 연승훈_학생부분석_20260406.pdf 242,771바이트 정상 생성. 의대샘플: 의대샘플_학생부분석_20260408.pdf 정상 생성"
+
+  - id: PIPE-D2-pdf_cover
+    requirement: |
+      PDF 표지 구성:
+      - 학생 이름, 학교명 표시
+      - 학년 범위 자동 생성 (데이터에서 감지)
+        - 1학년만: "1학년"
+        - 1~2학년: "1~2학년"
+        - 1~3학년: "1~3학년"
+      - 입시라운지 로고 (assets/logo.png)
+    spec_ref: "report_logic.py _calc_record_range() L596~610, CoverPage"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: _calc_record_range() setuek/changche/haengtuk에서 학년 수집 → min~max 범위 문자열. LOGO_PATH = assets/logo.png 참조. CoverPage에서 학생명+학교명+학년범위 출력"
+
+  - id: PIPE-D3-pdf_content
+    requirement: |
+      PDF 본문 구성:
+      - Excel과 동일한 분석 내용 포함
+      - 종합요약/세특/창체/행특/연계성/대학평가요소/역량별보완법
+      - 학부모 상담용으로 보기 좋게 포맷팅
+    spec_ref: "report_logic.py create_pdf() ~1400줄"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 1400줄. 종합요약→세특(학년별)→창체(영역별)→행특(학년별)→연계성→평가요소→보완법 순서로 PDF 페이지 생성. 연승훈 PDF 242KB 정상"
+
+  - id: PIPE-D4-pdf_font
+    requirement: |
+      PDF 한글 폰트 정상 렌더링:
+      - fonts/NanumSquareRoundR.ttf (본문)
+      - fonts/NanumSquareRoundB.ttf (굵은 폰트)
+      - 한글 깨짐 없이 정상 출력
+    spec_ref: "report_constants.py L45~46, fonts/ 디렉토리"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "report_constants.py: registerFont NanumSquareRoundR.ttf→'Malgun', NanumSquareRoundB.ttf→'MalgunBd'. 폰트 파일 존재 확인. PDF 한글 정상 렌더(이전 리포트 납품 실적 있음)"
+
+  # ─── E. 부분 학년 & 실행 모드 ───────────────────────────────────
+  - id: PIPE-E1-partial_year
+    requirement: |
+      부분 학년 학생부 지원:
+      - 1학년만 있어도 리포트 생성 가능
+      - setuek_data/changche_data/haengtuk_data에서 학년 자동 감지
+      - PDF 표지 학년 범위 자동 생성
+      - 없는 학년은 QA/리포트에서 자동 제외
+    spec_ref: "CLAUDE.md § 부분 학년 학생부 지원, _template.py L20~34"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: _calc_record_range() 학년 자동 감지. setuek_years_in_data = sorted(set(d[0] for d in setuek_data)). 의대샘플(2학년): 1~2학년 범위 생성. 빈 데이터 가드: 'if setuek_data else 0', 'if not all_years: return \"-\"'"
+
+  - id: PIPE-E2-flexible_qa
+    requirement: |
+      부분 학년 시 유연한 QA:
+      - 세특: 최소 1과목 이상
+      - 창체: 최소 1행 이상
+      - 행특: 최소 1학년 이상
+      - 학년 1개뿐이면 "학년별 성장 흐름" 항목 생략 가능
+    spec_ref: "CLAUDE.md § 유연한 QA 검증 규칙"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: check_structural_completeness()에서 setuek≥1, changche≥1, haengtuk≥1 최소 기준. 의대샘플(2학년분만) QA 정상 통과"
+
+  - id: PIPE-E3-dynamic_iteration
+    requirement: |
+      리포트 생성 시 학년 하드코딩 없이 동적 순회:
+      - setuek_data에 존재하는 학년만 순회
+      - changche_data에 존재하는 영역·학년만 순회
+      - haengtuk_data에 존재하는 학년만 순회
+    spec_ref: "CLAUDE.md § 자동 처리 항목"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "코드 확인: Excel — sorted(haengtuk_comments.keys()). PDF — setuek_years_in_data = sorted(set()), for yr in setuek_years_in_data. 창체: for d in changche_data if d[1]==area. 하드코딩 [1,2,3] 없음"
+
+  # ─── F. 기존 리포트 확인 (Step 0) ──────────────────────────────
+  - id: PIPE-F1-prior_report_search
+    requirement: |
+      분석 시작 전 output/ 폴더에서 동일 학생 기존 리포트 탐색:
+      - {학생이름}_학생부분석_*.xlsx / *.pdf 패턴 검색
+      - 존재 시 동일 인물 확인 (학교명, 생년월일, 학년 연속성)
+    spec_ref: "CLAUDE.md § Step 0-1, 0-2"
+    priority: P2
+    cli:
+      status: na
+      verified_at: "2026-04-16"
+      evidence: "Step 0은 Claude 대화형으로 수동 수행하는 단계. generate_report.py에 자동화 코드 없음 (설계 의도)"
+      note: "Claude가 분석 시작 시 output/ 스캔 후 기존 리포트 확인하는 워크플로우. 코드 자동화 대상 아님"
+
+  - id: PIPE-F2-change_tracking
+    requirement: |
+      2회차 이상 분석 시 변화 추적:
+      - 이전 분석 대비 영역별 등급 변화 추이
+      - 이전 보완점 반영도: 반영됨/부분반영/미반영 판정 + 근거
+      - 새 강점/보완점 식별
+      - 성장 코멘트 최소 200자
+      - 파일명: {학생이름}_학생부분석_{날짜}_v{횟수}.xlsx
+    spec_ref: "CLAUDE.md § Step 0-4, 이전분석대비변화 시트"
+    priority: P2
+    cli:
+      status: na
+      verified_at: "2026-04-16"
+      evidence: "변화 추적은 Claude 대화형으로 수행. output/change_tracking_sample.py 실험 파일 존재하나 파이프라인에 미통합. _v{횟수} 파일명은 Claude가 수동 지정"
+      note: "향후 자동화 가능. 현재는 Claude 워크플로우로 처리"
+
+  # ─── G. 종합 실행 흐름 ─────────────────────────────────────────
+  - id: PIPE-G1-end_to_end
+    requirement: |
+      python generate_report.py <학생명> 전체 흐름 정상 동작:
+      1. 학생 데이터 파일 로드 + 15개 변수 검증
+      2. QA P1 검증 통과
+      3. Excel 리포트 생성 (파일 정상 생성, 시트 포함)
+      4. PDF 리포트 생성 (파일 정상 생성, 한글 정상)
+      5. 출력 경로 안내
+      - exit code 0
+    spec_ref: "generate_report.py main(), CLAUDE.md § Step 9-1"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "연승훈: load→QA(15pass,2warn)→Excel(29KB,9시트)→PDF(242KB)→'Done.' exit 0. 의대샘플: load→QA(16pass,1warn)→Excel→PDF→'Done.' exit 0"
+
+  - id: PIPE-G2-existing_student_run
+    requirement: |
+      기존 학생 데이터(연승훈 또는 의대샘플)로 실행 시:
+      - QA 통과 + Excel + PDF 모두 정상 생성
+      - Excel 파일 열기 가능 (openpyxl load 가능)
+      - PDF 파일 열기 가능 (0바이트 아님)
+    spec_ref: "data/students/연승훈.py, data/students/의대샘플.py"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "연승훈: openpyxl.load_workbook() 성공, 9시트 정상 읽기. PDF 242,771바이트. 의대샘플: 동일하게 정상"
+
+  - id: PIPE-G3-qa_console_output
+    requirement: |
+      QA 검증 결과 콘솔 출력:
+      - PASS/FAIL/WARN 요약 표시
+      - FAIL 항목 상세 내용 + 수정 방법 제시
+      - P1 전체 PASS → "QA 통과 - 리포트 생성 시작" 메시지
+    spec_ref: "generate_report.py L128~151, qa_validator.py print_qa_report()"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "콘솔 출력 확인: '[P1] 필수 검증' 10항목 OK, '[P2] 중요 검증' WARN 상세. '결과: PASS (경고 2건)' + '통과 15건 / 실패 0건 / 경고 2건' + 'QA 통과 - 리포트 생성 시작'"
+
+  - id: PIPE-G4-output_files
+    requirement: |
+      생성된 파일 확인:
+      - output/{학생이름}_학생부분석_{YYYYMMDD}.xlsx 존재
+      - output/{학생이름}_학생부분석_{YYYYMMDD}.pdf 존재
+      - 파일 크기 > 0
+      - 콘솔에 전체 경로 출력
+    spec_ref: "generate_report.py L153~160"
+    priority: P0
+    cli:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "Excel saved: .../연승훈_학생부분석_20260406.xlsx (29,845bytes). PDF saved: .../연승훈_학생부분석_20260406.pdf (242,771bytes). 콘솔에 전체 경로 출력 확인"

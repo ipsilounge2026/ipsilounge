@@ -14,6 +14,10 @@ class AvailableSlotResponse(BaseModel):
     remaining: int  # 남은 예약 가능 수
     admin_id: str | None = None
     admin_name: str | None = None
+    # 기획서 §4-8-2: 학습상담 7일 리드타임 등 타입별 예약 가능 여부.
+    # consultation_type 쿼리가 주어졌을 때만 의미있는 값이 채워짐.
+    available: bool = True
+    unavailable_reason: str | None = None
 
     model_config = {"from_attributes": True}
 

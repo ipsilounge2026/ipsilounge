@@ -1,0 +1,457 @@
+# ===================================================================
+# 인증·권한·관리자 역할 체크리스트
+# ===================================================================
+# 영역: cross-cutting / AUTH
+# spec:
+#   - ipsilounge/CLAUDE.md § 관리자 역할 정의 (super_admin/admin/counselor/senior)
+#   - backend/app/routers/auth.py (회원/관리자 로그인 + 비밀번호 재설정)
+#   - backend/app/utils/security.py (JWT, bcrypt)
+#   - backend/app/utils/dependencies.py (get_current_user/admin/super_admin)
+#   - backend/app/routers/admin_admins.py (역할/메뉴/매칭)
+#   - admin-web/src/lib/auth.ts (프론트 권한 게이트)
+#   - user-web/src/lib/auth.ts (사용자 토큰 처리)
+#
+# 검증 방법: 코드 리뷰 + 구조 검증
+#   이 체크리스트는 인프라·보안 핵심이므로 "구현 존재 + 코드 정합성"을
+#   엄격 검증. 실제 로그인/토큰 발급 런타임 E2E는 booking.yaml 등
+#   상위 체크리스트에서 dev_login_as 로 이미 간접 검증됨.
+# ===================================================================
+
+meta:
+  area_code: AUTH
+  title: "인증·권한·관리자 역할"
+  created_at: "2026-04-16"
+  spec_refs:
+    - "ipsilounge/CLAUDE.md § 관리자 역할 정의"
+    - "ipsilounge/backend/app/routers/auth.py"
+    - "ipsilounge/backend/app/services/auth_service.py"
+    - "ipsilounge/backend/app/utils/security.py"
+    - "ipsilounge/backend/app/utils/dependencies.py"
+    - "ipsilounge/backend/app/routers/admin_admins.py"
+    - "ipsilounge/backend/app/models/admin.py"
+    - "ipsilounge/backend/app/models/user.py"
+    - "ipsilounge/admin-web/src/lib/auth.ts"
+    - "ipsilounge/admin-web/src/components/Sidebar.tsx"
+    - "ipsilounge/user-web/src/lib/auth.ts"
+  implementation_notes:
+    - "CLAUDE.md는 3개 역할(super_admin/admin/counselor) 명시. 실제 구현은 4개 역할(+ senior). VALID_ROLES={super_admin,admin,counselor,senior}"
+    - "Spec 메뉴 8개 vs 구현 메뉴 12개 (surveys/seminar/notice/guidebook 추가). Spec 대비 확장은 gap 문서화"
+    - "JWT는 HS256 + access 24h + refresh 7일. SECRET_KEY 는 .env 로 주입"
+    - "CLAUDE.md 언급한 보안 수준(bcrypt + rate limiter)이 실제 구현에서 확인됨"
+
+# ─── A. 사용자 인증 (회원가입·로그인·토큰) ──────────────────────────
+items:
+  - id: AUTH-A1-register
+    requirement: |
+      POST /api/auth/register
+      - UserRegister 스키마 검증 (email/password/name/member_type)
+      - 약관 동의(agree_terms + agree_privacy) 필수 (400 반환)
+      - 이메일 중복 체크 (400 반환)
+      - bcrypt 비밀번호 해싱 (pwd_context.hash)
+      - branch_manager는 is_active=False로 생성 (승인 대기)
+      - agreed_at/terms_version DB 기록
+      - rate limit: 5/hour
+    spec_ref: "backend/app/routers/auth.py L38~42, services/auth_service.py register_user()"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        auth.py L38~42 @limiter.limit("5/hour") 적용 확인.
+        auth_service.py L17~57 agree_terms/agree_privacy 양쪽 체크 + 이메일 중복 체크 + bcrypt 해싱 + branch_manager 비활성 + agreed_at/terms_version 기록 모두 구현.
+
+  - id: AUTH-A2-login
+    requirement: |
+      POST /api/auth/login
+      - UserLogin 스키마 (email + password)
+      - User 조회 → bcrypt 검증 (401 반환)
+      - is_active=False 시 403 + (branch_manager는 "승인 대기" 메시지)
+      - 성공 시 TokenResponse 발급 (sub=user.id, role=user, member_type 포함)
+      - rate limit: 5/minute
+    spec_ref: "backend/app/routers/auth.py L45~49, services/auth_service.py login_user()"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "auth_service.py L60~77 verify_password 실패 401, is_active 확인 + branch_manager 전용 메시지, token_data에 role/member_type 모두 포함."
+
+  - id: AUTH-A3-refresh
+    requirement: |
+      POST /api/auth/refresh
+      - refresh_token 수신
+      - decode_token() + type == "refresh" 검증 (401 반환)
+      - 새 access+refresh 발급
+      - member_type 보존 (있을 경우)
+      - rate limit: 10/minute
+    spec_ref: "backend/app/routers/auth.py L52~56, services/auth_service.py refresh_tokens()"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "auth_service.py L93~109 decode_token().type == 'refresh' 검증 + member_type 보존 로직 확인."
+
+  - id: AUTH-A4-admin-login
+    requirement: |
+      POST /api/auth/admin/login
+      - Admin 테이블 조회 + bcrypt 검증 (401)
+      - 성공 시 TokenResponse (sub=admin.id, role=admin)
+      - rate limit: 5/minute
+      - User/Admin은 서로 다른 role 클레임이라 토큰 혼용 불가
+    spec_ref: "backend/app/routers/auth.py L59~63, services/auth_service.py login_admin()"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "auth_service.py L80~90 Admin 조회 + verify_password + token_data role='admin'. dependencies.py에서 role 매칭으로 혼용 차단."
+
+# ─── B. JWT 토큰 구조 & 보안 ─────────────────────────────────────
+  - id: AUTH-B1-jwt-structure
+    requirement: |
+      JWT 구조 (HS256):
+      - access_token: exp = now + ACCESS_TOKEN_EXPIRE_MINUTES(24h), type='access'
+      - refresh_token: exp = now + REFRESH_TOKEN_EXPIRE_DAYS(7d), type='refresh'
+      - 클레임: sub (user/admin id), role (user/admin), 필요 시 member_type
+      - SECRET_KEY + ALGORITHM은 settings에서 주입
+    spec_ref: "backend/app/utils/security.py, config.py L30~33"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "security.py L19~30 create_access_token(type='access')/create_refresh_token(type='refresh') 분리. config.py ACCESS_TOKEN_EXPIRE_MINUTES=1440, REFRESH_TOKEN_EXPIRE_DAYS=7."
+
+  - id: AUTH-B2-password-hash
+    requirement: |
+      비밀번호 해싱: bcrypt (passlib CryptContext)
+      - hash_password(): pwd_context.hash
+      - verify_password(): pwd_context.verify (상수시간 비교)
+      - 평문 비밀번호는 DB/로그에 남지 않음
+    spec_ref: "backend/app/utils/security.py L8~16"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "security.py L8 pwd_context = CryptContext(schemes=['bcrypt']). register_user()/login_*/reset_password 모두 hash/verify만 사용."
+
+  - id: AUTH-B3-rate-limit
+    requirement: |
+      Rate limiting (slowapi):
+      - register: 5/hour
+      - login / admin/login: 5/minute
+      - refresh: 10/minute
+      - forgot-password: 3/hour
+      - key_func = get_remote_address (IP 기반)
+    spec_ref: "backend/app/utils/rate_limiter.py, routers/auth.py"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "rate_limiter.py Limiter(key_func=get_remote_address). auth.py 각 엔드포인트에 @limiter.limit 데코레이터 적용 (register 5/hour, login 5/min, refresh 10/min, forgot-password 3/hour)."
+
+  - id: AUTH-B4-token-type-guard
+    requirement: |
+      토큰 용도 혼용 방지:
+      - access_token으로 /refresh 호출 → type != 'refresh'로 401
+      - refresh_token으로 get_current_user/admin 호출 → type != 'access'로 401
+      - user 토큰으로 admin 엔드포인트 접근 → role != 'admin'로 401
+      - admin 토큰으로 user 엔드포인트 접근 → role != 'user'로 401
+    spec_ref: "backend/app/utils/dependencies.py L16~54, services/auth_service.py refresh_tokens()"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        dependencies.py L21 get_current_user: type != 'access' or role != 'user' → 401.
+        dependencies.py L41 get_current_admin: type != 'access' or role != 'admin' → 401.
+        auth_service.py L95 refresh_tokens: type != 'refresh' → 401. 4방향 가드 모두 구현.
+
+# ─── C. 관리자 역할 체계 ─────────────────────────────────────────
+  - id: AUTH-C1-roles
+    requirement: |
+      4개 역할 정의: super_admin / admin / counselor / senior
+      - admin_admins.py VALID_ROLES = {super_admin, admin, counselor, senior}
+      - Admin.role 컬럼 default='admin'
+      - ROLE_LABELS: 최고관리자/관리자/상담사/선배
+      - spec은 3개(super_admin/admin/counselor)만 명시이나 구현은 senior 추가됨
+    spec_ref: "ipsilounge/CLAUDE.md § 관리자 역할 정의, admin_admins.py L38~45"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_admins.py L38 VALID_ROLES={'super_admin','admin','counselor','senior'}. L40 ROLE_LABELS 4개 한글 매핑. senior는 spec에 없으나 CLAUDE.md 확장 기능(선배 상담) 연계로 추가됨."
+
+  - id: AUTH-C2-super-admin-guard
+    requirement: |
+      super_admin 전용 엔드포인트 가드:
+      - get_current_super_admin() : admin.role != 'super_admin' → 403
+      - 관리자 생성/승격/수정/비밀번호초기화
+      - 학생-담당자 매칭 생성/삭제
+      - 학생-선배 매칭 생성/삭제
+      - 전체 메뉴 목록 조회(/menus)
+    spec_ref: "backend/app/utils/dependencies.py L64~69, admin_admins.py"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        dependencies.py L64~69 get_current_super_admin 구현. admin_admins.py에서 create_admin/promote/update/reset-password/get_all_menus/create_assignment/delete_assignment/unmatched/create_senior_assignment/delete_senior_assignment 모두 get_current_super_admin 의존.
+
+  - id: AUTH-C3-self-deactivation-guard
+    requirement: |
+      본인 계정 비활성화 차단:
+      - update_admin: 본인(str(admin.id) == str(current_admin.id))이 is_active=False 시도 → 400
+    spec_ref: "backend/app/routers/admin_admins.py L234"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_admins.py L234~235 str(admin.id) == str(current_admin.id) and data.is_active is False → HTTPException(400) 확인."
+
+  - id: AUTH-C4-promote-user
+    requirement: |
+      회원을 관리자로 승격 (/api/admin/admins/promote, super_admin 전용):
+      - user_id로 User 조회 (없으면 404)
+      - 이미 Admin 등록된 이메일이면 400
+      - role 검증 (VALID_ROLES 포함)
+      - Admin 레코드 생성 (password_hash는 User 것 재사용, user_id 링크)
+      - allowed_menus 미지정 시 역할 기본값 주입
+    spec_ref: "backend/app/routers/admin_admins.py L171~214"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_admins.py L171~214 구현 확인: uuid 파싱→User 조회→email 기반 중복체크→Admin(user_id=str(user.id)) 생성. 역할 미지정 시 ROLE_DEFAULT_MENUS 주입."
+
+# ─── D. 메뉴 권한 (allowed_menus) ───────────────────────────────
+  - id: AUTH-D1-menu-catalog
+    requirement: |
+      전체 메뉴 키 목록 (ALL_MENUS, 12개):
+      dashboard, analysis, consultation, surveys, users, payments,
+      admins, seminar, notice, guidebook, assignments, settings
+      (spec 대비 surveys/seminar/notice/guidebook 4개 확장 — 확장 기능 연계)
+    spec_ref: "backend/app/routers/admin_admins.py L22~35"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_admins.py L22~35 ALL_MENUS 12개 확인. CLAUDE.md spec 8개(dashboard/analysis/consultation/users/payments/admins/assignments/settings) 대비 4개 추가는 확장 기능(설문/설명회/공지/가이드북) 연계."
+
+  - id: AUTH-D2-role-defaults
+    requirement: |
+      역할별 기본 메뉴 (ROLE_DEFAULT_MENUS):
+      - admin: dashboard, analysis, consultation, surveys, seminar, notice, assignments
+      - counselor: dashboard, consultation, surveys
+      - senior: dashboard, consultation, surveys
+      - super_admin은 전체 메뉴(allowed_menus 무시)
+      create_admin/promote 시 allowed_menus 미지정 시 기본값 주입
+    spec_ref: "backend/app/routers/admin_admins.py L48~52, L152~157, L197~202"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_admins.py L48~52 ROLE_DEFAULT_MENUS 3개 역할 기본값. L152~157, L197~202 두 곳에서 data.allowed_menus or ROLE_DEFAULT_MENUS[role] or 'dashboard' 폴백 로직 일관."
+
+  - id: AUTH-D3-me-endpoint
+    requirement: |
+      GET /api/admin/admins/me
+      - super_admin인 경우: ALL_MENUS 전체 키 반환
+      - 그 외: allowed_menus.split(',') → 리스트 반환 (값 없으면 ['dashboard'])
+      - id/email/name/role/allowed_menus 반환
+      - get_current_admin 의존 (일반 관리자도 자기정보 조회 가능)
+    spec_ref: "backend/app/routers/admin_admins.py L83~98"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_admins.py L87~98 super_admin 분기 → [m['key'] for m in ALL_MENUS]. 그 외 allowed_menus.split(',') or ['dashboard']. 5개 필드 응답."
+
+  - id: AUTH-D4-frontend-gate
+    requirement: |
+      관리자 웹 프론트 권한 게이트:
+      - admin-web/src/lib/auth.ts hasMenuAccess(menuKey): super_admin은 true, 그 외는 allowed_menus 포함 여부
+      - Sidebar.tsx: allMenuItems 필터링 — role==='super_admin' 전체, 아니면 allowed_menus.includes(item.key)
+      - getDefaultRoute(): 로그인 직후 리다이렉트 경로 계산 (super_admin → '/', 그 외 → 첫 allowed 메뉴)
+    spec_ref: "admin-web/src/lib/auth.ts, components/Sidebar.tsx"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        lib/auth.ts L31~36 hasMenuAccess: super_admin→true, else allowed_menus.includes.
+        Sidebar.tsx L42~46 filter: !adminInfo→dashboard만, super_admin→true, else allowed_menus.includes.
+        lib/auth.ts L52~60 getDefaultRoute: MENU_ROUTES 매핑. 3개 지점 일관.
+
+# ─── E. 데이터 접근 규칙 (매칭 기반 필터) ──────────────────────────
+  - id: AUTH-E1-analysis-matching-filter
+    requirement: |
+      분석 관리: admin.role != 'super_admin' 시 AdminStudentAssignment 매칭된
+      user_id의 AnalysisOrder만 조회/수정 가능
+      - _get_matched_user_ids(admin, db): super_admin → None(전체), 그 외 → 매칭 ID 리스트
+      - stats/list/detail 모든 엔드포인트에서 matched_user_ids 필터 적용
+    spec_ref: "backend/app/routers/admin_analysis.py L24~31, L34~54"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_analysis.py L24 _get_matched_user_ids 헬퍼. role=='super_admin' → None, else select(AdminStudentAssignment.user_id).where(admin_id==admin.id). stats/list 모두 matched_user_ids 조건부 필터 적용."
+
+  - id: AUTH-E2-consultation-slot-owner
+    requirement: |
+      상담 관리: 슬롯 소유자 기반 필터
+      - super_admin: 전체 슬롯 조회/수정 가능
+      - 그 외 관리자: ConsultationSlot.admin_id == admin.id 필터
+      - 슬롯 수정/삭제: 비 super_admin은 본인 슬롯만 (다른 admin의 슬롯 수정 시 403)
+      - 신규 슬롯 생성: super_admin만 data.admin_id 지정 가능, 그 외는 본인 id 강제
+    spec_ref: "backend/app/routers/admin_consultation.py L67~76, L91, L154~157, L188, L232"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_consultation.py L91 slot_admin_id = data.admin_id if super_admin and data.admin_id else str(admin.id). L154 if role != super_admin: conditions.append(ConsultationSlot.admin_id == admin_id). L188/L232 본인 슬롯 아닐 때 403. 3개 지점 일관."
+
+  - id: AUTH-E3-my-students
+    requirement: |
+      GET /api/admin/admins/my-students
+      - 현재 관리자에 매칭된 User 목록 반환
+      - 본인 id 기준 AdminStudentAssignment 조회 + User 조인
+      - super_admin도 본인 명의 매칭만 (전체 목록은 /assignments 엔드포인트)
+    spec_ref: "backend/app/routers/admin_admins.py L348~373"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_admins.py L354~357 select(AdminStudentAssignment).where(admin_id == current_admin.id)로 고정. 역할 분기 없음 — 본인 매칭만 반환."
+
+  - id: AUTH-E4-change-request-approval
+    requirement: |
+      담당자/선배 변경 요청 처리:
+      - super_admin + admin만 승인/거절 가능 (counselor/senior는 403)
+      - 승인 시 기존 AdminStudentAssignment/SeniorStudentAssignment 삭제 후 신규 생성
+      - requested_admin_id 없으면 new_admin_id 필수 (400)
+      - 이미 처리된 요청은 status != 'pending' 으로 400
+    spec_ref: "backend/app/routers/admin_admins.py L494~535, L671~712"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin_admins.py L502~503/L679~680 role not in ('super_admin','admin') → 403. L513~514/L690~691 이미 처리된 요청 400. L525~532/L702~709 기존 삭제 후 신규 생성 로직 일관."
+
+# ─── F. 비밀번호 재설정 ──────────────────────────────────────────
+  - id: AUTH-F1-forgot-password
+    requirement: |
+      POST /api/auth/forgot-password
+      - email 수신 → User 조회
+      - 사용자 존재/비존재 노출 금지 (성공 메시지 항상 동일)
+      - 존재하고 is_active=True인 경우에만 토큰 생성 + 이메일 발송
+      - token: secrets.token_urlsafe(32)
+      - expires_at: now + RESET_TOKEN_EXPIRE_MINUTES(기본 30분)
+      - PasswordResetToken DB 저장
+      - reset_link = FRONTEND_URL + '/reset-password?token=...'
+      - rate limit: 3/hour
+    spec_ref: "backend/app/routers/auth.py L66~88"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "auth.py L66~88 @limiter.limit('3/hour'). user 미존재/비활성 시에도 동일 성공 메시지 반환. secrets.token_urlsafe(32) + 30분 만료. FRONTEND_URL/reset-password?token= 링크 생성."
+
+  - id: AUTH-F2-reset-password
+    requirement: |
+      POST /api/auth/reset-password
+      - token + new_password 수신
+      - PasswordResetToken 조회: is_used=False AND expires_at > now (400)
+      - user_id로 User 조회 (404)
+      - bcrypt 새 해시 + reset_token.is_used = True (일회용)
+      - 성공 메시지 반환
+    spec_ref: "backend/app/routers/auth.py L91~114"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "auth.py L94~100 is_used==False + expires_at > utcnow 필터. L110~111 hash_password(new_password) + is_used=True 저장. 일회용 토큰 구조 확인."
+
+# ─── G. 토큰 저장·만료 (프론트) ──────────────────────────────────
+  - id: AUTH-G1-user-token-storage
+    requirement: |
+      사용자 웹 토큰 저장:
+      - user-web/src/lib/auth.ts
+      - keep_logged_in=true → localStorage, false → sessionStorage
+      - isLoggedIn(): 토큰 존재 + exp 검증 (만료 시 양쪽 삭제 + false)
+      - getToken(): localStorage → sessionStorage 순서 조회
+      - getMemberType(): JWT payload.member_type 파싱
+      - logout(): localStorage + sessionStorage 모두 제거
+    spec_ref: "user-web/src/lib/auth.ts"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "user-web/src/lib/auth.ts L13~23 localStorage || sessionStorage fallback. isTokenExpired() exp*1000 비교. logout L41~46 양쪽 제거 + keep_logged_in 플래그 제거."
+
+  - id: AUTH-G2-admin-token-storage
+    requirement: |
+      관리자 웹 토큰 저장:
+      - admin-web/src/lib/auth.ts
+      - localStorage('admin_token') + 'admin_info' JSON 저장
+      - isLoggedIn(): admin_token 존재 여부
+      - logout(): admin_token/admin_info/admin_keep_logged_in/admin_keep_cred 모두 제거 후 /login 이동
+      - 로그인 페이지에서 저장된 이메일(admin_saved_email) 복원
+    spec_ref: "admin-web/src/lib/auth.ts, admin-web/src/app/login/page.tsx"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "admin-web/src/lib/auth.ts L3~14 isLoggedIn → admin_token 존재, logout → 4개 키 제거 + /login 리다이렉트. login/page.tsx rememberEmail → admin_saved_email 복원 로직."
+
+# ─── H. 검증 인프라 (DEV_MODE) ──────────────────────────────────
+  - id: AUTH-H1-dev-login-as
+    requirement: |
+      /api/dev/login-as/{identifier} (DEV_MODE 전용):
+      - DEV_MODE=false 시 403 (운영 차단)
+      - identifier → email candidate 매핑 (student_t1 등)
+      - User 우선 조회 후 Admin 조회
+      - 운영 /api/auth/login 과 100% 동일한 TokenResponse 반환
+      - X-Dev-Mode: true 헤더 포함
+    spec_ref: "backend/app/routers/dev_routes.py L86~129"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "dev_routes.py L86~ _enforce_dev_mode() 선행. L102~114 User 우선 + token_data role='user', L117~ Admin 폴백 role='admin'. 실제 create_access/refresh_token 재사용 — 운영과 동일 스키마."
+
+# ─── I. Spec vs 구현 Gap 문서화 ─────────────────────────────────
+  - id: AUTH-I1-senior-role-extension
+    requirement: |
+      CLAUDE.md § 관리자 역할 정의는 3개(super_admin/admin/counselor)만 명시.
+      실제 구현은 4개(+ senior). SeniorStudentAssignment 별도 모델로 분리됨.
+      gap 문서화: 선배 상담 확장 기능 연계 (CLAUDE.md § 확장 기능 senior 관련 설명 필요)
+    spec_ref: "ipsilounge/CLAUDE.md § 관리자 역할 정의 vs admin_admins.py L38"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "gap 확인: spec 3개 역할 vs 구현 4개 역할. senior는 SeniorStudentAssignment 테이블 + admin_admins.py senior-assignments 엔드포인트로 일관 구현. spec 문서 갱신 과제로 기록."
+
+  - id: AUTH-I2-menu-extension
+    requirement: |
+      CLAUDE.md § 관리자 메뉴는 8개(dashboard/analysis/consultation/users/payments/admins/assignments/settings).
+      실제 ALL_MENUS는 12개(+ surveys/seminar/notice/guidebook).
+      확장 메뉴는 확장 기능(설문/설명회/공지/가이드북) 연계.
+      gap 문서화: CLAUDE.md 메뉴 섹션 업데이트 필요.
+    spec_ref: "ipsilounge/CLAUDE.md § 메뉴 vs admin_admins.py L22~35"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "gap 확인: spec 8개 vs 구현 12개. 추가 4개는 프론트 Sidebar/권한 게이트에서 일관 처리됨. spec 문서 갱신 과제."
+
+  - id: AUTH-I3-secret-key-default
+    requirement: |
+      config.py SECRET_KEY 기본값 = "your-secret-key-here-change-in-production"
+      운영 배포 시 반드시 .env 로 재정의 필요.
+      .env 또는 환경변수로 주입되지 않으면 약한 키로 구동됨 (보안 위험).
+      gap 문서화: 배포 체크리스트에 SECRET_KEY 검증 추가 필요.
+    spec_ref: "backend/app/config.py L30"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "config.py L30 기본값 플레이스홀더 확인. pydantic_settings env_file='.env' 주입 경로 존재하나, 운영 배포 시 수동 확인 필요. 배포 가이드에 강조 필요."

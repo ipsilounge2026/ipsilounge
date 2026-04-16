@@ -1,0 +1,533 @@
+# ===================================================================
+# 학생부 분석 리포트 출력 구조 체크리스트
+# ===================================================================
+# spec: school-record-analyzer/CLAUDE.md § 리포트 출력 구조, Step 9
+# 범위: Excel 리포트 시트 구성 · PDF 리포트 구조 · 파일명 규약 · spec↔구현 gap
+# 검증 방법: 실제 생성된 Excel/PDF 파일 검사 (openpyxl, pypdf) + 코드 리뷰
+# ===================================================================
+#
+# 참고: 분석 로직·루브릭은 analyzer/rubric.yaml 범위.
+#       파이프라인·QA·동적로드는 analyzer/pipeline.yaml 범위.
+#       이 체크리스트는 "리포트로 출력된 산출물의 구조"에 한정.
+#
+# 핵심 gap (spec vs 구현):
+#   spec 명시 13시트 중 구현 9시트 (내신분석/입결비교/키워드분석/
+#   전형적합도/출결봉사/이전분석대비변화 6시트 미구현).
+#   PDF 워드클라우드 및 하이라이트 PDF(9-4) 미구현.
+#   현재 운영은 "내신 제외 분석" 모드로 사용 중이므로 대부분의 미구현은
+#   실사용 영향 없음. 다만 키워드분석·하이라이트 PDF는 P2 확장 과제.
+# ===================================================================
+
+meta:
+  area_code: ANALYZER
+  title: "학생부 분석 리포트 출력 구조 (Excel + PDF)"
+  created_at: "2026-04-16"
+  spec_refs:
+    - "school-record-analyzer/CLAUDE.md § 리포트 출력 구조"
+    - "school-record-analyzer/CLAUDE.md § Step 9 (9-0~9-5)"
+    - "school-record-analyzer/CLAUDE.md § Excel 출력 규칙"
+    - "school-record-analyzer/modules/report_logic.py"
+    - "school-record-analyzer/modules/report_constants.py"
+  implementation_notes:
+    - "Excel 9시트 구현: 종합요약/세특분석/세특코멘트/핵심평가문장/창체분석/행특분석/연계성분석/대학평가요소/역량별보완법"
+    - "Spec 명시 13시트 중 6시트 미구현 (내신분석/입결비교/키워드분석/전형적합도/출결·봉사/이전분석대비변화)"
+    - "PDF 7개 섹션 구현 + 표지/목차/평가기준안내 인트로 페이지 (총 17페이지)"
+    - "하이라이트 PDF(CLAUDE.md § 9-4)는 미구현"
+    - "워드클라우드(CLAUDE.md § Step 8-4, PDF)는 미구현"
+
+# ─── A. Excel 시트 구조 (9시트 구현 검증) ────────────────────────
+items:
+  - id: RO-A1-excel_file_creation
+    requirement: |
+      create_excel(sd, xlsx_path) 실행 시 .xlsx 파일 정상 생성:
+      - openpyxl Workbook 기반
+      - 파일 크기 > 0, openpyxl.load_workbook() 로 다시 읽기 가능
+      - 파일명: {학생이름}_학생부분석_{YYYYMMDD}.xlsx
+    spec_ref: "report_logic.py create_excel() L61~278"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "연승훈_학생부분석_20260406.xlsx 29,845 bytes / 의대샘플_학생부분석_20260408.xlsx 28,671 bytes. load_workbook() 정상, 9시트 모두 읽기 가능"
+
+  - id: RO-A2-sheet_summary
+    requirement: |
+      종합요약 시트:
+      - 헤더 [항목, 내용]
+      - 11행: 학생명/학교명/비교과종합/비교과종합점수/
+        핵심강점1~3/보완영역1~3/성장스토리
+      - col_widths [18, 90], auto_filter A1:B12, freeze_panes A2
+    spec_ref: "report_logic.py L117~140, CLAUDE.md § 종합요약"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "12r×2c, freeze=A2, filter=A1:B12. 11행 내용 순서 일치: 학생명=연승훈, 학교명=봉양고, 비교과종합, 비교과종합점수=71.3점 A-등급, 핵심강점1~3, 보완영역1~3, 성장스토리"
+
+  - id: RO-A3-sheet_setuek
+    requirement: |
+      세특분석 시트:
+      - 헤더 [학년, 과목, 교과연계성, 탐구동기, 탐구과정, 결과성찰,
+              차별성, 학업태도, 가중합산, 등급] (10열)
+      - 각 행: setuek_data 매핑
+      - 등급 셀 apply_grade_color() 적용
+      - SETUEK_ITEMS는 6항목 (전공적합성 제외)
+    spec_ref: "report_logic.py L142~159, CLAUDE.md § 세특분석"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "20r×10c (19과목+헤더). 헤더 10열 정확. 등급 분포: S=5/A=3/B=9/C=2. 등급 컬러 확인: S=#1F4E79, A=#2E75B6, B=#9DC3E6, C=#F4B183"
+    note: "spec의 '7개 항목'은 프롬프트 기준. 구현은 6항목으로 일관됨"
+
+  - id: RO-A4-sheet_setuek_comment
+    requirement: |
+      세특코멘트 시트:
+      - 헤더 [학년, 과목, 강점, 보완점] (4열)
+      - comment_keys 순서대로 파싱 ('과목명(학년)' 형식)
+      - 강점/보완점 left_align
+      - col_widths [6, 18, 70, 70]
+    spec_ref: "report_logic.py L162~180, CLAUDE.md § 세특분석 코멘트"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "20r×4c. freeze=A2, filter=A1:D1. 19과목 코멘트 정상 로드. 파싱: rsplit('(',1)로 과목명/학년 분리"
+
+  - id: RO-A5-sheet_good_sentence
+    requirement: |
+      핵심평가문장 시트:
+      - 헤더 [과목, 핵심문장, 이유, 표현역량] (4열)
+      - good_sentences 4-tuple 매핑
+      - 핵심문장/이유/표현역량 left_align
+      - col_widths [16, 60, 55, 40]
+    spec_ref: "report_logic.py L183~193, CLAUDE.md § 좋은 평가 문장 추출"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "26r×4c (25개 핵심문장+헤더). 4-tuple 구조 정상 매핑"
+
+  - id: RO-A6-sheet_changche
+    requirement: |
+      창체분석 시트:
+      - 헤더 [학년, 영역, 시간, 항목5개, 합계(/50), 환산(100),
+              등급, 분량, 비율, 활용] (14열)
+      - 등급은 score_to_grade(scaled/10)로 계산
+      - 분량/비율/활용 문자열 표기 ("480/500자", "96%", "충실활용")
+      - 등급 셀 apply_grade_color() 적용
+    spec_ref: "report_logic.py L195~219, CLAUDE.md § 창체분석"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "10r×14c. row2 확인: [1,'자율',82,9,8,7,7,5,'36/50',72,'A','480/500','96%','충실활용']. 분량/비율/활용 문자열 정확"
+
+  - id: RO-A7-sheet_haengtuk
+    requirement: |
+      행특분석 시트:
+      - 헤더 [학년, 강점, 보완점] (3열)
+      - haengtuk_comments 딕셔너리 키 정렬 순회
+      - 강점/보완점 left_align
+      - col_widths [6, 75, 75]
+    spec_ref: "report_logic.py L221~234, CLAUDE.md § 행특분석"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "4r×3c (3학년+헤더). 학년별 sorted 순회 확인"
+    note: "spec은 '5항목 점수 + 학년/강점/보완점 3항목' 병행. 구현은 코멘트 중심 3열 (점수 테이블 없음, 설계 의도)"
+
+  - id: RO-A8-sheet_linkage
+    requirement: |
+      연계성분석 시트:
+      - 헤더 [분석영역, 연계도, 상세내용] (3열)
+      - linkage_data 3-tuple 매핑
+      - 상세내용 left_align
+      - col_widths [18, 10, 90]
+    spec_ref: "report_logic.py L236~246, CLAUDE.md § 연계성분석"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "4r×3c (3분석영역+헤더). freeze=A2, filter=A1:C1"
+
+  - id: RO-A9-sheet_eval
+    requirement: |
+      대학평가요소 시트:
+      - 헤더 [대분류, 세부항목, 등급, 근거] (4열)
+      - eval_data 4-tuple: 학업/진로/공동체 역량별 재분류
+      - 등급 셀 apply_grade_color() 적용
+      - 근거 left_align
+    spec_ref: "report_logic.py L248~260, CLAUDE.md § 대학평가요소"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "11r×4c (10세부항목+헤더). 학업역량 3 + 진로역량 3 + 공동체역량 4 = 10항목 정확"
+
+  - id: RO-A10-sheet_fix
+    requirement: |
+      역량별보완법 시트:
+      - 헤더 [역량, 항목, 현재등급, 진단, 보완활동, 중요도] (6열)
+      - fix_data 6-tuple 매핑
+      - 진단/보완활동 left_align (300자↑)
+      - col_widths [10, 14, 10, 30, 80, 8]
+    spec_ref: "report_logic.py L262~275, CLAUDE.md § 역량별보완법"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "5r×6c (4보완항목+헤더). 6-tuple 구조 완전"
+
+  # ─── B. Excel 스타일 규칙 ──────────────────────────────────────
+  - id: RO-B1-header_style
+    requirement: |
+      Excel 헤더 스타일 일관성:
+      - 배경색 #4472C4 (HEADER_FILL_HEX)
+      - Arial bold, 흰색 글자, size 10
+      - 모든 시트 헤더에 동일 적용
+    spec_ref: "report_logic.py L86~87, CLAUDE.md § Excel 출력 규칙"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "세특분석 헤더 확인: fill=004472C4, font=Arial bold, color=00FFFFFF, size=10. 모든 시트 동일 적용"
+
+  - id: RO-B2-filter_freeze
+    requirement: |
+      Excel UX 설정:
+      - 모든 시트 auto_filter.ref 설정
+      - 모든 시트 freeze_panes = "A2" (첫 행 고정)
+      - thin borders 전체 셀
+    spec_ref: "report_logic.py L82~88, style_cell()"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "9시트 모두 freeze_panes=A2, auto_filter.ref 설정 확인. thin Side(style='thin') border 전체 셀 적용"
+
+  - id: RO-B3-no_merge_wrap
+    requirement: |
+      태블릿 MS365 호환성:
+      - merge_cells 사용 금지 (모든 시트에서 0건)
+      - wrap_text 사용 금지 (grep 0건)
+    spec_ref: "CLAUDE.md § Excel 출력 규칙"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "9시트 검사: merged_cells.ranges 모두 0건. wrap_text cells 모두 0건. 태블릿 호환성 완전 준수"
+
+  - id: RO-B4-grade_color
+    requirement: |
+      등급별 배경색 + 글자색:
+      - S: bg #1F4E79, fg #FFFFFF
+      - A: bg #2E75B6, fg #FFFFFF
+      - B: bg #9DC3E6, fg #000000
+      - C: bg #F4B183, fg #000000
+      - D: bg #FF0000, fg #FFFFFF
+      - apply_grade_color() 함수로 세특/창체/평가요소 시트에 적용
+    spec_ref: "report_logic.py L46~54, L107~111"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "세특분석 등급 셀: S=001F4E79, A=002E75B6, B=009DC3E6, C=00F4B183 전부 일치. 창체/평가요소 시트도 동일 패턴"
+
+  # ─── C. PDF 구조 (표지 + 인트로 + 7개 섹션) ────────────────────
+  - id: RO-C1-pdf_file_creation
+    requirement: |
+      create_pdf(sd, pdf_path) 실행 시 .pdf 파일 정상 생성:
+      - reportlab SimpleDocTemplate + A4
+      - margins: left/right 10mm, top 12mm, bottom 12mm
+      - 파일 크기 > 100KB (정상 렌더 기준)
+    spec_ref: "report_logic.py L285~332"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "연승훈 PDF 242,771 bytes / 의대샘플 PDF 238,724 bytes. pypdf 읽기 성공. 연승훈 기준 17페이지"
+
+  - id: RO-C2-cover_page
+    requirement: |
+      표지 페이지 (CoverPage Flowable):
+      - 로고 (왼쪽 상단, 높이 54pt)
+      - 메인 타이틀 "학생부라운지" (MalgunBd 43pt, #1E3A5F)
+      - 하단 정보 박스: 학생명 + 학교명 + 학년범위 + 분석일
+      - 학년범위: _calc_record_range() 자동 생성 (1학년/1~2학년/1~3학년)
+    spec_ref: "report_logic.py L538~614, CLAUDE.md § 9-3 표지"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "p1 text='학생부라운지' 포함. CoverPage Flowable에서 로고+제목+정보박스 그리기. 의대샘플(2학년)은 '1~2학년' 자동 생성"
+
+  - id: RO-C3-toc_page
+    requirement: |
+      목차 페이지:
+      - 타이틀 "목차" (MalgunBd 22pt)
+      - 7개 메인 섹션 (1~7)
+      - 3개 서브 섹션 (2-1/2-2/2-3, 3-1/3-2/3-3)
+      - 메인/서브 들여쓰기 구분
+    spec_ref: "report_logic.py L618~649"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "'목차' 텍스트 PDF 포함 확인. toc_items 리스트: 7 메인 + 6 서브(2-1/2-2/2-3/3-1/3-2/3-3)"
+
+  - id: RO-C4-guide_page
+    requirement: |
+      평가 기준 안내 페이지:
+      - 1) 세특 평가 항목 (교과연계성/탐구동기/탐구과정/결과성찰/차별성/학업태도)
+      - 2) 창체 평가 항목 (자율/동아리/진로 각 5항목)
+      - 3) 행특 평가 항목 (5항목)
+      - 4) 등급 기준 (S~D, 1~10점 척도)
+      - 5) 핵심역량 분류 (학업/진로/공동체)
+    spec_ref: "report_logic.py L652~799"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "'평가 기준 안내' 텍스트 PDF 포함. 5개 테이블 순차 생성 (guide_setuek/guide_changche/guide_haengtuk/guide_grades/guide_comp)"
+
+  - id: RO-C5-section_1_summary
+    requirement: |
+      1. 종합의견:
+      - 11행 종합 테이블 (항목/내용)
+      - 2×2 bar chart: 세특/창체/행특/비교과종합 + 등급 (Admiral Slate 컬러)
+      - comp_total = (setuek×0.30 + changche×0.25 + haengtuk×0.10) / 0.65
+      - 종합 코멘트 박스 (좌측 #0E2841 막대 + 회색 배경 #F8F9FA)
+      - _grade_100()으로 S+/S/S- 세분화 등급 적용
+    spec_ref: "report_logic.py L810~937"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "'1. 종합의견', '종합 코멘트' 텍스트 PDF 포함. 4개 bar_items (세특/창체/행특/비교과종합). 연승훈 비교과종합=71.3 A-등급 렌더"
+
+  - id: RO-C6-section_2_setuek
+    requirement: |
+      2. 세부능력 및 특기사항 (3개 서브섹션):
+      - 2-1. 과목 별 분석:
+        • 교과 중심 분석 (국어/수학/영어/사회/과학 집계)
+        • 학년별·과목별 분석 (2-row 헤더, 탐구활동 3열 span, 학년 셀병합)
+      - 2-2. 과목 별 세부내용 (학년별 테이블, 강점/보완점)
+      - 2-3. 핵심평가문장 (과목/핵심문장/이유/핵심역량 + 같은 과목 셀병합)
+        + 핵심문장 역량 매핑표 (학업/진로/공동체 dot 표시)
+    spec_ref: "report_logic.py L940~1188"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "'2. 세부능력', '2-1', '2-2', '2-3', '핵심문장' 마커 모두 PDF 포함. subject_to_category 매핑, 학년 SPAN, 과목 셀병합 구현"
+
+  - id: RO-C7-section_3_changche
+    requirement: |
+      3. 창의적 체험활동 (3개 서브섹션):
+      - 3-1. 자율활동
+      - 3-2. 동아리활동
+      - 3-3. 진로활동
+      각각:
+      - 학년별 5항목 점수 + 평점 + 등급 + 분량/비율/활용
+      - 코멘트 테이블 (학년/강점/보완점/핵심역량)
+      + 창체 역량 매핑 정리표 (영역 셀병합 + 역량 dot)
+    spec_ref: "report_logic.py L1191~1312"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "'3. 창의적', '3-1', '3-2', '3-3' 마커 모두 PDF 포함. ch_items_map 영역별 항목명 분기 (자율/동아리/진로). 영역별 5항목 → 평점 → 등급 테이블"
+
+  - id: RO-C8-section_4_5
+    requirement: |
+      4. 행동특성 및 종합의견:
+      - 학년별 (강점/보완점/핵심역량) 4열 테이블
+      - haengtuk_comments 정렬 순회
+      5. 연계성분석:
+      - (분석영역/연계도/상세내용) 3열 테이블
+      - linkage_data 매핑
+    spec_ref: "report_logic.py L1314~1342"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "'4. 행동특성', '5. 연계성' 마커 모두 PDF 포함. 학년 sorted 순회, linkage 3-tuple 정상"
+
+  - id: RO-C9-section_6_7
+    requirement: |
+      6. 대학평가요소:
+      - (대분류/세부항목/등급/근거) 4열
+      - 대분류 셀병합 (학업/진로/공동체)
+      - 등급 컬러 텍스트
+      7. 역량별보완법:
+      - (역량/항목/현재/진단/보완활동/중요도) 6열
+      - fix_data 6-tuple 매핑
+    spec_ref: "report_logic.py L1344~1397"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "'6. 대학평가요소', '7. 역량별보완법' 마커 모두 PDF 포함. 대분류 SPAN 셀병합, 등급 컬러 텍스트 적용"
+
+  # ─── D. PDF 스타일 규약 ────────────────────────────────────────
+  - id: RO-D1-fonts_colors
+    requirement: |
+      폰트 & 제목 색상:
+      - NanumSquareRoundR.ttf → 'Malgun' 등록
+      - NanumSquareRoundB.ttf → 'MalgunBd' 등록
+      - TITLE_COLOR = #1E3A5F (제목)
+      - BLUE = #0E2841 (테이블 헤더 배경)
+    spec_ref: "report_constants.py register_fonts(), report_logic.py L335~347"
+    priority: P0
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "report_constants.py: registerFont NanumSquareRoundR.ttf→'Malgun', NanumSquareRoundB.ttf→'MalgunBd'. TITLE_COLOR=#1E3A5F, BLUE=#0E2841 확인. PDF 한글 정상 렌더"
+
+  - id: RO-D2-grade_competency_colors
+    requirement: |
+      Admiral Slate 등급 컬러 + 역량 컬러:
+      - 등급 GRADE_COLORS: S+/S/S- (남색), A+/A/A- (틸), B+/B/B- (금),
+        C+/C/C- (주황), D+/D/D- (빨강) — 세분화 15개
+      - GRADE_TEXT_COLORS 별도 (가독성 조정)
+      - 역량 COMP_COLORS: 학업(#006666) / 진로(#CC9600) / 공동체(#7B2D8E)
+      - colorize_competency() 함수로 역량명만 컬러 강조
+    spec_ref: "report_logic.py L351~426"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "GRADE_COLORS/GRADE_TEXT_COLORS 15등급(S+/S/S-...D-) 딕셔너리 정의. COMP_COLORS 3역량 정의. colorize_competency() 정규식으로 '학업역량(탐구력)' 등 컬러 강조"
+
+  - id: RO-D3-numbered_title_footer
+    requirement: |
+      제목 배지 + 페이지 푸터:
+      - NumberedTitle Flowable: 숫자 원형 배지 + 제목 텍스트
+        • 메인 제목(is_sub=False): 바탕색 채움
+        • 세부 제목(is_sub=True, 2-1/2-2 등): 테두리만
+      - _footer_content_pages: 왼쪽 하단 로고(17pt) + 오른쪽 하단 페이지번호
+      - _footer_cover_page: 표지에는 푸터 없음
+    spec_ref: "report_logic.py L305~325, L429~483"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "NumberedTitle Flowable 클래스 구현 확인. section_title() 정규식 '^(\\d[\\d\\-]*)\\.'로 is_sub 판별. doc.build onFirstPage=_footer_cover_page, onLaterPages=_footer_content_pages. PDF p2~p17에 페이지번호 확인"
+
+  # ─── E. 출력 규약 ─────────────────────────────────────────────
+  - id: RO-E1-filename_convention
+    requirement: |
+      파일명 규칙 (CLAUDE.md § 실행 흐름):
+      - Excel: output/{학생이름}_학생부분석_{YYYYMMDD}.xlsx
+      - PDF:   output/{학생이름}_학생부분석_{YYYYMMDD}.pdf
+      - 2회차: {학생이름}_학생부분석_{YYYYMMDD}_v{횟수}.xlsx (수동)
+      - 하이라이트: {학생이름}_학생부_하이라이트_{YYYYMMDD}.pdf (미구현)
+    spec_ref: "generate_report.py L153~160, CLAUDE.md § 9-2~9-4"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "output/ 폴더 확인: 연승훈_학생부분석_20260406.xlsx/.pdf, 의대샘플_학생부분석_20260408.xlsx/.pdf 모두 규약 일치"
+
+  - id: RO-E2-output_console
+    requirement: |
+      콘솔 출력 & 파일 경로 안내:
+      - "Excel saved: {path}" 출력 (report_logic.py L278)
+      - "PDF saved" 출력 없음 (reportlab이 stdout 기록)
+      - 진입점에서 파일 생성 결과 메시지 출력
+      - output/ 디렉토리 자동 생성 (없으면)
+    spec_ref: "report_logic.py L277~278, generate_report.py L153~158"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "report_logic.py L278: print(f'Excel saved: {xlsx_path}'). generate_report.py: OUTPUT_DIR.mkdir(parents=True, exist_ok=True). CLI 실행 시 전체 경로 콘솔 출력"
+
+  # ─── F. Spec vs 구현 gap (미구현 시트/기능) ────────────────────
+  - id: RO-F1-sheet_naesin_missing
+    requirement: |
+      내신분석 시트 (spec 명시, 미구현):
+      - 학기별 등급표, 추이 패턴, 주요교과/전교과, 원점수/평균/성취도분포
+      - 소인수 과목 표기, 교과이수 충실도
+      - 현재 운영은 "내신 제외 분석" 모드로 사용 중
+    spec_ref: "CLAUDE.md § 리포트 출력 구조 → 내신분석"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "Excel에 '내신분석' 시트 없음 확인. create_excel()에 내신 코드 경로 없음. CLAUDE.md § 실행 모드 '내신 제외 분석'이 현재 기본 모드"
+    note: "내신 분석 재활성화 시 Step 3 로직과 함께 구현 필요"
+
+  - id: RO-F2-sheet_admission_missing
+    requirement: |
+      입결비교 시트 (spec 명시, 미구현):
+      - 대학·학과별 내신 수치 비교 (입결 70% vs 내 환산)
+      - 비교과 등급 + 종합 판단 코멘트
+      - 현재 내신/입결 모두 미운영 (서비스 범위 밖)
+    spec_ref: "CLAUDE.md § 리포트 출력 구조 → 입결비교"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "Excel에 '입결비교' 시트 없음. admission_matcher.py 구버전 모듈 존재하나 현재 파이프라인 미통합"
+
+  - id: RO-F3-keyword_wordcloud_missing
+    requirement: |
+      키워드분석 시트 + PDF 워드클라우드 (spec 명시, 미구현):
+      - Excel: 핵심 키워드 빈도표 + 역량 카테고리 + 학년별 변화 추이
+      - PDF: 워드클라우드 이미지 (종합요약 또는 키워드분석 페이지)
+      - 기술: konlpy/kiwi 형태소 분석 + wordcloud + matplotlib
+      - 전체 미구현 (향후 확장 과제)
+    spec_ref: "CLAUDE.md § Step 8-4, § 리포트 출력 구조 → 키워드분석"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "Excel에 '키워드분석' 시트 없음. PDF 전체 검색: '워드클라우드' 키워드 0건. report_logic.py에 wordcloud/keyword grep 0건. 완전 미구현"
+    note: "CLAUDE.md § 9-3에서 '워드클라우드 이미지 포함 (구현 예정)' 명시"
+
+  - id: RO-F4-suitability_missing
+    requirement: |
+      전형적합도 시트 (spec 명시, 미구현):
+      - 추천 전형 (교과/학종-활동우수/학종-지역균형/논술/최상위도전)
+      - 판단 근거 코멘트
+      - Step 8-5 전형 적합도 분석과 연동
+    spec_ref: "CLAUDE.md § Step 8-5, § 리포트 출력 구조 → 전형적합도"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "Excel에 '전형적합도' 시트 없음. summary_data에 '추천전형' 필드 없음. 미구현 확인"
+
+  - id: RO-F5-attendance_missing
+    requirement: |
+      출결·봉사 시트 (spec 명시, 미구현):
+      - 출결 현황 (지각/결석/조퇴)
+      - 봉사시간 정리 (점수화 없이 시수만 표기)
+      - 현재 추출/분석 파이프라인에 해당 데이터 없음
+    spec_ref: "CLAUDE.md § 리포트 출력 구조 → 출결·봉사"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "Excel에 '출결·봉사' 시트 없음. 학생 데이터 구조(15변수)에 출결/봉사 필드 없음. 추출 파이프라인 미운영"
+
+  - id: RO-F6-highlight_pdf_change_tracking
+    requirement: |
+      2가지 확장 기능 모두 미구현:
+      (1) 상담용 학생부 하이라이트 PDF (9-4):
+        - 학생부 원본 이미지 + 반투명 형광색 하이라이트 + 번호 태그
+        - 노란(핵심문장)/초록(강점근거)/주황(보완근거)
+        - 범례 페이지 + 파일명 {학생이름}_학생부_하이라이트_{YYYYMMDD}.pdf
+      (2) 이전분석대비변화 시트 (2회차 이상):
+        - 등급 변화 추이 + 이전 보완점 반영도 + 새 강점/보완점 + 성장코멘트
+        - 현재 Claude 대화형 수동 처리. 코드 자동화 없음
+    spec_ref: "CLAUDE.md § Step 9-4, § Step 0-4, § 이전분석대비변화"
+    priority: P2
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "output/ 폴더에 '*_하이라이트_*.pdf' 파일 0건. PDF 텍스트에 '하이라이트' 키워드 0건. change_tracking_sample.py 실험 파일만 존재, 파이프라인 미통합"
+    note: "하이라이트 PDF는 실제 컨설팅 현장 활용도 높은 기능 — 향후 우선 구현 후보"

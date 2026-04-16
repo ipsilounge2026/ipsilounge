@@ -1,0 +1,444 @@
+# ===================================================================
+# 학생부 평가 루브릭 체크리스트
+# ===================================================================
+# spec: school-record-analyzer/CLAUDE.md (세특/창체/행특 루브릭, 종합 경쟁력 산출)
+# 범위: 루브릭 항목·가중치 · 등급 기준 · 코멘트 품질 · 종합점수 · 대학평가요소 · 보완법
+# 검증 방법: 코드 리뷰 + 실제 학생 데이터 대조 + CLI 실행
+# ===================================================================
+#
+# 주요 발견사항:
+#   1. 세특 항목: CLAUDE.md=7항목(전공적합성 포함), 구현=6항목(전공적합성 제외)
+#      → 구현 전체에서 6항목 일관. "미지정 모드"가 기본이며 7항목 코드 경로 없음
+#   2. 점수 척도: 프롬프트=1~5점, 데이터/QA/리포트=1~10점
+#      → 프롬프트가 구버전. 실제 운영은 1~10점 기준
+#   3. config.yaml 일부 설정이 코드에서 미참조 (rubric_grades 등)
+#   4. 연승훈 데이터: 점수/등급 연산은 정확. 코멘트 글자수는 P2 미달 다수(데이터 품질)
+# ===================================================================
+
+meta:
+  area_code: ANALYZER
+  title: "학생부 평가 루브릭 (세특/창체/행특)"
+  created_at: "2026-04-16"
+  spec_refs:
+    - "school-record-analyzer/CLAUDE.md § 세특 평가 루브릭"
+    - "school-record-analyzer/CLAUDE.md § 창체 평가 루브릭"
+    - "school-record-analyzer/CLAUDE.md § 행특 평가 루브릭"
+    - "school-record-analyzer/CLAUDE.md § 종합 경쟁력 산출"
+    - "school-record-analyzer/CLAUDE.md § 대학 평가요소별 매핑"
+    - "school-record-analyzer/CLAUDE.md § Step 8-7 역량별 보완법"
+    - "school-record-analyzer/modules/report_constants.py"
+    - "school-record-analyzer/modules/qa_validator.py"
+    - "school-record-analyzer/config/config.yaml"
+  known_spec_vs_impl_gaps:
+    - "세특 7항목(spec) vs 6항목(impl): 전공적합성 항목 제외가 기본 모드. 7항목 코드 경로 미구현"
+    - "점수 1~5(prompts) vs 1~10(data/QA/report): 프롬프트 미업데이트 상태"
+    - "config.yaml rubric_grades(5점 척도) 미참조. grades(100점 척도) 미참조. 코드는 하드코딩 10점 척도 사용"
+    - "changche_comments 300자 QA 검증 미구현(check_char_counts에 changche_comments 파라미터 없음)"
+
+# ─── A. 세특 루브릭 ───────────────────────────────────────────────
+items:
+  - id: RUB-A1-setuek_items
+    requirement: |
+      세특 평가 항목 정의:
+      - CLAUDE.md: 7항목 (교과연계성/탐구동기/탐구과정/결과성찰/전공적합성/차별성/학업태도)
+      - 구현: 6항목 (전공적합성 제외) → SETUEK_ITEMS 상수
+      - 미지정 모드가 기본이므로 6항목이 실제 운영 기준
+    spec_ref: "report_constants.py L17 SETUEK_ITEMS"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "SETUEK_ITEMS = ['교과연계성','탐구동기','탐구과정','결과성찰','차별성','학업태도'] — 정확히 6항목. 전공적합성 제외 모드가 유일 코드 경로"
+
+  - id: RUB-A2-setuek_weights
+    requirement: |
+      세특 가중치:
+      - config.yaml (7항목): 교과연계 17%, 탐구동기 17%, 탐구과정 17%, 결과성찰 17%, 전공적합 10%, 차별성 7%, 학업태도 15%
+      - 구현 (6항목 no_major): 교과연계 19%, 탐구동기 19%, 탐구과정 19%, 결과성찰 19%, 차별성 8%, 학업태도 16%
+      - 6항목 가중치 합 = 1.00
+    spec_ref: "report_constants.py L18, qa_validator.py L16, config.yaml"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "SETUEK_WEIGHTS_NO_MAJOR = [0.19,0.19,0.19,0.19,0.08,0.16]. sum=1.00. report_constants.py와 qa_validator.py에서 동일 값 중복 정의"
+
+  - id: RUB-A3-setuek_scoring
+    requirement: |
+      세특 채점 범위: 각 항목 1~10점
+      - 데이터: setuek_data[i][2:8] = 6개 점수
+      - QA: 1<=score<=10 범위 검증
+      - 가중합산: sum(score*weight) 계산, d[8]에 저장
+      - 등급: d[9]에 저장 (S/A/B/C/D)
+    spec_ref: "qa_validator.py check_score_ranges() L155, check_weighted_averages() L191"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "d[2:8] 6점수, d[8] wavg, d[9] grade. QA check_score_ranges: 1<=s<=10. check_weighted_averages: sum(s*w) vs d[8], TOLERANCE=0.05"
+
+  - id: RUB-A4-setuek_grade_thresholds
+    requirement: |
+      세특 등급 기준 (10점 척도):
+      S ≥ 8.5 / A ≥ 7.0 / B ≥ 5.0 / C ≥ 3.5 / D < 3.5
+      - score_to_grade() 함수에서 동일 기준 사용
+      - QA: 가중합산→등급 변환 일치 검증
+    spec_ref: "qa_validator.py score_to_grade() L220, report_logic.py L39"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "qa_validator.py와 report_logic.py 모두 동일 기준: S≥8.5/A≥7.0/B≥5.0/C≥3.5. QA check_grade_matching() L229에서 불일치 검증"
+
+  - id: RUB-A5-setuek_comments
+    requirement: |
+      세특 코멘트 구조:
+      - setuek_comments: {"과목명(학년)": (강점, 보완점)}
+      - 강점 코멘트: 모든 과목 필수, 최소 200자
+      - 보완점 코멘트: 모든 과목 필수, 최소 200자
+      - QA P2에서 글자수 검증
+    spec_ref: "qa_validator.py check_char_counts() L263"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "2-tuple (강점, 보완점) 형식. check_char_counts()에서 MIN_CHARS['setuek_comment']=200 검증. 연승훈 QA: WARN 47건(일부 200자 미달) — P2이므로 리포트 생성 허용"
+
+  - id: RUB-A6-good_sentences
+    requirement: |
+      좋은 평가 문장 구조:
+      - good_sentences: [(과목라벨, 핵심문장, 이유, 표현역량)] 4-tuple
+      - 모든 과목에 항목 존재 (없으면 "해당 없음" + 부재 이유)
+      - QA P2에서 과목 커버리지 + 4-tuple 완전성 검증
+    spec_ref: "qa_validator.py check_good_sentences_completeness() L303"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "4-tuple 형식 확인. check_good_sentences_completeness(): setuek_data 과목 vs good_sentences 과목 비교 + len(s)<4 검증. 연승훈: 25개 항목, 19과목 커버"
+
+  # ─── B. 창체 루브릭 ─────────────────────────────────────────────
+  - id: RUB-B1-changche_items
+    requirement: |
+      창체 평가 항목 (영역별 5항목, 각 20%):
+      - 자율: 참여주도성/활동구체성/동기과정결과/성장변화/전공적합성
+      - 동아리: 전문성깊이/개인기여도/동기과정결과/지속성발전/전공적합성
+      - 진로: 탐색구체성/목표일관성/동기과정결과/자기주도성/전공적합성
+      - 구현: CHANGCHE_ITEMS 5개 제네릭 + PDF에서 영역별 라벨
+    spec_ref: "report_constants.py L25, report_logic.py ch_items_map L1196"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "CHANGCHE_ITEMS 5개 제네릭 라벨. PDF ch_items_map: 자율/동아리/진로 각 5개 도메인별 라벨, 5번째 항상 전공적합성"
+
+  - id: RUB-B2-changche_scoring
+    requirement: |
+      창체 채점:
+      - changche_data: (학년, 영역, 시간, [5점수], 합/50, 환산/100, 분량str, 비율str, 활용)
+      - [5점수] 각 1~10 범위 → 합계/50 → 환산/100
+      - 등급: score_to_grade(환산/10) 적용
+    spec_ref: "qa_validator.py L165, report_logic.py L1218"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "d[3]=[5scores] 1-10범위, d[4]=합/50, d[5]=환산/100. QA check_score_ranges 검증. PDF grade=score_to_grade(d[5]/10). 연승훈 9행 모두 산술 정확"
+
+  - id: RUB-B3-changche_comments
+    requirement: |
+      창체 코멘트 구조:
+      - changche_comments: {(영역, 학년): (강점, 보완점, [역량키워드], 역량코멘트)}
+      - 강점/보완점: 각 최소 300자
+      - 영역별 좋은 평가 문장 추출 포함
+    spec_ref: "_template.py L80~84, report_logic.py PDF 창체 섹션"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "4-tuple (강점,보완점,[키워드],코멘트) 형식. PDF에서 vals[0~3] 모두 사용. 연승훈: 9행 모두 4-tuple 완전"
+      note: "300자 QA 검증 미구현(G3 참조). 연승훈 데이터 대부분 300자 미달이나 리포트 생성에 영향 없음"
+
+  - id: RUB-B4-changche_volume
+    requirement: |
+      창체 분량 비율 분석:
+      - 자율·동아리: 500자 제한, 진로: 700자 제한
+      - 충실활용 ≥ 95%, 활용부족 < 80%
+      - changche_data[6]=분량str, [7]=비율str, [8]=활용 판정
+      - QA P2에서 비율↔활용 판정 일치 검증
+    spec_ref: "qa_validator.py check_changche_volume() L374, config.yaml"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "CHANGCHE_VOLUME_THRESHOLDS: 충실활용≥0.95, 활용부족<0.80. check_changche_volume()에서 d[7]비율 vs d[8]활용 판정 일치 검증. 연승훈 QA: '창체 분량 판정 정합성' PASS"
+
+  # ─── C. 행특 루브릭 ─────────────────────────────────────────────
+  - id: RUB-C1-haengtuk_items
+    requirement: |
+      행특 평가 항목 (5항목, 각 20%):
+      활동구체성/동기과정결과/성장변화/인성공동체역량/분량밀도
+      - HAENGTUK_ITEMS 상수 일치 확인
+    spec_ref: "report_constants.py L26"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "HAENGTUK_ITEMS = ['활동 구체성','동기-과정-결과','성장 변화','인성/공동체','분량/밀도'] — 5항목. CLAUDE.md spec과 일치"
+
+  - id: RUB-C2-haengtuk_scoring
+    requirement: |
+      행특 채점:
+      - haengtuk_data: [(학년, [5점수], 합/50, 환산/100, 등급)]
+      - [5점수] 각 1~10 범위 → 합계/50 → 환산/100
+      - 등급: score_to_grade(환산/10) 적용
+      - 학년별 채점 후 평균
+    spec_ref: "qa_validator.py L174, report_logic.py"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "d[1]=[5scores] 1-10범위, d[2]=합/50, d[3]=환산/100, d[4]=등급. QA check_score_ranges 검증. 연승훈 3학년 모두 산술 정확(예: [8,7,6,9,8]→38/50→76→A)"
+
+  - id: RUB-C3-haengtuk_comments
+    requirement: |
+      행특 코멘트 구조:
+      - haengtuk_comments: {학년: (강점, 보완점, [역량키워드], 역량코멘트)}
+      - 강점/보완점: 각 최소 200자
+      - 학년별 상세 코멘트 (학년/강점/보완점 3항목)
+    spec_ref: "_template.py L96, qa_validator.py check_char_counts() L274"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "4-tuple 형식 확인. check_char_counts()에서 haengtuk_comment=200 검증 구현. 연승훈: P2 WARN 다수(일부 200자 미달) — QA 정상 작동"
+
+  - id: RUB-C4-haengtuk_display
+    requirement: |
+      행특 점수 표시:
+      - Excel: 학년/강점/보완점 (3열) — 5개별 항목 점수 미표시
+      - PDF: 학년/강점/보완점/핵심역량 (4열)
+      - 환산점수는 종합 바 그래프에서만 사용
+    spec_ref: "report_logic.py 행특분석 시트 L223"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "Excel headers=['학년','강점','보완점']. PDF headers=['학년','강점','보완점','핵심역량']. 개별 5항목 점수 미표시 — 종합 바 그래프의 환산점수만 사용"
+      note: "설계 의도: 리포트는 상담용이므로 점수보다 코멘트 중심. 점수는 QA+내부 품질관리용"
+
+  # ─── D. 등급 체계 & 종합 경쟁력 ─────────────────────────────────
+  - id: RUB-D1-grade_thresholds
+    requirement: |
+      등급 기준 일관성 (10점 척도):
+      - score_to_grade(): S≥8.5, A≥7.0, B≥5.0, C≥3.5, D<3.5
+      - report_logic.py와 qa_validator.py에서 동일 함수/기준 사용
+      - config.yaml grades(100점)와 코드(10점) 사이 환산 관계 정합
+    spec_ref: "qa_validator.py L220, report_logic.py L39"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "두 파일 모두 동일 기준: S≥8.5/A≥7.0/B≥5.0/C≥3.5/D<3.5. config.yaml 100점 척도와 환산 관계 정합: S≥90=8.5×10+5, A≥75=7.0×10+5"
+
+  - id: RUB-D2-fine_grading
+    requirement: |
+      세분 등급 (+/-):
+      - _grade_100() 함수: 100점 환산 후 S+/S/S-, A+/A/A- 등 세분화
+      - 종합요약, 바 그래프 등에서 세분 등급 표시
+    spec_ref: "report_logic.py _grade_100() L854"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "_grade_100() L854~875: score_to_grade(v/10) 호출 후 +/- 세분화. 연승훈 비교과 종합: A- 등급 표시"
+
+  - id: RUB-D3-composite_score
+    requirement: |
+      비교과 종합점수 산출:
+      - 세특(30%) + 창체(25%) + 행특(10%) = 65% → /0.65로 정규화
+      - setuek_avg = mean(d[8]) * 10 (→100점)
+      - changche_avg = mean(d[5]) (이미 100점)
+      - haengtuk_avg = mean(d[3]) (이미 100점)
+      - comp_total = (setuek*0.30 + changche*0.25 + haengtuk*0.10) / 0.65
+    spec_ref: "report_logic.py L852"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "L852: comp_total = (setuek_100*0.30 + changche_avg*0.25 + haengtuk_avg*0.10) / 0.65. 연승훈: 71.14점 계산 확인"
+      note: "내신(30%)+출결(5%)은 비교과 종합에 미포함 — 내신 제외 분석이 기본 모드"
+
+  - id: RUB-D4-grade_meaning
+    requirement: |
+      등급별 의미 정의:
+      - S: 최상위권 학종 경쟁력
+      - A: 상위권 경쟁력
+      - B: 평균 수준
+      - C: 보완 필요
+      - D: 경쟁력 재고 필요
+    spec_ref: "report_logic.py guide_grades L740"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "guide_grades 테이블: S=최상위권 학종 경쟁력, A=상위권 경쟁력, B=평균 수준, C=보완 필요, D=경쟁력 재고 필요 — spec 완전 일치"
+
+  # ─── E. 연계성 분석 ─────────────────────────────────────────────
+  - id: RUB-E1-linkage_structure
+    requirement: |
+      연계성 데이터 구조:
+      - linkage_data: [(분석영역, 연계도, 상세내용)]
+      - 분석영역: "세특 과목 간 연계", "창체-세특 연계", "학년별 성장 흐름"
+      - 연계도: 상/중/하
+      - 상세내용: 최소 200자
+    spec_ref: "_template.py L107, qa_validator.py L120"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "3-tuple (분석영역, 연계도, 상세내용) 구조. QA P1-A에서 최소 1항목 존재 검증. P2에서 200자 검증. 연승훈: 3항목 존재 (일부 200자 미달 WARN)"
+
+  - id: RUB-E2-growth_pattern
+    requirement: |
+      성장 패턴 유형 판별:
+      - 일관심화형 / 관심확장형 / 전환성장형 / 단절형
+      - linkage_data 또는 summary_data에서 패턴 서술
+    spec_ref: "CLAUDE.md § Step 8-3"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "CLAUDE.md에 4유형 정의. 연승훈 linkage_data[2]에 '일관심화형' 사용. 패턴 분류는 Claude 분석 시 수행(코드 강제 아님)"
+
+  # ─── F. 대학평가요소 & 역량별보완법 ─────────────────────────────
+  - id: RUB-F1-eval_mapping
+    requirement: |
+      대학평가요소 매핑 구조:
+      - eval_data: [(대분류, 세부항목, 등급, 근거)]
+      - 학업역량: 학업성취도/학업태도/탐구력
+      - 진로역량: 교과이수노력/교과성취도/진로탐색
+      - 공동체역량: 협업소통/나눔배려/성실성규칙준수/리더십
+      - 10개 세부항목 완전성 확인
+    spec_ref: "report_logic.py 대학평가요소 시트, _template.py L118"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "4-tuple (대분류,세부항목,등급,근거). 연승훈: 10행 = 학업역량3 + 진로역량3 + 공동체역량4. CLAUDE.md 10항목 표와 정확 일치"
+
+  - id: RUB-F2-fix_structure
+    requirement: |
+      역량별 보완법 구조:
+      - fix_data: [(역량, 항목, 현재등급, 진단, 보완활동, 중요도)]
+      - 보완활동: 최소 300자 (QA P2 검증)
+      - 중요도: 상/중/하
+      - 3단계: ① 현재 상태 진단 → ② 구체적 보완 활동 → ③ 기대 효과
+    spec_ref: "_template.py L132, qa_validator.py check_char_counts() L287"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "6-tuple 구조 확인. QA check_char_counts에서 fix_activity=300 검증. 연승훈: 4항목 중 2항목 300자 미달 WARN(273자, 253자)"
+
+  - id: RUB-F3-summary_structure
+    requirement: |
+      종합 요약 구조:
+      - summary_data: dict
+      - 필수 키: 학생/학교명/비교과종합/비교과종합점수/핵심강점1~3/보완영역1~3/성장스토리
+      - 종합코멘트: PDF에서 사용 (500자 이상 권장)
+    spec_ref: "_template.py L141, report_logic.py Excel 종합요약 + PDF"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "연승훈: 11개 필수 키 + 종합코멘트 키 존재. Excel에서 11개 키 표시. PDF에서 종합코멘트 추가 사용"
+
+  # ─── G. Spec-구현 정합성 ────────────────────────────────────────
+  - id: RUB-G1-prompt_scale_mismatch
+    requirement: |
+      프롬프트 점수 척도 불일치 확인:
+      - analyze_setuek.md: 1~5 점 기준 루브릭
+      - analyze_changche.md: 1~5 점 기준 루브릭
+      - analyze_haengtuk.md: 1~5 점 기준 루브릭
+      - 실제 운영: 1~10 점 기준 (데이터/QA/리포트)
+    spec_ref: "prompts/*.md vs qa_validator.py vs CLAUDE.md"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "3개 프롬프트 모두 1~5점 척도 사용 확인. 실제 분석 시 Claude에게 1~10점으로 지시하여 운영. 프롬프트는 구버전 참고용"
+      note: "프롬프트 업데이트 권장이나 운영에 지장 없음. 분석 시 CLAUDE.md가 최우선 지침"
+
+  - id: RUB-G2-config_unused
+    requirement: |
+      config.yaml 미참조 설정 확인:
+      - rubric_grades (5점 척도 S/A/B/C/D): 코드에서 미참조
+      - grades (100점 척도): 코드에서 미참조 (하드코딩 10점 척도 사용)
+      - remedial_threshold: 코드에서 미참조
+    spec_ref: "config/config.yaml vs qa_validator.py, report_logic.py"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "rubric_grades(5점 S≥4.3), grades(100점 S≥90), remedial_threshold(3.0) 모두 코드 미참조. 코드는 하드코딩 10점 척도(S≥8.5) 사용"
+      note: "config.yaml 정리 권장: dead config 삭제 또는 코드에서 config 참조로 전환"
+
+  - id: RUB-G3-changche_qa_gap
+    requirement: |
+      창체 코멘트 QA 검증 누락:
+      - CLAUDE.md: 창체 코멘트 300자 이상 필수
+      - qa_validator.py check_char_counts(): changche_comments가 파라미터에 없음
+      - 실질적 영향: 창체 코멘트 글자수 WARN이 QA에서 누락
+    spec_ref: "qa_validator.py check_char_counts() 파라미터 목록"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "check_char_counts()에 changche_comments 파라미터 없음. 세특/행특/연계/보완법만 검증. 창체 300자는 구조적으로 미검증 — P2 QA 누락 확인"
+      note: "향후 check_char_counts에 changche_comments 파라미터 추가 권장"
+
+  # ─── H. 실제 데이터 정합성 검증 ─────────────────────────────────
+  - id: RUB-H1-student_data_scores
+    requirement: |
+      실제 학생 데이터(연승훈) 점수 정합성:
+      - setuek_data 19과목 각 6점수 1~10 범위
+      - changche_data 9행 각 5점수 1~10 범위
+      - haengtuk_data 3행 각 5점수 1~10 범위
+      - 가중합산/환산 계산 정확성
+      - 등급 배정 정확성
+    spec_ref: "data/students/연승훈.py"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "19과목 114개 점수 모두 1~10. 가중합산 오차 max 0.02(허용 0.05). 19개 등급 모두 score_to_grade()와 일치. changche 9행/haengtuk 3행 산술 모두 정확"
+
+  - id: RUB-H2-student_data_comments
+    requirement: |
+      실제 학생 데이터(연승훈) 코멘트 구조 정합성:
+      - setuek_comments: 19과목 각 (강점, 보완점) 존재
+      - changche_comments: 9행 각 (강점, 보완점, 역량키워드, 역량코멘트) 존재
+      - haengtuk_comments: 3학년 각 (강점, 보완점, 역량키워드, 역량코멘트) 존재
+      - comment_keys: 19개, setuek_data 순서 일치
+    spec_ref: "data/students/연승훈.py"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "setuek_comments 19개 키 = comment_keys 19개 순서 일치. changche_comments 9행 4-tuple. haengtuk_comments 3학년 4-tuple. 구조적 완전성 확인"
+      note: "글자수 P2 미달 다수(세특·창체·행특 코멘트 일부 최소 기준 미달). 데이터 품질 개선 권장이나 코드 동작에 지장 없음"
+
+  - id: RUB-H3-student_data_comprehensive
+    requirement: |
+      실제 학생 데이터(연승훈) 종합 분석 정합성:
+      - linkage_data: 3항목 (세특연계/창체연계/성장흐름)
+      - eval_data: 10항목 (학업3/진로3/공동체4)
+      - fix_data: 보완법 항목 존재
+      - summary_data: 필수 키 모두 존재 (핵심강점3/보완영역3/성장스토리)
+    spec_ref: "data/students/연승훈.py"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "linkage_data 3항목 + eval_data 10항목 + fix_data 4항목 + summary_data 11+1키. good_sentences 25항목(19과목 커버). 종합 데이터 완전성 확인"

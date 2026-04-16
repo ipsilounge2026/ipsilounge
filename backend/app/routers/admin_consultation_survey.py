@@ -40,17 +40,31 @@ async def list_surveys(
     size: int = Query(20, ge=1, le=100),
     survey_type: str | None = Query(None),
     status: str | None = Query(None),
+    analysis_status: str | None = Query(
+        None,
+        description=(
+            "자동 분석 검증 상태 필터. 쉼표 구분 다중 값 허용. "
+            "예: 'blocked,repaired,warn' — 슈퍼관리자 QA 이슈 큐 전용."
+        ),
+    ),
     search: str | None = Query(None, description="학생 이름 또는 이메일 검색"),
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """설문 목록 조회 (관리자용)"""
+    """설문 목록 조회 (관리자용).
+
+    기획서 §4-8-1: analysis_status 필터로 슈퍼관리자 QA 이슈 큐 화면 구성 가능.
+    """
     base = select(ConsultationSurvey).join(User, ConsultationSurvey.user_id == User.id)
 
     if survey_type:
         base = base.where(ConsultationSurvey.survey_type == survey_type)
     if status:
         base = base.where(ConsultationSurvey.status == status)
+    if analysis_status:
+        statuses = [s.strip() for s in analysis_status.split(",") if s.strip()]
+        if statuses:
+            base = base.where(ConsultationSurvey.analysis_status.in_(statuses))
     if search:
         pattern = f"%{search}%"
         base = base.where((User.name.ilike(pattern)) | (User.email.ilike(pattern)))
@@ -93,6 +107,173 @@ async def list_surveys(
         })
 
     return {"items": items, "total": total}
+
+
+# ---- QA 이슈 큐 (슈퍼관리자 전용) ----
+
+@router.get("/qa-issues")
+async def list_qa_issues(
+    statuses: str = Query(
+        "blocked,repaired,warn",
+        description="조회할 analysis_status 목록 (쉼표 구분). 기본: blocked,repaired,warn",
+    ),
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """슈퍼관리자 QA 이슈 큐 전용 엔드포인트 (기획서 §4-8-1).
+
+    목록 + 영향 받는 상담 예약(학생·일시·담당 상담사) + 이슈 분류(P1/P2/P3) 요약 반환.
+    super_admin 권한이 아니면 403.
+    """
+    if admin.role != "super_admin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자 권한이 필요합니다.")
+
+    status_list = [s.strip() for s in statuses.split(",") if s.strip()]
+    if not status_list:
+        status_list = ["blocked", "repaired", "warn"]
+
+    # lazy import to avoid circular imports
+    from app.models.consultation_booking import ConsultationBooking
+    from app.models.consultation_slot import ConsultationSlot
+
+    result = await db.execute(
+        select(ConsultationSurvey, User)
+        .join(User, ConsultationSurvey.user_id == User.id)
+        .where(ConsultationSurvey.analysis_status.in_(status_list))
+        .order_by(
+            # blocked 우선, 그 다음 repaired → warn
+            ConsultationSurvey.analysis_status.asc(),
+            ConsultationSurvey.updated_at.desc(),
+        )
+    )
+    rows = result.all()
+
+    items: list[dict[str, Any]] = []
+    for survey, user in rows:
+        # 영향 받는 예약 조회 (상담일이 오늘 이후인 건만)
+        bookings_q = await db.execute(
+            select(ConsultationBooking, ConsultationSlot)
+            .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
+            .where(
+                ConsultationBooking.user_id == user.id,
+                ConsultationBooking.status.in_(["requested", "confirmed"]),
+            )
+            .order_by(ConsultationSlot.date.asc(), ConsultationSlot.start_time.asc())
+        )
+        affected = []
+        for b, slot in bookings_q.all():
+            counselor_name: str | None = None
+            if slot.admin_id:
+                try:
+                    counselor_uuid = uuid.UUID(slot.admin_id)
+                    counselor = (
+                        await db.execute(select(Admin).where(Admin.id == counselor_uuid))
+                    ).scalar_one_or_none()
+                    counselor_name = counselor.name if counselor else None
+                except ValueError:
+                    counselor_name = None
+            affected.append({
+                "booking_id": str(b.id),
+                "type": b.type,
+                "status": b.status,
+                "slot_date": slot.date.isoformat(),
+                "slot_start_time": slot.start_time.strftime("%H:%M"),
+                "slot_end_time": slot.end_time.strftime("%H:%M"),
+                "counselor_name": counselor_name,
+            })
+
+        validation = survey.analysis_validation or {}
+        items.append({
+            "survey_id": str(survey.id),
+            "user_id": str(user.id),
+            "user_name": user.name,
+            "user_email": user.email,
+            "user_phone": user.phone,
+            "survey_type": survey.survey_type,
+            "timing": survey.timing,
+            "mode": survey.mode,
+            "analysis_status": survey.analysis_status,
+            "submitted_at": survey.submitted_at.isoformat() if survey.submitted_at else None,
+            "updated_at": survey.updated_at.isoformat(),
+            "p1_issues": validation.get("p1_issues", []),
+            "p2_issues": validation.get("p2_issues", []),
+            "p3_issues": validation.get("p3_issues", []),
+            "auto_repaired": bool(validation.get("auto_repaired", False)),
+            "repair_log": validation.get("repair_log", []),
+            "validated_at": validation.get("validated_at"),
+            "affected_bookings": affected,
+        })
+
+    summary = {
+        "total": len(items),
+        "blocked": sum(1 for i in items if i["analysis_status"] == "blocked"),
+        "repaired": sum(1 for i in items if i["analysis_status"] == "repaired"),
+        "warn": sum(1 for i in items if i["analysis_status"] == "warn"),
+    }
+    return {"summary": summary, "items": items}
+
+
+@router.post("/{survey_id}/revalidate")
+async def revalidate_survey(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """설문 자동 분석 결과 재검증 (슈퍼관리자 QA 큐에서 수동 트리거).
+
+    기획서 §4-8-1: '수정 후 재배포 → 다음 조회 시 자동 재검증 → 통과 시 잠금 자동 해제'.
+    - 일반적으로는 computed 조회 시 자동 재검증되지만, 슈퍼관리자가
+      데이터 수정 후 즉시 잠금 해제 판정을 보고 싶을 때 사용.
+    """
+    if admin.role != "super_admin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자 권한이 필요합니다.")
+
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
+    merged = _merge_overrides(computed, survey.counselor_overrides)
+
+    from app.services.survey_qa_validator import validate_with_repair
+    qa = validate_with_repair(
+        merged,
+        survey.survey_type,
+        answers=survey.answers,
+        timing=survey.timing,
+    )
+
+    prev_status = survey.analysis_status
+    survey.analysis_status = qa["status"]
+    survey.analysis_validation = qa
+    await db.commit()
+
+    # blocked → pass/repaired 자동 전환 시 리포트 준비 완료 푸시 (첫 전환 시에만)
+    if (
+        prev_status in ("blocked", "pending", None)
+        and qa["status"] in ("pass", "repaired")
+        and survey.user_id is not None
+    ):
+        try:
+            from app.services.notification_service import send_report_ready_notification
+            student = (
+                await db.execute(select(User).where(User.id == survey.user_id))
+            ).scalar_one_or_none()
+            if student:
+                await send_report_ready_notification(user=student, db=db)
+        except Exception:
+            pass
+
+    return {
+        "survey_id": str(survey.id),
+        "prev_status": prev_status,
+        "new_status": qa["status"],
+        "auto_repaired": bool(qa.get("auto_repaired", False)),
+        "validation": qa,
+    }
 
 
 # ---- 설문 상세 ----
@@ -188,10 +369,30 @@ async def get_computed_stats(
     merged["qa_validation"] = qa
 
     # 검증 상태를 설문 레코드에 영속화 (상담 진행 차단 판정에 사용)
+    prev_status = survey.analysis_status
     if survey.analysis_status != qa["status"]:
         survey.analysis_status = qa["status"]
     survey.analysis_validation = qa
     await db.commit()
+
+    # 기획서 §7-1: 상담사가 리포트 검토(=본 엔드포인트 호출) 후 QA 통과(pass/repaired) 전환 시
+    # 학생에게 "리포트 준비 완료" 푸시. pending→pass/repaired 최초 전환 1회만 발송.
+    if (
+        prev_status in (None, "pending")
+        and qa["status"] in ("pass", "repaired")
+        and survey.user_id is not None
+    ):
+        try:
+            from app.models.user import User as _User
+            from app.services.notification_service import send_report_ready_notification
+            student = (
+                await db.execute(select(_User).where(_User.id == survey.user_id))
+            ).scalar_one_or_none()
+            if student:
+                await send_report_ready_notification(user=student, db=db)
+        except Exception:
+            # 푸시 실패는 분석 결과 반환에 영향 없도록 graceful degrade
+            pass
 
     return merged
 
@@ -374,6 +575,55 @@ async def download_report_pdf(
     computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
     computed = _merge_overrides(computed, survey.counselor_overrides)
 
+    # 기획서 §4-7/§4-9/§5-4-E4/§7-2: PDF에 로드맵·권장과목·수능최저·Delta 섹션 포함
+    extras: dict[str, Any] = {}
+    if survey.survey_type == "high":
+        # 권장과목 매칭
+        try:
+            from app.services.course_requirement_service import build_matching
+            extras["course_requirement_match"] = build_matching(survey.answers or {})
+        except Exception:
+            extras["course_requirement_match"] = None
+
+        # 수능 최저 시뮬레이션
+        try:
+            from app.services.suneung_minimum_service import simulate_suneung_minimum
+            extras["suneung_minimum"] = simulate_suneung_minimum(survey.answers or {})
+        except Exception:
+            extras["suneung_minimum"] = None
+
+        # Delta 모드: 이전 설문 대비 변화
+        if (survey.mode or "").lower() == "delta":
+            try:
+                prev_q = (
+                    select(ConsultationSurvey)
+                    .where(
+                        ConsultationSurvey.user_id == survey.user_id,
+                        ConsultationSurvey.survey_type == survey.survey_type,
+                        ConsultationSurvey.id != survey.id,
+                        ConsultationSurvey.created_at < survey.created_at,
+                    )
+                    .order_by(ConsultationSurvey.created_at.desc())
+                    .limit(1)
+                )
+                prev_res = await db.execute(prev_q)
+                previous = prev_res.scalar_one_or_none()
+                if previous:
+                    diff = _compute_delta(previous.answers or {}, survey.answers or {})
+                    extras["delta_change"] = {
+                        "has_previous": True,
+                        "previous_timing": previous.timing,
+                        "previous_submitted_at": (
+                            previous.submitted_at.isoformat() if previous.submitted_at else None
+                        ),
+                        "diff": diff,
+                        "summary": _summarize_delta(diff),
+                    }
+                else:
+                    extras["delta_change"] = {"has_previous": False}
+            except Exception:
+                extras["delta_change"] = None
+
     survey_dict = {
         "survey_type": survey.survey_type,
         "timing": survey.timing,
@@ -390,7 +640,9 @@ async def download_report_pdf(
 
     from app.services.survey_report_service import generate_survey_report_pdf
     try:
-        pdf_bytes = generate_survey_report_pdf(survey_dict, user_info, schema, computed)
+        pdf_bytes = generate_survey_report_pdf(
+            survey_dict, user_info, schema, computed, extras=extras
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF 생성 실패: {str(e)}")
 
@@ -531,6 +783,231 @@ async def delete_overrides(
     survey.counselor_overrides = None
     await db.commit()
     return {"ok": True}
+
+
+# ---- 상담사 4영역 점수 직접 수정 (기획서 §4-7 P2) ----
+
+class ScoreOverrideRequest(BaseModel):
+    """고등학생 4영역 점수 수동 재산출 요청.
+
+    각 영역은 0~100 사이 정수. null 또는 누락 시 해당 영역은 오버라이드 해제.
+    """
+    naesin: int | None = Field(None, ge=0, le=100, description="내신 경쟁력 (0~100)")
+    mock: int | None = Field(None, ge=0, le=100, description="모의고사 역량 (0~100)")
+    study: int | None = Field(None, ge=0, le=100, description="학습 습관·전략 (0~100)")
+    career: int | None = Field(None, ge=0, le=100, description="진로·전형 전략 (0~100)")
+    reason: str | None = Field(None, max_length=500, description="수정 사유 (감사 로그)")
+
+
+@router.patch("/{survey_id}/scores")
+async def update_score_overrides(
+    survey_id: uuid.UUID,
+    data: ScoreOverrideRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담사가 자동 산출된 4영역 점수(내신·모의·학습·진로)를 직접 수정.
+
+    기획서 §4-7 P2 (HSGAP-P2-counselor-score-override):
+    - 4영역 점수 입력 → _grade_label()로 등급 자동 재산출
+    - overall_score/overall_grade 재계산 후 counselor_overrides.radar_scores에 저장
+    - validate_with_repair() 재실행 → analysis_status/analysis_validation 업데이트
+    - before/after 감사 로그를 counselor_overrides.score_override_log에 append
+    """
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    if survey.survey_type != "high":
+        raise HTTPException(
+            status_code=400,
+            detail="4영역 점수 직접 수정은 고등학생 설문에만 지원됩니다.",
+        )
+
+    # 자동 산출 radar 가져오기 (override 병합 전 원본)
+    base_computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
+    base_radar = base_computed.get("radar_scores") or {}
+    if not base_radar:
+        raise HTTPException(
+            status_code=400,
+            detail="radar_scores 자동 산출 결과가 없어 점수 수정이 불가합니다.",
+        )
+
+    # 이전 override 저장된 값 (감사용 before 값은 실제 반영 중인 값 = 자동 또는 이전 수동)
+    existing_overrides = dict(survey.counselor_overrides or {})
+    prev_radar = existing_overrides.get("radar_scores") or base_radar
+
+    def _axis_prev(key: str) -> dict:
+        axis = prev_radar.get("radar", {}).get(key) or {}
+        return {"score": axis.get("score"), "grade": axis.get("grade")}
+
+    before_snapshot = {
+        "내신_경쟁력": _axis_prev("내신_경쟁력"),
+        "모의고사_역량": _axis_prev("모의고사_역량"),
+        "학습습관_전략": _axis_prev("학습습관_전략"),
+        "진로전형_전략": _axis_prev("진로전형_전략"),
+        "overall_score": prev_radar.get("overall_score"),
+        "overall_grade": prev_radar.get("overall_grade"),
+    }
+
+    # 새 점수 계산: 입력이 None이면 base_radar의 자동 산출값을 사용
+    from app.services.survey_scoring_service import _grade_label as _score_to_grade
+
+    def _pick(override_val: int | None, axis_key: str) -> float:
+        if override_val is not None:
+            return float(override_val)
+        axis = base_radar.get("radar", {}).get(axis_key) or {}
+        return float(axis.get("score") or 0)
+
+    naesin_s = _pick(data.naesin, "내신_경쟁력")
+    mock_s = _pick(data.mock, "모의고사_역량")
+    study_s = _pick(data.study, "학습습관_전략")
+    career_s = _pick(data.career, "진로전형_전략")
+
+    new_radar = {
+        "radar": {
+            "내신_경쟁력": {"score": naesin_s, "grade": _score_to_grade(naesin_s)},
+            "모의고사_역량": {"score": mock_s, "grade": _score_to_grade(mock_s)},
+            "학습습관_전략": {"score": study_s, "grade": _score_to_grade(study_s)},
+            "진로전형_전략": {"score": career_s, "grade": _score_to_grade(career_s)},
+        },
+        "overall_score": round((naesin_s + mock_s + study_s + career_s) / 4, 1),
+        "overall_grade": _score_to_grade((naesin_s + mock_s + study_s + career_s) / 4),
+        # 하위 구조는 감사·리포트 호환성을 위해 자동 산출값을 그대로 유지
+        "naesin": base_radar.get("naesin"),
+        "mock": base_radar.get("mock"),
+        "study": base_radar.get("study"),
+        "career": base_radar.get("career"),
+        # 수동 재산출 표식
+        "manual_override": True,
+    }
+
+    # 감사 로그 엔트리
+    now_iso = datetime.utcnow().isoformat()
+    audit_entry = {
+        "at": now_iso,
+        "by": str(admin.id),
+        "by_role": admin.role,
+        "reason": data.reason,
+        "input": {
+            "naesin": data.naesin,
+            "mock": data.mock,
+            "study": data.study,
+            "career": data.career,
+        },
+        "before": before_snapshot,
+        "after": {
+            "내신_경쟁력": {"score": naesin_s, "grade": _score_to_grade(naesin_s)},
+            "모의고사_역량": {"score": mock_s, "grade": _score_to_grade(mock_s)},
+            "학습습관_전략": {"score": study_s, "grade": _score_to_grade(study_s)},
+            "진로전형_전략": {"score": career_s, "grade": _score_to_grade(career_s)},
+            "overall_score": new_radar["overall_score"],
+            "overall_grade": new_radar["overall_grade"],
+        },
+    }
+
+    # counselor_overrides 갱신
+    existing_overrides["radar_scores"] = new_radar
+    existing_overrides["score_overrides"] = {
+        "naesin": data.naesin,
+        "mock": data.mock,
+        "study": data.study,
+        "career": data.career,
+        "_updated_at": now_iso,
+        "_updated_by": str(admin.id),
+    }
+    log = list(existing_overrides.get("score_override_log") or [])
+    log.append(audit_entry)
+    existing_overrides["score_override_log"] = log[-20:]  # 최근 20건만 보관
+    existing_overrides["_updated_at"] = now_iso
+    existing_overrides["_updated_by"] = str(admin.id)
+    survey.counselor_overrides = existing_overrides
+
+    # QA 재검증 (validate_with_repair)
+    merged = _merge_overrides(base_computed, existing_overrides)
+    from app.services.survey_qa_validator import validate_with_repair
+    qa = validate_with_repair(
+        merged,
+        survey.survey_type,
+        answers=survey.answers,
+        timing=survey.timing,
+    )
+    survey.analysis_status = qa["status"]
+    survey.analysis_validation = qa
+
+    await db.commit()
+
+    return {
+        "ok": True,
+        "radar_scores": new_radar,
+        "score_overrides": existing_overrides["score_overrides"],
+        "audit_entry": audit_entry,
+        "qa_validation": qa,
+        "analysis_status": qa["status"],
+    }
+
+
+@router.delete("/{survey_id}/scores")
+async def clear_score_overrides(
+    survey_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """4영역 점수 오버라이드 해제 (자동 산출값으로 복원). 다른 override는 유지."""
+    result = await db.execute(
+        select(ConsultationSurvey).where(ConsultationSurvey.id == survey_id)
+    )
+    survey = result.scalar_one_or_none()
+    if not survey:
+        raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다")
+
+    existing_overrides = dict(survey.counselor_overrides or {})
+    removed_keys = []
+    for k in ("radar_scores", "score_overrides"):
+        if k in existing_overrides:
+            existing_overrides.pop(k)
+            removed_keys.append(k)
+
+    # 감사 로그
+    if removed_keys:
+        now_iso = datetime.utcnow().isoformat()
+        log = list(existing_overrides.get("score_override_log") or [])
+        log.append({
+            "at": now_iso,
+            "by": str(admin.id),
+            "by_role": admin.role,
+            "action": "clear",
+            "removed_keys": removed_keys,
+        })
+        existing_overrides["score_override_log"] = log[-20:]
+        existing_overrides["_updated_at"] = now_iso
+        existing_overrides["_updated_by"] = str(admin.id)
+
+    survey.counselor_overrides = existing_overrides or None
+
+    # QA 재검증
+    base_computed = _compute_stats(survey.survey_type, survey.answers, survey.timing)
+    merged = _merge_overrides(base_computed, survey.counselor_overrides)
+    from app.services.survey_qa_validator import validate_with_repair
+    qa = validate_with_repair(
+        merged,
+        survey.survey_type,
+        answers=survey.answers,
+        timing=survey.timing,
+    )
+    survey.analysis_status = qa["status"]
+    survey.analysis_validation = qa
+
+    await db.commit()
+    return {
+        "ok": True,
+        "removed": removed_keys,
+        "qa_validation": qa,
+        "analysis_status": qa["status"],
+    }
 
 
 # ---- 상담사 체크리스트 ----

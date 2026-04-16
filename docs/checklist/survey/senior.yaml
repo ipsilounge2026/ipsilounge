@@ -1,0 +1,461 @@
+meta:
+  area_code: SENIOR
+  title: 선배 사전 설문 (senior_pre_survey.json)
+  schema_ref: ../_schema.yaml
+  index_ref: ../_index.yaml
+  source_specs:
+  - ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+  total_sessions: 4
+  last_updated: '2026-04-16'
+  status: ready
+  verification_summary:
+    pass: 17
+    partial: 0
+    unverified: 0
+    fail: 0
+    na: 0
+    verified_at: '2026-04-16'
+    completion_note: |
+      student_t1 로그인 → /senior-pre-survey → S1~S4 각 세션 검증.
+      3단계 흐름(select→survey→done). 4종 컴포넌트: radio/checkboxes/textarea/session_select.
+  notes: |
+    선배 상담 사전 설문. 별도 모델(senior_pre_surveys), 별도 라우터(/api/senior-pre-surveys).
+    ConsultationSurvey와 독립. 3단계 흐름: 세션선택 → 설문 → 완료.
+    공통 Q1~Q5 + 세션별 Q6~Q8.
+    S1(고1-1초): Q6~Q7 (2개)
+    S2(고1-2초): Q6~Q8 (3개)
+    S3(고2-1초): Q6~Q8 (3개)
+    S4(고2-2초): Q6~Q8 (3개)
+  component_types_used:
+  - radio
+  - checkboxes
+  - textarea
+  - session_select
+
+# ═══════════════════════════════════════════════════════════════════
+# Session Selection (1 item)
+# ═══════════════════════════════════════════════════════════════════
+items:
+- id: SENIOR-SESSION-select
+  aspect: navigation
+  requirement: |
+    세션 선택 화면에서 S1~S4 중 하나를 선택하면 해당 세션의 설문으로 진입.
+    S1: 고1-1학기 초, S2: 고1-2학기 초, S3: 고2-1학기 초, S4: 고2-2학기 초.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions (S1~S4)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - /senior-pre-survey 페이지 로드
+  - S1~S4 세션 카드/버튼 4개 표시
+  - 세션 클릭 → 설문 화면으로 전환
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# Common Questions Q1~Q5 (5 items)
+# ═══════════════════════════════════════════════════════════════════
+- id: SENIOR-COMMON-Q1-radio
+  question_id: Q1
+  aspect: input
+  requirement: |
+    Q1 (학교 생활) radio. required=true.
+    4개 옵션: 좋음/그럭저럭/힘듦/많이 힘듦.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: common_questions[id=Q1]
+  priority: P0
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-COMMON-Q2-radio
+  question_id: Q2
+  aspect: input
+  requirement: |
+    Q2 (오늘 컨디션) radio. required=true.
+    3개 옵션: 좋음/보통/피곤함.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: common_questions[id=Q2]
+  priority: P1
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-COMMON-Q3-checkboxes
+  question_id: Q3
+  aspect: input
+  requirement: |
+    Q3 (선배에게 듣고 싶은 조언) checkboxes. required=true.
+    옵션이 세션별로 다름 (options_by_session=true).
+    S1: 8개, S2: 6개, S3: 7개, S4: 6개 옵션.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: common_questions[id=Q3] + session_questions.*.Q3_options
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - 세션별 Q3 옵션이 다르게 렌더되는지 확인
+  - 복수 선택 가능
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-COMMON-Q4-textarea
+  question_id: Q4
+  aspect: input
+  requirement: |
+    Q4 (구체적 질문) textarea. required=false.
+    max_length=500.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: common_questions[id=Q4]
+  priority: P1
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-COMMON-Q5-radio
+  question_id: Q5
+  aspect: input
+  requirement: |
+    Q5 (가장 고민되는 것) radio. required=true.
+    7개 옵션: 공부·성적/진로·미래/친구관계/가족갈등/학교생활/특별히없음/기타.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: common_questions[id=Q5]
+  priority: P1
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# S1 — 고1-1학기 초 (2 items: Q6~Q7)
+# ═══════════════════════════════════════════════════════════════════
+- id: SENIOR-S1-Q6-radio
+  session: S1
+  question_id: Q6
+  aspect: input
+  requirement: |
+    S1-Q6 (동아리 정했어요?) radio. required=true.
+    3개 옵션: 정함/고민 중/아직 모름.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S1.questions[id=Q6]
+  priority: P1
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-S1-Q7-radio
+  session: S1
+  question_id: Q7
+  aspect: input
+  requirement: |
+    S1-Q7 (중학교 성적대) radio. required=true.
+    4개 옵션: 상위권/중상위권/중위권/중하위권.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S1.questions[id=Q7]
+  priority: P1
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# S2 — 고1-2학기 초 (3 items: Q6~Q8)
+# ═══════════════════════════════════════════════════════════════════
+- id: SENIOR-S2-Q6-radio
+  session: S2
+  question_id: Q6
+  aspect: input
+  requirement: |
+    S2-Q6 (1학기 내신 만족도) radio. required=true.
+    4개 옵션: 만족/그럭저럭/불만족/많이 불만족.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S2.questions[id=Q6]
+  priority: P1
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-S2-Q7-radio
+  session: S2
+  question_id: Q7
+  aspect: input
+  requirement: |
+    S2-Q7 (고2 선택과목) radio. required=true.
+    4개 옵션: 다 정함/일부 정함/고민 중/잘 모르겠음.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S2.questions[id=Q7]
+  priority: P1
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-S2-Q8-radio
+  session: S2
+  question_id: Q8
+  aspect: input
+  requirement: |
+    S2-Q8 (진로 방향) radio. required=true.
+    3개 옵션: 구체적으로 있음/대략 있음/아직 모름.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S2.questions[id=Q8]
+  priority: P2
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# S3 — 고2-1학기 초 (3 items: Q6~Q8)
+# ═══════════════════════════════════════════════════════════════════
+- id: SENIOR-S3-Q6-radio
+  session: S3
+  question_id: Q6
+  aspect: input
+  requirement: |
+    S3-Q6 (고1 평균 내신 등급) radio. required=true.
+    4개 옵션: 1~2등급/3~4등급/5등급/답하고 싶지 않음.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S3.questions[id=Q6]
+  priority: P1
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-S3-Q7-radio
+  session: S3
+  question_id: Q7
+  aspect: input
+  requirement: |
+    S3-Q7 (학생부 관리) radio. required=true.
+    4개 옵션: 잘하고 있음/보통/부족함/잘 모르겠음.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S3.questions[id=Q7]
+  priority: P2
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-S3-Q8-radio
+  session: S3
+  question_id: Q8
+  aspect: input
+  requirement: |
+    S3-Q8 (수능 공부 시작 여부) radio. required=true.
+    3개 옵션: 이미 시작/계획 중/아직 없음.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S3.questions[id=Q8]
+  priority: P2
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# S4 — 고2-2학기 초 (3 items: Q6~Q8)
+# ═══════════════════════════════════════════════════════════════════
+- id: SENIOR-S4-Q6-radio
+  session: S4
+  question_id: Q6
+  aspect: input
+  requirement: |
+    S4-Q6 (수시·정시 방향) radio. required=true.
+    4개 옵션: 수시/정시/혼합/아직 결정 못함.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S4.questions[id=Q6]
+  priority: P1
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-S4-Q7-radio
+  session: S4
+  question_id: Q7
+  aspect: input
+  requirement: |
+    S4-Q7 (평균 내신 등급) radio. required=true.
+    4개 옵션: 1~2등급/3~4등급/5등급/답하고 싶지 않음.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S4.questions[id=Q7]
+  priority: P2
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: SENIOR-S4-Q8-radio
+  session: S4
+  question_id: Q8
+  aspect: input
+  requirement: |
+    S4-Q8 (목표 대학·학과) radio. required=true.
+    3개 옵션: 구체적으로 있음/대략 있음/없음.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json
+    section: session_questions.S4.questions[id=Q8]
+  priority: P2
+  check_method: preview_mcp
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/senior_20260416T110000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na

@@ -1,0 +1,125 @@
+# ===================================================================
+# 체크리스트 공통 스키마 정의
+# ===================================================================
+# 이 파일은 모든 *.yaml 체크리스트가 따르는 형식과 채점 정의를 담습니다.
+# 변경 시 PR 필수. 자유롭게 수정하면 검증 결과의 일관성이 깨집니다.
+# ===================================================================
+
+meta:
+  schema_format_version: "1.0.0"
+  enforced_since: "2026-04-15"
+
+# ─── status 정의 ────────────────────────────────────────────────────
+# 모든 체크리스트 항목의 시스템별 status 필드는 아래 중 하나여야 함.
+status_legend:
+  pass:
+    label: "통과"
+    icon: "✅"
+    rule: "behavior_test의 모든 단계가 통과. evidence 필드 필수."
+  partial:
+    label: "부분 통과"
+    icon: "⚠️"
+    rule: "일부 단계만 통과. notes에 미통과 단계 명시 필수."
+  fail:
+    label: "실패"
+    icon: "❌"
+    rule: "핵심 기대결과가 불성립. notes 권장."
+  na:
+    label: "해당 없음"
+    icon: "—"
+    rule: "이 시스템에는 적용되지 않음. reason 필드 필수 (예: 'B는 web-only')."
+  unverified:
+    label: "미검증"
+    icon: "🔵"
+    rule: "지금 환경에서 검증 불가. evidence 비어 있어도 됨. 사용자 수동 확인 필요."
+  blocked:
+    label: "블록"
+    icon: "🚫"
+    rule: "선결 항목 미해결로 검증 불가. blocked_by 필드 필수."
+
+# ─── 검증 단계(L1/L2/L3) 정의 ──────────────────────────────────────
+# 한 항목당 시스템별로 L1, L2, L3 셋 모두 평가 가능 (상황에 따라 일부만 채워도 됨).
+verification_levels:
+  L1:
+    label: "코드/파일 존재 (정적)"
+    method: "Glob/Grep으로 파일 또는 함수 존재 확인. evidence: 파일경로:라인번호"
+  L2:
+    label: "production 경로에서 import·호출 (정적)"
+    method: "호출 지점이 실제 사용 경로에 있는지 확인. evidence: 호출 파일경로:라인번호"
+  L3:
+    label: "실제 실행 시 기대 동작 발생 (런타임)"
+    method: "build/test/preview-mcp/manual로 실제 실행. evidence: 빌드 로그, 테스트명, 스크린샷 경로"
+
+# ─── 검증 방법 enum ────────────────────────────────────────────────
+# 항목의 check_method 필드 값.
+check_methods:
+  build:       "npm run build / pytest 등 정적 빌드"
+  lint:        "lint 도구 통과"
+  unit_test:   "단위 테스트 통과"
+  preview_mcp: "Preview MCP / Claude in Chrome으로 화면 자동 조작"
+  manual:      "사용자 수동 확인 필요 (자동화 불가)"
+  na:          "검증 방법 자체가 적용 불가"
+
+# ─── 우선순위 정의 ─────────────────────────────────────────────────
+# priority 필드는 사용자 영향도 기준.
+priority_levels:
+  P0: "사용자가 막힘 — 작업 진행 불가"
+  P1: "기능은 작동하나 품질 저하 — 사용자가 결과 부분 미확인"
+  P2: "개선 권고 — 사용성/성능 향상"
+  P3: "선택 — nice to have"
+
+# ─── 항목 ID 명명 규칙 ─────────────────────────────────────────────
+# 형식: {AREA}-{SUB}-{ASPECT}
+# 예시:
+#   HIGH-A-A4-input         (high.json A 카테고리 A4 질문 입력)
+#   HIGH-B-B5-calculate     (high.json B 카테고리 B5 자동산출 계산)
+#   ANALYZER-STEP8-rubric   (CLAUDE.md Step 8 루브릭)
+#   AUTH-LOGIN-jwt          (인증 영역 로그인 JWT)
+id_patterns:
+  area_codes:
+    HIGH:        "고등학교 설문 (high.json)"
+    PRE_HIGH:    "예비고등학교 설문 (preheigh1.json)"
+    SENIOR:      "선배 설문 (senior_pre_survey.json)"
+    BOOKING:     "상담 예약"
+    SATISFACTION: "상담 후 만족도 설문"
+    ANALYZER:    "학생부 분석기 (CLAUDE.md)"
+    AUTH:        "인증·권한"
+    DATA_SHARE:  "데이터 공유 정책 (SHARED_DATA_ROOT 등)"
+    UX_POLICY:   "UX 공통 정책 (무기명·자동저장 등)"
+    TEST_ENV:    "검증 환경 (L3 검증 인프라 4개 자산)"
+
+# ─── 항목 필드 형식 (JSON Schema 스타일) ─────────────────────────
+item_schema:
+  required_fields:
+    - id
+    - requirement
+    - behavior_test
+    - check_method
+    - spec_ref
+  optional_fields:
+    - aspect
+    - category
+    - question_id
+    - priority
+    - blocked_by
+    - notes
+    - last_user_decision_at
+    - linked_pr
+
+  per_system_fields:
+    description: "각 시스템(backend, user_web, mobile, admin_web)별로 status + L1/L2/L3 evidence"
+    example:
+      status: pass | partial | fail | na | unverified | blocked
+      L1: { evidence: "파일경로:라인 또는 빈 문자열" }
+      L2: { evidence: "..." }
+      L3: { evidence: "..." }
+      reason: "(na일 때 필수)"
+      note: "(선택)"
+
+# ─── 사용자 결정 항목 ──────────────────────────────────────────────
+# 모호한 항목은 needs_user_decision 으로 임시 표시.
+# 결정되기 전까지는 status 비워둠.
+needs_user_decision:
+  marker: "needs_user_decision: true"
+  required_field: "interpretation_question"
+  resolved_field: "user_decision (사용자가 채워야 잠금)"

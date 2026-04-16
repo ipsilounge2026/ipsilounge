@@ -26,6 +26,8 @@ class NoteCreate(BaseModel):
     advice_given: str | None = None
     next_steps: str | None = None
     next_topic: str | None = None
+    # HSGAP-P2-senior-counselor-context-share-ui: 다음 선배에게 전달할 요약 맥락
+    next_senior_context: str | None = None
     topic_notes: dict | None = None  # 카테고리별 주제 기록
     admin_private_notes: str | None = None
     is_visible_to_user: bool = False
@@ -50,6 +52,7 @@ def _note_to_dict(note: ConsultationNote) -> dict:
         "advice_given": note.advice_given,
         "next_steps": note.next_steps,
         "next_topic": note.next_topic,
+        "next_senior_context": getattr(note, "next_senior_context", None),
         "topic_notes": note.topic_notes if hasattr(note, "topic_notes") else None,
         "admin_private_notes": note.admin_private_notes,
         "is_visible_to_user": note.is_visible_to_user,
@@ -135,6 +138,7 @@ async def create_note(
         advice_given=data.advice_given,
         next_steps=data.next_steps,
         next_topic=data.next_topic,
+        next_senior_context=data.next_senior_context,
         topic_notes=data.topic_notes,
         admin_private_notes=data.admin_private_notes,
         is_visible_to_user=data.is_visible_to_user,

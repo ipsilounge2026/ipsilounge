@@ -520,6 +520,7 @@ async def _trigger_satisfaction_survey(
     from app.config import settings
     from app.models.satisfaction_survey import SatisfactionSurvey
     from app.services.email_service import send_satisfaction_survey_invite_email
+    from app.services.notification_service import send_satisfaction_survey_notification
 
     # 중복 방지 (booking_id unique constraint)
     existing = await db.execute(
@@ -555,7 +556,7 @@ async def _trigger_satisfaction_survey(
     db.add(survey)
     await db.flush()  # id 확보
 
-    # 응답 메일 발송
+    # 응답 메일 + FCM 푸시 발송 (기획서 §10 만족도 자동 발송)
     user = (await db.execute(select(User).where(User.id == booking.user_id))).scalar_one_or_none()
     if user and user.email:
         survey_url = (
@@ -572,6 +573,14 @@ async def _trigger_satisfaction_survey(
             )
         except Exception:
             # 메일 실패해도 설문 레코드는 유지 (앱/웹에서 응답 가능)
+            pass
+
+    # 학생 FCM 푸시 (모바일 앱 사용자 대상)
+    if user:
+        try:
+            await send_satisfaction_survey_notification(user=user, db=db)
+        except Exception:
+            # 푸시 실패도 설문 레코드/이메일과 무관하게 graceful degrade
             pass
 
 

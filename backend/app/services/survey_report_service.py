@@ -75,8 +75,16 @@ def generate_survey_report_pdf(
     user_info: dict,
     schema: dict | None,
     computed: dict,
+    extras: dict | None = None,
 ) -> bytes:
-    """설문 리포트 PDF를 바이트로 생성하여 반환."""
+    """설문 리포트 PDF를 바이트로 생성하여 반환.
+
+    기획서 §4-7/§4-9/§5-4-E4/§7-2: `extras` 에 아래 키를 전달하면 전용 섹션을 추가한다.
+    - course_requirement_match: 권장 이수 과목 매칭 결과
+    - suneung_minimum: 수능 최저학력기준 시뮬레이션 결과
+    - delta_change: Delta 모드 이전 설문 대비 변경점
+    로드맵은 computed["roadmap"]에서 자동으로 렌더링된다.
+    """
     _ensure_fonts()
 
     buf = io.BytesIO()
@@ -101,11 +109,34 @@ def generate_survey_report_pdf(
     # ── 3. 자동 분석 (내신/모의/학습) ──
     _add_computed_section(elements, styles, survey, computed)
 
-    # ── 4. 상담사 메모 ──
+    # ── 4. 기획서 전용 섹션 (고등학생) ──
+    extras = extras or {}
+
+    # 4-1. 로드맵 (computed 에서 자동 생성)
+    roadmap = computed.get("roadmap") if isinstance(computed, dict) else None
+    if roadmap and roadmap.get("matrix"):
+        _render_roadmap(elements, styles, roadmap)
+
+    # 4-2. 권장 이수 과목 매칭
+    crm = extras.get("course_requirement_match")
+    if crm:
+        _render_course_requirement(elements, styles, crm)
+
+    # 4-3. 수능 최저 시뮬레이션
+    sun = extras.get("suneung_minimum")
+    if sun and isinstance(sun, dict):
+        _render_suneung_minimum(elements, styles, sun)
+
+    # 4-4. Delta 모드 변경점
+    delta = extras.get("delta_change")
+    if delta and isinstance(delta, dict) and delta.get("has_previous"):
+        _render_delta_change(elements, styles, delta)
+
+    # ── 5. 상담사 메모 ──
     if survey.get("admin_memo"):
         _add_memo_section(elements, styles, survey["admin_memo"])
 
-    # ── 5. 푸터 정보 ──
+    # ── 6. 푸터 정보 ──
     elements.append(Spacer(1, 10 * mm))
     elements.append(HRFlowable(width="100%", color=BORDER_COLOR))
     elements.append(Spacer(1, 3 * mm))
@@ -495,3 +526,422 @@ def _add_memo_section(elements, styles, memo_text):
     # 줄바꿈 처리
     memo_html = memo_text.replace("\n", "<br/>")
     elements.append(Paragraph(memo_html, styles["memo"]))
+
+
+# ═══════════════════════════════════════
+# 기획서 §4-9: 로드맵 (Phase × 4트랙)
+# ═══════════════════════════════════════
+
+def _render_roadmap(elements, styles, roadmap: dict):
+    """로드맵 섹션: Phase 행 × 4트랙 열 매트릭스.
+
+    roadmap = {
+        "items": [{area, priority, title, description, period, ...}, ...],
+        "matrix": {
+            "phases": [{key, label, theme}, ...],
+            "tracks": [{key, label, icon}, ...],
+            "cells": {phase_key: {track_key: text}},
+        },
+        "summary": str,
+    }
+    """
+    elements.append(PageBreak())
+    elements.append(Paragraph("단계별 로드맵 (Phase × 4트랙)", styles["h2"]))
+
+    summary_text = roadmap.get("summary")
+    if summary_text:
+        elements.append(Paragraph(summary_text, styles["body_bold"]))
+        elements.append(Spacer(1, 3 * mm))
+
+    matrix = roadmap.get("matrix") or {}
+    phases = matrix.get("phases") or []
+    tracks = matrix.get("tracks") or []
+    cells = matrix.get("cells") or {}
+
+    if phases and tracks:
+        # 헤더: Phase / 트랙별 컬럼
+        header = [Paragraph("Phase", styles["cell_bold"])]
+        for tr in tracks:
+            label = f'{tr.get("icon", "")} {tr.get("label", tr.get("key", ""))}'.strip()
+            header.append(Paragraph(label, styles["cell_bold"]))
+
+        table_rows = [header]
+        for ph in phases:
+            phase_key = ph.get("key")
+            phase_label = ph.get("label", phase_key or "")
+            phase_theme = ph.get("theme", "")
+            phase_cell = Paragraph(
+                f"<b>{phase_label}</b><br/><font size='7' color='#6B7280'>{phase_theme}</font>",
+                styles["cell"],
+            )
+            row = [phase_cell]
+            for tr in tracks:
+                text = (cells.get(phase_key, {}) or {}).get(tr.get("key"), "-")
+                if text and text != "-":
+                    text = str(text).replace("\n", "<br/>")
+                row.append(Paragraph(text, styles["cell"]))
+            table_rows.append(row)
+
+        # 전체 폭 약 180mm → Phase 30, 나머지 4등분
+        phase_col = 30 * mm
+        other_col = (180 * mm - phase_col) / max(1, len(tracks))
+        col_widths = [phase_col] + [other_col] * len(tracks)
+
+        t = Table(table_rows, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
+            ("TEXTCOLOR", (0, 0), (-1, 0), HEADER_FG),
+            ("FONTNAME", (0, 0), (-1, 0), FONT_B),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("BACKGROUND", (0, 1), (0, -1), SECTION_BG),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 4 * mm))
+
+    # 우선순위 아이템 (보완 영역)
+    items = roadmap.get("items") or []
+    high_items = [it for it in items if it.get("priority") == "상"]
+    if high_items:
+        elements.append(Paragraph("우선 보강 영역", styles["h3"]))
+        for it in high_items:
+            title = it.get("title", "")
+            area = it.get("area", "")
+            desc = it.get("description", "")
+            period = it.get("period", "")
+            elements.append(Paragraph(
+                f"<b>[{area}] {title}</b> — {period}",
+                styles["body_bold"],
+            ))
+            if desc:
+                elements.append(Paragraph(f"  {desc}", styles["body"]))
+            elements.append(Spacer(1, 1 * mm))
+
+
+# ═══════════════════════════════════════
+# 기획서 §4-7: 권장 이수 과목 매칭
+# ═══════════════════════════════════════
+
+def _render_course_requirement(elements, styles, match: dict):
+    """권장 이수 과목 매칭 섹션.
+
+    match = {
+        "available": bool,
+        "reason": str | None,
+        "results": [
+            {target, 대학, 모집단위, found, 핵심_이수, 핵심_미이수,
+             권장_이수, 권장_미이수, 비고, 학생_과목}, ...
+        ]
+    }
+    """
+    elements.append(PageBreak())
+    elements.append(Paragraph("목표 대학별 권장 이수 과목 매칭", styles["h2"]))
+
+    if not match.get("available", False):
+        reason = match.get("reason") or "매칭을 수행할 수 없습니다."
+        elements.append(Paragraph(reason, styles["body"]))
+        return
+
+    results = match.get("results") or []
+    if not results:
+        elements.append(Paragraph("매칭 결과가 없습니다.", styles["body"]))
+        return
+
+    for idx, r in enumerate(results):
+        target = r.get("target") or f"{r.get('대학', '?')} {r.get('모집단위', '?')}"
+        elements.append(Paragraph(f"{idx + 1}. {target}", styles["h3"]))
+
+        if not r.get("found"):
+            reason = r.get("reason") or "해당 대학/모집단위 정보를 찾을 수 없습니다."
+            elements.append(Paragraph(reason, styles["body"]))
+            elements.append(Spacer(1, 2 * mm))
+            continue
+
+        core_done = r.get("핵심_이수") or []
+        core_miss = r.get("핵심_미이수") or []
+        rec_done = r.get("권장_이수") or []
+        rec_miss = r.get("권장_미이수") or []
+
+        def _j(lst):
+            return ", ".join(lst) if lst else "-"
+
+        rows = [
+            ["구분", "이수 완료", "미이수"],
+            ["핵심과목", _j(core_done), _j(core_miss)],
+            ["권장과목", _j(rec_done), _j(rec_miss)],
+        ]
+        wrapped = []
+        for i, row in enumerate(rows):
+            st = styles["cell_bold"] if i == 0 else styles["cell"]
+            wrapped.append([Paragraph(str(c), st) for c in row])
+
+        t = Table(wrapped, colWidths=[25 * mm, 75 * mm, 75 * mm], repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
+            ("TEXTCOLOR", (0, 0), (-1, 0), HEADER_FG),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            # 이수 완료 컬럼은 초록, 미이수 컬럼은 주황 느낌
+            ("TEXTCOLOR", (1, 1), (1, -1), colors.HexColor("#10B981")),
+            ("TEXTCOLOR", (2, 1), (2, -1), colors.HexColor("#DC2626")),
+        ]))
+        elements.append(t)
+
+        note = r.get("비고")
+        if note:
+            elements.append(Spacer(1, 1 * mm))
+            elements.append(Paragraph(f"비고: {note}", styles["small"]))
+
+        # 핵심 미이수가 있으면 경고
+        if core_miss:
+            elements.append(Spacer(1, 1 * mm))
+            elements.append(Paragraph(
+                f"⚠ 핵심과목 미이수: {_j(core_miss)} — 보완 계획 수립 필요",
+                styles["body_bold"],
+            ))
+        elements.append(Spacer(1, 4 * mm))
+
+
+# ═══════════════════════════════════════
+# 기획서 §5-4-E4: 수능 최저학력기준 시뮬레이션
+# ═══════════════════════════════════════
+
+def _render_suneung_minimum(elements, styles, sim: dict):
+    """수능 최저학력기준 시뮬레이션 섹션.
+
+    sim = {
+        "student_mock_grades": {korean, math, english, inquiry1, inquiry2, korean_history},
+        "track": str,
+        "target_level": str,
+        "target_universities": [...],
+        "target_year": int,
+        "simulations": [{university, admission_category, admission_type,
+                         requirement_label, requirement_text,
+                         result, margin, detail, selected, failures}, ...],
+        "summary": {total_checked, met, close, not_met, no_requirement},
+        "error": str | None,
+    }
+    """
+    elements.append(PageBreak())
+    elements.append(Paragraph("수능 최저학력기준 충족 시뮬레이션", styles["h2"]))
+
+    err = sim.get("error")
+    if err:
+        elements.append(Paragraph(err, styles["body"]))
+        return
+
+    # 학생 기본 정보
+    grades = sim.get("student_mock_grades") or {}
+    subj_labels = {
+        "korean": "국어", "math": "수학", "english": "영어",
+        "inquiry1": "탐구1", "inquiry2": "탐구2", "korean_history": "한국사",
+    }
+    grade_line_parts = []
+    for key, lab in subj_labels.items():
+        v = grades.get(key)
+        if v is None:
+            continue
+        grade_line_parts.append(f"{lab} {v}등급")
+    if grade_line_parts:
+        elements.append(Paragraph(
+            f"최신 모의고사 등급: {' / '.join(grade_line_parts)}  "
+            f"(계열: {sim.get('track') or '-'})",
+            styles["body"],
+        ))
+
+    # 요약 통계
+    summary = sim.get("summary") or {}
+    elements.append(Paragraph(
+        f"검사 대상 {summary.get('total_checked', 0)}건 중 "
+        f"충족 {summary.get('met', 0)}건 / "
+        f"근접 미충족 {summary.get('close', 0)}건 / "
+        f"미충족 {summary.get('not_met', 0)}건 / "
+        f"최저 없음 {summary.get('no_requirement', 0)}건",
+        styles["body_bold"],
+    ))
+    elements.append(Spacer(1, 3 * mm))
+
+    # 결과별 그룹핑하여 테이블 출력 (충족 우선)
+    simulations = sim.get("simulations") or []
+    if not simulations:
+        elements.append(Paragraph("시뮬레이션 가능한 전형이 없습니다.", styles["body"]))
+        return
+
+    result_color = {
+        "충족": colors.HexColor("#10B981"),
+        "근접": colors.HexColor("#F59E0B"),
+        "미충족": colors.HexColor("#DC2626"),
+        "해당없음": colors.HexColor("#6B7280"),
+        "참조": colors.HexColor("#3B82F6"),
+        "파싱불가": colors.HexColor("#9CA3AF"),
+    }
+
+    header = [
+        Paragraph("대학", styles["cell_bold"]),
+        Paragraph("전형", styles["cell_bold"]),
+        Paragraph("최저 요구", styles["cell_bold"]),
+        Paragraph("판정", styles["cell_bold"]),
+        Paragraph("상세", styles["cell_bold"]),
+    ]
+    rows = [header]
+    for s in simulations:
+        result = s.get("result") or "파싱불가"
+        # 근접 라벨 보정 (margin < 0, >= -2)
+        display_result = result
+        margin = s.get("margin") or 0
+        if result == "미충족" and -2 <= margin < 0:
+            display_result = f"근접({margin})"
+        elif result == "미충족":
+            display_result = f"미충족({margin})"
+
+        univ = s.get("university", "?")
+        admission = f'{s.get("admission_category", "")}<br/>{s.get("admission_type", "")}'
+        req = (s.get("requirement_text") or "-").replace("\n", "<br/>")
+        req_label = s.get("requirement_label")
+        if req_label and req_label != "전체":
+            req = f"<b>[{req_label}]</b> {req}"
+        detail = s.get("detail") or "-"
+
+        rows.append([
+            Paragraph(univ, styles["cell"]),
+            Paragraph(admission, styles["cell"]),
+            Paragraph(req, styles["cell"]),
+            Paragraph(display_result, styles["cell_bold"]),
+            Paragraph(detail, styles["cell"]),
+        ])
+
+    t = Table(rows, colWidths=[28 * mm, 30 * mm, 55 * mm, 22 * mm, 45 * mm], repeatRows=1)
+    style_cmds = [
+        ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
+        ("TEXTCOLOR", (0, 0), (-1, 0), HEADER_FG),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("GRID", (0, 0), (-1, -1), 0.4, BORDER_COLOR),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]
+    for i, s in enumerate(simulations, start=1):
+        result = s.get("result") or "파싱불가"
+        color = result_color.get(result, colors.HexColor("#9CA3AF"))
+        style_cmds.append(("TEXTCOLOR", (3, i), (3, i), color))
+        if i % 2 == 0:
+            style_cmds.append(("BACKGROUND", (0, i), (-1, i), ROW_ALT))
+    t.setStyle(TableStyle(style_cmds))
+    elements.append(t)
+
+
+# ═══════════════════════════════════════
+# 기획서 §7-2: Delta 모드 변경점
+# ═══════════════════════════════════════
+
+def _render_delta_change(elements, styles, delta: dict):
+    """Delta 모드 이전 설문 대비 변경점 섹션.
+
+    delta = {
+        "has_previous": True,
+        "previous_timing": str,
+        "previous_submitted_at": str | None,
+        "diff": {cat_id: {q_id: {prev, curr, change_type}}},
+        "summary": str,
+    }
+    """
+    elements.append(PageBreak())
+    elements.append(Paragraph("이전 설문 대비 변경점 (Delta)", styles["h2"]))
+
+    prev_timing = delta.get("previous_timing") or "-"
+    prev_at = delta.get("previous_submitted_at")
+    prev_date = prev_at[:10] if prev_at else "-"
+    elements.append(Paragraph(
+        f"이전 설문: {prev_timing}  (제출 {prev_date})",
+        styles["body_bold"],
+    ))
+
+    summary_text = delta.get("summary") or "-"
+    elements.append(Paragraph(summary_text, styles["body"]))
+    elements.append(Spacer(1, 3 * mm))
+
+    diff = delta.get("diff") or {}
+    if not diff:
+        elements.append(Paragraph("변경된 항목이 없습니다.", styles["body"]))
+        return
+
+    change_label = {
+        "added": "신규",
+        "removed": "삭제",
+        "modified": "수정",
+        "increased": "증가",
+        "decreased": "감소",
+    }
+    change_color = {
+        "added": colors.HexColor("#10B981"),
+        "removed": colors.HexColor("#DC2626"),
+        "modified": colors.HexColor("#3B82F6"),
+        "increased": colors.HexColor("#059669"),
+        "decreased": colors.HexColor("#DC2626"),
+    }
+
+    for cat_id in sorted(diff.keys()):
+        cat_diff = diff[cat_id] or {}
+        if not cat_diff:
+            continue
+        elements.append(Paragraph(f"카테고리 {cat_id}", styles["h3"]))
+
+        header = [
+            Paragraph("문항", styles["cell_bold"]),
+            Paragraph("이전 값", styles["cell_bold"]),
+            Paragraph("현재 값", styles["cell_bold"]),
+            Paragraph("변경 유형", styles["cell_bold"]),
+        ]
+        rows = [header]
+        type_list: list[str] = []
+        for q_id in sorted(cat_diff.keys()):
+            q_change = cat_diff[q_id] or {}
+            prev_v = _format_answer_value(q_change.get("prev"))
+            curr_v = _format_answer_value(q_change.get("curr"))
+            ch_type = q_change.get("change_type") or "modified"
+            type_list.append(ch_type)
+            # 값이 길면 축약
+            if len(prev_v) > 80:
+                prev_v = prev_v[:80] + "..."
+            if len(curr_v) > 80:
+                curr_v = curr_v[:80] + "..."
+            rows.append([
+                Paragraph(q_id, styles["cell"]),
+                Paragraph(prev_v, styles["cell"]),
+                Paragraph(curr_v, styles["cell"]),
+                Paragraph(change_label.get(ch_type, ch_type), styles["cell_bold"]),
+            ])
+
+        t = Table(
+            rows, colWidths=[25 * mm, 65 * mm, 65 * mm, 25 * mm], repeatRows=1,
+        )
+        style_cmds = [
+            ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
+            ("TEXTCOLOR", (0, 0), (-1, 0), HEADER_FG),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.4, BORDER_COLOR),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ]
+        for i, ch in enumerate(type_list, start=1):
+            color = change_color.get(ch, colors.HexColor("#374151"))
+            style_cmds.append(("TEXTCOLOR", (3, i), (3, i), color))
+            if i % 2 == 0:
+                style_cmds.append(("BACKGROUND", (0, i), (-1, i), ROW_ALT))
+        t.setStyle(TableStyle(style_cmds))
+        elements.append(t)
+        elements.append(Spacer(1, 3 * mm))

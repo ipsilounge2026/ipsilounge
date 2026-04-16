@@ -3,11 +3,13 @@ uvicorn[standard]==0.34.0
 sqlalchemy==2.0.36
 asyncpg==0.30.0
 psycopg2-binary==2.9.10
+aiosqlite==0.20.0  # DEV_MODE 검증용 SQLite async 드라이버 (운영 미사용)
 alembic==1.14.0
 pydantic[email]==2.10.3
 pydantic-settings==2.7.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.2.1  # passlib 1.7.4 호환 (5.x 는 detect_wrap_bug 초기화에서 ValueError)
 python-multipart==0.0.18
 boto3==1.35.86
 firebase-admin==6.6.0

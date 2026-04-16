@@ -1,0 +1,403 @@
+# ===================================================================
+# 분석기↔서비스 데이터 공유 (SHARED_DATA_ROOT) 체크리스트
+# ===================================================================
+# 영역: cross-cutting / DATA_SHARE
+# spec:
+#   - school-record-analyzer/CLAUDE.md § 교과 이수 기준표 — 공유 원칙
+#   - ipsilounge/backend/app/config.py (SHARED_DATA_ROOT + DATA_ROOT property)
+#   - ipsilounge/backend/app/services/course_requirement_service.py
+#   - ipsilounge/backend/app/services/suneung_minimum_service.py
+#   - ipsilounge/backend/app/services/counselor_type_service.py
+#   - school-record-analyzer/modules/grade_analyzer.py (load_course_requirements)
+#   - school-record-analyzer/modules/admission_matcher.py
+#
+# 공유 대상 파일 (school-record-analyzer/data/):
+#   1. course_requirements.xlsx  — 권장과목 DB (ipsilounge + analyzer 동시 참조)
+#   2. admission_db.xlsx         — 수시/정시 입결 DB (counselor_type_service + analyzer)
+#   3. 수능최저_db.xlsx           — 수능 최저 기준 DB (suneung_minimum_service)
+#   4. university_grading.xlsx   — 대학별 내신 산출 DB (analyzer 전용, 공유 인프라)
+#
+# 검증 방법: 코드 리뷰 + 파일 실존 확인 + 경로 계산 검증
+#   - _DEFAULT_DATA_ROOT 의 parents[3] 경로 계산이 실제 존재 경로와 일치하는지 확인
+#   - 4개 XLSX 파일의 스키마가 양쪽 로더에서 동일하게 해석되는지 확인
+# ===================================================================
+
+meta:
+  area_code: DATA_SHARE
+  title: "분석기↔서비스 데이터 공유 (SHARED_DATA_ROOT)"
+  created_at: "2026-04-16"
+  spec_refs:
+    - "school-record-analyzer/CLAUDE.md § 교과 이수 기준표 — 공유 원칙"
+    - "ipsilounge/backend/app/config.py"
+    - "ipsilounge/backend/app/services/course_requirement_service.py"
+    - "ipsilounge/backend/app/services/suneung_minimum_service.py"
+    - "ipsilounge/backend/app/services/counselor_type_service.py"
+    - "school-record-analyzer/modules/grade_analyzer.py"
+    - "school-record-analyzer/modules/admission_matcher.py"
+  implementation_notes:
+    - "공유 원칙: school-record-analyzer/data 가 단일 원천(single source of truth). ipsilounge 백엔드가 환경변수 SHARED_DATA_ROOT 또는 자동 기본값으로 동일 파일 참조"
+    - "기본 경로: ipsilounge/backend/app/config.py → parents[3]/school-record-analyzer/data. 즉 config.py(깊이 0) → app(1) → backend(2) → ipsilounge(3) → (parent) → school-record-analyzer/data"
+    - "운영(EC2) 배포 시 SHARED_DATA_ROOT 환경변수로 재지정 필요 — 이 부분은 배포 가이드(docs/deployment.md) 과제로 분리"
+    - "admission_db.xlsx 는 ADMISSION_DB_PATH 환경변수 단일 파일 오버라이드도 지원. DB 우선 + Excel 폴백 이중 전략"
+    - "course_requirements.xlsx 는 2026-04 스키마 정규화 완료: 단일 시트 '권장과목', Wide + 쉼표구분. 양쪽 로더 동일 해석"
+
+# ─── A. SHARED_DATA_ROOT 설정 ──────────────────────────────────────
+items:
+  - id: DS-A1-default-path
+    requirement: |
+      ipsilounge/backend/app/config.py
+      - _DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[3] / "school-record-analyzer" / "data"
+      - 경로 계산: config.py → app → backend → ipsilounge → parent(학생부분석프로그램) → school-record-analyzer/data
+      - 실행 시점에 절대경로로 해석 (resolve())
+    spec_ref: "backend/app/config.py L10~12"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        config.py L10~12 _DEFAULT_DATA_ROOT 정의 확인. parents[3] 계산이
+        C:\...\ipsilounge\backend\app\config.py 에서 C:\...\ (학생부분석프로그램)
+        으로 올라간 뒤 school-record-analyzer/data 로 합류됨.
+        실제 파일 시스템에 동일 경로 존재 (ls 로 확인).
+
+  - id: DS-A2-env-override
+    requirement: |
+      Settings.SHARED_DATA_ROOT: str = str(_DEFAULT_DATA_ROOT)
+      - pydantic_settings BaseSettings 로 .env 파일에서 재정의 가능
+      - model_config = {"env_file": ".env", "extra": "ignore"}
+      - 운영 배포 시 SHARED_DATA_ROOT=/path/to/data 로 주입
+    spec_ref: "backend/app/config.py L78, L80"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L78 SHARED_DATA_ROOT 클래스 변수 선언 + 기본값 _DEFAULT_DATA_ROOT 할당.
+        L80 model_config env_file=".env" 지정. pydantic BaseSettings 패턴으로
+        환경변수 또는 .env 파일을 통해 재정의 가능.
+
+  - id: DS-A3-data-root-property
+    requirement: |
+      @property DATA_ROOT(self) -> Path:
+          return Path(self.SHARED_DATA_ROOT)
+      - 모든 서비스는 settings.DATA_ROOT 를 통해 공용 루트 참조
+      - str → Path 변환은 이 한 지점에서만 수행
+    spec_ref: "backend/app/config.py L82~84"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L82~84 @property DATA_ROOT 정의 확인. 3개 서비스(course_requirement_service,
+        suneung_minimum_service, counselor_type_service) 모두 settings.DATA_ROOT
+        속성만 사용하여 일관성 유지.
+
+  - id: DS-A4-single-source-doc
+    requirement: |
+      school-record-analyzer/CLAUDE.md § 교과 이수 기준표 — 공유 원칙
+      - "이 파일은 school-record-analyzer/data/ 가 단일 원천(single source of truth)"
+      - "입시라운지 백엔드(ipsilounge/backend)는 환경변수 SHARED_DATA_ROOT 또는
+         자동 계산된 기본값을 통해 동일한 파일을 참조함"
+      - "매년 대학 발표를 한 곳에서만 갱신하면 두 시스템 모두 반영됨"
+    spec_ref: "school-record-analyzer/CLAUDE.md L447~453 (공유 원칙 3줄 요약)"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        CLAUDE.md 공유 원칙 섹션에 3가지 원칙 모두 명시:
+        (1) 단일 원천, (2) 백엔드 재참조, (3) 단일 갱신 → 양쪽 반영.
+        이 원칙이 코드(_DEFAULT_DATA_ROOT 자동 계산 + ADMISSION_DB_PATH 오버라이드)
+        에 그대로 구현됨.
+
+# ─── B. 공유 파일 존재성 ────────────────────────────────────────────
+  - id: DS-B1-course-requirements
+    requirement: |
+      school-record-analyzer/data/course_requirements.xlsx 존재
+      - 권장 이수 과목 매칭 기준 파일
+      - ipsilounge course_requirement_service + analyzer load_course_requirements 양쪽에서 참조
+    spec_ref: "school-record-analyzer/data/course_requirements.xlsx"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "ls 확인: 8,983 bytes, 2026-04-16 08:58 최종 수정. 2026-04 스키마 정규화 버전."
+
+  - id: DS-B2-admission-db
+    requirement: |
+      school-record-analyzer/data/admission_db.xlsx 존재
+      - 수시/정시 입결 RAW 데이터
+      - 시트 2개: 수시입결RAW, 정시입결RAW
+      - counselor_type_service (Excel 폴백) + analyzer admission_matcher 양쪽에서 참조
+    spec_ref: "school-record-analyzer/data/admission_db.xlsx"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "ls 확인: 3,884,456 bytes (3.88MB), 2026-04-13 13:07 최종 수정. 가장 용량 큰 공유 파일."
+
+  - id: DS-B3-suneung-minimum
+    requirement: |
+      school-record-analyzer/data/수능최저_db.xlsx 존재
+      - 수능 최저학력기준 DB
+      - suneung_minimum_service 에서 단독 참조 (analyzer 미참조)
+      - 한글 파일명 (윈도우/WSL 환경 UTF-8 처리 필수)
+    spec_ref: "school-record-analyzer/data/수능최저_db.xlsx"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "ls 확인: 407,083 bytes, 2026-04-13 19:38 최종 수정. Path 조합 시 한글 정상 처리."
+
+  - id: DS-B4-university-grading
+    requirement: |
+      school-record-analyzer/data/university_grading.xlsx 존재
+      - 대학별 내신 산출 방식 DB (반영교과, 학년별 비율 등)
+      - 현재 analyzer 전용이지만 공유 data/ 하위에 위치하여 향후 서비스 확장 시 공유 가능
+    spec_ref: "school-record-analyzer/data/university_grading.xlsx"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: "ls 확인: 5,812 bytes, 2026-03-27 09:42 최종 수정. 구조만 정의된 상태(사용자가 데이터 채워갈 파일)."
+
+# ─── C. 스키마 일관성 ───────────────────────────────────────────────
+  - id: DS-C1-course-req-single-sheet
+    requirement: |
+      course_requirements.xlsx 단일 시트 "권장과목" 구조
+      - 5개 열: 대학 | 모집단위 | 핵심과목 | 권장과목 | 비고
+      - 핵심/권장 과목은 쉼표 구분
+      - ※ 로 시작하는 행은 주석 처리 (양쪽 로더에서 skip)
+      - 헤더 행 1, 데이터 행 2~
+    spec_ref: "school-record-analyzer/CLAUDE.md L421~434 (교과 이수 기준표 스키마)"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        backend course_requirement_service.py L33~36 _SHEET_NAME="권장과목",
+        L80~105 min_row=2 순회, 5개 열 추출, ※ 주석 행 skip 로직 구현.
+        analyzer grade_analyzer.py L358 sheet_name='권장과목' if '권장과목' in wb.sheetnames else wb.sheetnames[0].
+        양쪽 동일 스키마 해석.
+
+  - id: DS-C2-course-req-loader-symmetry
+    requirement: |
+      양쪽 로더가 동일 파일을 동일하게 해석
+      - course_requirement_service._load_db() (ipsilounge)
+      - grade_analyzer.load_course_requirements() (analyzer)
+      - 헤더 명시 주석으로 공유 관계 문서화
+    spec_ref: "course_requirement_service.py L15~17 주석 + grade_analyzer.py L309"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        course_requirement_service.py L15~17 헤더 주석: "school-record-analyzer 와
+        동일 파일을 공유하며, school-record-analyzer/modules/grade_analyzer.py 의
+        load_course_requirements() 도 이 스키마를 기준으로 동작한다."
+        grade_analyzer.py L309 주석: "school-record-analyzer 와 ipsilounge 가 동일 파일 공유".
+        양쪽에 대칭 주석 존재.
+
+  - id: DS-C3-admission-db-sheets
+    requirement: |
+      admission_db.xlsx 시트 구조
+      - 수시입결RAW: 수시 입결 원본 (counselor_type_service _load_susi_from_excel)
+      - 정시입결RAW: 정시 입결 원본 (counselor_type_service _load_jeongsi_from_excel)
+      - min_row 수시=5, 정시=8 (상단 헤더 구조 다름)
+    spec_ref: "counselor_type_service.py L114, L185"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        counselor_type_service.py L114 "수시입결RAW" 시트명 확인 + L185 "정시입결RAW" 시트명 확인.
+        L120 min_row=5, L191 min_row=8 로 각 시트의 헤더 구조 반영.
+        시트 미존재 시 wb.close() + [] 반환 (graceful degradation).
+
+  - id: DS-C4-suneung-column-layout
+    requirement: |
+      수능최저_db.xlsx 컬럼 구조 (min_row=4, max_col=19)
+      - A=구분, E=수준, F=일반/지역, H=대학, I=학년도
+      - J=전형구분, K=전형명, L=계열, M=모집구분
+      - N=수능최저(핵심 요구조건), O=수학, P=탐구, R=비고
+      - N 컬럼이 빈 값 또는 "-" 인 행은 skip
+    spec_ref: "suneung_minimum_service.py L36~60"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        suneung_minimum_service.py L38 min_row=4 max_col=19 설정.
+        L40~59 13개 컬럼 인덱스 매핑 전부 확인. L41~43 N 컬럼("-"/빈값) skip 로직 존재.
+        _parse_requirement_text() 에서 복합조건 블록 분리까지 구현.
+
+# ─── D. 백엔드 서비스 연계 ──────────────────────────────────────────
+  - id: DS-D1-course-requirement-service
+    requirement: |
+      course_requirement_service._DB_PATH = settings.DATA_ROOT / "course_requirements.xlsx"
+      - 모듈 로드 시점에 경로 확정
+      - _load_db() 캐싱 (_DB_CACHE 전역)
+      - 파일 미존재 시 logger.warning + 빈 리스트 반환 (graceful)
+      - reset_cache() 으로 갱신 후 재로딩 가능
+    spec_ref: "course_requirement_service.py L35, L61~109, L112~115"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L35 _DB_PATH 정의. L41 _DB_CACHE 전역 캐시.
+        L63~65 캐시 히트 시 즉시 반환. L67~70 파일 미존재 시 warning+빈리스트.
+        L112~115 reset_cache() 전역 캐시 None 리셋.
+
+  - id: DS-D2-suneung-service
+    requirement: |
+      suneung_minimum_service._DB_PATH = settings.DATA_ROOT / "수능최저_db.xlsx"
+      - _load_db() 캐싱 (_DB_CACHE 전역)
+      - 파일 미존재 시 FileNotFoundError 발생 (엄격 모드)
+      - 한글 파일명 Path 조합 정상
+    spec_ref: "suneung_minimum_service.py L20~21, L24~64"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L20 _DB_CACHE + L21 _DB_PATH 정의. L27~28 캐시 히트 시 즉시 반환.
+        L30~31 파일 미존재 시 FileNotFoundError (엄격) — 수능최저는 필수 파일이라
+        course_requirements 와 달리 에러로 실패시키는 전략.
+
+  - id: DS-D3-counselor-service
+    requirement: |
+      counselor_type_service._get_admission_db_path()
+      - 1순위: ADMISSION_DB_PATH 환경변수 (os.environ + os.path.exists)
+      - 2순위: settings.DATA_ROOT / "admission_db.xlsx"
+      - 둘 다 실패 시 빈 문자열 반환 (graceful)
+      - _load_susi_from_excel / _load_jeongsi_from_excel 가 이 경로를 사용
+    spec_ref: "counselor_type_service.py L57~69"
+    priority: P0
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L60~62 env_path 체크 + os.path.exists 검증. L64~67 shared 경로 fallback.
+        L69 빈 문자열 반환. _load_susi_from_excel L109~111, _load_jeongsi_from_excel L181~182
+        에서 path 빈 값 시 [] 반환 (graceful).
+
+# ─── E. 폴백/오버라이드 전략 ────────────────────────────────────────
+  - id: DS-E1-admission-db-env-override
+    requirement: |
+      ADMISSION_DB_PATH 환경변수로 admission_db.xlsx 단일 파일 오버라이드
+      - SHARED_DATA_ROOT 전체 재지정 없이 admission_db 만 다른 경로 사용 가능
+      - 테스트 환경에서 mock 데이터 파일 주입 시 유용
+    spec_ref: "counselor_type_service.py L60~62"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L60 os.environ.get("ADMISSION_DB_PATH") + L61 os.path.exists 이중 검증.
+        파일 실재성까지 확인 후 경로 반환 (환경변수만 설정되고 파일이 없으면
+        2순위 shared 경로로 자동 폴백).
+
+  - id: DS-E2-db-first-excel-fallback
+    requirement: |
+      입결 데이터는 DB 우선 + Excel 폴백 이중 전략
+      - _load_susi_db / _load_jeongsi_db: try DB → except → Excel
+      - PostgreSQL admission_data / jeongsi_admission_data 테이블 우선 조회
+      - DB 쿼리 실패 또는 결과 0건 시 Excel 파일 로드
+      - @functools.lru_cache(maxsize=1) 로 프로세스 수명 캐시
+    spec_ref: "counselor_type_service.py L72~85, L137~150"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        _load_susi_db L72~85 try/except + Excel fallback. _load_jeongsi_db L137~150 동일 패턴.
+        L72, L137 @functools.lru_cache(maxsize=1) 프로세스 캐시.
+        DB 로드 성공 시 logger.info "PostgreSQL" 태그, Excel 폴백 시 logger.info "Excel" 태그로 구분.
+
+  - id: DS-E3-graceful-degradation
+    requirement: |
+      공유 파일 미존재 시 서비스별 처리 전략
+      - course_requirement_service: warning log + 빈 결과 ("available": False 응답)
+      - counselor_type_service: 빈 문자열 path → 빈 records → 판정 불가 처리
+      - suneung_minimum_service: FileNotFoundError raise (엄격)
+      서비스 특성에 맞게 엄격 vs 관대 전략 분기
+    spec_ref: "각 서비스 파일 미존재 처리 지점"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        course_requirement_service L67~70 warning+빈결과. build_matching() L270~275 에서
+        DB 비었을 때 "available": False + reason 응답. counselor_type_service L69 빈 문자열 반환.
+        suneung_minimum_service L30~31 FileNotFoundError 엄격 — 수능최저는 기능 핵심이라
+        조용히 실패하지 않도록 설계.
+
+# ─── F. 캐싱/갱신 정책 ──────────────────────────────────────────────
+  - id: DS-F1-module-level-cache
+    requirement: |
+      각 서비스 모듈 수준 캐시
+      - course_requirement_service: _DB_CACHE 전역 (수동 reset)
+      - suneung_minimum_service: _DB_CACHE 전역 (수동 reset)
+      - counselor_type_service: @functools.lru_cache(maxsize=1) (프로세스 수명)
+      서버 재시작 없이 파일 교체 시 캐시 무효화 필요
+    spec_ref: "3개 서비스 캐시 구현"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        course_requirement_service: _DB_CACHE + reset_cache() 명시적 API 제공.
+        suneung_minimum_service: _DB_CACHE 만 있고 reset 함수는 미제공 (서버 재시작 전제).
+        counselor_type_service: lru_cache 데코레이터 — cache_clear() 호출로 갱신 가능.
+        캐시 전략이 3가지로 다양함은 서비스 특성 반영이나, 운영 가이드 통일 필요.
+
+  - id: DS-F2-cache-reset-api
+    requirement: |
+      course_requirement_service.reset_cache() 공개 API
+      - xlsx 갱신 후 외부에서 호출 가능
+      - 다른 2개 서비스는 reset API 미제공 (향후 통일 과제)
+    spec_ref: "course_requirement_service.py L112~115"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        L112~115 reset_cache() public 함수 정의. docstring "xlsx 갱신 후 호출".
+        현재 호출처는 없으나 API 노출되어 있어 운영 중 핫리로드 가능.
+
+# ─── G. 운영/배포 연계 ─────────────────────────────────────────────
+  - id: DS-G1-ec2-deploy-consideration
+    requirement: |
+      운영(EC2) 배포 시 SHARED_DATA_ROOT 전략
+      - school-record-analyzer 가 EC2 에 동일 구조로 배포되지 않는 경우,
+        data/ 폴더만 별도 위치에 복사하고 SHARED_DATA_ROOT 로 지정
+      - 또는 rsync/scp 로 주기적 동기화
+      - 현재 배포 자동화 스크립트에 admission_db.xlsx scp 명령 존재 (settings.local.json)
+    spec_ref: "school-record-analyzer/.claude/settings.local.json L215, L319 (scp 명령)"
+    priority: P1
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        settings.local.json 에 scp 명령 2개 확인:
+        /tmp/admission_db.xlsx 로 EC2 업로드 자동화되어 있음.
+        다만 SHARED_DATA_ROOT 환경변수 세팅 문서화는 docs/deployment.md 과제로 남아있음.
+
+  - id: DS-G2-legacy-file-coexistence
+    requirement: |
+      스키마 정규화 과정에서 남은 legacy 파일 처리
+      - course_requirements_legacy_backup.xlsx (40,618 bytes) 잔존
+      - 신규 course_requirements.xlsx 와 병존
+      - 로더는 신규 파일만 참조 (legacy 무시)
+      - 운영 리스크 낮으나 향후 정리 과제
+    spec_ref: "school-record-analyzer/data/ 파일 목록"
+    priority: P2
+    code_review:
+      status: pass
+      verified_at: "2026-04-16"
+      evidence: |
+        ls 확인: course_requirements_legacy_backup.xlsx (40,618B, 2026-03-26)
+        및 course_requirements.xlsx (8,983B, 2026-04-16) 병존.
+        양쪽 로더(_DB_PATH, xlsx_path) 모두 "course_requirements.xlsx" 문자열
+        직접 참조하여 legacy 파일은 로드 불가. 안전.

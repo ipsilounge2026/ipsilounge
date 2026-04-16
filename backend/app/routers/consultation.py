@@ -150,6 +150,101 @@ async def _check_lead_time(
             )
 
 
+async def _compute_slot_availability(
+    consultation_type: str | None,
+    owner_id,
+    db: AsyncSession,
+) -> tuple[date | None, str | None]:
+    """기획서 §4-8-2: 리드타임/선배매칭을 계산하여 UI 가드용으로 반환.
+
+    - 반환: (earliest_allowed_date, unavailable_reason)
+      - earliest_allowed_date: 이 날짜 이전 슬롯은 `available=False` 처리
+      - unavailable_reason: 사용자 안내 메시지 (None이면 전 구간 예약 가능)
+    - 에러를 raise 하지 않음 — 캘린더 UI에서 호출되므로 계산 결과만 반환.
+    - consultation_type 이 None 또는 owner_id 가 None 이면 (None, None) 반환.
+    """
+    if not consultation_type or owner_id is None:
+        return None, None
+
+    # 리드타임 없는 유형
+    if consultation_type in ("심리상담", "기타"):
+        return None, None
+
+    # 선배상담: 매칭 없으면 전체 비활성
+    if consultation_type == "선배상담":
+        senior = await _get_assigned_senior(owner_id, db)
+        if not senior:
+            # UI에서 전체 슬롯 비활성화를 의도. 먼 미래 날짜를 earliest 로 설정.
+            return (
+                date.max,
+                "선배 매칭이 필요합니다. 학원에 문의해주세요.",
+            )
+        return None, None
+
+    # 학생부분석 / 학종전략: 학생부 업로드 기준 7일
+    type_to_service = {
+        "학생부분석": "학생부라운지",
+        "학종전략": "학종라운지",
+    }
+    service_type = type_to_service.get(consultation_type)
+    if service_type:
+        upload_result = await db.execute(
+            select(AnalysisOrder)
+            .where(
+                AnalysisOrder.user_id == owner_id,
+                AnalysisOrder.service_type == service_type,
+                AnalysisOrder.status.in_(["uploaded", "processing", "completed"]),
+                AnalysisOrder.uploaded_at.isnot(None),
+            )
+            .order_by(AnalysisOrder.uploaded_at.asc())
+        )
+        orders = upload_result.scalars().all()
+        if not orders:
+            return (
+                date.max,
+                f"{consultation_type} 상담을 위해 먼저 학생부를 업로드해주세요.",
+            )
+        latest_upload = orders[-1].uploaded_at
+        earliest = (latest_upload + timedelta(days=7)).date()
+        return (
+            earliest,
+            (
+                f"{consultation_type} 상담은 학생부 업로드일"
+                f"({latest_upload.date().isoformat()}) 기준 7일 이후"
+                f"({earliest.isoformat()})부터 예약 가능합니다."
+            ),
+        )
+
+    # 학습상담: 사전 설문 제출 기준 7일
+    if consultation_type == "학습상담":
+        survey_result = await db.execute(
+            select(ConsultationSurvey)
+            .where(
+                ConsultationSurvey.user_id == owner_id,
+                ConsultationSurvey.status == "submitted",
+                ConsultationSurvey.survey_type.in_(["high", "preheigh1"]),
+            )
+            .order_by(ConsultationSurvey.submitted_at.desc())
+        )
+        survey = survey_result.scalar_one_or_none()
+        if not survey or not survey.submitted_at:
+            return (
+                date.max,
+                "학습상담 예약을 위해 먼저 사전 설문을 제출해주세요.",
+            )
+        earliest = (survey.submitted_at + timedelta(days=7)).date()
+        return (
+            earliest,
+            (
+                f"학습상담은 사전 설문 제출일"
+                f"({survey.submitted_at.date().isoformat()}) 기준 7일 이후"
+                f"({earliest.isoformat()})부터 예약 가능합니다."
+            ),
+        )
+
+    return None, None
+
+
 router = APIRouter(prefix="/api/consultation", tags=["상담예약"])
 
 
@@ -254,9 +349,25 @@ async def get_available_slots(
     year: int = Query(...),
     month: int = Query(...),
     admin_id: str | None = None,
+    consultation_type: str | None = Query(
+        None,
+        description=(
+            "상담 유형 — 지정하면 기획서 §4-8-2 리드타임/매칭을 계산하여 "
+            "각 슬롯에 available/unavailable_reason 채움."
+        ),
+    ),
+    owner_user_id: str | None = Query(
+        None,
+        description="학부모가 자녀 예약 시 자녀 user_id (지정 안 하면 user 본인 기준)",
+    ),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """예약 가능 시간대 조회 (달력용)"""
+    """예약 가능 시간대 조회 (달력용).
+
+    기획서 §4-8-2: consultation_type 이 주어지면 각 슬롯에
+    `available` / `unavailable_reason` 필드를 채워 UI에서 비활성 표시 가능.
+    """
     start_date = date(year, month, 1)
     if month == 12:
         end_date = date(year + 1, 1, 1)
@@ -292,19 +403,44 @@ async def get_available_slots(
         if admin_obj:
             admin_names[aid] = admin_obj.name
 
-    return [
-        AvailableSlotResponse(
-            id=s.id,
-            date=s.date,
-            start_time=s.start_time,
-            end_time=s.end_time,
-            remaining=s.max_bookings - s.current_bookings,
-            admin_id=s.admin_id,
-            admin_name=admin_names.get(s.admin_id),
+    # 기획서 §4-8-2: 리드타임 계산 (consultation_type 주어진 경우만)
+    earliest_date: date | None = None
+    lead_reason: str | None = None
+    if consultation_type:
+        try:
+            owner_id = await resolve_owner_id(user, db, owner_user_id)
+        except HTTPException:
+            # 권한 없으면 전체 비활성화 (안전 기본값)
+            owner_id = None
+        earliest_date, lead_reason = await _compute_slot_availability(
+            consultation_type, owner_id, db
         )
-        for s in slots
-        if s.current_bookings < s.max_bookings
-    ]
+
+    items: list[AvailableSlotResponse] = []
+    for s in slots:
+        if s.current_bookings >= s.max_bookings:
+            continue
+
+        slot_available = True
+        slot_reason: str | None = None
+        if earliest_date is not None and s.date < earliest_date:
+            slot_available = False
+            slot_reason = lead_reason
+
+        items.append(
+            AvailableSlotResponse(
+                id=s.id,
+                date=s.date,
+                start_time=s.start_time,
+                end_time=s.end_time,
+                remaining=s.max_bookings - s.current_bookings,
+                admin_id=s.admin_id,
+                admin_name=admin_names.get(s.admin_id),
+                available=slot_available,
+                unavailable_reason=slot_reason,
+            )
+        )
+    return items
 
 
 @router.post("/book", response_model=BookingResponse)

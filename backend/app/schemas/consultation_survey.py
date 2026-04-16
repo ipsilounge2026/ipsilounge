@@ -120,6 +120,12 @@ class SurveyResponse(BaseModel):
     updated_at: datetime
     submitted_at: datetime | None
 
+    # 기획서 §4-8-1 자동 분석 검증 상태
+    # pending|pass|repaired|warn|blocked 중 하나.
+    # 학생 리포트 뷰어는 "blocked" 일 때 전체 잠금 UI 를 노출해야 함.
+    analysis_status: str = "pending"
+    analysis_validation: dict | None = None
+
     model_config = {"from_attributes": True}
 
 

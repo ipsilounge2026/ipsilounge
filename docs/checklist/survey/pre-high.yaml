@@ -1,0 +1,1155 @@
+meta:
+  area_code: PRE_HIGH
+  title: 예비고등학교 설문 (preheigh1.json)
+  schema_ref: ../_schema.yaml
+  index_ref: ../_index.yaml
+  source_specs:
+  - ipsilounge/backend/app/surveys/schemas/preheigh1.json
+  total_categories: 7
+  last_updated: '2026-04-16'
+  status: ready
+  verification_summary:
+    pass: 36
+    partial: 0
+    unverified: 0
+    fail: 0
+    na: 0
+    verified_at: '2026-04-16'
+    completion_note: |
+      2개 세션으로 검증: student_t1 step 1~6 (A~F 30항목),
+      parent_a step 7 (G 6항목).
+      22종 컴포넌트 타입 검증: text/cascading_select/multi_select/text_list/
+      group_select/career_select/slider/radio/rank/semester_grade_matrix/
+      auto_calculated/subject_pick/weekly_schedule/composite/checkboxes/
+      subject_section/radio_grid/select_grid/level_accuracy/
+      subject_progress_grid/mock_exam_grid/textarea.
+  notes: |
+    예비고1(중3) 대상 설문. 고등학교 진학 전략 & 학습 준비 상담용.
+    high.json과 달리 타이밍(T1~T4) 시스템이 없는 단일 설문.
+    카테고리 A~G, 36개 질문.
+    G 카테고리는 학부모(parent) 응답 영역.
+  component_types_used:
+  - text
+  - cascading_select
+  - multi_select
+  - text_list
+  - group_select
+  - career_select
+  - slider
+  - radio
+  - rank
+  - semester_grade_matrix
+  - auto_calculated
+  - subject_pick
+  - weekly_schedule
+  - composite
+  - checkboxes
+  - subject_section
+  - radio_grid
+  - select_grid
+  - level_accuracy
+  - subject_progress_grid
+  - mock_exam_grid
+  - textarea
+
+# ═══════════════════════════════════════════════════════════════════
+# Category A — 기본 정보 (6 items)
+# ═══════════════════════════════════════════════════════════════════
+items:
+- id: PRE_HIGH-A-A1-input
+  category: A
+  question_id: A1
+  aspect: input
+  requirement: |
+    A1 (학생 이름) text 입력 필드. required=true.
+    placeholder "예: 홍길동" 표시. 입력값이 응답 객체에 저장.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category A.questions[id=A1]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - 예비고 설문 페이지 로드 → A 카테고리 진입 → A1 가시화
+  - placeholder '예: 홍길동' 표시
+  - 텍스트 입력 → 응답 객체에 A1=입력값 저장
+  backend:
+    status: na
+    reason: 단순 응답 저장. 백엔드 분기 로직 없음.
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+    note: Flutter 미구현 영역
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 설문 입력 UI 없음
+
+- id: PRE_HIGH-A-A2-input
+  category: A
+  question_id: A2
+  aspect: input
+  requirement: |
+    A2 (재학 중학교) text 입력 필드. required=true.
+    placeholder "예: 대치중학교". 지역 자동 매핑에 사용됨.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category A.questions[id=A2]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - A2 text input 렌더 확인
+  - placeholder '예: 대치중학교' 표시
+  - 입력 → 응답 객체에 A2=입력값 저장
+  backend:
+    status: na
+    reason: 단순 응답 저장.
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+    reason: 관리자 화면에 설문 입력 UI 없음
+
+- id: PRE_HIGH-A-A3-cascading_select
+  category: A
+  question_id: A3
+  aspect: input
+  requirement: |
+    A3 (거주 지역) cascading_select 2단계: 시·도 → 시·군·구.
+    required=true. 시도 선택 시 시군구 옵션이 동적으로 갱신된다.
+    통학권 분석용 데이터.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category A.questions[id=A3]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - A3 cascading_select 렌더 (시·도 / 시·군·구 두 개 select)
+  - 시·도 선택 → 시·군·구 옵션이 depends_on 기반으로 동적 필터링
+  - 두 단계 모두 선택 후 응답 객체에 {sido, sigungu} 저장
+  backend:
+    status: na
+    reason: 단순 응답 저장.
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-A-A4-multi_select
+  category: A
+  question_id: A4
+  aspect: input
+  requirement: |
+    A4 (희망 고등학교 유형) multi_select. required=false.
+    10개 옵션(일반고/자사고/외고/과고/국제고/영재학교/예술고/체육고/마이스터고/아직모름).
+    복수 선택 가능. "아직 모름" 선택 시 exclusive(다른 선택 해제).
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category A.questions[id=A4]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - A4 multi_select 10개 옵션 렌더
+  - 복수 선택 가능 확인 (2개 이상 동시 선택)
+  - '"아직 모름" 선택 → 기존 선택 모두 해제 (exclusive 동작)'
+  - 응답 객체에 배열 형태로 저장
+  backend:
+    status: na
+    reason: 단순 응답 저장.
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-A-A5-text_list
+  category: A
+  question_id: A5
+  aspect: input
+  requirement: |
+    A5 (구체적 희망 고등학교명) text_list. required=false.
+    max_items=3. placeholder "예: 휘문고등학교".
+    [+추가] 버튼으로 항목 추가, [삭제]로 제거.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category A.questions[id=A5]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - A5 text_list 렌더 (초기 1개 입력칸)
+  - '[+추가] 클릭 → 추가 입력칸 생성 (최대 3개)'
+  - 4번째 추가 시도 시 max_items 제한
+  - 텍스트 입력 → 응답 객체에 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-A-A6-group_select
+  category: A
+  question_id: A6
+  aspect: input
+  requirement: |
+    A6 (고등학교 선택 기준) group_select. required=true.
+    5개 그룹(학업/성적, 대입지원, 교육과정/활동, 생활/환경, 안전/비용) 각 1개 선택.
+    각 그룹 4~5개 옵션 + "없음" 선택지.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category A.questions[id=A6]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - A6 group_select 5개 그룹 렌더
+  - 각 그룹 내 옵션 radio 선택 가능
+  - 각 그룹에서 정확히 1개씩 선택 확인
+  - '"없음" 선택 시 해당 그룹 응답 "없음"으로 저장'
+  - 응답 객체에 {A6_1, A6_2, A6_3, A6_4, A6_5} 형태로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# Category B — 진로 & 대입 방향성 (4 items)
+# ═══════════════════════════════════════════════════════════════════
+- id: PRE_HIGH-B-B1-career_select
+  category: B
+  question_id: B1
+  aspect: input
+  requirement: |
+    B1 (관심 진로/직업 분야) career_select. required=false.
+    10개 대분류(인문·어문~탐색중), 각 분류 내 서브카테고리 선택.
+    복수 선택 가능. mapped_track 자동 매핑.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category B.questions[id=B1]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - B1 career_select 대분류 10개 버튼 렌더
+  - 대분류 클릭 → 서브카테고리 버튼 출현
+  - 서브카테고리 선택 → 선택 상태 표시 (배경색 변경)
+  - 복수 대분류·서브카테고리 선택 가능
+  - '"탐색 중" 선택 시 subcategories 없이 바로 저장'
+  - 응답 객체에 선택된 career 정보 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-B-B2-slider
+  category: B
+  question_id: B2
+  aspect: input
+  requirement: |
+    B2 (대입 전형 이해도) slider. required=true.
+    min=1, max=10, step=1. labels: 1="전혀 모름", 10="매우 잘 앎".
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category B.questions[id=B2]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - B2 slider 컴포넌트 렌더 (range input)
+  - min/max/step 확인
+  - 슬라이더 드래그 → 값 변경 → 응답 객체에 숫자로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-B-B3-radio
+  category: B
+  question_id: B3
+  aspect: input
+  requirement: |
+    B3 (대입 주력 전형) radio. required=true.
+    6개 옵션: 학생부교과/학생부종합/수능위주/논술/예체능/아직모름.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category B.questions[id=B3]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - B3 radio 6개 옵션 렌더
+  - 옵션 선택 → checked 상태 변경
+  - 응답 객체에 선택값 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-B-B4-rank
+  category: B
+  question_id: B4
+  aspect: input
+  requirement: |
+    B4 (고등학교에서 중요하게 준비하고 싶은 것) rank. required=true.
+    9개 옵션에서 상위 5개 순위 선택. ↑↓✕ 컨트롤로 순위 변경.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category B.questions[id=B4]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - B4 rank 9개 옵션 렌더
+  - 옵션 클릭 → 선택 목록에 추가 (최대 5개)
+  - 6번째 선택 시도 → max_picks 제한
+  - ↑↓ 컨트롤로 순위 변경, ✕로 선택 해제
+  - 응답 객체에 순위 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# Category C — 중학교 성적 (4 items)
+# ═══════════════════════════════════════════════════════════════════
+- id: PRE_HIGH-C-C1_C6-semester_grade_matrix
+  category: C
+  question_id: C1_C6
+  aspect: render+input
+  requirement: |
+    C1~C6 (학기별 교과 성적) semester_grade_matrix.
+    6학기(중1-1~중3-2) × 5과목(국/영/수/사/과) × 3필드(원점수/과목평균/표준편차).
+    각 학기에 자유학기제/미진행 체크 옵션(exempt). exempt=true면 성적 입력 비활성화.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category C.questions[id=C1_C6]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - semester_grade_matrix 컴포넌트 렌더
+  - 6학기 탭/카드 표시
+  - 자유학기제/미진행 체크 → exempt=true, 성적 입력 비활성화
+  - 비exempt 학기에서 과목별 원점수/과목평균/표준편차 입력
+  - number 필드 min/max 검증 (원점수 0~100, 표준편차 0~50)
+  - 응답 객체에 학기별 과목별 데이터 저장
+  backend:
+    status: na
+    reason: 프론트 입력 위젯. 백엔드는 응답 JSON 그대로 저장.
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-C-C7-auto_calculate
+  category: C
+  question_id: C7
+  aspect: auto_calculate
+  requirement: |
+    C7 (성적 추이) auto_calculated. C1~C6 입력 후 자동 계산.
+    전과목 추이 라인차트, 과목별 개별 추이, 추세 뱃지(상승/유지/하락/등락).
+    추세 판정: 마지막-처음 >= +3점 → 상승, |차이|<3 → 유지, <=-3 → 하락, 편차>5 → 등락.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category C.questions[id=C7]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - C1~C6 성적 입력 후 C7 영역에 차트/뱃지 자동 렌더
+  - 전과목/과목별 추이 라인 차트 표시
+  - 추세 뱃지 표시 (상승/유지/하락/등락)
+  - 성적 변경 시 실시간 재계산
+  backend:
+    status: unverified
+    note: 자동 산출 위치 확인 필요 (프론트 실시간 vs 백엔드 제출시점)
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-C-C8-subject_pick
+  category: C
+  question_id: C8
+  aspect: input
+  requirement: |
+    C8 (가장 자신 있는 과목) subject_pick. required=true.
+    5개 과목(국/영/수/사/과)에서 상위 2개 선택.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category C.questions[id=C8]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - C8 subject_pick 5개 과목 버튼 렌더
+  - 최대 2개 선택 가능
+  - 3번째 선택 시도 → max_picks 제한
+  - 응답 객체에 선택된 과목 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-C-C9-subject_pick
+  category: C
+  question_id: C9
+  aspect: input
+  requirement: |
+    C9 (가장 어려운 과목) subject_pick. required=true.
+    5개 과목(국/영/수/사/과)에서 상위 2개 선택.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category C.questions[id=C9]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - C9 subject_pick 5개 과목 버튼 렌더
+  - 최대 2개 선택 가능
+  - 응답 객체에 선택된 과목 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# Category D — 학습 습관 & 자기주도학습 역량 (5 items)
+# ═══════════════════════════════════════════════════════════════════
+- id: PRE_HIGH-D-D1-weekly_schedule
+  category: D
+  question_id: D1
+  aspect: render+input
+  requirement: |
+    D1 (일주일 학습 스케줄) weekly_schedule. required=true.
+    7일(월~일) × 3카테고리(학원수업/학원과제/자기주도학습).
+    각 항목에 과목(select 6개) + 시간(number 0~24, step=0.5).
+    자동 산출: 주간 총학습시간, 학원/과제/자기주도 비율, 과목별 학습시간 등.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category D.questions[id=D1]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - D1 weekly_schedule 7일 탭/섹션 렌더
+  - '[+추가] 클릭 → 카테고리/과목/시간 입력 행 추가'
+  - select(카테고리) + select(과목) + number(시간) 입력
+  - 자동 산출 (주간 총 학습시간, 비율 등) 실시간 표시
+  - 응답 객체에 요일별 항목 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-D-D2-composite
+  category: D
+  question_id: D2
+  aspect: input
+  requirement: |
+    D2 (학습 계획 및 실행력) composite. required=true.
+    3개 필드: slider(계획실행력 1~10) + radio(시험준비시작시점 5옵션) + radio(과목별계획표 4옵션).
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category D.questions[id=D2]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - D2 composite 3개 sub-field 렌더
+  - slider 값 변경 확인 (1~10)
+  - radio 2개 그룹 각각 선택 가능
+  - 응답 객체에 {plan_execution, test_prep_start, subject_plan_detail} 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-D-D3-composite
+  category: D
+  question_id: D3
+  aspect: input
+  requirement: |
+    D3 (오답 관리 습관) composite. required=true.
+    3개 필드: checkboxes(오답정리방법 5옵션) + radio(재확인빈도 4옵션) + checkboxes(복습방법 4옵션).
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category D.questions[id=D3]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - D3 composite 3개 sub-field 렌더
+  - checkboxes 복수 선택 가능
+  - radio 단일 선택 확인
+  - 응답 객체에 {method, review_frequency, review_method} 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-D-D4-checkboxes
+  category: D
+  question_id: D4
+  aspect: input
+  requirement: |
+    D4 (모르는 문제 해결 방법) checkboxes. required=true.
+    10개 옵션 복수 선택 가능.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category D.questions[id=D4]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - D4 checkboxes 10개 옵션 렌더
+  - 복수 선택 가능 확인
+  - 응답 객체에 선택된 값 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-D-D5-radio
+  category: D
+  question_id: D5
+  aspect: input
+  requirement: |
+    D5 (집중력 좋은 시간대) radio. required=true.
+    5개 옵션: 아침/오후/저녁/밤/일정하지않음.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category D.questions[id=D5]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - D5 radio 5개 옵션 렌더
+  - 선택 → checked 상태 변경
+  - 응답 객체에 선택값 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# Category E — 과목별 고등 준비율 (5 items)
+# ═══════════════════════════════════════════════════════════════════
+- id: PRE_HIGH-E-E1-subject_section_math
+  category: E
+  question_id: E1
+  aspect: render+input
+  requirement: |
+    E1 (수학 학습 현황) subject_section. 3개 subsection:
+    ① basic_skills: radio_grid 4문항×3단계(어려움/보통/자신있음) — 중학 수학 기초 역량 점검
+    ② advance_progress: select_grid 6과목(공통수학1~기하)×4옵션(0~3+회독) — 선행 진도
+    ③ problem_level: level_accuracy 4레벨(하/중/상/최상)×정답률(%) — 문제풀이 레벨
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category E.questions[id=E1]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - E1 subject_section "수학" 헤더 렌더
+  - radio_grid 4행×3열 라디오 버튼 렌더 및 선택 가능
+  - select_grid 6과목×4옵션 select 렌더 및 선택 가능
+  - level_accuracy 4레벨×정답률 number 입력 (0~100%)
+  - 응답 객체에 subsection별 데이터 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-E-E2-subject_section_english
+  category: E
+  question_id: E2
+  aspect: render+input
+  requirement: |
+    E2 (영어 학습 현황) subject_section. 8개 subsection:
+    ① vocabulary: composite(radio×3 + nested composite + radio)
+    ② reading: radio_grid 3문항×3단계
+    ③ grammar: radio_grid 3문항×3단계
+    ④ writing: composite(radio×3)
+    ⑤ mock_exam: mock_exam_grid 고1~3 등급 입력
+    ⑥ listening: composite(radio + conditional number)
+    ⑦ english_reading_extra: composite(radio + conditional checkbox)
+    ⑧ english_communication: composite(radio×2)
+    show_when 조건부 필드 포함 (vocabulary.book_name, listening.accuracy, reading_extra.material_types).
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category E.questions[id=E2]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - E2 subject_section "영어" 8개 subsection 순차 렌더
+  - radio_grid 정상 렌더 및 선택
+  - composite 내 show_when 조건부 필드 동적 표시/숨김
+  - mock_exam_grid 학년별 등급 입력 + "없음" 체크
+  - 응답 객체에 8개 subsection 데이터 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-E-E3-subject_section_korean
+  category: E
+  question_id: E3
+  aspect: render+input
+  requirement: |
+    E3 (국어 학습 현황) subject_section. 5개 subsection:
+    ① literature: radio_grid 5문항×3단계 — 문학 역량
+    ② non_fiction: composite(radio×2 + checkboxes) — 독서(비문학) 역량
+    ③ grammar_vocab: composite(radio×4) — 문법·어휘
+    ④ mock_exam: mock_exam_grid 고1~3 등급 입력
+    ⑤ reading_habit: composite(radio + checkboxes + radio) — 독서 습관
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category E.questions[id=E3]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - E3 subject_section "국어" 5개 subsection 렌더
+  - radio_grid 5행×3열 렌더 및 선택
+  - composite 내 radio/checkboxes 입력
+  - mock_exam_grid 렌더 및 입력
+  - 응답 객체에 5개 subsection 데이터 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-E-E4-subject_section_science
+  category: E
+  question_id: E4
+  aspect: render+input
+  requirement: |
+    E4 (과학 학습 현황) subject_section. 4개 subsection:
+    ① basic_skills: radio_grid 4문항×3단계 — 중학 과학 기초(물리/화학/생명/지구)
+    ② advance_progress: subject_progress_grid 6과목×2필드(학습여부 radio + 학습수준 conditional radio)
+    ③ science_skills: radio_grid 3문항×3단계 — 과학 학습 역량
+    ④ elective_pick: checkboxes 5옵션(물/화/생/지/아직모름) — 희망 선택과목
+    advance_progress에 show_when 조건부 필드 포함.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category E.questions[id=E4]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - E4 subject_section "과학" 4개 subsection 렌더
+  - radio_grid 렌더 및 선택
+  - subject_progress_grid 6과목별 학습여부 radio → "진행중" 이상 선택 시 학습수준 radio 표시
+  - checkboxes "아직 모름" exclusive 동작 확인
+  - 응답 객체에 4개 subsection 데이터 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-E-E5-textarea
+  category: E
+  question_id: E5
+  aspect: input
+  requirement: |
+    E5 (자유학기제 활동) textarea. required=false.
+    max_length=1000, rows=5. 글자수 카운터 표시.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category E.questions[id=E5]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - E5 textarea 렌더 (rows=5)
+  - 텍스트 입력 → 글자수 카운터 업데이트 (x/1000)
+  - 1000자 초과 입력 시 제한
+  - 응답 객체에 텍스트 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# Category F — 비교과 & 역량 (6 items)
+# ═══════════════════════════════════════════════════════════════════
+- id: PRE_HIGH-F-F1-text_list
+  category: F
+  question_id: F1
+  aspect: input
+  requirement: |
+    F1 (중학교 동아리 활동) text_list. required=false.
+    max_items=10. placeholder "예: 과학 탐구 동아리".
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category F.questions[id=F1]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - F1 text_list 렌더
+  - '[+추가] 클릭 → 항목 추가 (최대 10개)'
+  - 텍스트 입력 → 응답 객체에 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-F-F2-text_list
+  category: F
+  question_id: F2
+  aspect: input
+  requirement: |
+    F2 (교내 대회/수상 경험) text_list. required=false.
+    max_items=10. placeholder "예: 2024년 교내 수학경시대회 은상".
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category F.questions[id=F2]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - F2 text_list 렌더
+  - '[+추가] 클릭 → 항목 추가 (최대 10개)'
+  - 텍스트 입력 → 응답 객체에 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-F-F3-radio
+  category: F
+  question_id: F3
+  aspect: input
+  requirement: |
+    F3 (봉사활동 경험) radio. required=true.
+    3개 옵션: 없음/의무만/자발적 참여 있음.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category F.questions[id=F3]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - F3 radio 3개 옵션 렌더
+  - 선택 → checked 상태 변경
+  - 응답 객체에 선택값 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-F-F4-composite
+  category: F
+  question_id: F4
+  aspect: input
+  requirement: |
+    F4 (학급 임원/학생회 경험) composite. required=true.
+    2개 필드: radio(있음/없음) + text(역할, show_when "있음").
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category F.questions[id=F4]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - F4 composite 렌더 (radio + conditional text)
+  - '"있음" 선택 → text 입력 필드 표시'
+  - '"없음" 선택 → text 입력 필드 숨김'
+  - 응답 객체에 {has_experience, role} 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-F-F5-text_list
+  category: F
+  question_id: F5
+  aspect: input
+  requirement: |
+    F5 (독서 외 자기개발 활동) text_list. required=false.
+    max_items=10. instruction "코딩, 악기, 운동 등".
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category F.questions[id=F5]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - F5 text_list 렌더
+  - '[+추가] 클릭 → 항목 추가 (최대 10개)'
+  - 텍스트 입력 → 응답 객체에 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-F-F6-rank
+  category: F
+  question_id: F6
+  aspect: input
+  requirement: |
+    F6 (강점 역량) rank. required=true.
+    9개 옵션(리더십/협업/분석력/창의성/의사소통/끈기/자기관리/문제해결/공감능력)에서 상위 3개 순위.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category F.questions[id=F6]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - F6 rank 9개 옵션 렌더
+  - 최대 3개 순위 선택
+  - ↑↓✕ 컨트롤로 순위 변경/해제
+  - 응답 객체에 순위 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+# ═══════════════════════════════════════════════════════════════════
+# Category G — 학부모 관점 (6 items, respondent: parent)
+# ═══════════════════════════════════════════════════════════════════
+- id: PRE_HIGH-G-G1-textarea
+  category: G
+  question_id: G1
+  aspect: input
+  respondent: parent
+  requirement: |
+    G1 (고등학교 선택 걱정) textarea. required=false.
+    max_length=1000, rows=4. 학부모 응답 영역.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category G.questions[id=G1]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - parent 계정 로그인 → 예비고 설문 → G 카테고리 학부모 전용 페이지
+  - G1 textarea 렌더 (rows=4)
+  - 텍스트 입력 → 글자수 카운터 (x/1000)
+  - 응답 객체에 텍스트 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-G-G2-radio
+  category: G
+  question_id: G2
+  aspect: input
+  respondent: parent
+  requirement: |
+    G2 (자녀 학습 상황 파악 정도) radio. required=false.
+    3개 옵션: 거의 모름/대략 알고 있음/구체적으로 파악.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category G.questions[id=G2]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - G2 radio 3개 옵션 렌더
+  - 선택 → checked 상태 변경
+  - 응답 객체에 선택값 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-G-G3-radio
+  category: G
+  question_id: G3
+  aspect: input
+  respondent: parent
+  requirement: |
+    G3 (자녀와 대화 빈도) radio. required=false.
+    3개 옵션: 거의 안 함/가끔/자주.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category G.questions[id=G3]
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - G3 radio 3개 옵션 렌더
+  - 선택 → checked 상태 변경
+  - 응답 객체에 선택값 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-G-G4-checkboxes
+  category: G
+  question_id: G4
+  aspect: input
+  respondent: parent
+  requirement: |
+    G4 (학습 관리 계획) checkboxes. required=false.
+    4개 옵션: 자녀에게맡김/학원에맡김/직접챙김/전문컨설팅. 복수 선택 가능.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category G.questions[id=G4]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - G4 checkboxes 4개 옵션 렌더
+  - 복수 선택 가능 확인
+  - 응답 객체에 선택된 값 배열로 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-G-G5-radio
+  category: G
+  question_id: G5
+  aspect: input
+  respondent: parent
+  requirement: |
+    G5 (학원/과외 계획) radio. required=false.
+    4개 옵션: 현행유지/확대/축소/자기주도전환.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category G.questions[id=G5]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - G5 radio 4개 옵션 렌더
+  - 선택 → checked 상태 변경
+  - 응답 객체에 선택값 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na
+
+- id: PRE_HIGH-G-G6-textarea
+  category: G
+  question_id: G6
+  aspect: input
+  respondent: parent
+  requirement: |
+    G6 (상담에서 알고 싶은 것) textarea. required=false.
+    max_length=1000, rows=4.
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/preheigh1.json
+    section: category G.questions[id=G6]
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - G6 textarea 렌더 (rows=4)
+  - 텍스트 입력 → 글자수 카운터 (x/1000)
+  - 응답 객체에 텍스트 저장
+  backend:
+    status: na
+  user_web:
+    status: pass
+    verified_at: '2026-04-16'
+    L3:
+      evidence: 'preview_mcp run 2026-04-16, result: _runs/pre-high_20260416T100000Z.result.json'
+  mobile:
+    status: unverified
+  admin_web:
+    status: na

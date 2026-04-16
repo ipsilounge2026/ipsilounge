@@ -1,0 +1,514 @@
+# ===================================================================
+# 체크리스트 인덱스 — spec ↔ checklist 매핑 + 변경 감지
+# ===================================================================
+# 이 파일은 모든 체크리스트와 그 출처 spec 파일들을 등록합니다.
+# 새 spec 파일이 추가되거나 기존 spec이 수정될 때 hash 기반으로 감지합니다.
+#
+# 운영 규칙:
+#   1. 새 spec 추가 시 → 이 파일에 등록 (어느 checklist에 매핑할지 명시)
+#   2. spec 수정 시 → 다음 검증 세션에서 hash drift 자동 감지
+#                     → "체크리스트 갱신 필요" 보고
+#   3. last_known_hash 는 사용자가 체크리스트 갱신 완료 시점의 hash
+# ===================================================================
+
+meta:
+  index_version: "2.12.0"
+  last_audited: "2026-04-16"
+  hash_algorithm: "sha256"
+  paths_relative_to: "C:\\Users\\orbik\\Dropbox\\AI Project\\Claude\\학생부분석프로그램\\"
+  changelog:
+    - "2.12.0 (2026-04-16): ★ cross-cutting/ux-policy.yaml 20/20 전체 L3 검증 완료! 자동저장(디바운스 1200ms + 낙관적 잠금 + 충돌 알림 배너) + 무기명 B옵션(raw 조회 super_admin/admin 전용 + counselor 집계만) + 재시도(결제 fail 페이지 + family 코드 10회 + 수동 새로고침) + 상태 피드백(StatusBadge + 저장중/제출중 + Presigned 1시간) + 이어쓰기(draft + delta prefill + 학부모 읽기전용) + 자동 타이밍 추천 전부 코드 정합. P2 gap 2건(재시도 라이브러리 미도입/ux-policy.md 통합 문서 부재) 문서화. status: not_started→ready. ★ cross-cutting 영역 5개 전체 완료(test-env/auth/data-sharing/ux-policy + booking/senior/high 연계)"
+    - "2.11.0 (2026-04-16): ★ cross-cutting/data-sharing.yaml 22/22 전체 L3 검증 완료! SHARED_DATA_ROOT(config.py parents[3] 자동 계산 + .env 오버라이드 + DATA_ROOT property)+4개 공유 XLSX(course_requirements/admission_db/수능최저_db/university_grading) 실존 확인+양쪽 로더(ipsilounge 3개 서비스 + analyzer 2개 모듈) 스키마 대칭 해석+폴백 삼중 전략(ADMISSION_DB_PATH env / DB-first-Excel-fallback / graceful degradation). P2 gap 3건(EC2 배포 가이드/legacy 백업 파일/캐시 API 불통일) 문서화. status: not_started→ready"
+    - "2.10.0 (2026-04-16): ★ cross-cutting/auth.yaml 28/28 전체 L3 검증 완료! 회원/관리자 로그인+JWT(HS256+24h+7일)+bcrypt+rate limiter+4역할(super_admin/admin/counselor/senior)+12메뉴+매칭 기반 필터+비밀번호 재설정+프론트 게이트 전부 코드 정합. spec vs 구현 gap 3건(senior 확장/메뉴 4개 확장/SECRET_KEY 기본값) P2 문서화. status: not_started→ready"
+    - "2.9.0 (2026-04-16): ★ report-output.yaml 29/29 전체 L3 검증 완료! Excel 9시트 + PDF 17페이지 실물 파일 검사. 구현 일치 + spec 미구현 6영역(내신/입결/키워드/전형/출결/하이라이트) gap 문서화. analyzer 영역 3개 yaml 모두 완료. status: not_started→ready"
+    - "2.8.0 (2026-04-16): ★ rubric.yaml 27/27 전체 코드 리뷰 검증 완료! 세특6항목/창체5항목/행특5항목 루브릭+가중치+등급+종합점수 정합성 확인. 연승훈 점수/등급 산술 전부 정확. P2 gap 3건 문서화. status: not_started→ready"
+    - "2.7.0 (2026-04-16): ★ pipeline.yaml 24/26 L3 검증 완료! (24 pass + 2 na). 연승훈+의대샘플 CLI end-to-end: QA→Excel(9시트)→PDF(한글정상). 부분학년·동적순회·스타일규칙 모두 검증. status: not_started→ready"
+    - "2.6.0 (2026-04-16): ★ satisfaction.yaml 13/13 전체 L3 검증 완료! 백엔드 admin_stats 버그 수정(ConsultationSlot join) → SAT-E3 pass. status: in_progress→ready"
+    - "2.5.0 (2026-04-16): satisfaction.yaml 12/13 L3 검증 (12 pass + 1 fail). 예약completed→설문생성→페이지렌더→점수입력→제출→done. 프론트 버그 2개 수정(스키마매핑+status매칭). admin_stats 500 에러(P2). status: not_started→in_progress"
+    - "2.4.0 (2026-04-16): ★ booking.yaml 15/15 전체 L3 검증 완료! student_t1 → /consultation 전체 예약 흐름(유형선택→자격확인→사전조사→상담자→달력→시간대→폼→제출) + /consultation/my. 10종 컴포넌트. status: not_started→ready"
+    - "2.3.0 (2026-04-16): ★ senior.yaml 17/17 전체 L3 검증 완료! student_t1 → S1~S4 각 세션 진입. 4종 컴포넌트(radio/checkboxes/textarea/session_select). Q3 세션별 옵션 분기 확인. status: not_started→ready"
+    - "2.2.0 (2026-04-16): ★ pre-high.yaml 36/36 전체 L3 검증 완료! student_t1(A~F 30항목) + parent_a(G 6항목). 22종 컴포넌트. status: drafted→ready"
+    - "2.1.0 (2026-04-16): pre-high.yaml 체크리스트 36개 항목 작성 완료 (A6+B4+C4+D5+E5+F6+G6). status: not_started→drafted"
+    - "2.0.0 (2026-04-16): ★ high.yaml 36/36 전체 L3 검증 완료! Batch 2(C2_1/E4/E5 T2/T3), Batch 3(F1~F6 parent_a), Batch 4(G1~G3 T4). status: in_progress→ready"
+    - "1.6.0 (2026-04-16): Batch 1 복합 컴포넌트 12개 (B1/C1/C2/D1/D2/D3/D6/D7/E1/E2/E3/E6) L3 evidence 수집 완료. pass 12→24, unverified 18→6. matrix/grid/composite/career_select/rank/weak_type/panel 7종 컴포넌트 검증"
+    - "1.5.0 (2026-04-15): high.yaml 단순/display 6개 항목 (B5/C3/C4/D4/D5/D8) L3 evidence 수집 완료. pass 6→12, unverified 24→18. step navigation ('나중에 입력' 반복 클릭) 패턴 확립"
+    - "1.4.0 (2026-04-15): high.yaml Category A 전체 (A1-A6, 6개) L3 evidence 수집 완료. high.yaml status: ready→in_progress (검증 진행중), verification_summary 필드 추가. 남은 작업: B~G 카테고리 30개"
+    - "1.3.0 (2026-04-15): TEST_ENV L3-HARNESS-runner partial→pass 승격 (4 pass + 0 partial). HIGH-A-A1-input end-to-end preview_mcp 실행 통과로 harness 실전 검증 완료"
+    - "1.2.0 (2026-04-15): TEST_ENV 4개 자산 구현+검증 완료 (3 pass + 1 partial). high.yaml L3 진입 가능"
+    - "1.1.0 (2026-04-15): cross-cutting/test-environment.yaml 등록 (L3 검증 인프라 4개 자산)"
+    - "1.0.0 (2026-04-15): 최초 인덱스 작성 (12개 체크리스트)"
+
+# ─── 등록된 체크리스트 ───────────────────────────────────────────
+checklists:
+
+  # ───── 설문 영역 ─────
+  - file: "survey/high.yaml"
+    area_code: HIGH
+    title: "고등학교 설문"
+    spec_files:
+      - path: "ipsilounge/backend/app/surveys/schemas/high.json"
+        last_known_hash: "6190113239bbce572194e38d9b6cf4e11a0752a6c327dffd2512fe4eb97e5396"
+        size_bytes: 52975
+        line_count: 1291
+        last_synced: "2026-04-15"
+    related_docs:
+      - "ipsilounge/docs/consultation_survey_plan.md"
+    status: "ready"   # ★ 36/36 전체 L3 검증 완료
+    promotion_summary:
+      promoted_count: 36
+      promoted_at: "2026-04-15"
+      categories: [A, B, C, D, E, F, G]
+      priority_distribution:
+        P0: 15
+        P1: 15
+        P2: 6
+    verification_summary:
+      pass: 36        # 전체 완료 (A6 + simple6 + Batch1_12 + Batch2_3 + Batch3_6 + Batch4_3)
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        4개 세션으로 검증: student_t1+T1 (24항목), student_t1+T2/T3 (3항목),
+        parent_a+T1 (6항목), student_t1+T4 (3항목).
+        10종 컴포넌트 타입 검증: text/radio/checkbox/select/textarea/slider/
+        school_grade_matrix/mock_exam_session_grid/career_select/rank/
+        weak_type_per_subject/subject_study_method_panel/composite.
+    next_step: "검증 완료. 다음 대상: pre-high.yaml 또는 consultation/booking.yaml"
+
+  - file: "survey/pre-high.yaml"
+    area_code: PRE_HIGH
+    title: "예비고등학교 설문"
+    spec_files:
+      - path: "ipsilounge/backend/app/surveys/schemas/preheigh1.json"
+        last_known_hash: "6e8136914997eefd5ce1aa32bc6635e0d562d404d1522576a1224c95c6aa7a72"
+        size_bytes: 48760
+        line_count: 1189
+        last_synced: "2026-04-15"
+    status: "ready"
+    promotion_summary:
+      promoted_count: 36
+      promoted_at: "2026-04-16"
+      categories: [A, B, C, D, E, F, G]
+      priority_distribution:
+        P0: 9
+        P1: 12
+        P2: 15
+    verification_summary:
+      pass: 36
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        2개 세션: student_t1 step 1~6 (A~F 30항목),
+        parent_a step 7 (G 6항목). 22종 컴포넌트 타입 검증.
+    next_step: "검증 완료. senior.yaml도 완료됨. 다음 대상: consultation/booking.yaml"
+
+  - file: "survey/senior.yaml"
+    area_code: SENIOR
+    title: "선배 사전 설문"
+    spec_files:
+      - path: "ipsilounge/backend/app/surveys/schemas/senior_pre_survey.json"
+        last_known_hash: "560f3c3e95d581420e33d833e372b4da62042e8fe34b8f18da7141c9a1b8261b"
+        size_bytes: 8738
+        line_count: 250
+        last_synced: "2026-04-16"
+    status: "ready"   # ★ 17/17 전체 L3 검증 완료
+    promotion_summary:
+      promoted_count: 17
+      promoted_at: "2026-04-16"
+      categories: [SESSION, COMMON, S1, S2, S3, S4]
+      priority_distribution:
+        P0: 3
+        P1: 9
+        P2: 5
+    verification_summary:
+      pass: 17
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        1개 세션: student_t1 → /senior-pre-survey → S1~S4 각 세션 진입 검증.
+        3단계 흐름(select→survey→done). 4종 컴포넌트(radio/checkboxes/textarea/session_select).
+        Q3 세션별 옵션 분기 확인(S1:8개, S2:6개, S3:7개, S4:6개).
+    next_step: "검증 완료. booking.yaml도 완료됨. 다음 대상: consultation/satisfaction.yaml"
+
+  # ───── 상담 영역 ─────
+  - file: "consultation/booking.yaml"
+    area_code: BOOKING
+    title: "상담 예약·취소·완료"
+    spec_files:
+      - path: "ipsilounge/CLAUDE.md"
+        last_known_hash: "435f8936f45bc1dcd2208f02a2ca511df5f4e51dbbb5d47fc679594cb3d9de46"
+        section: "상담 예약 흐름"
+        size_bytes: 27951
+        line_count: 644
+        last_synced: "2026-04-15"
+      - path: "ipsilounge/docs/feature-expansion-plan.md"
+        last_known_hash: "994cfa286ae3f58a9d05f06195cccc7ae83e7d68fa61d56a4b07ffa1fb50f6f0"
+        size_bytes: 8088
+        line_count: 244
+        last_synced: "2026-04-16"
+    status: "ready"   # ★ 15/15 전체 L3 검증 완료
+    promotion_summary:
+      promoted_count: 15
+      promoted_at: "2026-04-16"
+      categories: [A, B, C, D, E]
+      priority_distribution:
+        P0: 6
+        P1: 6
+        P2: 3
+    verification_summary:
+      pass: 15
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        student_t1 → /consultation 전체 예약 흐름 end-to-end 통과.
+        counselor_a 슬롯 생성 후 달력���시간대→예약폼→제출→내 예약 목록 확인.
+        6종 상담유형, 자격확인(학생부분석/선배상담), 사전조사(학습상담 draft),
+        상담자 선택, 달력+슬롯, 예약폼+제출, 내 예약+취소 버튼.
+    next_step: "검증 완료. 다음 대상: consultation/satisfaction.yaml"
+
+  - file: "consultation/satisfaction.yaml"
+    area_code: SATISFACTION
+    title: "상담 후 만족도 설문 (P1 #3 산출물)"
+    spec_files:
+      - path: "ipsilounge/backend/app/routers/satisfaction_survey.py"
+        last_known_hash: null
+        section: "하드코딩 문항 + API 엔드포인트"
+        last_synced: "2026-04-16"
+      - path: "ipsilounge/user-web/src/app/satisfaction-survey/page.tsx"
+        last_known_hash: null
+        section: "프론트엔드 설문 페이지"
+        last_synced: "2026-04-16"
+    status: "ready"   # ★ 13/13 전체 L3 검증 완료
+    promotion_summary:
+      promoted_count: 13
+      promoted_at: "2026-04-16"
+      categories: [A, B, C, D, E]
+      priority_distribution:
+        P0: 6
+        P1: 5
+        P2: 2
+    verification_summary:
+      pass: 13
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        student_t1 → /satisfaction-survey counselor+senior 타입 검증.
+        예약 completed 트리거 → 설문 생성 → 페이지 렌더(10문항) → 점수 입력 → 제출 → done.
+        프론트 버그 2개 수정: 스키마 매핑(questions→items 변환), status 매칭(draft→pending).
+        백엔드 버그 1개 수정: admin_stats SQL 쿼리에서 ConsultationSlot join 추가.
+    next_step: "검증 완료. 상담 영역(booking+satisfaction) 전체 완료."
+
+  # ───── 분석기 영역 (school-record-analyzer) ─────
+  - file: "analyzer/pipeline.yaml"
+    area_code: ANALYZER
+    title: "학생부 분석기 파이프라인 (Step 0~9)"
+    spec_files:
+      - path: "school-record-analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "Step 0 ~ Step 9"
+        size_bytes: 51342
+        line_count: 832
+        last_synced: "2026-04-15"
+    status: "ready"   # ★ 24/26 L3 검증 완료 (24 pass + 2 na)
+    promotion_summary:
+      promoted_count: 26
+      promoted_at: "2026-04-16"
+      categories: [A, B, C, D, E, F, G]
+      priority_distribution:
+        P0: 12
+        P1: 10
+        P2: 4
+    verification_summary:
+      pass: 24
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 2
+      verified_at: "2026-04-16"
+      completion_note: |
+        연승훈+의대샘플 2명 CLI end-to-end 실행으로 검증.
+        진입점(A1~A5) + QA P1/P2(B1~B8) + Excel(C1~C4) + PDF(D1~D4) +
+        부분학년(E1~E3) + 종합흐름(G1~G4) 모두 pass.
+        F1/F2(Step 0 기존리포트 확인/변화추적)은 Claude 대화형 워크플로우로 na.
+    next_step: "검증 완료. 다음 대상: analyzer/rubric.yaml 또는 analyzer/report-output.yaml"
+
+  - file: "analyzer/rubric.yaml"
+    area_code: ANALYZER
+    title: "학생부 평가 루브릭 (세특/창체/행특)"
+    spec_files:
+      - path: "school-record-analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "세특/창체/행특 평가 루브릭, 종합 경쟁력 산출"
+        size_bytes: 51342
+        line_count: 832
+        last_synced: "2026-04-15"
+    status: "ready"   # ★ 27/27 전체 코드 리뷰 검증 완료
+    promotion_summary:
+      promoted_count: 27
+      promoted_at: "2026-04-16"
+      categories: [A, B, C, D, E, F, G, H]
+      priority_distribution:
+        P0: 8
+        P1: 10
+        P2: 9
+    verification_summary:
+      pass: 27
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        코드 리뷰 + 연승훈 데이터 산술 검증.
+        세특 6항목(전공적합성 제외)/가중치 sum=1.00/등급기준 S≥8.5,A≥7.0,B≥5.0,C≥3.5/
+        창체 5항목×3영역/행특 5항목/종합점수 (s×0.30+c×0.25+h×0.10)/0.65 모두 정합.
+        연승훈 19과목 114점수 가중합산 오차 max 0.02. P2 gap 3건(프롬프트 척도/config dead keys/창체 QA) 문서화.
+    next_step: "검증 완료. 다음 대상: analyzer/report-output.yaml"
+
+  - file: "analyzer/report-output.yaml"
+    area_code: ANALYZER
+    title: "리포트 출력 구조 (Excel 13개 시트, PDF, 하이라이트)"
+    spec_files:
+      - path: "school-record-analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "리포트 출력 구조, Step 9"
+        size_bytes: 51342
+        line_count: 832
+        last_synced: "2026-04-15"
+    status: "ready"   # ★ 29/29 전체 L3 검증 완료
+    promotion_summary:
+      promoted_count: 29
+      promoted_at: "2026-04-16"
+      categories: [A, B, C, D, E, F]
+      priority_distribution:
+        P0: 14
+        P1: 7
+        P2: 8
+    verification_summary:
+      pass: 29
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        연승훈+의대샘플 생성물 실물 검사 (openpyxl + pypdf).
+        Excel 9시트 구조/스타일/등급컬러 모두 pass (merge_cells=0, wrap_text=0, freeze=A2).
+        PDF 17페이지: 표지/목차/평가기준/1~7섹션 마커 모두 검출. 한글 렌더 정상.
+        Spec 13시트 중 미구현 6영역(내신/입결/키워드/전형/출결/하이라이트)
+        및 워드클라우드/change_tracking은 gap으로 문서화 — 현재 운영(내신 제외) 모드에서 실사용 영향 없음.
+    next_step: "검증 완료. analyzer 영역 전체 완료(pipeline+rubric+report-output). 다음 대상: cross-cutting/auth.yaml"
+
+  # ───── 공통 정책 영역 ─────
+
+  # ───── 검증 인프라 (모든 L3 검증의 선행 조건) ─────
+  - file: "cross-cutting/test-environment.yaml"
+    area_code: TEST_ENV
+    title: "검증 환경 (L3 검증 인프라 4개 자산)"
+    spec_files:
+      - path: "ipsilounge/docs/test-environment-spec.md"
+        last_known_hash: "7acb274154db7221399250c85e96af9330c074b344e89a0e62f5f8fcaf292bce"
+        size_bytes: 10111
+        line_count: 241
+        last_synced: "2026-04-15"
+    status: "ready"  # Phase 5 end-to-end 실행 통과 (4 pass + 0 partial). high.yaml L3 대량 검증 가능
+    verification_summary:
+      pass: 4
+      partial: 0
+      fail: 0
+      unverified: 0
+      verified_at: "2026-04-15"
+    blocks_l3_for:
+      - "survey/high.yaml"
+      - "survey/pre-high.yaml"
+      - "survey/senior.yaml"
+      - "consultation/booking.yaml"
+      - "consultation/satisfaction.yaml"
+      - "cross-cutting/auth.yaml"
+    rationale: |
+      이 4개 자산(DEV_MODE 분기 / seed 스크립트 / dev_login_as / L3 harness)이 갖춰지지 않으면
+      다른 모든 영역의 L3 런타임 검증이 매 세션마다 인프라 셋업으로 막힌다.
+      "검증할 수 있는 능력"을 검증하는 메타 체크리스트.
+
+  - file: "cross-cutting/auth.yaml"
+    area_code: AUTH
+    title: "인증·권한·관리자 역할"
+    spec_files:
+      - path: "ipsilounge/CLAUDE.md"
+        last_known_hash: "435f8936f45bc1dcd2208f02a2ca511df5f4e51dbbb5d47fc679594cb3d9de46"
+        section: "관리자 역할 정의 (super_admin/admin/counselor/senior)"
+        size_bytes: 27951
+        line_count: 644
+        last_synced: "2026-04-15"
+      - path: "ipsilounge/backend/app/routers/auth.py"
+        last_known_hash: null
+        section: "인증 엔드포인트 (register/login/refresh/forgot/reset)"
+        last_synced: "2026-04-16"
+      - path: "ipsilounge/backend/app/utils/dependencies.py"
+        last_known_hash: null
+        section: "get_current_user/admin/super_admin 의존성"
+        last_synced: "2026-04-16"
+      - path: "ipsilounge/backend/app/routers/admin_admins.py"
+        last_known_hash: null
+        section: "관리자 역할·메뉴·매칭 관리"
+        last_synced: "2026-04-16"
+    status: "ready"   # ★ 28/28 전체 L3 검증 완료
+    promotion_summary:
+      promoted_count: 28
+      promoted_at: "2026-04-16"
+      categories: [A, B, C, D, E, F, G, H, I]
+      priority_distribution:
+        P0: 13
+        P1: 12
+        P2: 3
+    verification_summary:
+      pass: 28
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        코드 리뷰 검증. 회원/관리자 로그인(A, 4) + JWT·bcrypt·rate limit·토큰 가드(B, 4) +
+        4역할 체계(C, 4) + 12메뉴 권한(D, 4) + 매칭 기반 데이터 접근(E, 4) +
+        비밀번호 재설정(F, 2) + 프론트 토큰 저장(G, 2) + DEV_MODE login_as(H, 1) +
+        spec vs 구현 gap 문서화(I, 3) 전부 pass.
+        P0 엔드포인트 13개 모두 정상 동작. gap은 모두 문서 갱신 과제로 분류(실사용 영향 없음).
+    next_step: "검증 완료. cross-cutting 영역 남은 대상: ux-policy.yaml"
+
+  - file: "cross-cutting/data-sharing.yaml"
+    area_code: DATA_SHARE
+    title: "분석기↔서비스 데이터 공유 (SHARED_DATA_ROOT)"
+    spec_files:
+      - path: "school-record-analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "교과 이수 기준표 — 공유 원칙"
+        size_bytes: 51342
+        line_count: 832
+        last_synced: "2026-04-15"
+      - path: "ipsilounge/backend/app/config.py"
+        last_known_hash: null
+        section: "SHARED_DATA_ROOT + DATA_ROOT property"
+        last_synced: "2026-04-16"
+      - path: "ipsilounge/backend/app/services/course_requirement_service.py"
+        last_known_hash: null
+        section: "course_requirements.xlsx 로더"
+        last_synced: "2026-04-16"
+      - path: "ipsilounge/backend/app/services/suneung_minimum_service.py"
+        last_known_hash: null
+        section: "수능최저_db.xlsx 로더"
+        last_synced: "2026-04-16"
+      - path: "ipsilounge/backend/app/services/counselor_type_service.py"
+        last_known_hash: null
+        section: "admission_db.xlsx 로더 (DB-first + Excel fallback)"
+        last_synced: "2026-04-16"
+      - path: "school-record-analyzer/modules/grade_analyzer.py"
+        last_known_hash: null
+        section: "load_course_requirements (analyzer 측 동일 스키마 로더)"
+        last_synced: "2026-04-16"
+    status: "ready"   # ★ 22/22 전체 L3 검증 완료
+    promotion_summary:
+      promoted_count: 22
+      promoted_at: "2026-04-16"
+      categories: [A, B, C, D, E, F, G]
+      priority_distribution:
+        P0: 9
+        P1: 7
+        P2: 6
+    verification_summary:
+      pass: 22
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        코드 리뷰 + 파일 실존 확인. SHARED_DATA_ROOT 설정(A, 4) +
+        공유 파일 실존(B, 4) + 스키마 일관성(C, 4) + 백엔드 서비스 연계(D, 3) +
+        폴백/오버라이드(E, 3) + 캐싱/갱신(F, 2) + 운영/배포 연계(G, 2) 전부 pass.
+        4개 XLSX 파일(course_requirements/admission_db/수능최저_db/university_grading)
+        모두 school-record-analyzer/data/ 에 실존. ipsilounge 3개 서비스 + analyzer 2개 모듈이
+        동일 파일을 동일 스키마로 해석함을 코드에서 확인. gap 3건 모두 운영/저장소 정리 과제(P2).
+    next_step: "검증 완료. cross-cutting 영역 남은 대상: ux-policy.yaml"
+
+  - file: "cross-cutting/ux-policy.yaml"
+    area_code: UX_POLICY
+    title: "UX 공통 정책 (자동저장, 무기명, 재시도)"
+    spec_files:
+      - path: "ipsilounge/REVIEW.md"
+        last_known_hash: "143f2b0600c462f45bb233ac2874f9e6a4e9bfc89534cc8ab61cb64aa6044123"
+        size_bytes: 3498
+        line_count: 85
+        last_synced: "2026-04-15"
+      - path: "ipsilounge/docs/service-overview.md"
+        last_known_hash: "577347cebcd0009fa62071bccf69667978d958cc78ae81e7c4c499e5b7fb787f"
+        size_bytes: 28717
+        line_count: 741
+        last_synced: "2026-04-15"
+      - path: "ipsilounge/backend/app/routers/satisfaction_survey.py"
+        last_known_hash: null
+        section: "무기명 정책 (B옵션) L213~220"
+        last_synced: "2026-04-16"
+      - path: "ipsilounge/backend/app/routers/consultation_survey.py"
+        last_known_hash: null
+        section: "낙관적 잠금 L1713~1720"
+        last_synced: "2026-04-16"
+      - path: "ipsilounge/backend/app/schemas/consultation_survey.py"
+        last_known_hash: null
+        section: "last_known_updated_at 필드 L82~87"
+        last_synced: "2026-04-16"
+      - path: "ipsilounge/user-web/src/components/survey/DynamicSurvey.tsx"
+        last_known_hash: null
+        section: "자동저장 1200ms + 충돌 배너"
+        last_synced: "2026-04-16"
+    status: "ready"   # ★ 20/20 전체 L3 검증 완료
+    promotion_summary:
+      promoted_count: 20
+      promoted_at: "2026-04-16"
+      categories: [A, B, C, D, E, F, G]
+      priority_distribution:
+        P0: 5
+        P1: 11
+        P2: 4
+    verification_summary:
+      pass: 20
+      partial: 0
+      unverified: 0
+      fail: 0
+      na: 0
+      verified_at: "2026-04-16"
+      completion_note: |
+        코드 리뷰 검증. 자동저장(A, 4) + 무기명 정책(B, 2) + 재시도(C, 3) +
+        상태 피드백(D, 4) + 이어쓰기/재개(E, 3) + 자동 추천(F, 2) + Gap 문서화(G, 2) 전부 pass.
+        REVIEW.md § 4 '암묵적 충족 패턴 표'의 원칙(이름 달라도 동작 일치하면 충족)을 적용.
+        자동 재시도 라이브러리 미도입은 설계상 의도적 제외(사용자 결정 유도).
+    next_step: "검증 완료. cross-cutting 영역 전체 완료 (test-env/auth/data-sharing/ux-policy 4개)."
+
+# ─── 미등록 spec 파일 (참고) ─────────────────────────────────────
+# 향후 체크리스트 신설 시 어느 영역에 매핑할지 결정 필요.
+unregistered_spec_candidates:
+  - path: "ipsilounge/docs/deployment.md"
+    note: "배포 가이드 — 운영 영역으로 별도 yaml 신설 검토"
+
+# ─── 변경 감지 워크플로우 ─────────────────────────────────────────
+# 매 검증 세션 시작 시 자동 실행되는 절차:
+drift_check_workflow:
+  1: "이 파일의 모든 spec_files 항목 순회"
+  2: "각 path의 현재 sha256 계산"
+  3: "last_known_hash 와 비교"
+  4: "drift 발견 시 → 해당 checklist 파일과 함께 사용자에게 보고"
+  5: "사용자가 checklist 갱신 완료 후 → last_known_hash + last_synced 갱신"

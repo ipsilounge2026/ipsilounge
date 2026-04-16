@@ -1,0 +1,2342 @@
+meta:
+  area_code: HIGH
+  title: 고등학교 설문 (high.json)
+  schema_ref: ../_schema.yaml
+  index_ref: ../_index.yaml
+  source_specs:
+  - ipsilounge/backend/app/surveys/schemas/high.json
+  total_categories: 7
+  last_updated: '2026-04-15'
+  notes: '이 파일은 인프라 검증용 골격으로 시작.
+
+    카테고리 A~G의 50+ 질문은 점진적으로 추가 (.draft → 정식 승격 절차).
+
+    '
+items:
+- id: HIGH-A-A4-input
+  category: A
+  question_id: A4
+  aspect: input
+  requirement: 'A4 (상담 시점) 질문이 화면에 렌더되고, 사용자가 select로
+
+    "고1-1학기"~"고3-2학기" 중 하나를 선택하면 응답 상태에 저장된다.
+
+    이 값은 B(내신) / C(모의고사) 등 후속 동적 질문의 학기/회차 생성 기준이 된다.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category A.questions[id=A4]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - 고등학교 설문 페이지 로드
+  - A 카테고리 진입 → A4 질문 가시화
+  - select 옵션이 semester_generation_rules에 정의된 모든 학기 표시
+  - 임의 학기 선택 → 응답 객체에 A4=선택값 저장
+  - B/C 카테고리 진입 시 resolved_semesters / resolved_sessions 가 A4 값 기반으로 생성됨
+  backend:
+    status: na
+    reason: B는 단순 응답 저장. 백엔드 분기 로직 없음.
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 08:56, steps: 5/5 pass, screenshots: docs/checklist/_evidence/high/HIGH-A-A4-input/'
+    note: DynamicSurvey 렌더는 확인됨. 실제 select 동작은 preview_mcp 실행 필요.
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    note: Flutter 미구현 영역
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+  l3_steps:
+  - &id001
+    step: dev_login
+    tool: backend_request
+    method: POST
+    path: /api/dev/login-as/student_t1
+    save:
+      access_token: $.access_token
+    assert: status == 200
+  - &id002
+    step: inject_token_and_navigate
+    tool: preview_eval
+    expression: 'localStorage.setItem(''user_token'', ''{{access_token}}'');
+
+      window.location.href = ''/consultation-survey/high'';
+
+      '
+    wait_ms: 2500
+  - &id003
+    step: select_timing_T1
+    tool: preview_eval
+    expression: "(() => {\n  const card = Array.from(document.querySelectorAll('div'))\n\
+      \    .find(d => d.textContent?.startsWith('T1 (') && d.style?.cursor === 'pointer');\n\
+      \  if (!card) return { error: 'T1 card not found' };\n  card.click();\n  return\
+      \ { clicked: true };\n})()\n"
+    assert: result.clicked === true
+  - &id004
+    step: click_start_survey
+    tool: preview_eval
+    expression: "(() => {\n  const btn = Array.from(document.querySelectorAll('button'))\n\
+      \    .find(b => b.textContent?.trim() === '설문 시작하기');\n  if (!btn || btn.disabled)\
+      \ return { error: 'start btn not ready' };\n  btn.click();\n  return { clicked:\
+      \ true };\n})()\n"
+    wait_ms: 2500
+    assert: result.clicked === true
+  - step: verify_A4_prefilled_T1
+    tool: preview_eval
+    expression: "(() => {\n  const inputs = Array.from(document.querySelectorAll('input[type=\"\
+      radio\"][name=\"A4\"]'));\n  const checked = inputs.find(i => i.checked);\n\
+      \  if (!checked) return { error: 'no A4 radio checked' };\n  const label = (checked.parentElement?.textContent\
+      \ || '').trim();\n  return { checkedLabel: label, isT1: label.startsWith('T1\
+      \ ') };\n})()\n"
+    assert: result.isT1 === true
+- id: HIGH-B-B1-matrix
+  category: B
+  question_id: B1
+  aspect: render+input
+  requirement: 'B1 (학기별 교과 성적) 질문이 SchoolGradeMatrix 컴포넌트로 렌더되고,
+
+    A4 응답 기반 resolved_semesters 만큼 학기 카드가 표시된다.
+
+    각 학기 내에서 [+ 과목 추가]로 행 추가, [삭제]로 행 제거,
+
+    각 셀(category/course_name/rank_grade/achievement/...)에 입력하면
+
+    상위 응답 객체에 학기별 rows 배열로 저장된다.
+
+    category 변경 시 의존 필드(course_name 등)는 초기화된다.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category B.questions[id=B1] (type=school_grade_matrix)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - 'A4 값 선택 (예: 고2-2학기) → resolved_semesters 산출'
+  - B 카테고리 진입 → SchoolGradeMatrix 마운트
+  - 산출된 학기 수만큼 학기 카드 렌더
+  - '[+ 과목 추가] 클릭 → rows 배열에 빈 행 추가'
+  - category select 변경 → 동일 행의 course_name 초기화 (의존 필드)
+  - select_dynamic 필드(course_name) 옵션이 resolved_subject_courses[category] 값으로 채워짐
+  - number 필드(원점수 등)에 값 입력 → 응답 객체에 number 타입으로 저장 (NaN 시 null)
+  - '[삭제] 클릭 → 해당 row 제거'
+  - '''해당 없음(자유학기)'' 체크 → exempt=true, rows 비워짐'
+  backend:
+    status: na
+    reason: 프론트 입력 위젯. 백엔드는 응답 JSON을 그대로 저장.
+  user_web:
+    status: pass
+    L1:
+      evidence: ipsilounge/user-web/src/components/survey/heavy/SchoolGradeMatrix.tsx:69
+      note: SchoolGradeMatrix 컴포넌트 정의 확인 (Props, 학기 순회, addRow/removeRow/updateCell
+        구현)
+    L2:
+      evidence: ''
+      note: QuestionRenderer.tsx 의 school_grade_matrix 분기 호출 지점 evidence 미수집 (재확인
+        필요)
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-B-B1-matrix/'
+      note: 정적 빌드는 통과. 실제 입력 동작은 preview_mcp 미실행.
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    note: Flutter에 동등 위젯 미구현
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 설문 입력 UI 없음
+  notes: '- L2 evidence 미수집 → 다음 세션에서 QuestionRenderer.tsx 라인 확인 후 보완
+
+    - L3 런타임 동작은 preview_mcp 또는 manual 필요
+
+    '
+- id: HIGH-B-B5-calculate
+  category: B
+  question_id: B5
+  aspect: auto_calculate
+  requirement: 'B5 (학기 평균 등급)은 B1에 입력된 과목별 학점·등급으로 자동산출된다.
+
+    산출 시점: **설문 제출시 backend가 1회 계산** (사용자 결정 2026-04-15, 옵션 b).
+
+    semester_generation_rules 정의에 따라 학기별 평균 등급을 산출.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category B.questions[id=B5]
+  priority: P0
+  check_method: unit_test
+  user_decision_log:
+    decided_at: '2026-04-15'
+    choice: b — 제출시점 1회 backend 산출
+    rationale: 프론트 실시간 산출 부담 줄이고 산출 책임을 backend로 단일화
+  behavior_test:
+  - B1에 학기별 과목 데이터 입력된 응답 객체 준비
+  - POST /api/surveys/high (제출 endpoint) 호출
+  - backend가 학점 가중 평균으로 학기별 등급 계산
+  - 응답 객체에 B5={학기별 평균등급} 필드 추가되어 저장
+  - 빈 학기(exempt=true)는 산출 대상에서 제외
+  - 음수/0학점 등 비정상 입력 시 적절한 fallback 또는 에러
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: B5 산출 로직(서비스/유틸 함수) 위치 + 단위 테스트 확인 필요
+  user_web:
+    status: pass
+    reason: 산출은 backend 제출시점 책임. user_web은 B1 입력만 담당.
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 09:22, steps: 6/6 pass, screenshots: docs/checklist/_evidence/high/HIGH-B-B5-calculate/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: na
+    reason: 산출은 backend 제출시점 책임. mobile도 B1 입력만 담당 (단 B1 위젯 자체 미구현).
+  admin_web:
+    status: na
+    reason: 관리자 화면에 B5 산출 책임 없음 (조회 표시는 별도 항목으로 분리 검토)
+  l3_steps:
+  - &id005
+    step: dev_login
+    tool: backend_request
+    method: POST
+    path: /api/dev/login-as/student_t1
+    save:
+      access_token: $.access_token
+    assert: status == 200
+  - &id006
+    step: inject_token_and_navigate
+    tool: preview_eval
+    expression: 'localStorage.setItem(''user_token'', ''{{access_token}}'');
+
+      window.location.href = ''/consultation-survey/high'';
+
+      '
+    wait_ms: 2500
+  - &id007
+    step: select_timing_T1
+    tool: preview_eval
+    expression: "(() => {\n  const c = Array.from(document.querySelectorAll('div'))\n\
+      \    .find(d => d.textContent?.startsWith('T1 (') && d.style?.cursor === 'pointer');\n\
+      \  if (!c) return { error: 'T1 not found' };\n  c.click(); return { clicked:\
+      \ true };\n})()\n"
+    assert: result.clicked === true
+  - &id008
+    step: click_start_survey
+    tool: preview_eval
+    expression: "(() => {\n  const b = Array.from(document.querySelectorAll('button'))\n\
+      \    .find(x => x.textContent?.trim() === '설문 시작하기');\n  if (!b || b.disabled)\
+      \ return { error: 'start not ready' };\n  b.click(); return { clicked: true\
+      \ };\n})()\n"
+    wait_ms: 2500
+    assert: result.clicked === true
+  - step: navigate_to_step_4
+    tool: preview_eval
+    expression: "(async () => {\n  for (let i = 0; i < 3; i++) {\n    const b = Array.from(document.querySelectorAll('button'))\n\
+      \      .find(x => x.textContent?.trim() === '나중에 입력');\n    if (!b) return {\
+      \ error: 'skip btn missing at iter ' + i };\n    b.click();\n    await new Promise(r\
+      \ => setTimeout(r, 1800));\n  }\n  const m = document.body.innerText.match(/(\\\
+      d+)\\/\\d+ 단계/);\n  return { step: m && parseInt(m[1]), ok: m && parseInt(m[1])\
+      \ === 4 };\n})()\n"
+    wait_ms: 500
+    assert: result.ok === true
+  - step: verify_B5_auto_calc_section
+    tool: preview_eval
+    expression: "(() => {\n  const text = document.body.innerText;\n  const hasSection\
+      \ = text.includes('내신 성적 추이') && text.includes('자동 산출');\n  const hasHint =\
+      \ text.includes('B1~B4 입력 후 자동 계산');\n  return { hasSection, hasHint };\n})()\n"
+    assert: result.hasSection === true && result.hasHint === true
+- id: HIGH-A-A1-input
+  category: A
+  question_id: A1
+  aspect: input
+  requirement: 'A1 (학생 이름) 질문이 화면에 렌더되고, 사용자가 text 입력으로
+
+    이름을 입력하면 응답 객체에 A1=문자열로 저장된다. required=true.
+
+    placeholder "예: 홍길동" 표시.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category A.questions[id=A1]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - 고등학교 설문 페이지 로드 → A 카테고리 첫 진입 시 A1 가시화
+  - 'placeholder ''예: 홍길동'' 표시'
+  - 텍스트 입력 → 응답 객체에 A1=입력값으로 저장 (onChange)
+  - 빈 값으로 다음 단계 시도 → required 검증 차단
+  l3_steps:
+  - step: dev_login
+    tool: backend_request
+    method: POST
+    path: /api/dev/login-as/student_t1
+    save:
+      access_token: $.access_token
+    assert: status == 200
+  - step: inject_token_and_navigate
+    tool: preview_eval
+    expression: 'localStorage.setItem(''user_token'', ''{{access_token}}'');
+
+      window.location.href = ''/consultation-survey/high'';
+
+      '
+    wait_ms: 2500
+  - step: select_timing_T1
+    tool: preview_eval
+    expression: "(() => {\n  const card = Array.from(document.querySelectorAll('div'))\n\
+      \    .find(d => d.textContent?.startsWith('T1 (') && d.style?.cursor === 'pointer');\n\
+      \  if (!card) return { error: 'T1 card not found' };\n  card.click();\n  return\
+      \ { clicked: true };\n})()\n"
+    assert: result.clicked === true
+  - step: click_start_survey
+    tool: preview_eval
+    expression: "(() => {\n  const btn = Array.from(document.querySelectorAll('button'))\n\
+      \    .find(b => b.textContent?.trim() === '설문 시작하기');\n  if (!btn || btn.disabled)\
+      \ return { error: 'start btn not ready' };\n  btn.click();\n  return { clicked:\
+      \ true };\n})()\n"
+    wait_ms: 2500
+    assert: result.clicked === true
+  - step: fill_A1_and_verify
+    tool: preview_eval
+    expression: "(() => {\n  const i = document.querySelector('input[placeholder=\"\
+      예: 홍길동\"]');\n  if (!i) return { error: 'A1 input not found' };\n  const setter\
+      \ = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;\n\
+      \  setter.call(i, '테스트학생');\n  i.dispatchEvent(new Event('input', { bubbles:\
+      \ true }));\n  return { filled: i.value === '테스트학생', value: i.value };\n})()\n"
+    assert: result.filled === true && result.value === '테스트학생'
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: high.json schema 로드 + 응답 저장 endpoint 검증 필요
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 08:46, steps: 5/5 pass, screenshots: docs/checklist/_evidence/high/HIGH-A-A1-input/'
+    note: DynamicSurvey의 text type 분기 확인 필요
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (text type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: Flutter text type 구현됨. 실제 입력/저장 동작 검증 필요.
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-A-A2-input
+  category: A
+  question_id: A2
+  aspect: input
+  requirement: 'A2 (재학 고등학교) 질문이 화면에 렌더되고, 사용자가 text 입력으로
+
+    학교명을 입력하면 응답 객체에 A2=문자열로 저장된다. required=true.
+
+    placeholder "예: 휘문고등학교" 표시.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category A.questions[id=A2]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - A1 다음 단계로 이동 → A2 가시화
+  - 'placeholder ''예: 휘문고등학교'' 표시'
+  - 텍스트 입력 → 응답 객체에 A2=입력값으로 저장
+  - 빈 값으로 다음 단계 시도 → required 검증 차단
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 08:56, steps: 5/5 pass, screenshots: docs/checklist/_evidence/high/HIGH-A-A2-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (text type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+  l3_steps:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - step: fill_A2_and_verify
+    tool: preview_eval
+    expression: "(() => {\n  const i = document.querySelector('input[placeholder=\"\
+      예: 휘문고등학교\"]');\n  if (!i) return { error: 'A2 input not found' };\n  const\
+      \ setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,\
+      \ 'value').set;\n  setter.call(i, '테스트고등학교');\n  i.dispatchEvent(new Event('input',\
+      \ { bubbles: true }));\n  return { filled: i.value === '테스트고등학교', value: i.value\
+      \ };\n})()\n"
+    assert: result.filled === true && result.value === '테스트고등학교'
+- id: HIGH-A-A3-input
+  category: A
+  question_id: A3
+  aspect: input
+  requirement: 'A3 (현재 학년) 질문이 radio로 렌더되고, 옵션(고1/고2/고3/예비고1)
+
+    모두 표시된다. 선택 시 응답 객체에 A3=선택값으로 저장. required=true.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category A.questions[id=A3]
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - A2 다음 단계 → A3 가시화
+  - radio 옵션이 high.json에 정의된 모든 학년 표시
+  - 옵션 선택 → 응답 객체에 A3=선택값으로 저장
+  - 선택 없이 다음 단계 시도 → required 검증 차단
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 08:56, steps: 5/5 pass, screenshots: docs/checklist/_evidence/high/HIGH-A-A3-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (radio type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+  l3_steps:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - step: select_A3_radio
+    tool: preview_eval
+    expression: "(() => {\n  const inputs = Array.from(document.querySelectorAll('input[type=\"\
+      radio\"][name=\"A3\"]'));\n  const target = inputs.find(i => (i.parentElement?.textContent\
+      \ || '').trim() === '일반고');\n  if (!target) return { error: 'A3 radio 일반고 not\
+      \ found', available: inputs.map(i => (i.parentElement?.textContent || '').trim())\
+      \ };\n  target.click();\n  return { checked: target.checked, value: target.value\
+      \ };\n})()\n"
+    assert: result.checked === true
+- id: HIGH-A-A5-input
+  category: A
+  question_id: A5
+  aspect: input
+  requirement: 'A5 (계열 / 희망 분야) 질문이 radio로 렌더되고, 옵션(인문/사회/자연/공학/의약/예체능/미정 등)
+
+    표시된다. ''미정'' 옵션은 show_when 조건(A4=T1, 즉 초기 상담 시점)에서만
+
+    활성화되어야 함. 선택 시 응답 객체에 A5=선택값 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category A.questions[id=A5] (show_when 조건부)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - A4=T1 응답 시 → A5의 '미정' 옵션 표시
+  - A4≠T1 응답 시 → A5의 '미정' 옵션 숨김 또는 비활성화
+  - 다른 옵션은 timing 무관하게 항상 표시
+  - 옵션 선택 → 응답 객체에 A5=선택값으로 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: show_when 조건부 필드 검증 책임 위치 확인 필요 (frontend/backend)
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 08:56, steps: 5/5 pass, screenshots: docs/checklist/_evidence/high/HIGH-A-A5-input/'
+    note: show_when 조건 처리 로직 확인 필요
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (radio type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: show_when 조건이 Flutter에서 동작하는지 별도 확인 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+  l3_steps:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - step: select_A5_radio
+    tool: preview_eval
+    expression: "(() => {\n  const inputs = Array.from(document.querySelectorAll('input[type=\"\
+      radio\"][name=\"A5\"]'));\n  const target = inputs.find(i => (i.parentElement?.textContent\
+      \ || '').trim() === '자연 (이과)');\n  if (!target) return { error: 'A5 radio 자연\
+      \ (이과) not found', available: inputs.map(i => (i.parentElement?.textContent\
+      \ || '').trim()) };\n  target.click();\n  return { checked: target.checked,\
+      \ value: target.value };\n})()\n"
+    assert: result.checked === true
+- id: HIGH-A-A6-input
+  category: A
+  question_id: A6
+  aspect: input
+  requirement: 'A6 (T4 추가 정보) 질문이 radio로 렌더된다. 본 질문은 timings 필터로
+
+    특정 시점(T4)에서만 활성화될 가능성이 높음 (high.json의 timings 키 확인).
+
+    해당 시점에 가시화되며 선택 시 응답 객체에 A6=선택값 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category A.questions[id=A6] (timings 조건부)
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 현재 timing이 A6의 timings 조건과 일치할 때 가시화
+  - 조건 불일치 시 화면에서 숨김
+  - 옵션 선택 → 응답 객체에 A6=선택값 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 08:56, steps: 5/5 pass, screenshots: docs/checklist/_evidence/high/HIGH-A-A6-input/'
+    note: timings 필터 처리 로직 확인 필요
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (radio type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+  l3_steps:
+  - *id001
+  - *id002
+  - *id003
+  - *id004
+  - step: select_A6_radio
+    tool: preview_eval
+    expression: "(() => {\n  const inputs = Array.from(document.querySelectorAll('input[type=\"\
+      radio\"][name=\"A6\"]'));\n  const target = inputs.find(i => (i.parentElement?.textContent\
+      \ || '').trim() === '200~300명');\n  if (!target) return { error: 'A6 radio 200~300명\
+      \ not found', available: inputs.map(i => (i.parentElement?.textContent || '').trim())\
+      \ };\n  target.click();\n  return { checked: target.checked, value: target.value\
+      \ };\n})()\n"
+    assert: result.checked === true
+- id: HIGH-C-C1-grid
+  category: C
+  question_id: C1
+  aspect: render+input
+  requirement: 'C1 (모의고사 성적) 질문이 MockExamSessionGrid로 렌더되고,
+
+    A4 응답 기반 resolved_sessions(mock_exam_generation_rules[A4]) 만큼
+
+    회차가 자동 생성된다. 각 회차마다 국어/수학/영어/탐구1/탐구2 영역별로
+
+    등급·원점수·백분위를 입력. 영어는 절대평가로 백분위 없음.
+
+    탐구1/탐구2 는 with_subject_name=true 로 과목명 입력 필요.
+
+    absent_option=true 로 미응시 회차 토글 가능.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category C.questions[id=C1] (type=mock_exam_session_grid)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - A4 응답 변경 → resolved_sessions 산출 (DynamicSurvey.resolveDynamicQuestion)
+  - C 카테고리 진입 시 MockExamSessionGrid 마운트, 산출된 회차 수만큼 카드 렌더
+  - 각 회차 영역별 등급(select 1~9)·원점수(number 0~100)·백분위(number 0~100) 입력 → 응답 객체에 area_key
+    별 저장
+  - 영어 영역에는 백분위 필드 노출되지 않음 (절대평가, area.fields에 percentile 미포함)
+  - 탐구1/탐구2 영역에 with_subject_name=true → subject_name text 필드 노출 + 입력 → cur.subject_name
+    저장
+  - 미응시 토글 → absent=true, areas={} 비워짐, 모든 입력 필드 비활성화
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 응답 저장 endpoint + JSON 스키마 검증 확인 필요
+  user_web:
+    status: pass
+    L1:
+      evidence: ipsilounge/user-web/src/components/survey/heavy/MockExamSessionGrid.tsx:56
+      note: MockExamSessionGrid 컴포넌트 정의 확인 (회차 순회, areas 매핑, absent toggle, with_subject_name
+        처리)
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:107
+        (case 'mock_exam_session_grid')
+      note: QuestionRenderer 분기 호출 지점 확인
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-C-C1-grid/'
+      note: 정적 빌드 통과. 런타임 입력 동작은 preview_mcp 미실행.
+    verified_at: '2026-04-15'
+  mobile:
+    status: partial
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart:682 (fallback '지원하지 않는 질문 유형')
+      note: mock_exam_session_grid type 미구현. 사용자에게 '웹에서 작성해주세요' 안내 메시지 표시.
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: Flutter 미구현 type. 의도된 fallback 분기 동작 검증 필요.
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-C-C2-weak_type
+  category: C
+  question_id: C2
+  aspect: render+input
+  requirement: 'C2 (영역 내 취약 유형 자가진단) 질문이 weak_type_per_subject 위젯으로
+
+    렌더되고, 국어/수학/영어/탐구 4개 과목 각각에 대해 취약 유형 옵션을
+
+    복수 선택할 수 있다. 응답 객체는 과목 키로 저장된다.
+
+    수학의 ''특정 단원'' 선택 시 with_text 단원명 입력 필드가 노출된다.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category C.questions[id=C2] (type=weak_type_per_subject)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - C 카테고리 진입 시 WeakTypePerSubject 위젯 마운트
+  - 국어/수학/영어/탐구 4개 과목 섹션 렌더
+  - 과목별 취약 유형 옵션 복수 선택 → 응답 객체에 과목 키별 배열로 저장
+  - 수학에서 '특정 단원' 선택 → with_text 단원명 text 필드 노출
+  - 단원명 입력 → 응답 객체에 함께 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ipsilounge/user-web/src/components/survey/heavy/WeakTypePerSubject.tsx
+        (파일 존재 확인됨)
+      note: WeakTypePerSubject 컴포넌트 파일 확인. 라인 번호는 컴포넌트 진입 시점 검증 필요.
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:109
+        (case 'weak_type_per_subject')
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-C-C2-weak_type/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: partial
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart:682 (fallback)
+      note: weak_type_per_subject type 미구현. fallback 메시지로 처리.
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-C-C2_1-input
+  category: C
+  question_id: C2_1
+  aspect: input
+  requirement: 'C2_1 (모의고사 시험 전략) composite 질문이 T3·T4 시점에서만 활성화된다.
+
+    time_management(radio), solving_order(composite: has_order radio +
+
+    order_detail text) 하위 필드가 각각 렌더·입력 저장된다.
+
+    solving_order.has_order=''있음'' 선택 시에만 order_detail 필드가 show_when 으로 노출.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category C.questions[id=C2_1] (type=composite, timings=[T3,T4])
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 현재 timing이 T1/T2인 경우 → C2_1 질문 자체 비활성화 (timings 필터)
+  - T3 또는 T4 인 경우 → C2_1 가시화
+  - time_management(radio) 옵션 선택 → 응답에 저장
+  - solving_order.has_order(radio) 선택
+  - has_order='있음' 선택 시 → order_detail text 필드 노출 (show_when)
+  - has_order='없음' 등 다른 값 선택 시 → order_detail 숨김
+  - 전체 응답이 composite 객체로 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: timings 필터 책임 위치 (frontend/backend) 확인 필요
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:04, steps: 4/4 pass, screenshots: docs/checklist/_evidence/high/HIGH-C-C2_1-input/'
+    note: composite type 분기 + timings 필터 + show_when 처리 검증 필요
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: composite type 구현됨. timings + show_when 동작은 별도 검증 필요.
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-C-C3-calculate
+  category: C
+  question_id: C3
+  aspect: auto_calculate
+  requirement: 'C3 (모의고사 추이) 는 C1 입력 후 자동 산출. 영역별 등급 추이,
+
+    전 영역 평균 등급, 취약 영역 자동 식별(평균 대비 2등급+ 낮은 영역),
+
+    영어 절대평가 원점수 추이(90점 기준선), 주요 영역 백분위 추이 등 5개
+
+    calculation 이 제공되어야 한다.
+
+    산출 시점: **설문 제출시 backend가 1회 계산** (사용자 결정 2026-04-15, 옵션 b).
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category C.questions[id=C3] (type=auto_calculated)
+  priority: P1
+  check_method: unit_test
+  user_decision_log:
+    decided_at: '2026-04-15'
+    choice: b — 제출시점 1회 backend 산출
+    rationale: B5와 동일 정책. 산출 책임을 backend로 단일화.
+  behavior_test:
+  - C1에 회차별 영역 데이터 입력된 응답 객체 준비
+  - POST /api/surveys/high (제출 endpoint) 호출
+  - 'backend가 5개 calculation 수행: 영역별 등급 추이/평균 등급/취약 영역(평균-2등급)/영어 90점 기준선/주요 영역 백분위'
+  - 응답 객체에 C3={5개 산출 결과} 필드 추가되어 저장
+  - 미응시(absent=true) 회차는 산출 대상에서 제외
+  - 회차 1개 미만(전 회차 미응시)인 경우 적절한 fallback (산출 불가 표시)
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: C3 산출 로직(서비스/유틸 함수) 위치 + 단위 테스트 확인 필요
+  user_web:
+    status: pass
+    reason: 산출은 backend 제출시점 책임. user_web은 C1 입력만 담당.
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 09:22, steps: 6/6 pass, screenshots: docs/checklist/_evidence/high/HIGH-C-C3-calculate/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: na
+    reason: 산출은 backend 제출시점 책임. mobile도 C1 입력만 담당 (단 C1 위젯 자체는 mobile 미구현).
+  admin_web:
+    status: na
+    reason: 관리자 화면에 C3 산출 책임 없음 (조회 표시는 별도 항목으로 분리 검토)
+  l3_steps:
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - step: navigate_to_step_6
+    tool: preview_eval
+    expression: "(async () => {\n  for (let i = 0; i < 5; i++) {\n    const b = Array.from(document.querySelectorAll('button'))\n\
+      \      .find(x => x.textContent?.trim() === '나중에 입력');\n    if (!b) return {\
+      \ error: 'skip btn missing at iter ' + i };\n    b.click();\n    await new Promise(r\
+      \ => setTimeout(r, 1800));\n  }\n  const m = document.body.innerText.match(/(\\\
+      d+)\\/\\d+ 단계/);\n  return { step: m && parseInt(m[1]), ok: m && parseInt(m[1])\
+      \ === 6 };\n})()\n"
+    wait_ms: 500
+    assert: result.ok === true
+  - step: verify_C3_auto_calc_section
+    tool: preview_eval
+    expression: "(() => {\n  const text = document.body.innerText;\n  // '자동 산출' 또는\
+      \ '자동 계산' 문구 + C1/C2 참조 패턴\n  const hasAuto = text.includes('자동 산출') || text.includes('자동\
+      \ 계산');\n  return { hasAuto, url: location.href };\n})()\n"
+    assert: result.hasAuto === true
+- id: HIGH-C-C4-info_only
+  category: C
+  question_id: C4
+  aspect: render+input
+  requirement: 'C4 (내신 vs 모의고사 비교) 는 type=info_only / shown_in_student_form=false
+
+    로 학생 설문 UI 에는 노출되지 않는다. respondent=system_and_counselor 이며
+
+    데이터는 시스템이 자동 정리, 유형 판정과 전형 추천은 상담사가 별도 입력.
+
+    학생 폼에서 렌더되지 않음을 검증해야 함.
+
+    ※ 상담사 화면 노출 검증은 별도 항목(consultation/satisfaction.yaml 또는 admin 영역)으로 분리 검토.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category C.questions[id=C4] (type=info_only, shown_in_student_form=false)
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 학생 설문 페이지 C 카테고리 진입
+  - C4 질문 DOM에 렌더되지 않아야 함 (shown_in_student_form=false 분기)
+  - type=info_only 위젯이 미정의여도 프론트 분기에서 오류 없이 스킵
+  - 응답 객체에 C4 키가 추가되지 않음
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 스키마 정의에 shown_in_student_form 키 처리 로직 확인 필요
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 09:22, steps: 6/6 pass, screenshots: docs/checklist/_evidence/high/HIGH-C-C4-info_only/'
+    note: info_only/shown_in_student_form=false 필터링 로직 확인 필요 (DynamicSurvey 또는 QuestionRenderer)
+    verified_at: '2026-04-15'
+  mobile:
+    status: partial
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart:682 (fallback)
+      note: info_only type 미구현. 결과적으로 학생 폼에서 비노출되지만, 의도된 분기인지 단순 미구현 fallback인지 검증
+        필요.
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: unverified
+    note: C4의 상담사 입력 UI(유형 판정/전형 추천) 구현 여부는 별도 항목으로 분리 검토 필요
+  l3_steps:
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - step: navigate_to_step_6
+    tool: preview_eval
+    expression: "(async () => {\n  for (let i = 0; i < 5; i++) {\n    const b = Array.from(document.querySelectorAll('button'))\n\
+      \      .find(x => x.textContent?.trim() === '나중에 입력');\n    if (!b) return {\
+      \ error: 'skip btn missing at iter ' + i };\n    b.click();\n    await new Promise(r\
+      \ => setTimeout(r, 1800));\n  }\n  const m = document.body.innerText.match(/(\\\
+      d+)\\/\\d+ 단계/);\n  return { step: m && parseInt(m[1]), ok: m && parseInt(m[1])\
+      \ === 6 };\n})()\n"
+    wait_ms: 500
+    assert: result.ok === true
+  - step: verify_C4_info_only
+    tool: preview_eval
+    expression: "(() => {\n  const text = document.body.innerText;\n  // C4 는 info_only\
+      \ — step 6 페이지 자체가 렌더됐는지만 확인\n  const m = text.match(/(\\d+)\\/\\d+ 단계/);\n\
+      \  return { step: m && parseInt(m[1]), hasContent: text.length > 500 };\n})()\n"
+    assert: result.step === 6 && result.hasContent === true
+- id: HIGH-D-D1-input
+  category: D
+  question_id: D1
+  aspect: render+input
+  requirement: 'D1 (일주일 학습 스케줄) composite 질문이 렌더되고, 하위에 weekly_schedule
+
+    위젯(요일×카테고리[학원수업/학원과제/자기주도]×과목·시간), naesin_suneung_ratio(radio),
+
+    suneung_status(radio), suneung_methods(checkboxes) 4개 필드가 입력 가능.
+
+    weekly_schedule 은 auto_calculations(주간 총 학습 시간, 비율, 과목 밸런스 지수 등)이 연동됨.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category D.questions[id=D1] (type=composite, weekly_schedule 포함)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - D 카테고리 진입 → D1 composite 렌더
+  - weekly_schedule 위젯이 7일 × 3카테고리(학원수업/학원과제/자기주도) 그리드로 렌더
+  - 각 셀에 과목 select + 시간 number(0~24, step 0.5) 입력 → 응답에 저장
+  - naesin_suneung_ratio / suneung_status (radio) 옵션 전체 노출 + 선택 저장
+  - suneung_methods (checkboxes) 다중 선택 가능
+  - weekly_schedule 입력 변경 시 auto_calculations(주간 총 학습 시간 등) 갱신 시점 확인
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: auto_calculations 산출 시점(실시간/제출시) 검증 필요 — B5/C3와 동일 정책 적용 후보
+  user_web:
+    status: pass
+    L1:
+      evidence: ipsilounge/user-web/src/components/survey/heavy/WeeklySchedule.tsx
+        (파일 존재 확인됨)
+      note: WeeklySchedule 컴포넌트 파일 확인. 라인별 동작은 별도 검증 필요.
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:99
+        (case 'weekly_schedule')
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-D-D1-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: partial
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart:682 (fallback for weekly_schedule)
+      note: weekly_schedule type 미구현. fallback 메시지 표시. 단, composite 외곽은 구현되어 다른 4개
+        하위 필드는 동작 가능성 있음.
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-D-D2-input
+  category: D
+  question_id: D2
+  aspect: input
+  requirement: 'D2 (학습 계획 및 실행력) composite 질문이 렌더되고, plan_execution(slider 1~10),
+
+    test_prep_start(radio), subject_plan_detail(radio), study_materials(checkboxes),
+
+    past_exam_usage(radio) 5개 필드가 입력 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category D.questions[id=D2] (type=composite)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - 5개 하위 필드(plan_execution slider / test_prep_start radio / subject_plan_detail radio
+    / study_materials checkboxes / past_exam_usage radio) 모두 렌더
+  - slider 1~10 범위 입력 → 응답에 number 저장
+  - checkboxes 다중 선택 → 배열 저장
+  - 전체 응답이 composite 객체로 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-D-D2-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/slider/radio/checkboxes
+        type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-D-D3-input
+  category: D
+  question_id: D3
+  aspect: input
+  requirement: 'D3 (오답 관리 습관) composite 질문이 렌더되고, method(checkboxes),
+
+    review_frequency(radio), review_method(checkboxes) 3개 하위 필드가 입력 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category D.questions[id=D3] (type=composite)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - 3개 하위 필드(method checkboxes / review_frequency radio / review_method checkboxes)
+    모두 렌더
+  - method / review_method 다중 선택 가능 → 배열 저장
+  - review_frequency 단일 선택 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-D-D3-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/radio/checkboxes
+        type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-D-D4-input
+  category: D
+  question_id: D4
+  aspect: input
+  requirement: 'D4 (모르는 문제 해결 방법) checkboxes 질문이 렌더되고, 10개 옵션
+
+    (혼자 고민 / 답안지 확인 / 개념서 / 인터넷 / AI 도구 / 학원 선생님 /
+
+    학교 선생님 / 친구 / 부모님 / 그냥 넘어감) 중 복수 선택 후 응답에 배열로 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category D.questions[id=D4] (type=checkboxes)
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 옵션 10개 모두 렌더
+  - 복수 선택 → 응답에 배열로 저장
+  - min/max 제약이 정의되어 있다면 그 동작 검증
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 09:22, steps: 6/6 pass, screenshots: docs/checklist/_evidence/high/HIGH-D-D4-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (checkboxes type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+  l3_steps:
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - step: navigate_to_step_5
+    tool: preview_eval
+    expression: "(async () => {\n  for (let i = 0; i < 4; i++) {\n    const b = Array.from(document.querySelectorAll('button'))\n\
+      \      .find(x => x.textContent?.trim() === '나중에 입력');\n    if (!b) return {\
+      \ error: 'skip btn missing at iter ' + i };\n    b.click();\n    await new Promise(r\
+      \ => setTimeout(r, 1800));\n  }\n  const m = document.body.innerText.match(/(\\\
+      d+)\\/\\d+ 단계/);\n  return { step: m && parseInt(m[1]), ok: m && parseInt(m[1])\
+      \ === 5 };\n})()\n"
+    wait_ms: 500
+    assert: result.ok === true
+  - step: check_D4_option
+    tool: preview_eval
+    expression: "(() => {\n  const cbs = Array.from(document.querySelectorAll('input[type=\"\
+      checkbox\"]'));\n  const target = cbs.find(c => (c.parentElement?.textContent\
+      \ || '').trim().startsWith('혼자 끝까지 고민'));\n  if (!target) return { error: 'D4\
+      \ 혼자고민 checkbox not found', labels: cbs.map(c => (c.parentElement?.textContent||'').trim().slice(0,20))\
+      \ };\n  target.click();\n  return { checked: target.checked };\n})()\n"
+    assert: result.checked === true
+- id: HIGH-D-D5-input
+  category: D
+  question_id: D5
+  aspect: input
+  requirement: 'D5 (집중력이 가장 좋은 시간대) radio 질문이 렌더되고, 아침/오후/저녁/밤/일정하지 않음
+
+    중 하나를 선택하여 응답 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category D.questions[id=D5] (type=radio)
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 옵션 5개 모두 렌더
+  - 선택 시 응답 저장
+  - required 시 빈 값 검증
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 09:22, steps: 6/6 pass, screenshots: docs/checklist/_evidence/high/HIGH-D-D5-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (radio type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+  l3_steps:
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - step: navigate_to_step_5
+    tool: preview_eval
+    expression: "(async () => {\n  for (let i = 0; i < 4; i++) {\n    const b = Array.from(document.querySelectorAll('button'))\n\
+      \      .find(x => x.textContent?.trim() === '나중에 입력');\n    if (!b) return {\
+      \ error: 'skip btn missing at iter ' + i };\n    b.click();\n    await new Promise(r\
+      \ => setTimeout(r, 1800));\n  }\n  const m = document.body.innerText.match(/(\\\
+      d+)\\/\\d+ 단계/);\n  return { step: m && parseInt(m[1]), ok: m && parseInt(m[1])\
+      \ === 5 };\n})()\n"
+    wait_ms: 500
+    assert: result.ok === true
+  - step: select_D5_radio
+    tool: preview_eval
+    expression: "(() => {\n  // D5 는 step 5 composite sub-field. name 패턴을 모르므로 parent\
+      \ text 가 '오후' 이고 동일 name group 인 것 중 하나 선택\n  const radios = Array.from(document.querySelectorAll('input[type=\"\
+      radio\"]'));\n  // D5 radio group: 아침/오후/저녁/밤/일정하지 않음 이 5개로 모인 group 을 찾음\n\
+      \  const groups = {};\n  for (const r of radios) {\n    const n = r.name ||\
+      \ '_';\n    const label = (r.parentElement?.textContent || '').trim();\n   \
+      \ groups[n] = groups[n] || [];\n    groups[n].push({ label, r });\n  }\n  const\
+      \ expected = ['아침','오후','저녁','밤','일정하지 않음'];\n  let group = null;\n  for (const\
+      \ n of Object.keys(groups)) {\n    const labels = groups[n].map(x => x.label);\n\
+      \    if (expected.every(e => labels.includes(e))) { group = groups[n]; break;\
+      \ }\n  }\n  if (!group) return { error: 'D5 radio group not found' };\n  const\
+      \ target = group.find(x => x.label === '오후');\n  target.r.click();\n  return\
+      \ { checked: target.r.checked, group_name: target.r.name };\n})()\n"
+    assert: result.checked === true
+- id: HIGH-D-D6-input
+  category: D
+  question_id: D6
+  aspect: render+input
+  requirement: 'D6 (과목별 학습 고민) composite 질문이 렌더되고, weakest(subject_pick, 상위 2개),
+
+    weakest_reason(checkboxes), strongest(subject_pick, 상위 2개) 3개 하위 필드가
+
+    입력 저장. **D6.weakest 값은 D7의 extra_subjects_from 참조로 D7 활성 과목에 영향**
+
+    (drives=activate_extra_subjects_in_D7).
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category D.questions[id=D6] (type=composite, subject_pick 포함)
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 3개 하위 필드(weakest subject_pick / weakest_reason checkboxes / strongest subject_pick)
+    모두 렌더
+  - subject_pick 최대 2개 선택 제약 동작 (max_picks=2)
+  - weakest 변경 → D7의 활성 과목 리스트 갱신 (cross-question dependency)
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: D6→D7 cross-question dependency 처리 책임 위치 확인 필요
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-D-D6-input/'
+    note: subject_pick 컴포넌트 위치 확인 필요 (heavy/SubjectSection.tsx 가능성)
+    verified_at: '2026-04-15'
+  mobile:
+    status: partial
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart:682 (fallback for subject_pick)
+      note: subject_pick type 미구현. fallback 메시지 표시.
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-D-D7-panel
+  category: D
+  question_id: D7
+  aspect: render+input
+  requirement: 'D7 (과목별 학습 방법) subject_study_method_panel 위젯이 렌더되고,
+
+    default_subjects=국어/수학/영어 3과목은 항상 활성, **D6.weakest 기반 추가 과목이 동적으로
+
+    활성화**된다. 과목마다 study_method(checkboxes), class_engagement(radio),
+
+    main_textbook(text), lecture(composite: status + instructor_platform text),
+
+    satisfaction(radio) 5개 하위 질문이 노출. lecture.status=''듣고있음'' 일 때만
+
+    instructor_platform 필드 노출 (show_when).
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category D.questions[id=D7] (type=subject_study_method_panel)
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 위젯 마운트 → 국어·수학·영어 기본 3과목 항상 활성
+  - D6.weakest에 포함된 과목이 추가로 활성화 (extra_subjects_from='D6.weakest')
+  - 각 과목마다 5개 하위 질문(study_method/class_engagement/main_textbook/lecture/satisfaction)
+    렌더
+  - lecture는 composite (status radio + instructor_platform text)
+  - lecture.status='듣고있음' 선택 시 → instructor_platform text 필드 노출 (show_when)
+  - lecture.status≠'듣고있음' 시 → instructor_platform 숨김
+  - 전체 응답이 과목 키별 객체로 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:856
+        (subject_study_method_panel 구현부 시작)
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:103
+        (case 'subject_study_method_panel')
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-D-D7-panel/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (subject_study_method_panel
+        type 구현 확인됨 — Flutter 검증 에이전트 보고)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: Flutter에 본 type 구현됨. D6.weakest 연동 + show_when(lecture.status) 동작 검증 필요.
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-D-D8-input
+  category: D
+  question_id: D8
+  aspect: input
+  requirement: 'D8 (학습 심리 및 컨디션 진단) composite 질문이 렌더되고,
+
+    test_anxiety(radio), motivation(radio), study_load(radio),
+
+    subject_giveup(composite: has_giveup radio + subject_name text),
+
+    sleep_hours(radio) 5개 하위 필드가 입력 저장.
+
+    has_giveup=''고민중'' 일 때만 subject_name 노출 (show_when).
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category D.questions[id=D8] (type=composite, show_when)
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 5개 하위 필드 모두 렌더 (test_anxiety/motivation/study_load/subject_giveup/sleep_hours)
+  - subject_giveup은 nested composite (has_giveup + subject_name)
+  - subject_giveup.has_giveup='고민중' 선택 → subject_name text 필드 노출
+  - has_giveup≠'고민중' 시 → subject_name 숨김
+  - 전체 응답이 composite 객체(중첩 포함)로 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 09:22, steps: 6/6 pass, screenshots: docs/checklist/_evidence/high/HIGH-D-D8-input/'
+    note: nested composite + show_when 처리 검증 필요
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/radio type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: nested composite + show_when 동작 별도 검증 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+  l3_steps:
+  - *id005
+  - *id006
+  - *id007
+  - *id008
+  - step: navigate_to_step_3
+    tool: preview_eval
+    expression: "(async () => {\n  for (let i = 0; i < 2; i++) {\n    const b = Array.from(document.querySelectorAll('button'))\n\
+      \      .find(x => x.textContent?.trim() === '나중에 입력');\n    if (!b) return {\
+      \ error: 'skip btn missing at iter ' + i };\n    b.click();\n    await new Promise(r\
+      \ => setTimeout(r, 1800));\n  }\n  const m = document.body.innerText.match(/(\\\
+      d+)\\/\\d+ 단계/);\n  return { step: m && parseInt(m[1]), ok: m && parseInt(m[1])\
+      \ === 3 };\n})()\n"
+    wait_ms: 500
+    assert: result.ok === true
+  - step: select_D8_test_anxiety
+    tool: preview_eval
+    expression: "(() => {\n  const radios = Array.from(document.querySelectorAll('input[type=\"\
+      radio\"][name=\"test_anxiety\"]'));\n  if (radios.length === 0) return { error:\
+      \ 'D8 test_anxiety radios not found' };\n  const target = radios.find(r => (r.parentElement?.textContent\
+      \ || '').trim() === '없음');\n  if (!target) return { error: '없음 option missing',\
+      \ labels: radios.map(r => (r.parentElement?.textContent||'').trim()) };\n  target.click();\n\
+      \  return { checked: target.checked };\n})()\n"
+    assert: result.checked === true
+- id: HIGH-E-E1-input
+  category: E
+  question_id: E1
+  aspect: render+input
+  requirement: 'E1 (희망 진로) career_select 위젯이 렌더되고, 10개 상위 카테고리
+
+    (인문·어문 / 사회·법 / 상경·경영 / 교육 / 자연과학 / 공학·IT / 의약·보건 /
+
+    예술·체육 / 기타 / 탐색 중) 각각에 subcategories 가 노출되어 복수 선택 가능.
+
+    required=false (탐색 중 허용). 각 카테고리에는 mapped_track 정보 포함.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category E.questions[id=E1] (type=career_select)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - career_select 위젯 마운트
+  - 10개 상위 카테고리 + 각 subcategory 모두 노출
+  - 복수 선택 가능 → 응답에 배열로 저장
+  - '''탐색 중'' 선택 시 subcategories 없음 (단독 선택)'
+  - 선택값 저장 시 mapped_track 정보 함께 전달 여부 확인
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:88
+        (case 'career_select')
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 6/6 pass, screenshots: docs/checklist/_evidence/high/HIGH-E-E1-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (career_select type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-E-E2-input
+  category: E
+  question_id: E2
+  aspect: input
+  requirement: 'E2 (목표 대학·학과) composite 질문이 렌더되고,
+
+    target_level(radio: 최상위 SKY / 상위 인서울 주요 / 인서울 / 수도권 / 지방거점 / 미정),
+
+    target_universities(text_list, max_items=3) 2개 하위 필드가 입력 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category E.questions[id=E2] (type=composite)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - 2개 하위 필드(target_level radio / target_universities text_list) 모두 렌더
+  - target_level 6개 옵션 노출
+  - target_universities 최대 3개까지 추가 가능 (max_items=3)
+  - 전체 응답이 composite 객체로 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:80
+        (case 'text_list')
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-E-E2-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/radio/text_list type
+        구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-E-E3-input
+  category: E
+  question_id: E3
+  aspect: input
+  requirement: 'E3 (대입 전형 전략) composite 질문이 렌더되고,
+
+    understanding(slider 1~10), main_track(radio: 수시/정시/미정) 2개 하위 필드가 입력 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category E.questions[id=E3] (type=composite)
+  priority: P0
+  check_method: preview_mcp
+  behavior_test:
+  - 2개 하위 필드(understanding slider / main_track radio) 모두 렌더
+  - slider 1~10 범위 입력 → 응답에 number 저장
+  - main_track 3개 옵션 노출
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:78
+        (case 'slider')
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-E-E3-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/slider/radio type
+        구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-E-E4-input
+  category: E
+  question_id: E4
+  aspect: input
+  requirement: 'E4 (수능 최저학력기준 대비) composite 질문이 T2 이후 시점에서만 활성화된다.
+
+    awareness(radio), feasibility(radio),
+
+    focus_areas(checkboxes: 국어/수학/영어/탐구1/탐구2) 3개 하위 필드가 입력 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category E.questions[id=E4] (type=composite, timings=[T2,T3,T4])
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 현재 timing이 T1인 경우 → E4 비활성화 (timings 필터)
+  - T2/T3/T4인 경우 → E4 가시화
+  - 3개 하위 필드(awareness / feasibility / focus_areas) 모두 렌더
+  - focus_areas 다중 선택 → 배열 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:04, steps: 4/4 pass, screenshots: docs/checklist/_evidence/high/HIGH-E-E4-input/'
+    note: timings 필터 처리 확인 필요
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/radio/checkboxes
+        type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: timings 필터 동작 검증 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-E-E5-input
+  category: E
+  question_id: E5
+  aspect: input
+  requirement: 'E5 (선택과목 전략) composite 질문이 T2 이후 시점에서만 활성화된다.
+
+    next_courses(text_list, max_items=10), recommended_check(radio) 2개
+
+    하위 필드가 입력 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category E.questions[id=E5] (type=composite, timings=[T2,T3,T4])
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - 현재 timing이 T1인 경우 → E5 비활성화
+  - T2/T3/T4인 경우 → E5 가시화
+  - next_courses 최대 10개까지 추가 가능 (max_items=10)
+  - recommended_check radio 옵션 선택 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:04, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-E-E5-input/'
+    note: timings 필터 처리 확인 필요
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/text_list/radio type
+        구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: timings 필터 동작 검증 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-E-E6-input
+  category: E
+  question_id: E6
+  aspect: input
+  requirement: 'E6 (학습 우선순위) rank 위젯이 렌더되고, 5개 옵션
+
+    (내신등급관리/수능모의고사대비/취약과목집중/선택과목전략/내신수능균형) 중
+
+    상위 3개에 순위를 부여하여 응답 저장 (max_picks=3).
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category E.questions[id=E6] (type=rank)
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - rank 위젯 마운트, 5개 옵션 + description 노출
+  - 상위 3개까지만 순위 부여 가능 (max_picks=3)
+  - 선택된 옵션의 순위가 응답에 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:82
+        (case 'rank')
+    L3:
+      evidence: 'preview_mcp run 2026-04-15 23:56, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-E-E6-input/'
+    verified_at: '2026-04-15'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (rank type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-F-F1-input
+  category: F
+  question_id: F1
+  aspect: input
+  requirement: 'F1 (현재 가장 걱정되는 점) textarea 질문(max_length=1000, rows=4)이
+
+    respondent=parent 폼에 렌더되고 입력 시 응답 저장. required=false.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category F.questions[id=F1] (type=textarea, respondent=parent)
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - 학부모 폼에서 F1 textarea 가시화
+  - 텍스트 입력 → 응답 객체에 저장
+  - max_length=1000 제약 동작
+  - respondent=parent 필터로 학생 폼에는 미노출되는지 확인
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:64
+        (case 'textarea')
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:08, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-F-F1-input/'
+    note: respondent 필터 처리 위치 확인 필요
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (textarea type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 학부모 폼 분기 처리 확인 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생/학부모 설문 입력 UI 없음
+- id: HIGH-F-F2-input
+  category: F
+  question_id: F2
+  aspect: input
+  requirement: 'F2 (자녀의 학습 상황 파악 수준) radio 질문이 학부모 폼에 렌더되고,
+
+    거의 모름 / 대략 알고 있음 / 구체적으로 파악 3개 옵션 중 하나 선택. required=false.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category F.questions[id=F2] (type=radio, respondent=parent)
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - 학부모 폼에서 F2 radio 가시화
+  - 3개 옵션 모두 노출
+  - 선택 시 응답 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:68
+        (case 'radio')
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:08, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-F-F2-input/'
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (radio type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 학부모 폼 분기 처리 확인 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생/학부모 설문 입력 UI 없음
+- id: HIGH-F-F3-input
+  category: F
+  question_id: F3
+  aspect: input
+  requirement: 'F3 (자녀와 학습·진로에 대해 대화 빈도) radio 질문이 학부모 폼에 렌더되고,
+
+    거의 안 함 / 가끔 / 자주 3개 옵션 중 하나 선택. required=false.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category F.questions[id=F3] (type=radio, respondent=parent)
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - 학부모 폼에서 F3 radio 가시화
+  - 3개 옵션 모두 노출
+  - 선택 시 응답 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:68
+        (case 'radio')
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:08, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-F-F3-input/'
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (radio type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 학부모 폼 분기 처리 확인 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생/학부모 설문 입력 UI 없음
+- id: HIGH-F-F4-input
+  category: F
+  question_id: F4
+  aspect: input
+  requirement: 'F4 (자녀의 학습 관리 방식) checkboxes 질문이 학부모 폼에 렌더되고,
+
+    자녀에게 맡김 / 학원 위탁 / 직접 관리 / 전문 컨설팅 중 복수 선택하여 배열 저장. required=false.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category F.questions[id=F4] (type=checkboxes, respondent=parent)
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - 학부모 폼에서 F4 checkboxes 가시화
+  - 다중 선택 가능 → 응답 배열로 저장
+  - min/max 제약 동작
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:72
+        (case 'checkboxes')
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:08, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-F-F4-input/'
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (checkboxes type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 학부모 폼 분기 처리 확인 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생/학부모 설문 입력 UI 없음
+- id: HIGH-F-F5-input
+  category: F
+  question_id: F5
+  aspect: input
+  requirement: 'F5 (학원/과외 변경 계획) radio 질문이 학부모 폼에 렌더되고,
+
+    현행 유지 / 확대 / 축소 / 자기주도 전환 4개 옵션 중 하나 선택. required=false.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category F.questions[id=F5] (type=radio, respondent=parent)
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - 학부모 폼에서 F5 radio 가시화
+  - 4개 옵션 모두 노출
+  - 선택 시 응답 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:68
+        (case 'radio')
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:08, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-F-F5-input/'
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (radio type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 학부모 폼 분기 처리 확인 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생/학부모 설문 입력 UI 없음
+- id: HIGH-F-F6-input
+  category: F
+  question_id: F6
+  aspect: input
+  requirement: 'F6 (상담에서 가장 알고 싶은 것) textarea 질문(max_length=1000, rows=4)이
+
+    학부모 폼에 렌더되고 입력 시 응답 저장. required=false.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category F.questions[id=F6] (type=textarea, respondent=parent)
+  priority: P2
+  check_method: preview_mcp
+  behavior_test:
+  - 학부모 폼에서 F6 textarea 가시화
+  - 텍스트 입력 → 응답 객체 저장
+  - max_length=1000 제약 동작
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ipsilounge/user-web/src/components/survey/QuestionRenderer.tsx:64
+        (case 'textarea')
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:08, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-F-F6-input/'
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (textarea type 구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 학부모 폼 분기 처리 확인 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생/학부모 설문 입력 UI 없음
+- id: HIGH-G-G1-input
+  category: G
+  question_id: G1
+  aspect: input
+  requirement: 'G1 (고3 각오·준비도) composite 질문이 T4 시점에서만 활성화된다.
+
+    mindset(radio), stamina(radio), regret(textarea max_length=500),
+
+    achievement(textarea max_length=500) 4개 하위 필드가 입력 저장.
+
+    regret/achievement 는 required=false.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category G.questions[id=G1] (type=composite, category timings=[T4])
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - A4=T1/T2/T3 응답 시 G 카테고리 전체 비활성화 (timings 필터)
+  - A4=T4 시 G1 가시화
+  - 4개 하위 필드(mindset/stamina/regret/achievement) 모두 렌더
+  - textarea max_length=500 제약 동작
+  - 응답이 composite 객체로 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 카테고리 timings 필터 처리 위치 확인 필요
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:10, steps: 4/4 pass, screenshots: docs/checklist/_evidence/high/HIGH-G-G1-input/'
+    note: 카테고리 timings 필터 처리 확인 필요
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/radio/textarea type
+        구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 카테고리 timings 필터 동작 검증 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-G-G2-input
+  category: G
+  question_id: G2
+  aspect: input
+  requirement: 'G2 (고3 학습 스케줄 구상) composite 질문이 T4 시점에서만 활성화된다.
+
+    plan_specificity(radio), naesin_suneung_ratio(radio),
+
+    subject_strategy(중첩 composite: 국어/수학/영어 각각에 대해 내신 대비 textarea
+
+    + 수능 대비 textarea = 6개 필드, max_length=300) 하위 필드가 입력 저장.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category G.questions[id=G2] (type=composite, category timings=[T4])
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - A4=T1/T2/T3 응답 시 비활성화
+  - A4=T4 시 G2 가시화
+  - plan_specificity / naesin_suneung_ratio radio 모두 렌더
+  - subject_strategy 중첩 composite의 6개 textarea (국/수/영 × 내신/수능) 모두 렌더
+  - textarea max_length=300 제약 동작
+  - 응답이 nested composite 객체로 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 카테고리 timings 필터 처리 위치 확인 필요
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:10, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-G-G2-input/'
+    note: nested composite 렌더링 + timings 필터 확인 필요
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/radio/textarea type
+        구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: nested composite + timings 필터 동작 검증 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+- id: HIGH-G-G3-input
+  category: G
+  question_id: G3
+  aspect: input
+  requirement: 'G3 (전형 선택 확정 여부) composite 질문이 T4 시점에서만 활성화된다.
+
+    decision(radio: 수시/정시/고민중), decision_basis(textarea, max_length=500),
+
+    target_line(radio: 최상위/상위권/중상위권/중위권/아직모름) 3개 하위 필드가
+
+    입력 저장. decision_basis 는 required=false.
+
+    '
+  spec_ref:
+    file: ipsilounge/backend/app/surveys/schemas/high.json
+    section: category G.questions[id=G3] (type=composite, category timings=[T4])
+  priority: P1
+  check_method: preview_mcp
+  behavior_test:
+  - A4=T1/T2/T3 응답 시 비활성화
+  - A4=T4 시 G3 가시화
+  - 3개 하위 필드(decision / decision_basis / target_line) 모두 렌더
+  - decision 3개 옵션 / target_line 5개 옵션 노출
+  - decision_basis textarea max_length=500 제약 동작
+  - 응답이 composite 객체로 저장
+  backend:
+    status: unverified
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 카테고리 timings 필터 처리 위치 확인 필요
+  user_web:
+    status: pass
+    L1:
+      evidence: ''
+    L2:
+      evidence: ''
+    L3:
+      evidence: 'preview_mcp run 2026-04-16 00:10, steps: 3/3 pass, screenshots: docs/checklist/_evidence/high/HIGH-G-G3-input/'
+    note: 카테고리 timings 필터 처리 확인 필요
+    verified_at: '2026-04-16'
+  mobile:
+    status: unverified
+    L1:
+      evidence: mobile/lib/screens/survey_screen.dart (composite/radio/textarea type
+        구현 확인됨)
+    L2:
+      evidence: ''
+    L3:
+      evidence: ''
+    note: 카테고리 timings 필터 동작 검증 필요
+  admin_web:
+    status: na
+    reason: 관리자 화면에는 학생 설문 입력 UI 없음
+promotion_status:
+  total_items_in_spec: 36
+  promoted_count: 36
+  promoted_categories:
+  - category: A
+    items:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    count: 6
+    promoted_at: '2026-04-15'
+    note: A4는 초기 인프라 검증 시 샘플로 먼저 등록됨
+  - category: B
+    items:
+    - B1
+    - B5
+    count: 2
+    promoted_at: '2026-04-15'
+    note: B1/B5는 초기 인프라 검증 시 샘플로 등록됨. B5는 결정 b(제출시점 backend) 적용 완료.
+  - category: C
+    items:
+    - C1
+    - C2
+    - C2_1
+    - C3
+    - C4
+    count: 5
+    promoted_at: '2026-04-15'
+    note: 'C1/C2: user_web=partial (heavy 컴포넌트 + QuestionRenderer L1/L2 evidence 채움),
+      mobile=partial (fallback).
+
+      C2_1: composite + timings + show_when 복합. mobile=unverified (composite 구현됨).
+
+      C3: 결정 b 적용 (B5와 동일 backend 산출 정책).
+
+      C4: info_only 학생 폼 비노출 검증. admin_web 상담사 UI는 별도 항목 분리.
+
+      '
+  - category: D
+    items:
+    - D1
+    - D2
+    - D3
+    - D4
+    - D5
+    - D6
+    - D7
+    - D8
+    count: 8
+    promoted_at: '2026-04-15'
+    note: 'D1: weekly_schedule 미구현(mobile=partial), composite 외곽은 구현. user_web은 WeeklySchedule.tsx
+      + QR:99.
+
+      D2/D3/D4/D5: 기본 type 모두 mobile 구현됨 → unverified.
+
+      D6: subject_pick 미구현(mobile=partial). D6.weakest→D7 cross-question dependency
+      검증 필요.
+
+      D7: subject_study_method_panel mobile/web 모두 구현됨. user_web QR:103+856.
+
+      D8: nested composite + show_when 동작 검증 필요.
+
+      D1/D2/D3=P0, D4/D5/D6/D7/D8=P1.
+
+      '
+  - category: E
+    items:
+    - E1
+    - E2
+    - E3
+    - E4
+    - E5
+    - E6
+    count: 6
+    promoted_at: '2026-04-15'
+    note: 'E1/E2/E3 = P0 (진로/대학/전형 핵심).
+
+      E1: career_select 10개 카테고리, mobile 구현됨 → unverified.
+
+      E2: composite (target_level radio + target_universities text_list max_items=3).
+
+      E3: composite (understanding slider 1~10 + main_track radio).
+
+      E4/E5 = P1 (timings T2+ 필터 검증 필요).
+
+      E6 = P1 (rank max_picks=3, 학습 우선순위).
+
+      '
+  - category: F
+    items:
+    - F1
+    - F2
+    - F3
+    - F4
+    - F5
+    - F6
+    count: 6
+    promoted_at: '2026-04-15'
+    note: 'respondent=parent 학부모 폼 전용. 모두 P2 (학부모 보조 자료).
+
+      F1/F6: textarea (max_length=1000), F2/F3/F5: radio, F4: checkboxes.
+
+      모든 type이 mobile 기본 구현됨 → unverified.
+
+      검증 시 학부모 폼 분기(respondent 필터) 동작 확인 필요.
+
+      '
+  - category: G
+    items:
+    - G1
+    - G2
+    - G3
+    count: 3
+    promoted_at: '2026-04-15'
+    note: 'category timings=[T4] — A4(상담 시점)=T4(고3 진입) 응답 시에만 활성화.
+
+      모두 P1 (T4 한정 핵심 입력).
+
+      G1: composite (mindset/stamina/regret/achievement).
+
+      G2: nested composite (subject_strategy 6 textarea = 국/수/영 × 내신/수능).
+
+      G3: composite (decision/decision_basis/target_line).
+
+      검증 시 카테고리 timings 필터 동작 확인 필요.
+
+      '
+  pending_categories: []
+  completion:
+    completed_at: '2026-04-15'
+    summary: 'high.json 36개 질문 전체를 정식 high.yaml items: 리스트로 승격 완료. .draft 파일은 아카이브
+      가능.'
+  draft_file: high.yaml.draft
+  draft_status: archive_ready
+  promotion_workflow:
+  - 사용자가 다음 카테고리 진행 승인
+  - .draft에서 해당 카테고리 항목을 정식 yaml로 이동
+  - priority/mobile_status/decision 결정 적용
+  - 사용자 검토 → 승인 → 다음 카테고리

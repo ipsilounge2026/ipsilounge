@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.admin import Admin
+from app.models.consultation_note import ConsultationNote
 from app.models.consultation_survey import ConsultationSurvey
 from app.models.senior_consultation_note import SeniorConsultationNote
 from app.models.senior_pre_survey import SeniorPreSurvey
@@ -596,6 +597,21 @@ async def get_counselor_summary_for_senior(
     note_result = await db.execute(note_q)
     prev_note = note_result.scalar_one_or_none()
 
+    # HSGAP-P2-senior-counselor-context-share-ui:
+    # 상담사가 작성한 최신 ConsultationNote.next_senior_context 로드 (공개 설정된 것만)
+    counselor_note_q = (
+        select(ConsultationNote)
+        .where(
+            ConsultationNote.user_id == uid,
+            ConsultationNote.is_visible_to_user == True,  # noqa: E712 — 학생에게 공개된 기록만
+        )
+        .order_by(ConsultationNote.consultation_date.desc())
+        .limit(1)
+    )
+    counselor_note = (
+        await db.execute(counselor_note_q)
+    ).scalar_one_or_none()
+
     return {
         "user_id": user_id,
         "survey_type": survey.survey_type,
@@ -603,6 +619,13 @@ async def get_counselor_summary_for_senior(
         "abstracted_summary": abstracted,
         "prev_senior_context": prev_note.context_for_next if prev_note else None,
         "prev_senior_session": prev_note.session_timing if prev_note else None,
+        "counselor_next_senior_context": (
+            getattr(counselor_note, "next_senior_context", None) if counselor_note else None
+        ),
+        "counselor_note_date": (
+            counselor_note.consultation_date.isoformat() if counselor_note else None
+        ),
+        "counselor_note_category": counselor_note.category if counselor_note else None,
     }
 
 

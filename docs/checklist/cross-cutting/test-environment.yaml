@@ -1,0 +1,310 @@
+# ===================================================================
+# 검증 환경(Test Environment) 체크리스트
+# ===================================================================
+# 영역: cross-cutting / TEST_ENV
+# spec: ipsilounge/docs/test-environment-spec.md
+#
+# 의의: 이 4개 항목이 모두 ✅ pass 가 되어야 다른 모든 영역의 L3 검증이
+#       의미 있는 수준으로 진행 가능. "검증할 수 있는 능력"을 검증한다.
+# ===================================================================
+
+meta:
+  area: TEST_ENV
+  schema_version: "1.0.0"
+  spec_doc: "ipsilounge/docs/test-environment-spec.md"
+  spec_doc_version: "1.0.0"
+  created_at: "2026-04-15"
+  rationale: |
+    L3(런타임) 검증이 매 세션마다 인프라 셋업으로 막히는 문제를 영구적으로 해결한다.
+    이 4개 자산이 갖춰지면 어떤 영역의 L3 검증도 5분 내 시작 가능.
+  blocks_l3_verification_for:
+    - "survey/high.yaml"
+    - "survey/pre-high.yaml"
+    - "survey/senior.yaml"
+    - "consultation/booking.yaml"
+    - "consultation/satisfaction.yaml"
+    - "cross-cutting/auth.yaml"
+
+# ─── 항목 목록 ──────────────────────────────────────────────────────
+items:
+
+  # ============================================================
+  # 자산 1 — DEV_MODE 환경 변수 분기 (SQLite + 자동 테이블 생성)
+  # ============================================================
+
+  - id: TEST-ENV-DEV-MODE-bridge
+    category: DEV_MODE
+    aspect: env_branch
+    requirement: |
+      backend가 DEV_MODE=true 환경 변수 설정 시 다음을 자동 분기:
+      (1) DB engine을 sqlite+aiosqlite로 전환
+      (2) 기동 시 Base.metadata.create_all() 자동 실행
+      (3) JSONB 컬럼이 SQLite JSON으로 fallback (with_variant 패턴)
+      (4) /api/dev/* 라우터 마운트
+      (5) DEV_MODE 미설정 시 운영 코드와 100% 동일 동작
+    spec_ref:
+      file: "ipsilounge/docs/test-environment-spec.md"
+      section: "§2 자산 1 — Dev 모드 SQLite 분기"
+    priority: P0
+    check_method: build
+    behavior_test:
+      - "DEV_MODE 미설정 상태에서 backend 기동 → PostgreSQL 시도 (운영 동작)"
+      - "DEV_MODE=true 설정 → SQLite 파일 생성 (./dev.db) 확인"
+      - "기동 로그에 'DEV_MODE active, using SQLite' 류 메시지 출력"
+      - "create_all 결과로 모든 모델 테이블이 SQLite에 생성됨 (sqlite> .tables 로 확인)"
+      - "JSONB 컬럼(예: ConsultationSurvey.answers)이 정상 INSERT/SELECT 가능"
+      - "/api/dev/health 엔드포인트가 200 응답 (DEV_MODE 노출 확인)"
+    backend:
+      status: pass
+      verified_at: "2026-04-15"
+      L1:
+        evidence: "app/config.py(DEV_MODE+effective_database_url), app/database.py(@compiles JSONB/UUID→sqlite), app/main.py(migration 가드), requirements.txt(aiosqlite==0.20.0)"
+        note: "모델 코드 무변경. SQLAlchemy @compiles dialect dispatch 로 JSONB→JSON, UUID→VARCHAR(36) 자동 분기"
+      L2:
+        evidence: "DEV_MODE 미설정 시 effective_database_url=postgresql+asyncpg... (운영 동작 100% 보존). DEV_MODE=true 시 sqlite+aiosqlite:///./dev.db 로 전환 + ALTER TABLE 마이그레이션 자동 skip"
+        note: "production 경로 회귀 없음 확인 — Test 1 통과"
+      L3:
+        evidence: "DEV_MODE=true 기동 → SQLite 28개 테이블 create_all 성공 → ConsultationSurvey.answers={'A':{'A4':'T2','A1':'예시'},'B':{}} dict insert/select 라운드트립 통과(한글 포함). 로그: 'DEV_MODE active — using SQLite at ./dev.db. JSONB→JSON, UUID→VARCHAR(36) auto-applied'"
+        note: "Test 2/3 통과 (2026-04-15). 검증 환경: Windows + Python 3.14 + SQLAlchemy 2.0.49 + aiosqlite 0.22.1"
+    user_web:
+      status: na
+      reason: "DEV_MODE는 backend 전용 분기. 프론트는 NEXT_PUBLIC_API_URL만 동일하게 사용"
+    mobile:
+      status: na
+      reason: "DEV_MODE는 backend 전용"
+    admin_web:
+      status: na
+      reason: "DEV_MODE는 backend 전용"
+
+  # ============================================================
+  # 자산 2 — 시드 스크립트 (테스트 사용자 7명 + 설문 인스턴스 4개)
+  # ============================================================
+
+  - id: TEST-ENV-SEED-script
+    category: SEED
+    aspect: data_setup
+    requirement: |
+      backend/scripts/seed_l3_test_data.py 는 다음을 멱등적으로 수행:
+      (1) DEV_MODE=true 일 때만 동작 (안전 가드)
+      (2) --reset 플래그 시 dev.db 삭제 후 재생성
+      (3) 테스트 사용자 7명 생성 (학생 4 + 학부모 1 + 관리자 1 + 상담사 1)
+      (4) FamilyLink: parent_a ↔ student_t2 연결
+      (5) ConsultationSurvey 인스턴스 4개 생성 (학생당 1개, timing=학생 시점)
+      (6) 각 설문에 A4 사전 응답 주입 (timings 필터 동작 검증용)
+      (7) 결과 JSON을 stdout 출력 (harness 입력으로 사용)
+    spec_ref:
+      file: "ipsilounge/docs/test-environment-spec.md"
+      section: "§3 자산 2 — 시드 스크립트"
+    priority: P0
+    check_method: unit_test
+    behavior_test:
+      - "DEV_MODE 미설정 시 즉시 종료 + 안내 메시지"
+      - "DEV_MODE=true + --reset → dev.db 삭제됨"
+      - "스크립트 실행 후 users 테이블에 7개 행 존재"
+      - "admins 테이블에 admin_a, counselor_a 2개 행 존재"
+      - "family_links 테이블에 parent_a-student_t2 행 존재 (status=active)"
+      - "consultation_surveys 테이블에 4개 행 (학생당 1개)"
+      - "각 학생 설문의 answers['A']['A4'] 가 학생의 timing 값과 일치"
+      - "stdout 출력이 유효한 JSON (jq . 통과)"
+      - "재실행(--reset 없이) 시 중복 생성 없음 (idempotent)"
+    backend:
+      status: pass
+      verified_at: "2026-04-15"
+      L1:
+        evidence: "backend/scripts/seed_l3_test_data.py (argparse + asyncio.run + main 진입점). DEV_MODE 가드는 import 전에 실행"
+        note: "PYTHONPATH 자체 주입(_BACKEND_ROOT)으로 단독 실행 가능"
+      L2:
+        evidence: "User/Admin/FamilyLink/ConsultationSurvey 모델 import + async_session 사용 + select() 멱등 체크 패턴"
+        note: "5개 STUDENT_DEFS / 2개 ADMIN_DEFS / 1개 PARENT_DEF / 1개 family link / 4개 설문 시드"
+      L3:
+        evidence: |
+          Test 1 (DEV_MODE 미설정): exit code 2 + 안내 메시지 출력 ✓
+          Test 2 (--reset): exit 0, JSON output {users:5, admins:2, surveys:4, family_link:1}
+            - student_t1.A4=T1 / t2.A4=T2 / t3.A4=T3 / t4.A4=T4 (학생 시점과 정확 일치)
+          Test 3 (멱등 재실행): 동일 ID 반환 (중복 생성 없음)
+          Test 4 (sqlite 직접 SELECT): users=5, admins=2, family_links=1, consultation_surveys=4
+        note: "2026-04-15 검증 완료. dev.db 위치: backend/dev.db"
+    user_web:
+      status: na
+      reason: "시드는 backend 전용 스크립트"
+    mobile:
+      status: na
+      reason: "시드는 backend 전용 스크립트"
+    admin_web:
+      status: na
+      reason: "시드는 backend 전용 스크립트"
+
+  # ============================================================
+  # 자산 3 — Dev 전용 인증 우회 (POST /api/dev/login-as/{identifier})
+  # ============================================================
+
+  - id: TEST-ENV-DEV-LOGIN-bypass
+    category: DEV_MODE
+    aspect: auth_bypass
+    requirement: |
+      app/routers/dev_routes.py 신설 + DEV_MODE=true 일 때만 마운트:
+      (1) POST /api/dev/login-as/{identifier} 엔드포인트
+      (2) 인증 불필요 (DEV_MODE 자체가 게이트)
+      (3) 시드된 사용자 식별자(student_t1 등)로 정상 JWT 발급
+      (4) 응답 형식이 운영 /api/auth/login 과 100% 동일
+      (5) 모든 응답에 X-Dev-Mode: true 헤더 추가
+      (6) DEV_MODE 미설정 시 라우터 자체가 마운트되지 않아 404
+      (7) 라우터 내부에서도 settings.DEV_MODE 한 번 더 체크 (이중 가드)
+    spec_ref:
+      file: "ipsilounge/docs/test-environment-spec.md"
+      section: "§4 자산 3 — Dev 전용 인증 우회"
+    priority: P0
+    check_method: manual
+    behavior_test:
+      - "DEV_MODE 미설정 + curl POST /api/dev/login-as/student_t1 → 404"
+      - "DEV_MODE=true + curl POST /api/dev/login-as/student_t1 → 200"
+      - "응답 본문에 access_token + refresh_token + user_info 존재"
+      - "응답 헤더에 X-Dev-Mode: true 존재"
+      - "발급된 access_token으로 GET /api/users/me 호출 시 정상 응답 (정상 JWT 검증)"
+      - "존재하지 않는 식별자(예: student_t99) → 404 + 에러 메시지"
+      - "상담사(counselor_a)로 호출 → admin role JWT 발급 (member_type 정확히 분기)"
+      - "/api/dev/health 엔드포인트도 활성화 (DEV_MODE 활성 신호)"
+    backend:
+      status: pass
+      verified_at: "2026-04-15"
+      L1:
+        evidence: "app/routers/dev_routes.py — APIRouter(prefix='/api/dev'), GET /health + POST /login-as/{identifier}, _enforce_dev_mode 이중 가드, _identifier_to_email_candidates 헬퍼"
+        note: "TokenResponse 응답은 운영 /api/auth/login 과 동일 (access_token+refresh_token+token_type='bearer')"
+      L2:
+        evidence: "app/main.py: 'if settings.DEV_MODE: from app.routers import dev_routes; app.include_router(dev_routes.router)' + WARNING 로그"
+        note: "운영(DEV_MODE 미설정)에서는 dev_routes 자체가 import 되지 않음"
+      L3:
+        evidence: |
+          ASGI 인프로세스 검증 (httpx ASGITransport, 2026-04-15):
+          - [2-1] GET /api/dev/health → 200 + X-Dev-Mode:true
+          - [2-2] POST /api/dev/login-as/student_t1 → 200, JWT claims {role:user, member_type:student, type:access}
+          - [2-3] POST /api/dev/login-as/counselor_a → 200, role:admin
+          - [2-4] POST /api/dev/login-as/parent_a → 200, member_type:parent
+          - [2-5] POST /api/dev/login-as/student_t99 (존재하지 않음) → 404
+          - [2-6] POST /api/dev/login-as/admin_a → 200, role:admin
+          이중 가드 검증: DEV_MODE 미설정 + 라우터 강제 마운트 시 모든 엔드포인트 → 404
+        note: "발급된 JWT 는 decode_token 으로 sub/role/member_type/type 클레임 모두 검증 통과"
+    user_web:
+      status: na
+      reason: "dev 우회 로그인은 backend 전용 엔드포인트. 프론트는 발급된 JWT를 정상 사용"
+    mobile:
+      status: na
+      reason: "dev 우회는 backend 전용"
+    admin_web:
+      status: na
+      reason: "dev 우회는 backend 전용"
+
+  # ============================================================
+  # 자산 4 — L3 검증 Harness (docs/checklist/_runners/l3_high.py)
+  # ============================================================
+
+  - id: TEST-ENV-L3-HARNESS-runner
+    category: HARNESS
+    aspect: verification_runner
+    requirement: |
+      docs/checklist/_runners/l3_high.py 는 다음을 수행:
+      (1) backend(8000) + user-web(3000) health check
+      (2) DEV_MODE 활성 여부 확인 (/api/dev/health)
+      (3) survey/high.yaml 의 items: 리스트 로드
+      (4) 각 항목의 behavior_test 단계를 preview_mcp 호출로 실행
+      (5) 단계별 screenshot 저장 (_evidence/high/{item_id}/{step_n}.png)
+      (6) 각 항목의 user_web.L3.evidence 자동 갱신
+      (7) 실패 항목은 status: fail + note 갱신
+      (8) 전체 실행 결과를 _runs/high_{timestamp}.json 으로 저장
+      (9) 콘솔에 요약 출력 (pass/fail/skipped 카운트)
+      (10) 재실행 안전 (evidence 덮어쓰기)
+    spec_ref:
+      file: "ipsilounge/docs/test-environment-spec.md"
+      section: "§5 자산 4 — L3 검증 Harness"
+    priority: P0
+    check_method: unit_test
+    behavior_test:
+      - "사전 점검: backend/user-web 미가동 시 명확한 에러 출력 + 종료"
+      - "사전 점검: DEV_MODE 비활성 시 명확한 안내 + 종료"
+      - "high.yaml items 로드 시 36개 항목 인식"
+      - "각 항목의 behavior_test 단계가 preview_mcp 4단계(navigate/fill/click/assert) 중 하나로 매핑됨"
+      - "1개 항목 시범 실행 → screenshot 파일 생성됨 (_evidence/high/{item_id}/)"
+      - "해당 항목의 yaml에 evidence 필드 자동 갱신됨 (timestamp 포함)"
+      - "_runs/high_{timestamp}.json 결과 파일 생성"
+      - "콘솔 요약 출력에 pass/fail 카운트 정확히 표시"
+      - "동일 항목 재실행 시 evidence 덮어쓰기 (중복 누적 안 됨)"
+      - "behavior_test에 l3_steps 메타데이터가 없는 항목은 skip + 안내"
+    backend:
+      status: na
+      reason: "harness는 외부 클라이언트(별도 Python 프로세스). backend 코드 변경 없음"
+    user_web:
+      status: pass
+      verified_at: "2026-04-15"
+      L1:
+        evidence: "docs/checklist/_runners/l3_high.py — argparse 진입점 + 5개 서브커맨드(preflight/plan/apply/summary/run). PyYAML + httpx 의존"
+        note: "_REPO_ROOT/_CHECKLIST_DIR/_RUNS_DIR/_EVIDENCE_DIR 경로 자동 계산"
+      L2:
+        evidence: "preflight: GET /health + /api/dev/health + user-web GET / 로 사전 점검. plan: high.yaml items 순회 → l3_steps 메타가 있으면 status=ready, 없으면 status=unmapped 로 분류 후 _runs/high_<ts>.plan.json 저장. apply: result.json 의 step_results 를 읽어 user_web.L3.evidence + status(pass/fail) + verified_at 자동 갱신"
+        note: "preview_mcp 직접 호출 대신 plan/result 분리 패턴 — Claude 세션이 plan을 읽어 preview_mcp 실행 후 result.json 작성, 그 다음 apply 가 yaml 갱신"
+      L3:
+        evidence: |
+          Test 1 (plan 생성): exit 0, _runs/high_20260415T075832Z.plan.json 작성됨
+            summary={total:36, ready:0, unmapped:36} — l3_steps 메타가 high.yaml 에 아직 없어 모두 unmapped
+          Test 2 (apply 라운드트립): 합성 result.json (HIGH-A-A4-input, step_results 3/3 pass) 으로 apply --result 실행
+            → high.yaml 의 HIGH-A-A4-input 항목에 user_web.status=pass, user_web.L3.evidence='...' 정확히 기록됨
+            → 검증 후 백업본으로 high.yaml 원복
+          Test 3 (preflight): backend 미가동 상태 시 명확한 에러 메시지 + exit 1 (기능 정상)
+          Test 4 (end-to-end 1건 실제 preview_mcp 실행, 2026-04-15 08:46): HIGH-A-A1-input 에 l3_steps 메타 추가 후 plan → ready:1/unmapped:35 확인.
+            Claude 세션이 preview_mcp 로 5단계(dev_login → inject_token_and_navigate → select_timing_T1 → click_start_survey → fill_A1_and_verify) 모두 pass 시나리오 실행.
+            result.json 작성 후 apply --result 실행 → high.yaml HIGH-A-A1-input.user_web.status=pass, L3.evidence='preview_mcp run 2026-04-15 08:46, steps: 5/5 pass, screenshots: docs/checklist/_evidence/high/HIGH-A-A1-input/' 정확히 기록됨.
+            서버 상태: backend(DEV_MODE=true, task bl8r3g3ol) + user-web(serverId 38a4189b-f9c8-451e-9057-1301ffe0170f, port 3000, clean .next).
+        note: "harness 구조 + end-to-end 1건 모두 통과. 나머지 35개 항목 l3_steps 메타 작성은 별도 작업(Phase 5-계속)."
+    mobile:
+      status: na
+      reason: "이 harness는 web 전용. mobile은 별도 harness (Flutter driver) — 후속 과제"
+    admin_web:
+      status: na
+      reason: "이 harness는 high.yaml 전용. admin_web 영역은 별도 harness — 후속 과제"
+
+# ─── 검증 진행 상황 ─────────────────────────────────────────────────
+verification_status:
+  total_items: 4
+  unverified: 0
+  pass: 4
+  partial: 0
+  fail: 0
+  last_updated: "2026-04-15"
+  na_per_system_summary: |
+    - backend: 3개 항목 검증 대상 (TEST-ENV-DEV-MODE-bridge / TEST-ENV-SEED-script / TEST-ENV-DEV-LOGIN-bypass) — 모두 pass
+    - user_web: 1개 항목 검증 대상 (TEST-ENV-L3-HARNESS-runner) — pass (end-to-end 1건 실제 preview_mcp 실행 통과)
+    - mobile/admin_web: 모두 NA (이 영역의 자산은 web 인프라 전용)
+
+  completed:
+    - "Phase 3-1 (2026-04-15): TEST-ENV-DEV-MODE-bridge → backend.status=pass (SQLite 28테이블 + JSONB 한글 라운드트립)"
+    - "Phase 3-2 (2026-04-15): TEST-ENV-SEED-script → backend.status=pass (5학생+2관리자+1FamilyLink+4설문 멱등 시드)"
+    - "Phase 3-3 (2026-04-15): TEST-ENV-DEV-LOGIN-bypass → backend.status=pass (ASGI 6케이스 통과 + 이중 가드 검증)"
+    - "Phase 3-4 (2026-04-15): TEST-ENV-L3-HARNESS-runner → user_web.status=partial (plan/apply 라운드트립 통과, end-to-end 대기)"
+    - "Phase 5   (2026-04-15): TEST-ENV-L3-HARNESS-runner → user_web.status=pass 승격. HIGH-A-A1-input 에 l3_steps 5단계 추가 후 실제 preview_mcp 로 dev_login→token 주입→navigate→T1 클릭→설문 시작→A1 입력 모두 통과. l3_high.py apply 로 high.yaml evidence 자동 갱신 검증 완료."
+
+  next_steps:
+    - "(후속 작업) high.yaml 나머지 35개 items 에 l3_steps 메타 추가 — HIGH-A-A1-input 패턴을 템플릿 삼아 점진 확장"
+    - "(후속 작업) pre-high.yaml / senior.yaml / consultation 체크리스트들도 동일한 l3_steps 메타 규격 적용"
+    - "(후속 작업) l3_high.py 에 preview_mcp 직접 실행 executor 추가 검토 (현재는 Claude 세션 경유) — 단, MCP 도구 보안 경계 고려 필요"
+
+# ─── 운영 메모 ──────────────────────────────────────────────────────
+operational_notes:
+  blocking_dependencies: |
+    이 4개 항목이 모두 ✅ pass 되기 전까지 다음 체크리스트의 L3 evidence 수집은
+    "pending TEST-ENV completion" 상태로 보류:
+    - survey/high.yaml (36 items 모두)
+    - survey/pre-high.yaml (예정)
+    - survey/senior.yaml (예정)
+    - consultation/booking.yaml (예정)
+    - consultation/satisfaction.yaml (예정)
+
+  why_priority_p0_all: |
+    4개 항목 모두 P0 인 이유:
+    이 4개가 동작하지 않으면 다른 모든 P0 항목의 L3 검증이 막힌다.
+    즉, 이 영역은 "모든 P0의 P0".
+
+  rollback_safety: |
+    이 인프라 전체가 운영 코드에 영향을 주지 않는 안전 장치:
+    - DEV_MODE 환경 변수 미설정 시 100% 운영 동작
+    - dev_routes.py 자체가 마운트되지 않음
+    - SQLite dev.db 는 .gitignore 처리
+    - seed 스크립트는 DEV_MODE 가드로 운영 DB 보호

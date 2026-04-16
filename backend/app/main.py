@@ -107,6 +107,14 @@ app.include_router(satisfaction_survey.router)
 app.include_router(senior_pre_survey.router)
 app.include_router(universities.router)
 
+# DEV_MODE 전용 라우터 (운영에서는 마운트되지 않음)
+# spec: ipsilounge/docs/test-environment-spec.md §4
+if settings.DEV_MODE:
+    from app.routers import dev_routes  # noqa: E402
+
+    app.include_router(dev_routes.router)
+    logger.warning("DEV_MODE: /api/dev/* router mounted (login-as, health). DO NOT use in production.")
+
 
 @app.on_event("startup")
 async def startup():
@@ -231,7 +239,23 @@ async def startup():
                     connection.execute(text("ALTER TABLE consultation_bookings ADD COLUMN cancel_reason TEXT"))
                     logger.info("consultation_bookings 테이블에 cancel_reason 컬럼 추가 완료")
 
-        await conn.run_sync(_check_and_migrate)
+            # HSGAP-P2-senior-counselor-context-share-ui: 상담사→선배 인수인계용 요약 필드
+            if inspector.has_table("consultation_notes"):
+                note_columns = [c["name"] for c in inspector.get_columns("consultation_notes")]
+                if "next_senior_context" not in note_columns:
+                    connection.execute(text(
+                        "ALTER TABLE consultation_notes ADD COLUMN next_senior_context TEXT"
+                    ))
+                    logger.info("consultation_notes 테이블에 next_senior_context 컬럼 추가 완료")
+
+        # DEV_MODE(SQLite) 에서는 매번 create_all 로 최신 스키마가 보장되므로
+        # PostgreSQL 전용 ALTER TABLE 마이그레이션을 건너뛴다.
+        # (운영 PostgreSQL 에서는 종전과 동일하게 마이그레이션 수행)
+        # spec: ipsilounge/docs/test-environment-spec.md §2-1
+        if settings.DEV_MODE:
+            logger.info("DEV_MODE: skipping PostgreSQL ALTER TABLE migrations (create_all is sufficient)")
+        else:
+            await conn.run_sync(_check_and_migrate)
 
     logger.info("DB 테이블 초기화 완료")
 

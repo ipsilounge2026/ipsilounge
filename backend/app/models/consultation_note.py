@@ -59,6 +59,9 @@ class ConsultationNote(Base):
     advice_given = Column(Text, nullable=True)   # 제공한 조언
     next_steps = Column(Text, nullable=True)     # 다음 실행 계획
     next_topic = Column(Text, nullable=True)     # 다음 상담 예정 주제
+    # HSGAP-P2-senior-counselor-context-share-ui: 다음 선배 상담사에게 전달할 요약 맥락
+    # (민감정보는 제외한 핵심 포인트, 선배 상담사 "담당 학생 요약" 페이지에 노출)
+    next_senior_context = Column(Text, nullable=True)
 
     # 카테고리별 주제 기록 (JSONB) — 카테고리+학년+시점에 따라 구조가 달라짐
     # 예: {"topic_1": "...", "topic_2": "...", ...}
