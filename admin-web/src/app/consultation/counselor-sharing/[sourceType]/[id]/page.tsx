@@ -15,6 +15,7 @@ import Sidebar from "@/components/Sidebar";
 import {
   getCounselorSharingDetail,
   updateCounselorSharingReview,
+  previewCounselorSharing,
 } from "@/lib/api";
 import { isLoggedIn, getAdminInfo } from "@/lib/auth";
 
@@ -136,6 +137,10 @@ export default function CounselorSharingDetailPage() {
   const [sharing, setSharing] = useState<Record<string, boolean>>({});
   const [reviewNotes, setReviewNotes] = useState("");
 
+  // P2-③: 실시간 미리보기 (토글 변경 시 debounce 로 백엔드 preview API 호출)
+  const [livePreview, setLivePreview] = useState<Record<string, unknown> | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
   const sharingLabels = useMemo(
     () => (sourceType === "survey" ? SURVEY_SHARING_LABELS : NOTE_SHARING_LABELS),
     [sourceType],
@@ -176,12 +181,38 @@ export default function CounselorSharingDetailPage() {
         ...(data.senior_sharing_settings || {}),
       });
       setReviewNotes(data.senior_review_notes || "");
+      // 초기 preview: 서버 사이드 렌더 결과를 시작점으로 사용 (이후 토글 변경 시 갱신)
+      setLivePreview(data.preview_for_senior || {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "불러오기 실패");
     } finally {
       setLoading(false);
     }
   };
+
+  // P2-③: sharing 변경 시 300ms debounce 로 백엔드 preview 호출해 실시간 반영
+  useEffect(() => {
+    if (!detail) return;
+    const timer = setTimeout(async () => {
+      setPreviewLoading(true);
+      try {
+        const { preview_for_senior } = await previewCounselorSharing(
+          sourceType,
+          id,
+          sharing,
+        );
+        setLivePreview(preview_for_senior);
+      } catch (e) {
+        // 실패 시 기존 미리보기 유지 (사용자에게는 조용히 실패)
+        console.error("[counselor-sharing] preview refresh failed", e);
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+    // detail 자체(객체)의 변동은 의미없고 sharing/sourceType/id 만 의존
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharing, sourceType, id]);
 
   const toggleSharing = (key: string) => {
     setSharing((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -279,6 +310,36 @@ export default function CounselorSharingDetailPage() {
 
   const answers = (detail.answers || {}) as Record<string, unknown>;
 
+  // P2-③: survey answers 에 BLOCKED 카테고리(D8/F/G) 가 실제 포함되었는지 판정
+  // — 포함 시 더 강한 붉은색 경고, 미포함 시 회색 안내로 구분
+  const blockedCatsFound: string[] = (() => {
+    if (sourceType !== "survey") return [];
+    const found: string[] = [];
+    const d = answers["D"];
+    if (d && typeof d === "object" && (d as Record<string, unknown>)["D8"]) {
+      found.push("D8");
+    }
+    const f = answers["F"];
+    if (f !== undefined && f !== null && f !== "") {
+      if (typeof f !== "object" || Object.keys(f as Record<string, unknown>).length > 0) {
+        found.push("F");
+      }
+    }
+    const g = answers["G"];
+    if (g !== undefined && g !== null && g !== "") {
+      if (typeof g !== "object" || Object.keys(g as Record<string, unknown>).length > 0) {
+        found.push("G");
+      }
+    }
+    return found;
+  })();
+
+  // 공유 항목 카운트 (True 인 토글 수 / 전체 토글 수)
+  const sharingCountTotal = Object.keys(sharingLabels).length;
+  const sharingCountOn = Object.entries(sharing).filter(
+    ([key, val]) => val && key in sharingLabels,
+  ).length;
+
   return (
     <div className="admin-layout">
       <Sidebar />
@@ -344,22 +405,56 @@ export default function CounselorSharingDetailPage() {
           </div>
         </div>
 
-        {/* D8/F/G 시스템 차단 경고 */}
-        <div
-          style={{
-            padding: 14,
-            background: "#FEF2F2",
-            border: "1px solid #FCA5A5",
-            borderRadius: 8,
-            marginBottom: 16,
-            color: "#991B1B",
-            fontSize: 13,
-            lineHeight: 1.6,
-          }}
-        >
-          ⚠️ 아래 내용에는 D8(심리)/F(학부모)/G(고3) 카테고리가 포함될 수 있습니다. 해당 카테고리는
-          선배에게 시스템적으로 차단되어 절대 공유되지 않습니다.
-        </div>
+        {/* D8/F/G 시스템 차단 경고 — 실제 포함 여부에 따라 강도 차등 */}
+        {blockedCatsFound.length > 0 ? (
+          <div
+            style={{
+              padding: 14,
+              background: "#FEF2F2",
+              border: "1px solid #FCA5A5",
+              borderRadius: 8,
+              marginBottom: 16,
+              color: "#991B1B",
+              fontSize: 13,
+              lineHeight: 1.6,
+            }}
+          >
+            ⚠️ 이 기록에는 <strong>{blockedCatsFound.join(", ")}</strong> 카테고리가 포함되어
+            있습니다. 해당 항목은 관리자 설정과 무관하게 <strong>시스템적으로 차단</strong>되어
+            절대 선배에게 공유되지 않습니다 (V1 §6-1).
+          </div>
+        ) : sourceType === "survey" ? (
+          <div
+            style={{
+              padding: 12,
+              background: "#F3F4F6",
+              border: "1px solid #E5E7EB",
+              borderRadius: 8,
+              marginBottom: 16,
+              color: "#4B5563",
+              fontSize: 12,
+              lineHeight: 1.6,
+            }}
+          >
+            ℹ️ 이 설문에는 D8(심리)/F(학부모)/G(고3) 민감 카테고리가 포함되어 있지 않습니다. 하단 토글은
+            비민감 항목만 제어합니다.
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: 12,
+              background: "#F3F4F6",
+              border: "1px solid #E5E7EB",
+              borderRadius: 8,
+              marginBottom: 16,
+              color: "#4B5563",
+              fontSize: 12,
+              lineHeight: 1.6,
+            }}
+          >
+            ℹ️ 상담 기록 본문의 민감 정보(D8/F/G)는 시스템적으로 차단되어 선배에게 노출되지 않습니다.
+          </div>
+        )}
 
         {/* 2단 레이아웃 */}
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
@@ -481,8 +576,29 @@ export default function CounselorSharingDetailPage() {
           <div>
             <div style={{ ...sectionStyle, position: "sticky", top: 20 }}>
               {/* 공유 토글 */}
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#374151", marginBottom: 12 }}>
-                선배 공유 토글
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#374151" }}>
+                  선배 공유 토글
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: sharingCountOn === 0 ? "#9CA3AF" : "#065F46",
+                    background: sharingCountOn === 0 ? "#F3F4F6" : "#D1FAE5",
+                    padding: "3px 8px",
+                    borderRadius: 4,
+                    fontWeight: 600,
+                  }}
+                >
+                  공유 {sharingCountOn} / {sharingCountTotal}
+                </div>
               </div>
               <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>
                 체크된 항목만 선배가 볼 수 있는 요약에 포함됩니다.
@@ -515,46 +631,69 @@ export default function CounselorSharingDetailPage() {
                   시스템 차단 항목
                 </div>
                 <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>
-                  백엔드에서 강제로 차단됩니다 (변경 불가).
+                  백엔드에서 강제로 차단됩니다 — 관리자도 해제할 수 없습니다 (V1 §6-1).
                 </div>
                 {[
                   { key: "D8", label: "D8 심리·컨디션" },
                   { key: "F", label: "F 학부모 관점" },
                   { key: "G", label: "G 고3 준비" },
-                ].map((s) => (
-                  <div
-                    key={s.key}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "8px 10px",
-                      background: "#F3F4F6",
-                      borderRadius: 6,
-                      marginBottom: 6,
-                      fontSize: 12,
-                      color: "#6B7280",
-                    }}
-                  >
-                    🔒 <span>{s.label} — 시스템 차단 (변경 불가)</span>
-                  </div>
-                ))}
+                ].map((s) => {
+                  const isPresent = blockedCatsFound.includes(s.key);
+                  return (
+                    <div
+                      key={s.key}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "8px 10px",
+                        background: isPresent ? "#FEE2E2" : "#F3F4F6",
+                        borderRadius: 6,
+                        marginBottom: 6,
+                        fontSize: 12,
+                        color: isPresent ? "#991B1B" : "#6B7280",
+                        border: isPresent ? "1px solid #FCA5A5" : "1px solid transparent",
+                      }}
+                    >
+                      🔒{" "}
+                      <span>
+                        {s.label} — 시스템 차단
+                        {isPresent ? " · 본 기록에 포함됨" : " · 관리자도 해제 불가"}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* 선배 미리보기 */}
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: "2px solid #E5E7EB" }}>
                 <div
                   style={{
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: "#1E40AF",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
                     marginBottom: 4,
                   }}
                 >
-                  🎓 선배가 보게 될 요약
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1E40AF" }}>
+                    🎓 선배가 보게 될 요약
+                  </div>
+                  {previewLoading && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "#1E40AF",
+                        background: "#DBEAFE",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                      }}
+                    >
+                      갱신 중…
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 10 }}>
-                  ※ 토글 변경 후 저장하면 미리보기가 갱신됩니다.
+                  ※ 체크박스를 변경하면 실시간으로 미리보기가 갱신됩니다 (저장 불필요).
                 </div>
                 <div
                   style={{
@@ -563,15 +702,16 @@ export default function CounselorSharingDetailPage() {
                     borderRadius: 8,
                     padding: 12,
                     fontSize: 12,
+                    opacity: previewLoading ? 0.6 : 1,
+                    transition: "opacity 0.15s",
                   }}
                 >
-                  {!detail.preview_for_senior ||
-                  Object.keys(detail.preview_for_senior).length === 0 ? (
+                  {!livePreview || Object.keys(livePreview).length === 0 ? (
                     <div style={{ color: "#9CA3AF", fontStyle: "italic" }}>
-                      미리보기가 생성되지 않았습니다.
+                      공유될 항목이 없습니다. 위의 토글을 켜서 선배에게 전달할 내용을 선택하세요.
                     </div>
                   ) : (
-                    Object.entries(detail.preview_for_senior).map(([k, v]) => {
+                    Object.entries(livePreview).map(([k, v]) => {
                       const label = previewLabels[k] || k;
                       return (
                         <div key={k} style={{ marginBottom: 10 }}>

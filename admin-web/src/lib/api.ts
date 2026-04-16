@@ -462,6 +462,19 @@ export async function updateCounselorSharingReview(
   });
 }
 
+// --- 상담사→선배 공유 실시간 미리보기 (연계규칙 V1 §6, P2-③) ---
+// DB write 없이 sharing_settings 기반 preview 만 계산해 반환
+export async function previewCounselorSharing(
+  sourceType: "survey" | "note",
+  id: string,
+  sharingSettings: Record<string, boolean>,
+): Promise<{ preview_for_senior: Record<string, unknown> }> {
+  return request(`/api/admin/counselor-sharing/${sourceType}/${id}/preview`, {
+    method: "POST",
+    body: JSON.stringify({ sharing_settings: sharingSettings }),
+  });
+}
+
 // --- 상담 데이터 열람 감사 로그 (연계규칙 V1 §10-2, super_admin 전용) ---
 export async function getConsultationDataAccessLogs(params?: {
   target_user_id?: string;
