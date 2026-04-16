@@ -73,6 +73,23 @@ class ConsultationNote(Base):
     # 학생 공개 여부
     is_visible_to_user = Column(Boolean, default=False)
 
+    # --- 선배 공유 검토 게이트 (V1 §6) ---
+    # 상담사 상담 기록(ConsultationNote)을 선배에게 공유하기 전 관리자 검토.
+    # 학생 공개(is_visible_to_user)와 무관한 별도 플래그.
+    # D8/F/G 민감 카테고리는 settings와 무관하게 시스템적으로 차단됨.
+    senior_review_status = Column(String(20), default="pending")
+    # "pending" | "reviewed" | "revision_requested"
+    senior_review_notes = Column(Text, nullable=True)
+    # 항목별 공유 설정 (next_senior_context / action_plan_detail 등).
+    # 기본값은 services.senior_sharing_service.DEFAULT_NOTE_SENIOR_SHARING 참조.
+    senior_sharing_settings = Column(JSONB, nullable=True)
+    senior_reviewed_at = Column(DateTime, nullable=True)
+    senior_reviewer_admin_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("admins.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # 추가 기록 (append-only, 수정/삭제 불가)
     addenda = Column(JSONB, nullable=True)
 

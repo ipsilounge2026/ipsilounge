@@ -30,7 +30,12 @@ from app.models.consultation_survey import ConsultationSurvey
 from app.models.senior_consultation_note import SeniorConsultationNote
 from app.models.senior_pre_survey import SeniorPreSurvey
 from app.models.user import User
-from app.services.senior_sharing_service import abstract_consultation_for_senior
+from app.services.consultation_access_log_service import log_consultation_data_access
+from app.services.senior_sharing_service import (
+    DEFAULT_NOTE_SENIOR_SHARING,
+    DEFAULT_SURVEY_SENIOR_SHARING,
+    abstract_consultation_for_senior,
+)
 from app.services.survey_scoring_service import compute_radar_scores
 from app.utils.dependencies import get_current_admin
 
@@ -334,6 +339,18 @@ async def get_reviewed_senior_notes_for_student(
         sharing = note.sharing_settings or DEFAULT_SHARING_SETTINGS
         filtered_notes.append(_apply_sharing_filter(note_dict, sharing))
 
+    # V1 §10-2: 상담사(또는 관리자)가 선배 노트 요약을 열람한 이력 감사 로그
+    await log_consultation_data_access(
+        db,
+        viewer_admin_id=admin.id,
+        viewer_role=admin.role,
+        target_user_id=uid,
+        access_type="counselor_views_senior_notes",
+        source_type="senior_note",
+        source_id=None,
+        meta={"note_count": len(filtered_notes)},
+    )
+
     return {"notes": filtered_notes}
 
 
@@ -591,19 +608,21 @@ async def get_counselor_summary_for_senior(
     """
     선배용 상담사 설문 추상화 요약 조회.
 
-    연계규칙 V1 §3-4:
+    연계규칙 V1 §3-4 / §6:
     - 상담사 설문의 답변을 선배에게 공유할 때 추상화 변환
-    - 관리자 리뷰(reviewed)를 통과한 선배 기록이 있는 학생만 조회 가능
-    - D8, F, G 등 민감정보는 비공유
+    - **관리자 선배 공유 검토(senior_review_status='reviewed')를 통과한 설문만 노출**
+    - 상담사 ConsultationNote 의 next_senior_context 역시 reviewed 이고 토글 허용 시만
+    - D8, F, G 등 민감정보는 시스템적으로 비공유 (senior_sharing_service.BLOCKED_CATEGORIES)
     """
     uid = uuid.UUID(user_id)
 
-    # 학생의 최신 submitted 상담사 설문 조회
+    # 학생의 최신 submitted + senior_review='reviewed' 상담사 설문 조회
     survey_q = (
         select(ConsultationSurvey)
         .where(
             ConsultationSurvey.user_id == uid,
             ConsultationSurvey.status == "submitted",
+            ConsultationSurvey.senior_review_status == "reviewed",
         )
         .order_by(ConsultationSurvey.submitted_at.desc())
         .limit(1)
@@ -612,17 +631,22 @@ async def get_counselor_summary_for_senior(
     survey = survey_result.scalar_one_or_none()
 
     if not survey:
-        raise HTTPException(status_code=404, detail="상담사 설문 데이터가 없습니다")
+        raise HTTPException(
+            status_code=404,
+            detail="선배에게 공유 가능한 상담사 설문이 없습니다 (관리자 검토 미완료)",
+        )
 
     # 레이더 점수 산출
     answers = survey.answers or {}
     radar = compute_radar_scores(answers, survey.timing)
 
-    # 추상화 변환
+    # 추상화 변환 (V1 §6 토글 반영)
+    survey_sharing = survey.senior_sharing_settings or DEFAULT_SURVEY_SENIOR_SHARING
     abstracted = abstract_consultation_for_senior(
         answers=answers,
         radar_scores=radar,
         timing=survey.timing,
+        sharing=survey_sharing,
     )
 
     # 이전 선배 기록의 context_for_next 로드
@@ -638,13 +662,13 @@ async def get_counselor_summary_for_senior(
     note_result = await db.execute(note_q)
     prev_note = note_result.scalar_one_or_none()
 
-    # HSGAP-P2-senior-counselor-context-share-ui:
-    # 상담사가 작성한 최신 ConsultationNote.next_senior_context 로드 (공개 설정된 것만)
+    # V1 §6: 상담사 ConsultationNote — senior_review_status='reviewed' + next_senior_context 토글 ON
+    # (is_visible_to_user 는 학생 공개 플래그이므로 사용하지 않는다)
     counselor_note_q = (
         select(ConsultationNote)
         .where(
             ConsultationNote.user_id == uid,
-            ConsultationNote.is_visible_to_user == True,  # noqa: E712 — 학생에게 공개된 기록만
+            ConsultationNote.senior_review_status == "reviewed",
         )
         .order_by(ConsultationNote.consultation_date.desc())
         .limit(1)
@@ -653,6 +677,37 @@ async def get_counselor_summary_for_senior(
         await db.execute(counselor_note_q)
     ).scalar_one_or_none()
 
+    counselor_next_senior_context: str | None = None
+    counselor_note_date: str | None = None
+    counselor_note_category: str | None = None
+    if counselor_note is not None:
+        note_sharing = counselor_note.senior_sharing_settings or DEFAULT_NOTE_SENIOR_SHARING
+        if note_sharing.get("next_senior_context", True):
+            counselor_next_senior_context = getattr(
+                counselor_note, "next_senior_context", None
+            )
+        counselor_note_date = (
+            counselor_note.consultation_date.isoformat()
+            if counselor_note.consultation_date
+            else None
+        )
+        counselor_note_category = counselor_note.category
+
+    # 감사 로그: 선배(또는 관리자)가 상담사 요약을 열람했음을 기록
+    await log_consultation_data_access(
+        db,
+        viewer_admin_id=admin.id,
+        viewer_role=admin.role,
+        target_user_id=uid,
+        access_type="senior_views_counselor_summary",
+        source_type="survey",
+        source_id=survey.id,
+        meta={
+            "sharing_settings": survey_sharing,
+            "counselor_note_id": str(counselor_note.id) if counselor_note else None,
+        },
+    )
+
     return {
         "user_id": user_id,
         "survey_type": survey.survey_type,
@@ -660,13 +715,9 @@ async def get_counselor_summary_for_senior(
         "abstracted_summary": abstracted,
         "prev_senior_context": prev_note.context_for_next if prev_note else None,
         "prev_senior_session": prev_note.session_timing if prev_note else None,
-        "counselor_next_senior_context": (
-            getattr(counselor_note, "next_senior_context", None) if counselor_note else None
-        ),
-        "counselor_note_date": (
-            counselor_note.consultation_date.isoformat() if counselor_note else None
-        ),
-        "counselor_note_category": counselor_note.category if counselor_note else None,
+        "counselor_next_senior_context": counselor_next_senior_context,
+        "counselor_note_date": counselor_note_date,
+        "counselor_note_category": counselor_note_category,
     }
 
 

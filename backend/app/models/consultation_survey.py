@@ -21,6 +21,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
+# 선배 공유 기본 검토 상태 (V1 §6 상담사 설문 기록 게이트)
+SENIOR_REVIEW_STATUS_PENDING = "pending"
+SENIOR_REVIEW_STATUS_REVIEWED = "reviewed"
+SENIOR_REVIEW_STATUS_REVISION_REQUESTED = "revision_requested"
+
+
 class ConsultationSurvey(Base):
     __tablename__ = "consultation_surveys"
 
@@ -127,6 +133,26 @@ class ConsultationSurvey(Base):
     # 원본 설문에서 보존한 데이터 (예비고1 E영역 등, 비교 상담용)
     # 예: { "preheigh1_E": { ... }, "preheigh1_C": { ... }, "converted_at": "..." }
     preserved_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # --- 선배 공유 검토 게이트 (V1 §6) ---
+    # 상담사 설문 내용을 선배에게 노출하기 전 관리자 검토를 거친다.
+    # D8/F/G 민감 카테고리는 settings와 무관하게 시스템적으로 차단됨.
+    senior_review_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending"
+    )
+    # "pending" | "reviewed" | "revision_requested"
+    senior_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 항목별 공유 설정 (키: academic_tier_label/career_direction/target_school_name/
+    # subject_difficulties/study_methods/roadmap_top_summary/action_plan_detail/
+    # subject_selection/radar_grades). 기본값은 services.senior_sharing_service.
+    # DEFAULT_SURVEY_SENIOR_SHARING 참조.
+    senior_sharing_settings: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    senior_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    senior_reviewer_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("admins.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

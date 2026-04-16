@@ -12,7 +12,9 @@ from app.models.admin import Admin
 from app.utils.rate_limiter import limiter
 from app.routers import (
     admin_analysis,
+    admin_audit_log,
     admin_consultation,
+    admin_counselor_sharing_review,
     admin_dashboard,
     admin_payments,
     admin_users,
@@ -101,6 +103,8 @@ app.include_router(seminar.router)
 app.include_router(admin_seminar.router)
 app.include_router(admin_notice.router)
 app.include_router(admin_senior_consultation.router)
+app.include_router(admin_counselor_sharing_review.router)
+app.include_router(admin_audit_log.router)
 app.include_router(admin_guidebook.router)
 app.include_router(notice.router)
 app.include_router(satisfaction_survey.router)
@@ -123,6 +127,7 @@ async def startup():
     from app.models import (  # noqa: F401
         analysis_order,
         consultation_booking,
+        consultation_data_access_log,
         consultation_slot,
         consultation_survey,
         notification,
@@ -255,6 +260,37 @@ async def startup():
                     "WHERE category LIKE 'T_'"
                 ))
                 logger.info("guidebooks 테이블 category T1~T4 → S1~S4 마이그레이션 완료")
+
+            # 연계규칙 V1 §6: 상담사 측 선배 공유 검토 필드
+            if inspector.has_table("consultation_surveys"):
+                cols = [c["name"] for c in inspector.get_columns("consultation_surveys")]
+                for col, ddl in [
+                    ("senior_review_status", "VARCHAR(20) NOT NULL DEFAULT 'pending'"),
+                    ("senior_review_notes", "TEXT"),
+                    ("senior_sharing_settings", "JSONB"),
+                    ("senior_reviewed_at", "TIMESTAMP"),
+                    ("senior_reviewer_admin_id", "UUID REFERENCES admins(id) ON DELETE SET NULL"),
+                ]:
+                    if col not in cols:
+                        connection.execute(text(
+                            f"ALTER TABLE consultation_surveys ADD COLUMN {col} {ddl}"
+                        ))
+                        logger.info(f"consultation_surveys.{col} 컬럼 추가")
+
+            if inspector.has_table("consultation_notes"):
+                cols = [c["name"] for c in inspector.get_columns("consultation_notes")]
+                for col, ddl in [
+                    ("senior_review_status", "VARCHAR(20) DEFAULT 'pending'"),
+                    ("senior_review_notes", "TEXT"),
+                    ("senior_sharing_settings", "JSONB"),
+                    ("senior_reviewed_at", "TIMESTAMP"),
+                    ("senior_reviewer_admin_id", "UUID REFERENCES admins(id) ON DELETE SET NULL"),
+                ]:
+                    if col not in cols:
+                        connection.execute(text(
+                            f"ALTER TABLE consultation_notes ADD COLUMN {col} {ddl}"
+                        ))
+                        logger.info(f"consultation_notes.{col} 컬럼 추가")
 
         # DEV_MODE(SQLite) 에서는 매번 create_all 로 최신 스키마가 보장되므로
         # PostgreSQL 전용 ALTER TABLE 마이그레이션을 건너뛴다.
