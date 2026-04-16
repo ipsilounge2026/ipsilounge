@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'providers/auth_provider.dart';
 import 'providers/analysis_provider.dart';
@@ -31,8 +33,24 @@ import 'screens/satisfaction_survey_screen.dart';
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
-/// Firebase 사용 가능 여부 (google-services.json 설정 후 true로 변경)
+/// Firebase 사용 가능 여부.
+///
+/// 활성화 순서:
+///   1. Firebase 콘솔에서 Android 앱 등록 (package name: com.ipsilounge.app)
+///   2. google-services.json → android/app/ 배치
+///   3. android/build.gradle: `classpath 'com.google.gms:google-services:4.4.2'`
+///   4. android/app/build.gradle: `apply plugin: 'com.google.gms.google-services'`
+///   5. 본 플래그를 true 로 변경
 const bool kEnableFirebase = false;
+
+/// 백그라운드 메시지 핸들러 (top-level 함수여야 함).
+/// onBackgroundMessage 는 별도 isolate 에서 실행되므로 UI 접근 불가.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // 백그라운드에서 도착한 메시지는 FCM 기본 표시만 사용.
+  // (알림 내용은 message.notification / message.data 로 접근 가능)
+  debugPrint('FCM 백그라운드 메시지 수신: ${message.messageId}');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +58,7 @@ void main() async {
   // Firebase 초기화 (설정된 경우만)
   if (kEnableFirebase) {
     try {
-      final firebaseCore = await _initFirebase();
+      await _initFirebase();
       debugPrint('Firebase 초기화 완료');
     } catch (e) {
       debugPrint('Firebase 초기화 실패: $e');
@@ -69,13 +87,50 @@ void main() async {
   runApp(const IpsiLoungeApp());
 }
 
+/// Firebase Core 초기화 + FCM 핸들러 등록.
+/// kEnableFirebase == true 이면서 google-services.json 이 배치되어 있어야 성공.
 Future<void> _initFirebase() async {
-  // Firebase 초기화는 kEnableFirebase가 true일 때만 호출됨
-  // google-services.json 설정 후 아래 import를 활성화:
-  // import 'package:firebase_core/firebase_core.dart';
-  // import 'package:firebase_messaging/firebase_messaging.dart';
-  // await Firebase.initializeApp();
-  // FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  await Firebase.initializeApp();
+
+  // 알림 권한 요청 (iOS 필수, Android 13+ 필수)
+  final settings = await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  debugPrint('FCM 권한 상태: ${settings.authorizationStatus}');
+
+  // 백그라운드 메시지 핸들러 등록
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // 포그라운드 수신 시 → 로컬 알림으로 표시
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    debugPrint('FCM 포그라운드 메시지 수신: ${message.messageId}');
+    final notification = message.notification;
+    if (notification != null) {
+      flutterLocalNotificationsPlugin.show(
+        notification.hashCode,
+        notification.title,
+        notification.body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'ipsilounge_channel',
+            '입시라운지 알림',
+            channelDescription: '분석 완료 및 상담 예약 알림',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+      );
+    }
+  });
+
+  // 알림 탭으로 앱을 연 경우 (백그라운드 → 포그라운드 전환)
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    debugPrint('FCM 알림 탭하여 앱 오픈: ${message.data}');
+    // 향후 data.type 에 따라 라우팅 처리 가능
+    // (예: type=consultation_confirmed → /consultation/my)
+  });
 }
 
 class IpsiLoungeApp extends StatelessWidget {

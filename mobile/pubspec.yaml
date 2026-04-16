@@ -25,9 +25,13 @@ dependencies:
   path_provider: ^2.1.2
   permission_handler: ^11.3.0
 
-  # FCM 푸시 알림 — google-services.json 설정 후 활성화
-  # firebase_core: ^3.1.0
-  # firebase_messaging: ^15.0.3
+  # FCM 푸시 알림
+  # 코드 경로는 kEnableFirebase 플래그(main.dart)로 가드됨.
+  # 실제 활성화: (1) Firebase 프로젝트 생성 → (2) android/app/google-services.json 배치
+  #           → (3) android/{build.gradle, app/build.gradle}에 google-services 플러그인 적용
+  #           → (4) main.dart의 kEnableFirebase = true 로 변경
+  firebase_core: ^3.1.0
+  firebase_messaging: ^15.0.3
   flutter_local_notifications: ^17.1.2
 
   # 상태 관리

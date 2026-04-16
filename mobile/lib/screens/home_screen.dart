@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../main.dart' show kEnableFirebase;
 import '../providers/auth_provider.dart';
 import '../providers/analysis_provider.dart';
 import '../services/auth_service.dart';
@@ -8,6 +9,10 @@ import 'analysis_list_screen.dart';
 import 'consultation_list_screen.dart';
 import 'mypage_screen.dart';
 import 'seminar_screen.dart';
+
+// Firebase import 는 compile 단계에서만 필요.
+// kEnableFirebase=false 이면 런타임에는 호출되지 않음.
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,11 +31,30 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // FCM은 Firebase 설정 후 활성화
-    // _initFCM();
+    // FCM 토큰 등록 (로그인 상태 + Firebase 활성화 시)
+    _initFCM();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AnalysisProvider>().loadOrders();
     });
+  }
+
+  /// FCM 토큰을 백엔드에 등록.
+  /// 기획서 §7-1: 상담 확정 / 리포트 준비 완료 / 만족도 설문 발송 3개 트리거가 본 토큰으로 발송됨.
+  Future<void> _initFCM() async {
+    if (!kEnableFirebase) return;
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null && token.isNotEmpty) {
+        await AuthService.saveFcmToken(token);
+        debugPrint('FCM 토큰 등록 완료');
+      }
+      // 토큰 갱신 시 자동 재등록
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+        AuthService.saveFcmToken(newToken);
+      });
+    } catch (e) {
+      debugPrint('FCM 토큰 등록 실패: $e');
+    }
   }
 
   @override

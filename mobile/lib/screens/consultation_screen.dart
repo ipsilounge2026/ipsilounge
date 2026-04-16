@@ -3,6 +3,7 @@ import '../models/consultation.dart';
 import '../services/consultation_service.dart';
 import '../widgets/child_selector.dart';
 import 'survey_screen.dart';
+import 'high_survey_timing_screen.dart';
 
 class _ConsultationType {
   final String value;
@@ -581,11 +582,11 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                   width: double.infinity,
                   child: OutlinedButton(
                     onPressed: () async {
+                      // HSGAP-P2-mobile-timing-select-ui: T1~T4 시점 선택 + 추천 배너
                       final result = await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => SurveyScreen(
-                            surveyType: 'high',
+                          builder: (_) => HighSurveyTimingScreen(
                             ownerUserId: _selectedChildId,
                           ),
                         ),
