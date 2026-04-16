@@ -248,6 +248,14 @@ async def startup():
                     ))
                     logger.info("consultation_notes 테이블에 next_senior_context 컬럼 추가 완료")
 
+            # P1-2: guidebook 시점 코드 T1~T4 → S1~S4 통일 (프론트 규격과 일치)
+            if inspector.has_table("guidebooks"):
+                connection.execute(text(
+                    "UPDATE guidebooks SET category = 'S' || SUBSTRING(category FROM 2) "
+                    "WHERE category LIKE 'T_'"
+                ))
+                logger.info("guidebooks 테이블 category T1~T4 → S1~S4 마이그레이션 완료")
+
         # DEV_MODE(SQLite) 에서는 매번 create_all 로 최신 스키마가 보장되므로
         # PostgreSQL 전용 ALTER TABLE 마이그레이션을 건너뛴다.
         # (운영 PostgreSQL 에서는 종전과 동일하게 마이그레이션 수행)

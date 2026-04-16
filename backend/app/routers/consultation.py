@@ -819,3 +819,48 @@ async def create_senior_change_request(
     db.add(req)
     await db.commit()
     return {"message": "선배 변경 요청이 접수되었습니다."}
+
+
+@router.get("/change-senior-request/my")
+async def list_my_senior_change_requests(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """본인이 제출한 선배 변경 요청 이력 조회 (대기/승인/거절 포함)"""
+    result = await db.execute(
+        select(SeniorChangeRequest)
+        .where(SeniorChangeRequest.user_id == user.id)
+        .order_by(SeniorChangeRequest.created_at.desc())
+    )
+    requests = result.scalars().all()
+
+    # 선배 이름 조회를 위한 id 집합
+    senior_ids: set[uuid.UUID] = set()
+    for r in requests:
+        if r.current_senior_id:
+            senior_ids.add(r.current_senior_id)
+        if r.requested_senior_id:
+            senior_ids.add(r.requested_senior_id)
+
+    senior_name_map: dict[uuid.UUID, str] = {}
+    if senior_ids:
+        admin_rows = await db.execute(select(Admin).where(Admin.id.in_(senior_ids)))
+        for a in admin_rows.scalars().all():
+            senior_name_map[a.id] = a.name
+
+    items = []
+    for r in requests:
+        items.append({
+            "id": str(r.id),
+            "current_senior_id": str(r.current_senior_id) if r.current_senior_id else None,
+            "current_senior_name": senior_name_map.get(r.current_senior_id) if r.current_senior_id else None,
+            "requested_senior_id": str(r.requested_senior_id) if r.requested_senior_id else None,
+            "requested_senior_name": senior_name_map.get(r.requested_senior_id) if r.requested_senior_id else None,
+            "reason": r.reason,
+            "status": r.status,
+            "admin_memo": r.admin_memo,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "processed_at": r.processed_at.isoformat() if r.processed_at else None,
+        })
+
+    return {"items": items}

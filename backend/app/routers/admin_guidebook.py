@@ -22,7 +22,7 @@ from app.utils.dependencies import get_current_admin
 
 router = APIRouter(prefix="/api/admin/guidebooks", tags=["가이드북 관리"])
 
-VALID_TIMINGS = ("T1", "T2", "T3", "T4")
+VALID_TIMINGS = ("S1", "S2", "S3", "S4")
 
 
 class BulkSaveItem(BaseModel):
@@ -78,7 +78,7 @@ async def bulk_save_guidebooks(
     if admin.role == "senior":
         raise HTTPException(status_code=403, detail="관리자만 가이드북을 수정할 수 있습니다")
     if data.timing not in VALID_TIMINGS:
-        raise HTTPException(status_code=400, detail=f"유효하지 않은 시점: {data.timing}")
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 시점: {data.timing} (S1~S4)")
 
     for idx, item in enumerate(data.items):
         result = await db.execute(

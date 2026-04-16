@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.admin import Admin
+from app.models.admin import Admin, SeniorStudentAssignment
 from app.models.consultation_note import ConsultationNote
 from app.models.consultation_survey import ConsultationSurvey
 from app.models.senior_consultation_note import SeniorConsultationNote
@@ -117,12 +117,24 @@ async def create_senior_note(
 ):
     """선배 상담 기록 생성 (선배 또는 관리자)"""
     # 학생 존재 확인
-    user_result = await db.execute(select(User).where(User.id == uuid.UUID(data.user_id)))
+    user_uuid = uuid.UUID(data.user_id)
+    user_result = await db.execute(select(User).where(User.id == user_uuid))
     if not user_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="학생을 찾을 수 없습니다")
 
+    # P1-1: 선배 역할이면 담당 학생(SeniorStudentAssignment) 매칭 여부 검증
+    if admin.role == "senior":
+        assign_result = await db.execute(
+            select(SeniorStudentAssignment).where(
+                SeniorStudentAssignment.senior_id == admin.id,
+                SeniorStudentAssignment.user_id == user_uuid,
+            )
+        )
+        if assign_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=403, detail="담당 학생이 아닙니다")
+
     note = SeniorConsultationNote(
-        user_id=uuid.UUID(data.user_id),
+        user_id=user_uuid,
         senior_id=admin.id,
         booking_id=uuid.UUID(data.booking_id) if data.booking_id else None,
         session_number=data.session_number,
@@ -202,6 +214,15 @@ async def get_senior_note(
             .order_by(SeniorConsultationNote.created_at.desc())
             .limit(1)
         )
+        # P1-3: 선배 역할은 is_visible_to_next_senior 플래그 반영 (본인 기록 예외)
+        if admin.role == "senior":
+            from sqlalchemy import or_
+            prev_q = prev_q.where(
+                or_(
+                    SeniorConsultationNote.senior_id == admin.id,
+                    SeniorConsultationNote.is_visible_to_next_senior == True,  # noqa: E712
+                )
+            )
         prev_result = await db.execute(prev_q)
         prev_note = prev_result.scalar_one_or_none()
         if prev_note:
@@ -369,6 +390,17 @@ async def get_prev_checkpoints(
         .order_by(SeniorConsultationNote.created_at.desc())
         .limit(1)
     )
+    # P1-3: 선배 역할이면서 본인이 작성한 기록이 아닌 경우
+    #       is_visible_to_next_senior == False 인 노트는 제외.
+    #       super_admin / admin 은 모든 노트 조회 가능.
+    if admin.role == "senior":
+        from sqlalchemy import or_
+        prev_q = prev_q.where(
+            or_(
+                SeniorConsultationNote.senior_id == admin.id,
+                SeniorConsultationNote.is_visible_to_next_senior == True,  # noqa: E712
+            )
+        )
     result = await db.execute(prev_q)
     prev_note = result.scalar_one_or_none()
     if not prev_note:
@@ -400,6 +432,15 @@ async def get_cumulative_summary(
         .where(SeniorConsultationNote.user_id == uid)
         .order_by(SeniorConsultationNote.session_number.asc(), SeniorConsultationNote.consultation_date.asc())
     )
+    # P1-3: 선배 역할이면 본인 기록 + is_visible_to_next_senior=True 인 타 선배 기록만 노출
+    if admin.role == "senior":
+        from sqlalchemy import or_
+        q = q.where(
+            or_(
+                SeniorConsultationNote.senior_id == admin.id,
+                SeniorConsultationNote.is_visible_to_next_senior == True,  # noqa: E712
+            )
+        )
     result = await db.execute(q)
     notes = result.scalars().all()
 
