@@ -45,13 +45,14 @@ grades:
   C: { min: 35, max: 54, label: "보완 필요" }
   D: { min: 0, max: 34, label: "경쟁력 재고 필요" }
 
-# 세특/창체/행특 등급 기준 (5점 만점 가중평균)
+# 세특/창체/행특 등급 기준 (10점 만점 가중평균)
+# ※ modules/report_logic.py score_to_grade() 와 동일 기준
 rubric_grades:
-  S: { min: 4.3, max: 5.0 }
-  A: { min: 3.5, max: 4.2 }
-  B: { min: 2.6, max: 3.4 }
-  C: { min: 1.8, max: 2.5 }
-  D: { min: 1.0, max: 1.7 }
+  S: { min: 8.5, max: 10.0 }
+  A: { min: 7.0, max: 8.4 }
+  B: { min: 5.0, max: 6.9 }
+  C: { min: 3.5, max: 4.9 }
+  D: { min: 1.0, max: 3.4 }
 
 # 창체 분량 비율 분석 기준
 changche_volume:
@@ -71,8 +72,9 @@ wordcloud:
   width: 800
   height: 400
 
-# 역량별 보완법 기준 (이 점수 이하면 보완 대상)
-remedial_threshold: 3.0
+# 역량별 보완법 기준 (10점 만점, 이 점수 이하면 보완 대상)
+# ※ CLAUDE.md § Step 8-7 "점수가 6점 이하인 경우 보완 대상" 기준
+remedial_threshold: 6.0
 
 # 5등급→9등급 환산표 출처 시트명
 grade_conversion_source: "부산광역시교육청"

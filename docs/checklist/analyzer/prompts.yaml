@@ -20,10 +20,10 @@ meta:
     - "analyzer/rubric.yaml P2 gap 에 '프롬프트 1~10 척도 vs 구현 1~5 척도 불일치' 이슈 있음 — 추후 통일 필요"
   verification_summary:
     verified_at: "2026-04-17"
-    pass: 10
+    pass: 11
     partial: 0
     fail: 0
-    documented_gap: 1  # C2 척도 불일치 (rubric.yaml P2 gap 으로 이미 문서화)
+    documented_gap: 0  # C2 척도 불일치는 2026-04-17 해소
     method: "Glob 파일 존재성 + 파일명 패턴 매칭 + template 변수 교차 참조"
     completion_note: |
       A1~A4 추출 프롬프트 4개(grades/setuek/changche/haengtuk) 실존.
@@ -33,8 +33,9 @@ meta:
       D1/D2 출력 JSON 구조가 _template.py 15개 변수와 1:1 매칭.
       E1 prompts/ 에 정확히 8개 md 파일 존재 (불필요 파일 없음).
       E2 UTF-8 인코딩 정상 (이식 과정에서 한글 깨짐 없음).
-      C2 gap: 프롬프트 내 1~10 척도 지시 vs config.yaml rubric_grades 5점 만점.
-      rubric.yaml 체크리스트 P2 항목으로 이미 문서화 — 척도 통일은 별도 과제.
+      [2026-04-17 해소] C2 척도 불일치: 프롬프트 3개(analyze_setuek/changche/haengtuk)를
+      1~10점 5단계 기준으로 재작성. JSON 예시 점수도 1~10 스케일로 조정.
+      config.yaml rubric_grades 도 S≥8.5 (10점) 로 업데이트.
 
 # ─── A. 추출 프롬프트 (Step 2) ──────────────────────────────────────
 items:
@@ -123,11 +124,12 @@ items:
 
   - id: PROMPT-C2-score-scale-gap
     requirement: |
-      채점 척도 불일치 (analyzer/rubric.yaml P2 gap 참조)
-      - 프롬프트는 1~10점 슬라이더로 지시
-      - 실제 구현은 1~5점 + config.yaml rubric_grades 기준
-      - gap: 프롬프트를 1~5 로 통일 또는 구현을 1~10 으로 통일 필요
-    spec_ref: "analyzer/prompts/analyze_*.md · analyzer/config/config.yaml L49~54"
+      채점 척도 1~10점 통일 확인 (2026-04-17 해소)
+      - 프롬프트 3개(analyze_setuek/changche/haengtuk) 1~10점 5단계 기준
+      - config.yaml rubric_grades 10점 스케일 (S≥8.5)
+      - modules/report_logic.py score_to_grade() 10점 스케일과 일치
+      - 구버전 모듈(_rubric_to_100, score clamp) 도 1~10 공식으로 업데이트
+    spec_ref: "analyzer/prompts/analyze_*.md · analyzer/config/config.yaml L49~54 · analyzer/modules/report_logic.py"
     priority: P2
 
   - id: PROMPT-C3-comment-min-length

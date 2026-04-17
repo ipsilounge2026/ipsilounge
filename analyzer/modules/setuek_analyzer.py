@@ -77,7 +77,7 @@ def parse_setuek_response(response_json: dict) -> dict:
         scores = subj.get('scores', {})
         for item_name, item_data in scores.items():
             score = item_data.get('score', 0)
-            item_data['score'] = max(1, min(5, int(score)))
+            item_data['score'] = max(1, min(10, int(score)))
         # 좋은 평가 문장 필드 기본값 보장
         if '좋은평가문장' not in subj:
             subj['좋은평가문장'] = []
@@ -122,8 +122,8 @@ def calc_setuek_weighted_scores(subject_scores: list, config: dict = None,
 
 
 def setuek_score_to_100(weighted_avg: float) -> float:
-    """세특 가중평균(1.0~5.0)을 100점으로 환산"""
-    return round(max(0, min(100, (weighted_avg - 1.0) / 4.0 * 100)), 1)
+    """세특 가중평균(1.0~10.0)을 100점으로 환산"""
+    return round(max(0, min(100, (weighted_avg - 1.0) / 9.0 * 100)), 1)
 
 
 def _score_to_grade(score: float, rubric_grades: dict) -> str:

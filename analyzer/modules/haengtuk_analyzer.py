@@ -58,7 +58,7 @@ def parse_haengtuk_response(response_json: dict) -> dict:
         scores = year_data.get('scores', {})
         for item_name, item_data in scores.items():
             score = item_data.get('score', 0)
-            item_data['score'] = max(1, min(5, int(score)))
+            item_data['score'] = max(1, min(10, int(score)))
         # 좋은 평가 문장 필드 기본값 보장
         if '좋은평가문장' not in year_data:
             year_data['좋은평가문장'] = []
@@ -101,8 +101,8 @@ def calc_haengtuk_scores(haengtuk_response: dict, config: dict = None) -> dict:
 
 
 def _rubric_to_100(score: float) -> float:
-    """루브릭 점수(1~5)를 100점으로 환산"""
-    return round(max(0, min(100, (score - 1.0) / 4.0 * 100)), 1)
+    """루브릭 점수(1~10)를 100점으로 환산"""
+    return round(max(0, min(100, (score - 1.0) / 9.0 * 100)), 1)
 
 
 def _score_to_grade(score: float, rubric_grades: dict) -> str:
