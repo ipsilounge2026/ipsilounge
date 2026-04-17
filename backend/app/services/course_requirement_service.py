@@ -12,9 +12,8 @@ xlsx 스키마 (단일 시트: 권장과목):
     D: 권장과목 (쉼표 구분)
     E: 비고 (선택)
 
-※ school-record-analyzer 와 동일 파일을 공유하며,
-   school-record-analyzer/modules/grade_analyzer.py 의 load_course_requirements()
-   도 이 스키마를 기준으로 동작한다.
+※ analyzer/modules/grade_analyzer.py 의 load_course_requirements() 도 동일 파일을
+   동일 스키마로 로드한다 (통합 이식 후 ipsilounge/analyzer/data/ 단일 소스).
 """
 
 from __future__ import annotations

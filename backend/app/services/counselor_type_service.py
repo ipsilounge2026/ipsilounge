@@ -61,7 +61,7 @@ def _get_admission_db_path() -> str:
     if env_path and os.path.exists(env_path):
         return env_path
 
-    # 기본: 공용 데이터 루트(SHARED_DATA_ROOT) — school-record-analyzer/data
+    # 기본: 공용 데이터 루트(SHARED_DATA_ROOT) — ipsilounge/analyzer/data
     shared = settings.DATA_ROOT / "admission_db.xlsx"
     if shared.exists():
         return str(shared)
