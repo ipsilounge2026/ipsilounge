@@ -1,0 +1,171 @@
+# ===================================================================
+# 학생부 분석기 프롬프트 파일 체크리스트
+# ===================================================================
+# spec: ipsilounge/analyzer/CLAUDE.md § 디렉토리 구조 · § 처리 파이프라인
+# 범위: prompts/ 폴더 8개 md 파일 존재 + 역할 · 루브릭 일치
+# 검증 방법: 파일 존재성 + 내용 스캔 (항목 수 · 지시문 · 참조)
+# ===================================================================
+
+meta:
+  area_code: ANALYZER
+  title: "analyzer prompts/ 프롬프트 파일"
+  created_at: "2026-04-17"
+  spec_refs:
+    - "ipsilounge/analyzer/CLAUDE.md § 디렉토리 구조"
+    - "ipsilounge/analyzer/CLAUDE.md § 처리 파이프라인 (Step 2 추출 / Step 5~8 분석)"
+    - "ipsilounge/analyzer/prompts/*.md"
+  implementation_notes:
+    - "프롬프트는 Claude 호출 시 학생부 데이터 추출 + 평가 분석에 사용"
+    - "추출 4개(extract_*) + 분석 4개(analyze_*) = 8개 구조"
+    - "analyzer/rubric.yaml P2 gap 에 '프롬프트 1~10 척도 vs 구현 1~5 척도 불일치' 이슈 있음 — 추후 통일 필요"
+
+# ─── A. 추출 프롬프트 (Step 2) ──────────────────────────────────────
+items:
+  - id: PROMPT-A1-extract-grades
+    requirement: |
+      prompts/extract_grades.md — 교과 성적 추출 프롬프트
+      - 학기별 과목명 · 학점 · 원점수 · 과목평균 · 성취도 · 성취도별분포비율 ·
+        석차등급 · 수강자수 추출 지시
+      - CLAUDE.md § Step 2 규격 준수
+    spec_ref: "analyzer/prompts/extract_grades.md"
+    priority: P0
+
+  - id: PROMPT-A2-extract-setuek
+    requirement: |
+      prompts/extract_setuek.md — 세특 텍스트 추출 프롬프트
+      - 과목별로 원문 세특 텍스트 추출
+      - 공백·포맷 정리
+    spec_ref: "analyzer/prompts/extract_setuek.md"
+    priority: P0
+
+  - id: PROMPT-A3-extract-changche
+    requirement: |
+      prompts/extract_changche.md — 창체 활동 추출 프롬프트
+      - 자율활동 / 동아리활동 / 진로활동 영역별 텍스트 추출
+      - 학년별 구조 유지
+    spec_ref: "analyzer/prompts/extract_changche.md"
+    priority: P0
+
+  - id: PROMPT-A4-extract-haengtuk
+    requirement: |
+      prompts/extract_haengtuk.md — 행특 추출 프롬프트
+      - 학년별 행동특성 및 종합의견 원문 추출
+    spec_ref: "analyzer/prompts/extract_haengtuk.md"
+    priority: P0
+
+# ─── B. 분석 프롬프트 (Step 5~8) ───────────────────────────────────
+  - id: PROMPT-B1-analyze-setuek
+    requirement: |
+      prompts/analyze_setuek.md — 세특 평가 프롬프트
+      - 루브릭 7항목 (교과연계성·탐구동기·탐구과정·결과성찰·
+        전공적합성·차별성·학업태도) 채점 지시
+      - 각 과목별 강점·보완점 코멘트 (최소 200자)
+      - 좋은 평가 문장 추출 (4항목: 과목/핵심문장/이유/표현역량)
+    spec_ref: "analyzer/prompts/analyze_setuek.md · analyzer/CLAUDE.md § 세특 평가 루브릭"
+    priority: P0
+
+  - id: PROMPT-B2-analyze-changche
+    requirement: |
+      prompts/analyze_changche.md — 창체 평가 프롬프트
+      - 영역별(자율·동아리·진로) 루브릭 5항목 채점
+      - 영역별 강점·보완점 코멘트 (최소 300자)
+      - 분량 비율 분석 지시
+    spec_ref: "analyzer/prompts/analyze_changche.md · analyzer/CLAUDE.md § 창체 평가 루브릭"
+    priority: P0
+
+  - id: PROMPT-B3-analyze-haengtuk
+    requirement: |
+      prompts/analyze_haengtuk.md — 행특 평가 프롬프트
+      - 루브릭 5항목 채점
+      - 학년별 강점·보완점 코멘트 (최소 200자)
+      - 학년 간 성장 추이 평가
+    spec_ref: "analyzer/prompts/analyze_haengtuk.md · analyzer/CLAUDE.md § 행특 평가 루브릭"
+    priority: P0
+
+  - id: PROMPT-B4-analyze-comprehensive
+    requirement: |
+      prompts/analyze_comprehensive.md — 종합 분석 프롬프트
+      - 세특 과목 간 연계성 분석
+      - 창체-세특 영역 간 연계성 분석
+      - 학년별 성장 스토리 (최소 200자)
+      - 핵심 강점 3가지 / 보완 필요 영역 3가지
+      - 전형 적합도 추천
+      - 역량별 보완법 (§8-7)
+    spec_ref: "analyzer/prompts/analyze_comprehensive.md · analyzer/CLAUDE.md § Step 8"
+    priority: P0
+
+# ─── C. 루브릭 일관성 ──────────────────────────────────────────────
+  - id: PROMPT-C1-rubric-items-match
+    requirement: |
+      프롬프트에 명시된 루브릭 항목 수가 CLAUDE.md 와 일치
+      - 세특: 7항목 (analyze_setuek.md 와 CLAUDE.md § 세특 루브릭)
+      - 창체: 각 영역 5항목 (analyze_changche.md 와 CLAUDE.md § 창체 루브릭)
+      - 행특: 5항목 (analyze_haengtuk.md 와 CLAUDE.md § 행특 루브릭)
+    spec_ref: "analyzer/CLAUDE.md § 평가 루브릭"
+    priority: P0
+
+  - id: PROMPT-C2-score-scale-gap
+    requirement: |
+      채점 척도 불일치 (analyzer/rubric.yaml P2 gap 참조)
+      - 프롬프트는 1~10점 슬라이더로 지시
+      - 실제 구현은 1~5점 + config.yaml rubric_grades 기준
+      - gap: 프롬프트를 1~5 로 통일 또는 구현을 1~10 으로 통일 필요
+    spec_ref: "analyzer/prompts/analyze_*.md · analyzer/config/config.yaml L49~54"
+    priority: P2
+
+  - id: PROMPT-C3-comment-min-length
+    requirement: |
+      코멘트 최소 글자수 명시
+      - 세특 과목별 강점/보완점: 각 200자 이상
+      - 창체 영역별 강점/보완점: 각 300자 이상
+      - 행특 학년별 강점/보완점: 각 200자 이상
+      - 연계성·성장 스토리: 최소 200자
+      - 역량별 보완법 구체 활동: 최소 300자
+    spec_ref: "analyzer/CLAUDE.md § Step 5~8 (강점/보완점 최소 분량)"
+    priority: P0
+
+# ─── D. 출력 구조 지시 ─────────────────────────────────────────────
+  - id: PROMPT-D1-output-json-schema
+    requirement: |
+      프롬프트가 JSON 출력 구조 명시 (Step 2 추출 결과)
+      - 카테고리별 dict 형태
+      - 일관된 키 사용 (grade_data, setuek_comments 등)
+      - _template.py 15개 필수 변수와 매칭
+    spec_ref: "analyzer/prompts/extract_*.md + data/students/_template.py"
+    priority: P0
+
+  - id: PROMPT-D2-template-alignment
+    requirement: |
+      프롬프트 출력이 _template.py 변수 구조와 1:1 매칭
+      - STUDENT / SCHOOL / TODAY (메타 3)
+      - setuek_data / setuek_comments / comment_keys / good_sentences (세특 4)
+      - changche_data / changche_comments (창체 2)
+      - haengtuk_data / haengtuk_comments (행특 2)
+      - linkage_data / eval_data / fix_data / summary_data (종합 4)
+    spec_ref: "analyzer/data/students/_template.py · analyzer/CLAUDE.md § 9-0"
+    priority: P0
+
+# ─── E. 관리·유지보수 ──────────────────────────────────────────────
+  - id: PROMPT-E1-file-count
+    requirement: |
+      정확히 8개 프롬프트 파일 존재 (추출 4 + 분석 4)
+      - glob 결과와 CLAUDE.md 명시 목록 일치
+      - 불필요한 임시 파일/백업 없음
+    spec_ref: "analyzer/prompts/ 디렉토리"
+    priority: P1
+
+  - id: PROMPT-E2-encoding-utf8
+    requirement: |
+      모든 프롬프트 파일 UTF-8 인코딩
+      - 한글 깨짐 없음
+      - 특수문자 (●○⚠ 등) 정상 표기
+    spec_ref: "analyzer/prompts/*.md"
+    priority: P1
+
+  - id: PROMPT-E3-version-control
+    requirement: |
+      프롬프트 변경 이력 추적
+      - git 커밋으로 프롬프트 변경 내역 관리
+      - 큰 변경 시 CHANGELOG 기록 (analyzer 자체 CHANGELOG 없음 — ipsilounge/CHANGELOG 공유)
+    spec_ref: "ipsilounge/CHANGELOG.md"
+    priority: P2

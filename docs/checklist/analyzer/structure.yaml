@@ -1,0 +1,226 @@
+# ===================================================================
+# 학생부 분석기 디렉토리·파일 구조 체크리스트
+# ===================================================================
+# spec: ipsilounge/analyzer/CLAUDE.md § 디렉토리 구조
+# 범위: 루트 폴더/파일 존재 · 하위 구성 · 역할
+# 검증 방법: 파일 시스템 glob + 코드 리뷰
+# ===================================================================
+
+meta:
+  area_code: ANALYZER
+  title: "analyzer 디렉토리·파일 구조"
+  created_at: "2026-04-17"
+  spec_refs:
+    - "ipsilounge/analyzer/CLAUDE.md § 디렉토리 구조"
+    - "ipsilounge/analyzer/README.md"
+  implementation_notes:
+    - "2026-04-17 통합 이식 완료: school-record-analyzer/* → ipsilounge/analyzer/*"
+    - "격리 원칙: backend/*-web/mobile 어디서도 analyzer.* 를 직접 import 하지 않음"
+    - "input/output/tools 는 gitignore 대상 (민감·OS별)"
+
+# ─── A. 루트 진입점 파일 ────────────────────────────────────────────
+items:
+  - id: STRUCT-A1-cli-entry
+    requirement: |
+      analyzer/generate_report.py — 명령행 진입점 존재
+      - python generate_report.py <학생명> 실행
+      - 인자 없이 실행 시 학생 목록 출력
+      - 필수 변수 15개 검증 + QA validator 자동 실행
+    spec_ref: "analyzer/generate_report.py"
+    priority: P0
+
+  - id: STRUCT-A2-legacy-script
+    requirement: |
+      analyzer/analyze.py — 구버전 메인 실행 스크립트 보존
+      - 신규 개발은 generate_report.py 중심
+      - 구버전 참고용으로만 유지
+    spec_ref: "analyzer/analyze.py"
+    priority: P2
+
+  - id: STRUCT-A3-claude-md
+    requirement: |
+      analyzer/CLAUDE.md — 분석기 프로젝트 설계서 존재
+      - 파이프라인 Step 0~9, 루브릭, DB 스펙, 리포트 구조 등 단일 원천
+      - ipsilounge/CLAUDE.md 는 "analyzer 영역은 여기 참조" 로만 연결
+    spec_ref: "analyzer/CLAUDE.md"
+    priority: P0
+
+  - id: STRUCT-A4-readme
+    requirement: |
+      analyzer/README.md — 개발 모드 사용법 요약
+      - CLI 실행법, 학생부 드래그 분석 흐름, 민감 데이터 취급 안내
+      - 통합 이식 시 신규 작성
+    spec_ref: "analyzer/README.md"
+    priority: P1
+
+  - id: STRUCT-A5-requirements
+    requirement: |
+      analyzer/requirements.txt — 런타임 의존성 Pin
+      - openpyxl / reportlab / PyYAML 3개 pin (==)
+      - 실제 import 기준으로만 명시 (CLAUDE.md 명시 중 미사용 5개 제외)
+    spec_ref: "analyzer/requirements.txt"
+    priority: P1
+
+# ─── B. 모듈 (비즈니스 로직) ────────────────────────────────────────
+  - id: STRUCT-B1-modules-dir
+    requirement: |
+      analyzer/modules/ — 12개 분석 모듈
+      - __init__.py
+      - extractor.py                    학생부 데이터 추출
+      - grade_analyzer.py               내신 성적 분석
+      - setuek_analyzer.py              세특 분석
+      - changche_analyzer.py            창체 분석
+      - haengtuk_analyzer.py            행특 분석
+      - admission_matcher.py            입결 매칭
+      - comprehensive_analyzer.py       종합 분석
+      - qa_validator.py                 QA 검증 (Step 8.5)
+      - report_logic.py                 ★ create_excel + create_pdf 본체
+      - report_constants.py             ★ 공통 상수 (SETUEK_ITEMS 등)
+      - report_generator.py             (구버전 리포트 생성기)
+    spec_ref: "analyzer/CLAUDE.md § 디렉토리 구조"
+    priority: P0
+
+  - id: STRUCT-B2-report-logic-split
+    requirement: |
+      데이터/로직 분리 (방식 B) 유지
+      - report_logic.py 한 파일 수정만으로 모든 학생 리포트에 반영됨
+      - 새 학생 추가 시 data/students/<학생명>.py 만 채우면 됨
+    spec_ref: "analyzer/CLAUDE.md § 데이터/로직 분리 구조"
+    priority: P1
+
+# ─── C. 프롬프트 ────────────────────────────────────────────────────
+  - id: STRUCT-C1-prompts-dir
+    requirement: |
+      analyzer/prompts/ — 8개 md 프롬프트
+      - extract_grades.md               성적 추출
+      - extract_setuek.md               세특 추출
+      - extract_changche.md             창체 추출
+      - extract_haengtuk.md             행특 추출
+      - analyze_setuek.md               세특 평가
+      - analyze_changche.md             창체 평가
+      - analyze_haengtuk.md             행특 평가
+      - analyze_comprehensive.md        종합 분석 (연계성·성장 스토리)
+    spec_ref: "analyzer/CLAUDE.md § 디렉토리 구조"
+    priority: P0
+
+# ─── D. 설정·공용 DB ────────────────────────────────────────────────
+  - id: STRUCT-D1-config-dir
+    requirement: |
+      analyzer/config/ — 설정 파일 2개
+      - config.yaml                     루브릭 가중치·등급 기준·소인수 기준
+      - grade_conversion.xlsx           5등급 ↔ 9등급 환산표
+    spec_ref: "analyzer/CLAUDE.md § 디렉토리 구조"
+    priority: P0
+
+  - id: STRUCT-D2-data-dir
+    requirement: |
+      analyzer/data/ — 공용 xlsx DB 4개 + students/
+      - admission_db.xlsx               수시 입결 DB
+      - course_requirements.xlsx        권장 이수 과목 DB
+      - university_grading.xlsx         대학별 내신 산출 DB
+      - 수능최저_db.xlsx                 수능 최저 기준 DB
+      - students/                       학생별 데이터 (서브폴더)
+      ※ SHARED_DATA_ROOT 단일 원천. ipsilounge backend 가 동일 파일 참조.
+    spec_ref: "analyzer/CLAUDE.md § 외부 DB · ipsilounge/backend/app/config.py"
+    priority: P0
+
+  - id: STRUCT-D3-legacy-backup
+    requirement: |
+      course_requirements_legacy_backup.xlsx — 이전 스키마 백업 (2026-03-26)
+      - 로더는 신규 파일(course_requirements.xlsx) 만 참조
+      - 정리 과제 (P2)
+    spec_ref: "analyzer/data/course_requirements_legacy_backup.xlsx"
+    priority: P2
+
+# ─── E. 학생 데이터 (민감 취급) ─────────────────────────────────────
+  - id: STRUCT-E1-students-template
+    requirement: |
+      analyzer/data/students/_template.py — 학생 데이터 템플릿
+      - 15개 필수 변수 뼈대 (메타3 + 세특4 + 창체2 + 행특2 + 종합4)
+      - git 포함 (이름 앞 underscore로 whitelist)
+    spec_ref: "analyzer/data/students/_template.py"
+    priority: P0
+
+  - id: STRUCT-E2-students-sample
+    requirement: |
+      analyzer/data/students/의대샘플.py — 결과 리포트 샘플
+      - git 포함 (whitelist 명시)
+      - 신규 학생 데이터 작성 시 참고 자료
+    spec_ref: "analyzer/data/students/의대샘플.py"
+    priority: P1
+
+  - id: STRUCT-E3-students-gitignore
+    requirement: |
+      실제 학생 데이터 gitignore
+      - 패턴: analyzer/data/students/*.py + whitelist 3개
+        (_template.py, 의대샘플.py, __init__.py)
+      - 신규 학생(예: 연승훈.py, 김철수.py)은 자동 제외
+      - git check-ignore 로 검증 가능
+    spec_ref: "ipsilounge/.gitignore L74~78"
+    priority: P0
+
+# ─── F. 리소스 (폰트·이미지) ────────────────────────────────────────
+  - id: STRUCT-F1-fonts
+    requirement: |
+      analyzer/fonts/ — PDF 한글 렌더링용 TTF
+      - NanumSquareRoundR.ttf           (본문)
+      - NanumSquareRoundB.ttf           (굵은 글씨)
+      - Pretendard-Regular.ttf / Bold.ttf (보조)
+      - suit.zip (추가 폰트 패키지)
+    spec_ref: "analyzer/CLAUDE.md § 디렉토리 구조 · modules/report_constants.py L44"
+    priority: P0
+
+  - id: STRUCT-F2-assets
+    requirement: |
+      analyzer/assets/logo.png — 입시라운지 로고
+      - PDF 표지·하단 삽입용
+    spec_ref: "analyzer/modules/report_logic.py L303"
+    priority: P1
+
+# ─── G. 민감·빌드 폴더 (gitignore) ──────────────────────────────────
+  - id: STRUCT-G1-input-ignored
+    requirement: |
+      analyzer/input/ — 학생부 원본 파일 투입 폴더
+      - 개발 모드에서 학생부 PDF/이미지 임시 저장
+      - gitignore 대상 (민감)
+      - 빈 폴더로만 이식 (원본 44MB 미이식)
+    spec_ref: "ipsilounge/.gitignore L68"
+    priority: P0
+
+  - id: STRUCT-G2-output-ignored
+    requirement: |
+      analyzer/output/ — 생성된 리포트 저장 폴더
+      - xlsx + pdf 파일 생성 위치
+      - gitignore 대상 (민감)
+      - 이식 시 빈 폴더로 생성
+    spec_ref: "ipsilounge/.gitignore L69"
+    priority: P0
+
+  - id: STRUCT-G3-tools-excluded
+    requirement: |
+      analyzer/tools/ — OS별 바이너리 폴더 (gitignore)
+      - Windows용 poppler 바이너리 등 (49MB)
+      - 이식 시 미포함 (실제 코드에서 pdf2image 미사용 상태)
+      - 향후 필요 시 setup 스크립트로 자동 설치
+    spec_ref: "ipsilounge/.gitignore L70"
+    priority: P2
+
+# ─── H. 격리 (ipsilounge 본체와의 경계) ─────────────────────────────
+  - id: STRUCT-H1-no-import-from-backend
+    requirement: |
+      ipsilounge 본체 코드가 analyzer 를 직접 import 하지 않음
+      - grep -r "from analyzer" ipsilounge/backend → 0건
+      - grep -r "import analyzer" ipsilounge/backend → 0건
+      - admin-web / user-web / mobile 에서도 참조 없음
+      - 접점은 향후 backend/app/services/analyzer_service.py wrapper 1곳 한정
+    spec_ref: "ipsilounge/CLAUDE.md § 관련 인프라: analyzer 통합"
+    priority: P0
+
+  - id: STRUCT-H2-shared-data-root
+    requirement: |
+      SHARED_DATA_ROOT 는 analyzer/data 를 단일 원천으로 참조
+      - backend/app/config.py _DEFAULT_DATA_ROOT = parents[2] / "analyzer" / "data"
+      - settings.DATA_ROOT property 로 일관된 접근
+      - 환경변수 SHARED_DATA_ROOT 로 운영 오버라이드 가능
+    spec_ref: "ipsilounge/backend/app/config.py L10~12, L78~84"
+    priority: P0

@@ -1,0 +1,214 @@
+# ===================================================================
+# 학생부 분석기 설정 파일 체크리스트
+# ===================================================================
+# spec: ipsilounge/analyzer/CLAUDE.md § config.yaml 예시 구조
+#       ipsilounge/analyzer/config/config.yaml
+#       ipsilounge/analyzer/config/grade_conversion.xlsx
+# 범위: 가중치·등급기준·임계값 스키마 정합성
+# 검증 방법: yaml 로드 + 필드 존재성·합계 검증 + 코드 교차 참조
+# ===================================================================
+
+meta:
+  area_code: ANALYZER
+  title: "analyzer config.yaml 스키마"
+  created_at: "2026-04-17"
+  spec_refs:
+    - "ipsilounge/analyzer/CLAUDE.md § config.yaml 예시 구조"
+    - "ipsilounge/analyzer/config/config.yaml"
+    - "ipsilounge/analyzer/config/grade_conversion.xlsx"
+    - "ipsilounge/analyzer/modules/grade_analyzer.py::load_config"
+  implementation_notes:
+    - "실제 config.yaml 은 CLAUDE.md 예시보다 더 많은 필드 포함 (rubric_grades, changche_volume, remedial_threshold 등)"
+    - "세특은 CLAUDE.md 7항목이나 전공적합성 제외 버전(no_major) 도 별도 가중치 제공"
+    - "analyzer/rubric.yaml P2 gap 에 '채점 척도 불일치' 이슈 문서화되어 있음 — 프롬프트 1~10 vs 구현 1~5"
+
+# ─── A. scoring 섹션 ────────────────────────────────────────────────
+items:
+  - id: CONFIG-A1-setuek-weights-sum
+    requirement: |
+      scoring.setuek_weights 7항목 합계 == 1.00
+      - 교과연계성 0.17 / 탐구동기 0.17 / 탐구과정 0.17 / 결과성찰 0.17
+      - 전공적합성 0.10 / 차별성 0.07 / 학업태도 0.15
+      - 합계 1.00
+    spec_ref: "analyzer/config/config.yaml L5~12"
+    priority: P0
+
+  - id: CONFIG-A2-setuek-weights-no-major-sum
+    requirement: |
+      scoring.setuek_weights_no_major 6항목 합계 == 1.00
+      - 전공적합성 제외, 나머지 항목에 가중치 재배분
+      - 교과연계성 0.19 / 탐구동기 0.19 / 탐구과정 0.19 / 결과성찰 0.19
+      - 차별성 0.08 / 학업태도 0.16
+      - 합계 1.00
+    spec_ref: "analyzer/config/config.yaml L14~21"
+    priority: P0
+
+  - id: CONFIG-A3-changche-weights-sum
+    requirement: |
+      scoring.changche_weights 합계 ≈ 1.00 (반올림 오차 허용)
+      - 자율 0.333 / 동아리 0.333 / 진로 0.334 = 1.000
+    spec_ref: "analyzer/config/config.yaml L23~26"
+    priority: P0
+
+  - id: CONFIG-A4-overall-weights-sum
+    requirement: |
+      scoring.overall_weights 5항목 합계 == 1.00
+      - 내신 0.30 / 세특 0.30 / 창체 0.25 / 행특 0.10 / 출결 0.05
+      - CLAUDE.md § 종합 경쟁력 산출 공식과 일치
+    spec_ref: "analyzer/config/config.yaml L28~35 · analyzer/CLAUDE.md § 종합 경쟁력 산출"
+    priority: P0
+
+  - id: CONFIG-A5-small-class-threshold
+    requirement: |
+      scoring.small_class_threshold = 13
+      - 수강자 13명 이하 → 소인수 과목 표기 (점수 보정 없음)
+      - CLAUDE.md § Step 3-3 과 일치
+    spec_ref: "analyzer/config/config.yaml L37 · analyzer/CLAUDE.md § 3-3"
+    priority: P1
+
+# ─── B. 등급 기준 (grades / rubric_grades) ──────────────────────────
+  - id: CONFIG-B1-grades-100pt
+    requirement: |
+      grades (종합 경쟁력 등급, 100점 만점)
+      - S 90~100 / A 75~89 / B 55~74 / C 35~54 / D 0~34
+      - CLAUDE.md § 종합 등급 표와 일치
+      - label 필드에 의미 서술 포함
+    spec_ref: "analyzer/config/config.yaml L40~46 · analyzer/CLAUDE.md § 종합 등급"
+    priority: P0
+
+  - id: CONFIG-B2-rubric-grades-5pt
+    requirement: |
+      rubric_grades (세특/창체/행특 개별 가중평균 5점 만점)
+      - S 4.3~5.0 / A 3.5~4.2 / B 2.6~3.4 / C 1.8~2.5 / D 1.0~1.7
+      - 리포트 세특/창체/행특 섹션에 이 기준으로 등급 산출
+    spec_ref: "analyzer/config/config.yaml L49~54"
+    priority: P0
+
+  - id: CONFIG-B3-grade-range-continuity
+    requirement: |
+      등급 경계값 연속성
+      - grades: S.min(90) - A.max(89) - 1 | A.min(75) - B.max(74) - 1 ... 간격 정확
+      - rubric_grades: S.min(4.3) - A.max(4.2) - 0.1 … 0.1 단위 간격
+      - 경계값 사이에 빈 구간 없음
+    spec_ref: "analyzer/config/config.yaml L40~54"
+    priority: P1
+
+# ─── C. 창체 분량 판정 ──────────────────────────────────────────────
+  - id: CONFIG-C1-changche-volume-limits
+    requirement: |
+      changche_volume.limits 글자수 상한
+      - 자율 500 / 동아리 500 / 진로 700
+      - CLAUDE.md § 학생부 구성 항목의 연간 글자수 제한과 일치
+    spec_ref: "analyzer/config/config.yaml L57~61"
+    priority: P1
+
+  - id: CONFIG-C2-changche-volume-thresholds
+    requirement: |
+      changche_volume.thresholds 판정 경계
+      - 충실활용 0.95 (95% 이상)
+      - 활용부족 0.80 (80% 미만)
+      - 경계 사이(80% ≤ x < 95%) 는 "적정활용"
+    spec_ref: "analyzer/config/config.yaml L62~65 · analyzer/CLAUDE.md § Step 6"
+    priority: P1
+
+# ─── D. 기타 임계값 ─────────────────────────────────────────────────
+  - id: CONFIG-D1-remedial-threshold
+    requirement: |
+      remedial_threshold = 3.0
+      - 역량별 보완법(§8-7) 생성 기준
+      - 세부 항목 점수가 이 값 이하면 보완 대상
+    spec_ref: "analyzer/config/config.yaml L75"
+    priority: P1
+
+  - id: CONFIG-D2-trend-threshold
+    requirement: |
+      trend_threshold = 0.3
+      - 성적 추이 패턴 판별 (상승·유지·하락·등락·V자 반등 등)
+      - 학기 간 등급 차이 0.3 이하는 "유지"
+    spec_ref: "analyzer/config/config.yaml L81 · analyzer/CLAUDE.md § 3-4"
+    priority: P2
+
+  - id: CONFIG-D3-jinro-grade-map
+    requirement: |
+      진로선택과목 성취도 → 등급 환산
+      - A=1 / B=2 / C=3 / D=4 / E=5
+      - 진로선택과목은 석차등급 없고 A~E 성취도로만 평가
+    spec_ref: "analyzer/config/config.yaml L90~95 · analyzer/CLAUDE.md § 3-5"
+    priority: P1
+
+  - id: CONFIG-D4-attendance-scoring
+    requirement: |
+      attendance_scoring (출결 100점 만점)
+      - base 100
+      - 미인정결석 -5/일 · 질병결석 -1/일
+      - 지각/조퇴/결과 각 -0.5/회
+      - min_score 0
+    spec_ref: "analyzer/config/config.yaml L97~105"
+    priority: P1
+
+  - id: CONFIG-D5-major-subject-groups
+    requirement: |
+      major_subject_groups (주요교과 교과군)
+      - 공통: 국어/수학/영어
+      - 인문: 국어/수학/영어/사회/한국사
+      - 자연: 국어/수학/영어/과학
+      - CLAUDE.md § 3-1 주요교과 분류 기준과 일치
+    spec_ref: "analyzer/config/config.yaml L84~87"
+    priority: P1
+
+# ─── E. 워드클라우드 (향후 기능) ────────────────────────────────────
+  - id: CONFIG-E1-wordcloud-section
+    requirement: |
+      wordcloud 섹션 (§8-4 향후 구현용 설정)
+      - max_keywords 50
+      - min_frequency 2
+      - font_path "NanumGothic.ttf" (현재 analyzer/fonts/ 에 없음)
+      - width 800 / height 400
+      - 실제 사용 코드 없음 — 정의만 유지 (향후 구현 시 활용)
+    spec_ref: "analyzer/config/config.yaml L67~72"
+    priority: P3
+
+  - id: CONFIG-E2-wordcloud-font-gap
+    requirement: |
+      wordcloud.font_path 에 지정된 NanumGothic.ttf 가 analyzer/fonts/ 에 없음
+      - 현재는 NanumSquareRound + Pretendard 만 존재
+      - 워드클라우드 구현 시 NanumGothic 추가 또는 경로 변경 필요
+    spec_ref: "analyzer/fonts/ 실제 파일 목록"
+    priority: P3
+
+# ─── F. 환산표 (grade_conversion.xlsx) ──────────────────────────────
+  - id: CONFIG-F1-grade-conversion-xlsx
+    requirement: |
+      grade_conversion.xlsx — 5등급 ↔ 9등급 환산표
+      - config_yaml.grade_conversion_source = "부산광역시교육청"
+      - 교육청 발표 공식 환산 자료 기반
+    spec_ref: "analyzer/config/grade_conversion.xlsx · config.yaml L78"
+    priority: P1
+
+  - id: CONFIG-F2-conversion-disclaimer
+    requirement: |
+      리포트에 환산 한계 명시 필수
+      - CLAUDE.md § 3-7: "5등급↔9등급 환산에 따른 참고 결과이며,
+        2022 교육과정 적용 첫 입시에서는 입결이 변동될 수 있음"
+      - 리포트 생성 시 위 문구가 포함되는지 report_logic.py 확인
+    spec_ref: "analyzer/CLAUDE.md § 3-7"
+    priority: P1
+
+# ─── G. 코드 ↔ config 참조 일관성 ───────────────────────────────────
+  - id: CONFIG-G1-load-config-function
+    requirement: |
+      modules/grade_analyzer.py::load_config()
+      - analyzer/config/config.yaml 로드
+      - PyYAML 사용
+      - 다른 모듈(report_constants 등)에서 재사용
+    spec_ref: "analyzer/modules/grade_analyzer.py L20~"
+    priority: P1
+
+  - id: CONFIG-G2-no-hardcoded-weights
+    requirement: |
+      가중치·등급기준·임계값이 모듈 내 하드코딩되지 않고
+      config.yaml 을 단일 원천으로 참조
+      - report_constants.py 에서 SETUEK_ITEMS 등 정의 시 config 값 사용
+      - 하드코딩 발견 시 config 로 이동 권장
+    spec_ref: "analyzer/CLAUDE.md § 데이터/로직 분리"
+    priority: P1

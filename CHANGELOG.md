@@ -7,6 +7,20 @@
 
 ## 2026-04-17
 
+### analyzer 체크리스트 보완 6종 신규 작성
+`ipsilounge/docs/checklist/analyzer/` 에 신규 6개 체크리스트 추가.
+기존 3종(pipeline/rubric/report-output)이 파이프라인·루브릭·리포트 산출물을
+커버하는 반면, 이들은 인프라·구조 측면을 보완.
+- `structure.yaml` — 디렉토리/파일 구조 (16 항목)
+- `dependencies.yaml` — Python 의존성 (12 항목, gap 5개 포함)
+- `config.yaml` — config.yaml / grade_conversion.xlsx 스키마 (18 항목)
+- `prompts.yaml` — 8개 프롬프트 파일 + 루브릭 일관성 (11 항목)
+- `entry-point.yaml` — generate_report.py CLI 품질 (13 항목)
+- `student-data.yaml` — 15개 필수 변수 · 부분 학년 지원 · gitignore (16 항목)
+`_index.yaml` 에 등록 + index_version 2.12.0 → 2.13.0.
+상태는 모두 drafted (L1 검증 대기). 기존 3종(pipeline/rubric/report-output) 은
+이미 ready 상태 유지.
+
 ### school-record-analyzer → ipsilounge/analyzer 통합 이식 완료
 
 - 파일 이식: `school-record-analyzer/*` → `ipsilounge/analyzer/*` (42 files, 12MB)

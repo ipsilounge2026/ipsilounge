@@ -12,11 +12,12 @@
 # ===================================================================
 
 meta:
-  index_version: "2.12.0"
-  last_audited: "2026-04-16"
+  index_version: "2.13.0"
+  last_audited: "2026-04-17"
   hash_algorithm: "sha256"
   paths_relative_to: "C:\\Users\\orbik\\Dropbox\\AI Project\\Claude\\학생부분석프로그램\\"
   changelog:
+    - "2.13.0 (2026-04-17): ★ analyzer 영역 보완 6종 체크리스트 신규 작성 (structure/dependencies/config/prompts/entry-point/student-data). 기존 3종(pipeline/rubric/report-output)이 파이프라인·루브릭·리포트를 커버하는 반면 이들은 인프라·구조 측면 보완. analyzer 영역 체크리스트 9개로 확장. school-record-analyzer → ipsilounge/analyzer 통합 이식(0dbe1d8) 이후 첫 체크리스트 보강."
     - "2.12.0 (2026-04-16): ★ cross-cutting/ux-policy.yaml 20/20 전체 L3 검증 완료! 자동저장(디바운스 1200ms + 낙관적 잠금 + 충돌 알림 배너) + 무기명 B옵션(raw 조회 super_admin/admin 전용 + counselor 집계만) + 재시도(결제 fail 페이지 + family 코드 10회 + 수동 새로고침) + 상태 피드백(StatusBadge + 저장중/제출중 + Presigned 1시간) + 이어쓰기(draft + delta prefill + 학부모 읽기전용) + 자동 타이밍 추천 전부 코드 정합. P2 gap 2건(재시도 라이브러리 미도입/ux-policy.md 통합 문서 부재) 문서화. status: not_started→ready. ★ cross-cutting 영역 5개 전체 완료(test-env/auth/data-sharing/ux-policy + booking/senior/high 연계)"
     - "2.11.0 (2026-04-16): ★ cross-cutting/data-sharing.yaml 22/22 전체 L3 검증 완료! SHARED_DATA_ROOT(config.py parents[3] 자동 계산 + .env 오버라이드 + DATA_ROOT property)+4개 공유 XLSX(course_requirements/admission_db/수능최저_db/university_grading) 실존 확인+양쪽 로더(ipsilounge 3개 서비스 + analyzer 2개 모듈) 스키마 대칭 해석+폴백 삼중 전략(ADMISSION_DB_PATH env / DB-first-Excel-fallback / graceful degradation). P2 gap 3건(EC2 배포 가이드/legacy 백업 파일/캐시 API 불통일) 문서화. status: not_started→ready"
     - "2.10.0 (2026-04-16): ★ cross-cutting/auth.yaml 28/28 전체 L3 검증 완료! 회원/관리자 로그인+JWT(HS256+24h+7일)+bcrypt+rate limiter+4역할(super_admin/admin/counselor/senior)+12메뉴+매칭 기반 필터+비밀번호 재설정+프론트 게이트 전부 코드 정합. spec vs 구현 gap 3건(senior 확장/메뉴 4개 확장/SECRET_KEY 기본값) P2 문서화. status: not_started→ready"
@@ -312,6 +313,112 @@ checklists:
         Spec 13시트 중 미구현 6영역(내신/입결/키워드/전형/출결/하이라이트)
         및 워드클라우드/change_tracking은 gap으로 문서화 — 현재 운영(내신 제외) 모드에서 실사용 영향 없음.
     next_step: "검증 완료. analyzer 영역 전체 완료(pipeline+rubric+report-output). 다음 대상: cross-cutting/auth.yaml"
+
+  # ───── 분석기 영역 (보완 6종 — 2026-04-17 통합 이식 이후 신규) ─────
+  - file: "analyzer/structure.yaml"
+    area_code: ANALYZER
+    title: "analyzer 디렉토리·파일 구조"
+    spec_files:
+      - path: "ipsilounge/analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "디렉토리 구조"
+        last_synced: "2026-04-17"
+      - path: "ipsilounge/analyzer/README.md"
+        last_known_hash: null
+        last_synced: "2026-04-17"
+    status: "drafted"
+    promotion_summary:
+      promoted_count: 0
+      note: "체크리스트 작성 직후. L1 검증 필요."
+    next_step: "L1 파일 존재성 검증 → L2 코드 참조 확인"
+
+  - file: "analyzer/dependencies.yaml"
+    area_code: ANALYZER
+    title: "analyzer Python 의존성"
+    spec_files:
+      - path: "ipsilounge/analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "기술 스택"
+        last_synced: "2026-04-17"
+      - path: "ipsilounge/analyzer/requirements.txt"
+        last_known_hash: null
+        last_synced: "2026-04-17"
+    status: "drafted"
+    promotion_summary:
+      promoted_count: 0
+      note: "실제 사용 3개(openpyxl/reportlab/PyYAML) + gap 5개(pdf2image 등) 문서화"
+    next_step: "L1 pip show 검증 → gap 해소 로드맵 수립"
+
+  - file: "analyzer/config.yaml"
+    area_code: ANALYZER
+    title: "analyzer config.yaml 스키마"
+    spec_files:
+      - path: "ipsilounge/analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "config.yaml 예시 구조"
+        last_synced: "2026-04-17"
+      - path: "ipsilounge/analyzer/config/config.yaml"
+        last_known_hash: null
+        last_synced: "2026-04-17"
+    status: "drafted"
+    promotion_summary:
+      promoted_count: 0
+      note: "가중치 합계·등급 경계·임계값 정합성 20여 항목"
+    next_step: "L1 파일 존재 + 합계 산술 검증"
+
+  - file: "analyzer/prompts.yaml"
+    area_code: ANALYZER
+    title: "analyzer prompts/ 프롬프트 파일"
+    spec_files:
+      - path: "ipsilounge/analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "처리 파이프라인 Step 2, 5~8"
+        last_synced: "2026-04-17"
+      - path: "ipsilounge/analyzer/prompts/"
+        last_known_hash: null
+        last_synced: "2026-04-17"
+    status: "drafted"
+    promotion_summary:
+      promoted_count: 0
+      note: "추출 4 + 분석 4 = 총 8개 md 파일. 루브릭 항목 일관성 포함"
+    next_step: "L1 파일 존재 + 항목 수 스캔 + gap(1~10 vs 1~5 척도) 확인"
+
+  - file: "analyzer/entry-point.yaml"
+    area_code: ANALYZER
+    title: "analyzer generate_report.py CLI 진입점"
+    spec_files:
+      - path: "ipsilounge/analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "명령행 진입점 사용법 · Step 9"
+        last_synced: "2026-04-17"
+      - path: "ipsilounge/analyzer/generate_report.py"
+        last_known_hash: null
+        last_synced: "2026-04-17"
+    status: "drafted"
+    promotion_summary:
+      promoted_count: 0
+      note: "pipeline.yaml 이 end-to-end, 여기는 스크립트 자체 품질 (exit code, 한글 파일명 등)"
+    next_step: "L3 CLI 실행 검증 (이미 Phase 5 에서 부분 확인)"
+
+  - file: "analyzer/student-data.yaml"
+    area_code: ANALYZER
+    title: "analyzer data/students/ 학생 데이터 스키마"
+    spec_files:
+      - path: "ipsilounge/analyzer/CLAUDE.md"
+        last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
+        section: "9-0 학생 데이터 파일 작성 · 부분 학년 학생부 지원"
+        last_synced: "2026-04-17"
+      - path: "ipsilounge/analyzer/data/students/_template.py"
+        last_known_hash: null
+        last_synced: "2026-04-17"
+      - path: "ipsilounge/analyzer/data/students/의대샘플.py"
+        last_known_hash: null
+        last_synced: "2026-04-17"
+    status: "drafted"
+    promotion_summary:
+      promoted_count: 0
+      note: "15개 필수 변수 스키마 · 부분 학년 지원 · whitelist gitignore"
+    next_step: "L1 파일 존재 + REQUIRED_VARS 일치 확인"
 
   # ───── 공통 정책 영역 ─────
 

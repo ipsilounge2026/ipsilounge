@@ -1,0 +1,232 @@
+# ===================================================================
+# 학생 데이터 파일 스키마 체크리스트
+# ===================================================================
+# spec: ipsilounge/analyzer/CLAUDE.md § 9-0 학생 데이터 파일 작성
+#       ipsilounge/analyzer/data/students/_template.py
+#       ipsilounge/analyzer/data/students/의대샘플.py
+# 범위: 필수 변수 15개 · 데이터 형식 · 부분학년 지원 · 민감 데이터 취급
+# 검증 방법: 파일 존재 + 변수 스캔 + _template 과 샘플 비교
+# ===================================================================
+
+meta:
+  area_code: ANALYZER
+  title: "analyzer data/students/ 학생 데이터 스키마"
+  created_at: "2026-04-17"
+  spec_refs:
+    - "ipsilounge/analyzer/CLAUDE.md § 9-0 학생 데이터 파일 작성"
+    - "ipsilounge/analyzer/CLAUDE.md § 부분 학년 학생부 지원"
+    - "ipsilounge/analyzer/data/students/_template.py"
+    - "ipsilounge/analyzer/data/students/의대샘플.py"
+    - "ipsilounge/analyzer/generate_report.py L25~31 REQUIRED_VARS"
+  implementation_notes:
+    - "15개 필수 변수는 generate_report.py 의 REQUIRED_VARS 리스트와 1:1 매칭"
+    - "부분 학년 학생부 지원: 1학년 1학기만 있어도 리포트 생성 가능 (신규 상담 초기)"
+    - "실제 학생 데이터는 gitignore (whitelist 로 _template, 의대샘플, __init__ 만 포함)"
+
+# ─── A. 필수 변수 15개 존재 ─────────────────────────────────────────
+items:
+  - id: STUDENT-A1-meta-vars
+    requirement: |
+      메타 변수 3개
+      - STUDENT: str  학생 이름
+      - SCHOOL: str   재학 학교명
+      - TODAY: str    리포트 생성일자 (YYYYMMDD 형식, 파일명에 사용)
+    spec_ref: "_template.py § 메타 정보"
+    priority: P0
+
+  - id: STUDENT-A2-setuek-vars
+    requirement: |
+      세특 변수 4개
+      - setuek_data: list[tuple]
+        (학년, 과목명, 교과연계성점수, 탐구동기, 탐구과정, 결과성찰, 차별성, 학업태도, 가중합산, 등급)
+      - setuek_comments: dict[str, dict]
+        과목별 { 강점: str, 보완점: str } (각 200자 이상)
+      - comment_keys: list[tuple]  과목명 키 매핑
+      - good_sentences: list[dict]
+        { 과목, 핵심문장, 이유, 표현역량 } 4항목 구조
+    spec_ref: "_template.py § 세특 데이터 · CLAUDE.md § Step 5"
+    priority: P0
+
+  - id: STUDENT-A3-changche-vars
+    requirement: |
+      창체 변수 2개
+      - changche_data: 자율/동아리/진로 영역별 점수·텍스트·분량
+      - changche_comments: 영역별 { 강점: str, 보완점: str } (각 300자 이상)
+    spec_ref: "_template.py § 창체 데이터 · CLAUDE.md § Step 6"
+    priority: P0
+
+  - id: STUDENT-A4-haengtuk-vars
+    requirement: |
+      행특 변수 2개
+      - haengtuk_data: 학년별 5항목 점수
+      - haengtuk_comments: 학년별 { 강점: str, 보완점: str } (각 200자 이상)
+    spec_ref: "_template.py § 행특 데이터 · CLAUDE.md § Step 7"
+    priority: P0
+
+  - id: STUDENT-A5-comprehensive-vars
+    requirement: |
+      종합 변수 4개
+      - linkage_data: 세특 과목 간 · 창체-세특 연계성 분석 (상/중/하 + 서술 200자+)
+      - eval_data:    종합 점수 · 등급 산출 · 4대 영역 + 역량별 (학업/진로/공동체)
+      - fix_data:     역량별 보완법 — 현재 상태 · 구체 보완 활동 300자+ · 기대 효과
+      - summary_data: 핵심 강점 3 · 보완 필요 3 · 추천 전형 · 성장 스토리 요약
+    spec_ref: "_template.py § 종합 분석 · CLAUDE.md § Step 8"
+    priority: P0
+
+# ─── B. generate_report.py REQUIRED_VARS 일치 ──────────────────────
+  - id: STUDENT-B1-required-vars-match
+    requirement: |
+      REQUIRED_VARS 리스트 (generate_report.py L25~31) 와
+      _template.py 변수 이름이 정확히 일치
+      - 순서·대소문자까지 동일
+      - 누락 시 generate_report.py 가 exit 2 로 차단
+    spec_ref: "generate_report.py L25~31 + _template.py 전체"
+    priority: P0
+
+# ─── C. 부분 학년 학생부 지원 ───────────────────────────────────────
+  - id: STUDENT-C1-partial-years
+    requirement: |
+      1학년 1학기만 있는 신규 상담 학생도 리포트 생성 가능
+      - 학년 필드에 존재하는 학년만 입력 (1, 2, 3 중 일부)
+      - 학기 구분 불필요 (학년 정보만 유지)
+      - _template.py 상단 주석에 명시
+    spec_ref: "_template.py L21~35 · CLAUDE.md § 부분 학년 학생부 지원"
+    priority: P0
+
+  - id: STUDENT-C2-partial-changche
+    requirement: |
+      창체 부분 입력 허용
+      - 자율만 있어도 OK (동아리·진로 없을 수 있음)
+      - 존재하는 영역만 changche_data 에 포함
+    spec_ref: "_template.py § 창체 부분 입력 설명"
+    priority: P1
+
+  - id: STUDENT-C3-partial-haengtuk
+    requirement: |
+      행특 학년 부분 입력 허용
+      - 1학년만 있어도 OK (2·3학년 없을 수 있음)
+      - 존재하는 학년만 haengtuk_data 에 포함
+    spec_ref: "_template.py § 행특 부분 입력 설명"
+    priority: P1
+
+  - id: STUDENT-C4-linkage-min-items
+    requirement: |
+      연계성 데이터 (linkage_data) 최소 항목
+      - 학년 1개뿐일 때: 세특 과목 간 + 창체-세특 연계 2항목 충분
+      - 학년 2개 이상: 학년별 성장 흐름 추가 권장
+    spec_ref: "_template.py · CLAUDE.md § 부분 학년 연계성"
+    priority: P2
+
+  - id: STUDENT-C5-cover-year-auto
+    requirement: |
+      표지 학년 범위 자동 감지
+      - setuek_data / changche_data / haengtuk_data 에서 학년 자동 추출
+      - "1학년" / "1~2학년" / "1~3학년" 으로 자동 표기
+      - 하드코딩 없이 데이터 기반
+    spec_ref: "CLAUDE.md § 부분 학년 자동 처리 · report_logic.py"
+    priority: P1
+
+# ─── D. 데이터 형식 정합성 ──────────────────────────────────────────
+  - id: STUDENT-D1-setuek-tuple-structure
+    requirement: |
+      setuek_data 튜플 10개 요소 구조
+      - (학년:int, 과목명:str, 교과:int, 탐구동기:int, 탐구과정:int,
+         결과성찰:int, 차별성:int, 학업태도:int, 가중합산:float, 등급:str)
+      - 현재 구현 6항목 점수 (전공적합성 제외) + 가중합산 + 등급
+    spec_ref: "_template.py setuek_data 예시"
+    priority: P0
+
+  - id: STUDENT-D2-comment-min-length
+    requirement: |
+      코멘트 최소 분량 규칙
+      - 세특 강점/보완점: 200자 이상
+      - 창체 강점/보완점: 300자 이상
+      - 행특 강점/보완점: 200자 이상
+      - 연계성 서술: 200자 이상
+      - 역량별 보완 활동: 300자 이상
+      - QA validator 가 검증 (qa_validator.py)
+    spec_ref: "CLAUDE.md § Step 5~8 + qa_validator P2 rules"
+    priority: P0
+
+  - id: STUDENT-D3-grade-labels
+    requirement: |
+      등급 라벨 S/A/B/C/D 일관 사용
+      - 세특/창체/행특 개별 등급: config.yaml rubric_grades 기준 (5점 만점 환산)
+      - 종합 등급: config.yaml grades 기준 (100점 만점)
+    spec_ref: "config/config.yaml L40~54"
+    priority: P1
+
+# ─── E. 샘플·템플릿 관리 ────────────────────────────────────────────
+  - id: STUDENT-E1-template-complete
+    requirement: |
+      _template.py 에 15개 변수 모두 빈 껍데기 또는 예시로 선언됨
+      - 각 변수 위에 형식 주석 명시
+      - 신규 학생 추가 시 복사 → 채움
+    spec_ref: "_template.py 전체"
+    priority: P0
+
+  - id: STUDENT-E2-sample-complete
+    requirement: |
+      의대샘플.py 가 15개 변수 전부 유효한 데이터로 채움
+      - QA validator 통과하는 수준
+      - 결과 리포트 생성 성공 (generate_report.py 의대샘플)
+      - 신규 학생 작성 시 참고 사례
+    spec_ref: "data/students/의대샘플.py · 이식 Phase 5 검증"
+    priority: P1
+
+  - id: STUDENT-E3-template-docstring
+    requirement: |
+      _template.py 상단 docstring
+      - 사용법 3단계 (복사 → 채움 → generate_report.py 실행)
+      - 필수 변수 15개 목록
+      - 부분 학년 지원 안내
+      - 튜플 차원 · 딕셔너리 키 형식 강조
+    spec_ref: "_template.py L3~36"
+    priority: P1
+
+# ─── F. 민감 데이터 취급 ────────────────────────────────────────────
+  - id: STUDENT-F1-whitelist-gitignore
+    requirement: |
+      학생 데이터 whitelist gitignore 규칙
+      - 패턴: analyzer/data/students/*.py 제외
+      - 예외: _template.py / 의대샘플.py / __init__.py
+      - git check-ignore 로 검증 가능
+    spec_ref: "ipsilounge/.gitignore L74~78"
+    priority: P0
+
+  - id: STUDENT-F2-no-personal-info-in-samples
+    requirement: |
+      _template.py 와 의대샘플.py 에 실제 개인정보 없음
+      - 이름 "학생이름" / "의대샘플" (가명)
+      - 학교명 추상화
+      - 성적·활동 내용은 대표 사례로 구성
+    spec_ref: "data/students/_template.py + 의대샘플.py"
+    priority: P0
+
+  - id: STRUCT-F3-sample-in-whitelist
+    requirement: |
+      의대샘플.py 에 whitelist 예외가 명시적으로 등록됨
+      - .gitignore 에 `!analyzer/data/students/의대샘플.py` 라인 존재
+      - 누락 시 실수로 미포함 가능
+    spec_ref: "ipsilounge/.gitignore L77"
+    priority: P0
+
+# ─── G. 2회차 이상 (증분 분석) ──────────────────────────────────────
+  - id: STUDENT-G1-version-data
+    requirement: |
+      동일 학생 2회차 분석 시 파일 관리
+      - 같은 이름의 .py 파일 내용을 갱신
+      - 또는 별도 변수로 이전 분석 결과 보존 (CLAUDE.md § 0-4)
+      - 리포트 파일명에 _v{N} 접미사
+    spec_ref: "CLAUDE.md § 0-4 이전 대비 변화 분석"
+    priority: P2
+
+  - id: STUDENT-G2-change-tracking-fields
+    requirement: |
+      2회차 이상 분석 시 summary_data 에 변화 섹션 포함
+      - 등급 변화 추이
+      - 보완점 반영도 (반영됨/부분반영/미반영)
+      - 새 강점·보완점
+      - 성장 코멘트 (최소 200자)
+    spec_ref: "CLAUDE.md § 0-4 변화 추적 분석"
+    priority: P2
