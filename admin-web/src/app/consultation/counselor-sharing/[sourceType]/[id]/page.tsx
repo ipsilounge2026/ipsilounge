@@ -711,7 +711,10 @@ export default function CounselorSharingDetailPage() {
                       공유될 항목이 없습니다. 위의 토글을 켜서 선배에게 전달할 내용을 선택하세요.
                     </div>
                   ) : (
-                    Object.entries(livePreview).map(([k, v]) => {
+                    Object.entries(livePreview)
+                      // P3-①: _redacted_fields 는 UI 표시용 메타데이터이므로 preview 렌더에서 숨김
+                      .filter(([k]) => !k.startsWith("_"))
+                      .map(([k, v]) => {
                       const label = previewLabels[k] || k;
                       return (
                         <div key={k} style={{ marginBottom: 10 }}>

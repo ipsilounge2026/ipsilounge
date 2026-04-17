@@ -169,6 +169,48 @@ interface SeniorNoteForCounselor {
   action_items: { action: string; priority?: string }[];
   next_checkpoints: { checkpoint: string; status?: string }[];
   context_for_next: string | null;
+  // P3-①: 선배 판단으로 비공유 처리된 필드 목록 (원본에 값이 있었으나 공유 OFF)
+  _redacted_fields?: string[];
+}
+
+/** P3-① 공용 "비공유" 배지 — 선배 판단으로 가려진 항목 표기 */
+function RedactedBadge() {
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 600,
+        color: "#7C2D12",
+        background: "#FEF3C7",
+        border: "1px solid #FCD34D",
+        padding: "1px 6px",
+        borderRadius: 4,
+        marginLeft: 6,
+      }}
+      title="선배가 비공유로 설정한 항목입니다 (V1 §6 연계 검토)"
+    >
+      🔒 선배 비공유
+    </span>
+  );
+}
+
+/** 섹션 내용 대체 — 필드가 redact 되었고 실제 값이 없는 경우 */
+function RedactedPlaceholder({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        padding: "8px 12px",
+        background: "#FEF3C7",
+        border: "1px dashed #FCD34D",
+        borderRadius: 6,
+        fontSize: 12,
+        color: "#7C2D12",
+        lineHeight: 1.5,
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 type SessionTab = "checklist" | "notes" | "delta" | "senior-notes";
@@ -1473,7 +1515,27 @@ export default function ConsultationSessionPage() {
             ) : seniorNotes.length === 0 ? (
               <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF" }}>선배 상담 기록이 없습니다</div>
             ) : (
-              seniorNotes.map((sn) => (
+              seniorNotes.map((sn) => {
+                const redacted = new Set(sn._redacted_fields || []);
+                const isRed = (f: string) => redacted.has(f);
+                // 섹션별 redact 판정 (해당 섹션에 속한 필드 중 하나라도 redacted)
+                const redSection = {
+                  core_topics: isRed("core_topics"),
+                  student_questions:
+                    isRed("student_questions") || isRed("senior_answers"),
+                  student_observation:
+                    isRed("student_mood") ||
+                    isRed("study_attitude") ||
+                    isRed("special_observations"),
+                  action_items: isRed("action_items"),
+                  next_checkpoints: isRed("next_checkpoints"),
+                  context_for_next: isRed("context_for_next"),
+                };
+                const hasAnyRedacted =
+                  (sn._redacted_fields && sn._redacted_fields.length > 0) ||
+                  false;
+
+                return (
                 <div key={sn.id} style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
                   {/* 헤더 */}
                   <div style={{
@@ -1482,111 +1544,174 @@ export default function ConsultationSessionPage() {
                   }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: "#5B21B6" }}>
                       {sn.session_timing || `${sn.session_number}회차`} 선배 상담
+                      {hasAnyRedacted && <RedactedBadge />}
                     </div>
                     <div style={{ fontSize: 12, color: "#6B7280" }}>{sn.consultation_date}</div>
                   </div>
 
                   <div style={{ padding: 20 }}>
+                    {hasAnyRedacted && (
+                      <div style={{
+                        padding: "8px 12px",
+                        background: "#FFFBEB",
+                        border: "1px solid #FDE68A",
+                        borderRadius: 6,
+                        fontSize: 12,
+                        color: "#92400E",
+                        marginBottom: 14,
+                        lineHeight: 1.5,
+                      }}>
+                        ℹ️ 이 기록에는 선배가 비공유로 설정한 항목이 있습니다. 해당 섹션은
+                        🔒 배지로 표시되며, 원본이 아닌 비공유 안내가 노출됩니다 (V1 §6).
+                      </div>
+                    )}
+
                     {/* 핵심 주제 */}
-                    {sn.core_topics && sn.core_topics.length > 0 && (
+                    {(sn.core_topics?.length > 0 || redSection.core_topics) && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
                           ■ 핵심 주제 진행 결과
+                          {redSection.core_topics && <RedactedBadge />}
                         </div>
-                        {sn.core_topics.map((t, i) => (
-                          <div key={i} style={{ padding: "6px 0", fontSize: 13, borderBottom: "1px solid #F3F4F6" }}>
-                            <span>{t.progress_status === "충분히 다룸" ? "✓" : t.progress_status === "간단히 다룸" ? "△" : "✗"}</span>{" "}
-                            <strong>{t.topic}</strong>: {t.progress_status || "미기록"}
-                            {t.key_content && (
-                              <div style={{ color: "#6B7280", marginTop: 2, paddingLeft: 16 }}>
-                                &quot;{t.key_content}&quot;
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                        {sn.core_topics && sn.core_topics.length > 0 ? (
+                          sn.core_topics.map((t, i) => (
+                            <div key={i} style={{ padding: "6px 0", fontSize: 13, borderBottom: "1px solid #F3F4F6" }}>
+                              <span>{t.progress_status === "충분히 다룸" ? "✓" : t.progress_status === "간단히 다룸" ? "△" : "✗"}</span>{" "}
+                              <strong>{t.topic}</strong>: {t.progress_status || "미기록"}
+                              {t.key_content && (
+                                <div style={{ color: "#6B7280", marginTop: 2, paddingLeft: 16 }}>
+                                  &quot;{t.key_content}&quot;
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <RedactedPlaceholder>
+                            핵심 주제는 선배가 비공유로 설정해 이 화면에 노출되지 않습니다.
+                          </RedactedPlaceholder>
+                        )}
                       </div>
                     )}
 
                     {/* 자유 질의 */}
-                    {sn.student_questions && (
+                    {(sn.student_questions || redSection.student_questions) && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
                           ■ 자유 질의 핵심
+                          {redSection.student_questions && <RedactedBadge />}
                         </div>
-                        <div style={{ fontSize: 13, padding: "8px 12px", background: "#F9FAFB", borderRadius: 6 }}>
-                          &quot;{sn.student_questions}&quot;
-                          {sn.senior_answers && (
-                            <div style={{ marginTop: 6, color: "#6B7280" }}>
-                              &rarr; {sn.senior_answers}
-                            </div>
-                          )}
-                        </div>
+                        {sn.student_questions ? (
+                          <div style={{ fontSize: 13, padding: "8px 12px", background: "#F9FAFB", borderRadius: 6 }}>
+                            &quot;{sn.student_questions}&quot;
+                            {sn.senior_answers && (
+                              <div style={{ marginTop: 6, color: "#6B7280" }}>
+                                &rarr; {sn.senior_answers}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <RedactedPlaceholder>
+                            자유 질의 내용은 선배가 비공유로 설정해 노출되지 않습니다.
+                          </RedactedPlaceholder>
+                        )}
                       </div>
                     )}
 
                     {/* 학생 상태 */}
-                    {(sn.student_mood || sn.study_attitude || sn.special_observations) && (
+                    {(sn.student_mood || sn.study_attitude || sn.special_observations || redSection.student_observation) && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
                           ■ 학생 상태 관찰
+                          {redSection.student_observation && <RedactedBadge />}
                         </div>
-                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6, fontSize: 13 }}>
-                          {sn.student_mood && <span>· 전반적 분위기: {sn.student_mood}</span>}
-                          {sn.study_attitude && <span>· 공부 태도: {sn.study_attitude}</span>}
-                        </div>
-                        {sn.special_observations && (
-                          <div style={{ padding: "6px 12px", background: "#FEF3C7", borderRadius: 6, fontSize: 13 }}>
-                            · 특이사항: &quot;{sn.special_observations}&quot;
-                          </div>
+                        {sn.student_mood || sn.study_attitude || sn.special_observations ? (
+                          <>
+                            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6, fontSize: 13 }}>
+                              {sn.student_mood && <span>· 전반적 분위기: {sn.student_mood}</span>}
+                              {sn.study_attitude && <span>· 공부 태도: {sn.study_attitude}</span>}
+                            </div>
+                            {sn.special_observations && (
+                              <div style={{ padding: "6px 12px", background: "#FEF3C7", borderRadius: 6, fontSize: 13 }}>
+                                · 특이사항: &quot;{sn.special_observations}&quot;
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <RedactedPlaceholder>
+                            학생 상태 관찰(분위기·태도·특이사항)은 선배가 비공유로 설정해
+                            노출되지 않습니다.
+                          </RedactedPlaceholder>
                         )}
                       </div>
                     )}
 
                     {/* 실천 사항 */}
-                    {sn.action_items && sn.action_items.length > 0 && (
+                    {(sn.action_items?.length > 0 || redSection.action_items) && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
                           ■ 선배가 제안한 실천 사항
+                          {redSection.action_items && <RedactedBadge />}
                         </div>
-                        {sn.action_items.map((a, i) => (
-                          <div key={i} style={{ fontSize: 13, padding: "4px 0" }}>
-                            {i + 1}. &quot;{a.action}&quot;
-                          </div>
-                        ))}
+                        {sn.action_items && sn.action_items.length > 0 ? (
+                          sn.action_items.map((a, i) => (
+                            <div key={i} style={{ fontSize: 13, padding: "4px 0" }}>
+                              {i + 1}. &quot;{a.action}&quot;
+                            </div>
+                          ))
+                        ) : (
+                          <RedactedPlaceholder>
+                            선배가 제안한 실천 사항은 비공유로 설정되어 노출되지 않습니다.
+                          </RedactedPlaceholder>
+                        )}
                       </div>
                     )}
 
                     {/* 다음 확인 사항 */}
-                    {sn.next_checkpoints && sn.next_checkpoints.length > 0 && (
+                    {(sn.next_checkpoints?.length > 0 || redSection.next_checkpoints) && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
                           ■ 다음 상담 시 확인 필요 사항
+                          {redSection.next_checkpoints && <RedactedBadge />}
                         </div>
-                        {sn.next_checkpoints.map((c, i) => (
-                          <div key={i} style={{ fontSize: 13, padding: "4px 0" }}>
-                            · {c.checkpoint}
-                          </div>
-                        ))}
+                        {sn.next_checkpoints && sn.next_checkpoints.length > 0 ? (
+                          sn.next_checkpoints.map((c, i) => (
+                            <div key={i} style={{ fontSize: 13, padding: "4px 0" }}>
+                              · {c.checkpoint}
+                            </div>
+                          ))
+                        ) : (
+                          <RedactedPlaceholder>
+                            다음 확인 사항은 선배가 비공유로 설정해 노출되지 않습니다.
+                          </RedactedPlaceholder>
+                        )}
                       </div>
                     )}
 
                     {/* 맥락 전달 */}
-                    {sn.context_for_next && (
+                    {(sn.context_for_next || redSection.context_for_next) && (
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
                           ■ 선배가 상담사에게 전달하는 맥락
+                          {redSection.context_for_next && <RedactedBadge />}
                         </div>
-                        <div style={{
-                          padding: 12, background: "#EFF6FF", border: "1px solid #BFDBFE",
-                          borderRadius: 6, fontSize: 13, lineHeight: 1.6,
-                        }}>
-                          {sn.context_for_next}
-                        </div>
+                        {sn.context_for_next ? (
+                          <div style={{
+                            padding: 12, background: "#EFF6FF", border: "1px solid #BFDBFE",
+                            borderRadius: 6, fontSize: 13, lineHeight: 1.6,
+                          }}>
+                            {sn.context_for_next}
+                          </div>
+                        ) : (
+                          <RedactedPlaceholder>
+                            선배의 전달 맥락은 비공유로 설정되어 노출되지 않습니다.
+                          </RedactedPlaceholder>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
