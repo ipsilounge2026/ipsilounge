@@ -281,28 +281,53 @@ DEFAULT_SHARING_SETTINGS = {
 }
 
 
+# V1 §6 — 선배 노트 공유 토글 키 → 실제 치환되는 필드 키 매핑.
+# P3-① 상담사 UI 가 "선배 판단으로 비공유" 인지 "원래 빈 값" 인지 구분할 수 있도록
+# _redacted_fields 메타데이터를 같이 반환한다.
+_SHARING_TOGGLE_TO_FIELDS: dict[str, list[str]] = {
+    "core_topics": ["core_topics"],
+    "optional_topics": ["optional_topics"],
+    "student_questions": ["student_questions", "senior_answers"],
+    "student_observation": ["student_mood", "study_attitude", "special_observations"],
+    "action_items": ["action_items"],
+    "next_checkpoints": ["next_checkpoints"],
+    "context_for_next": ["context_for_next"],
+    "operator_notes": ["operator_notes"],
+}
+
+
 def _apply_sharing_filter(note_dict: dict, sharing: dict) -> dict:
-    """sharing_settings 기반으로 비공유 항목을 제거한 dict 반환."""
+    """sharing_settings 기반으로 비공유 항목을 제거한 dict 반환.
+
+    V1 §6 + P3-①: 공유 OFF 로 가려진 필드는 None/[] 로 치환하되,
+    어떤 필드가 "선배 판단으로 비공유" 인지 `_redacted_fields` 배열에 기록.
+    상담사 UI 는 이 메타데이터를 이용해 "원래 빈 값"과 "비공유 처리"를 구분해
+    배지로 표시할 수 있다.
+    """
     filtered = dict(note_dict)
-    if not sharing.get("core_topics", True):
-        filtered["core_topics"] = []
-    if not sharing.get("optional_topics", True):
-        filtered["optional_topics"] = []
-    if not sharing.get("student_questions", True):
-        filtered["student_questions"] = None
-        filtered["senior_answers"] = None
-    if not sharing.get("student_observation", True):
-        filtered["student_mood"] = None
-        filtered["study_attitude"] = None
-        filtered["special_observations"] = None
-    if not sharing.get("action_items", True):
-        filtered["action_items"] = []
-    if not sharing.get("next_checkpoints", True):
-        filtered["next_checkpoints"] = []
-    if not sharing.get("context_for_next", True):
-        filtered["context_for_next"] = None
-    if not sharing.get("operator_notes", False):
-        filtered["operator_notes"] = None
+    redacted_fields: list[str] = []
+    for toggle, fields in _SHARING_TOGGLE_TO_FIELDS.items():
+        # operator_notes 의 기본값만 False, 나머지는 True
+        default_value = False if toggle == "operator_notes" else True
+        if sharing.get(toggle, default_value):
+            continue
+        for field in fields:
+            # 원본 값이 존재했을 때만 redacted 로 간주 (빈 데이터 혼동 방지)
+            original = note_dict.get(field)
+            was_present = (
+                original is not None
+                and original != []
+                and original != ""
+                and original != {}
+            )
+            # 치환 (리스트 필드는 [], 그 외는 None)
+            if isinstance(original, list):
+                filtered[field] = []
+            else:
+                filtered[field] = None
+            if was_present:
+                redacted_fields.append(field)
+    filtered["_redacted_fields"] = redacted_fields
     # 내부 리뷰 정보는 상담사에게 노출하지 않음
     filtered.pop("review_notes", None)
     filtered.pop("content_checklist", None)

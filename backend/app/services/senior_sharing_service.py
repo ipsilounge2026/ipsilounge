@@ -217,6 +217,9 @@ def filter_note_for_senior(
     - next_senior_context : bool — True 일 때만 원문 유지
     - action_plan_detail : bool — False 일 때 next_steps / advice_given 제거
 
+    P3-①: 공유 OFF 로 가려진 필드 목록을 `_redacted_fields` 메타에 기록.
+    선배(또는 관리자 UI) 는 이를 이용해 "비공유" 배지를 표시할 수 있다.
+
     `note_payload` 는 수정하지 않고 얕은 사본을 반환.
     """
     effective_sharing: dict[str, bool] = dict(DEFAULT_NOTE_SENIOR_SHARING)
@@ -227,11 +230,26 @@ def filter_note_for_senior(
             effective_sharing[key] = bool(value)
 
     filtered = dict(note_payload or {})
+    redacted_fields: list[str] = []
+
+    def _redact_if_present(field: str) -> None:
+        original = (note_payload or {}).get(field)
+        if (
+            original is not None
+            and original != ""
+            and original != []
+            and original != {}
+        ):
+            redacted_fields.append(field)
+        filtered[field] = None
+
     if not effective_sharing.get("next_senior_context", True):
-        filtered["next_senior_context"] = None
+        _redact_if_present("next_senior_context")
     if not effective_sharing.get("action_plan_detail", False):
-        filtered["next_steps"] = None
-        filtered["advice_given"] = None
+        _redact_if_present("next_steps")
+        _redact_if_present("advice_given")
+
+    filtered["_redacted_fields"] = redacted_fields
     return filtered
 
 
