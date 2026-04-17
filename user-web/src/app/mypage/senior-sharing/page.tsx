@@ -584,6 +584,117 @@ export default function SeniorSharingPage() {
           </div>
         )}
 
+        {/* P3-②: 연계 동의 전면 철회 / 회원 탈퇴 안내 (V1 §10-1) */}
+        <section
+          style={{
+            marginTop: 36,
+            padding: 20,
+            border: "1px solid #E5E7EB",
+            borderRadius: 8,
+            background: "#FAFAFA",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 700,
+              color: "#111827",
+              marginBottom: 10,
+            }}
+          >
+            📌 부분 철회 vs 전면 철회(회원 탈퇴)
+          </div>
+          <div style={{ fontSize: 13, color: "#4B5563", lineHeight: 1.7, marginBottom: 14 }}>
+            위의 건별 중단·복구는 <strong>부분 철회</strong>로, 회원 지위는 유지한 채
+            선배에게 공유되는 개별 상담 데이터를 즉시 비노출 처리합니다. 반면
+            <strong> 전면 철회</strong>는 연계 동의 자체를 완전히 취소하고
+            서비스 이용을 중단하는 조치로, 회원 탈퇴를 통해서만 가능합니다.
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 12,
+              marginBottom: 14,
+            }}
+          >
+            <div
+              style={{
+                padding: 14,
+                background: "white",
+                border: "1px solid #D1FAE5",
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46", marginBottom: 6 }}>
+                ✅ 부분 철회 (이 페이지)
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#374151", lineHeight: 1.7 }}>
+                <li>회원 지위·이용 유지</li>
+                <li>선택한 상담 기록만 선배에게 비노출</li>
+                <li>언제든 "다시 허용"으로 복구 가능</li>
+                <li>상담사 측 원본 기록은 보존됨</li>
+              </ul>
+            </div>
+            <div
+              style={{
+                padding: 14,
+                background: "white",
+                border: "1px solid #FCA5A5",
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B", marginBottom: 6 }}>
+                ⚠️ 전면 철회 (회원 탈퇴)
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#374151", lineHeight: 1.7 }}>
+                <li>연계 동의 전면 취소 + 서비스 이용 중단</li>
+                <li>선배·상담사 모두에게 즉시 비노출</li>
+                <li>
+                  업로드한 학생부 파일·분석 리포트는 즉시 삭제 (
+                  <a
+                    href="/terms"
+                    style={{ color: "#1D4ED8", textDecoration: "underline" }}
+                  >
+                    이용약관 제11조
+                  </a>
+                  )
+                </li>
+                <li>탈퇴는 되돌릴 수 없음</li>
+              </ul>
+            </div>
+          </div>
+          <div
+            style={{
+              padding: 12,
+              background: "#FFFBEB",
+              border: "1px solid #FDE68A",
+              borderRadius: 8,
+              fontSize: 12,
+              color: "#92400E",
+              lineHeight: 1.7,
+            }}
+          >
+            <strong>전면 철회(회원 탈퇴) 요청 방법</strong>
+            <div style={{ marginTop: 4 }}>
+              현재 셀프 탈퇴 기능은 준비 중이며, 고객센터로 요청하시면 확인 후 처리해드립니다.
+              탈퇴 시 선배·상담사 양쪽에 공유되던 모든 데이터는 즉시 비공개되고,
+              회원이 업로드한 학생부·리포트는 삭제됩니다.
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, color: "#78350F" }}>
+              ※ 보관 의무가 있는 결제·정산 기록 등은 관련 법령에 따른 보관 기간 동안 유지됩니다
+              (
+              <a
+                href="/privacy"
+                style={{ color: "#1D4ED8", textDecoration: "underline" }}
+              >
+                개인정보처리방침
+              </a>{" "}
+              참조).
+            </div>
+          </div>
+        </section>
+
         {/* 개별 철회 모달 */}
         {revokeTarget && (
           <div
