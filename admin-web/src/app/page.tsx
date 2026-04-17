@@ -38,6 +38,13 @@ interface UnwrittenRecord {
   type: string;
   date: string | null;
   student_name: string;
+  // 기록 작성 기한 관리 (공통 §5-1 / §4-8 / §3-7)
+  completed_at?: string | null;
+  days_elapsed?: number | null;
+  deadline_days?: number;
+  overdue?: boolean;
+  waived?: boolean;
+  waive_reason?: string | null;
 }
 
 interface StudentSurvey {
@@ -518,37 +525,101 @@ export default function DashboardPage() {
 
         {/* ================================================================
             상담사 + 선배: 기록 미작성 알림
+            (공통 §5-1 / §4-8 / §3-7: 상담 후 7일 이내 작성 필수,
+             초과 시 담당자 신규 예약 자동 차단)
            ================================================================ */}
         {isCounselorRole && data.unwritten_records && data.unwritten_records.length > 0 && (
           <>
             <SectionTitle title="기록 미작성 알림" />
+            {data.unwritten_records.some((r) => r.overdue && !r.waived) && (
+              <div
+                style={{
+                  background: "#FEF2F2",
+                  border: "1px solid #FCA5A5",
+                  borderRadius: 8,
+                  padding: "10px 12px",
+                  marginBottom: 10,
+                  fontSize: 12,
+                  color: "#991B1B",
+                  lineHeight: 1.6,
+                }}
+              >
+                ⚠️ 기한 초과 건이 있어 <strong>신규 상담 예약이 차단</strong>됩니다.
+                아래 "기한 초과" 표시 건을 먼저 작성해주세요. (기한: 상담 완료 후 7일)
+              </div>
+            )}
             <div className="table-wrapper">
               <table>
                 <thead>
                   <tr>
                     <th>학생</th>
                     <th>상담 유형</th>
-                    <th>상담일</th>
+                    <th>상담 완료일</th>
+                    <th>경과</th>
+                    <th>상태</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.unwritten_records.map((r) => (
-                    <tr key={r.booking_id}>
-                      <td style={{ fontWeight: 600 }}>{r.student_name}</td>
-                      <td>{r.type}</td>
-                      <td>{r.date ? new Date(r.date).toLocaleDateString("ko-KR") : "-"}</td>
-                      <td>
-                        <button
-                          className="btn btn-primary btn-sm"
-                          style={{ fontSize: 11, padding: "2px 8px" }}
-                          onClick={() => router.push(`/consultation`)}
-                        >
-                          기록 작성
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {data.unwritten_records.map((r) => {
+                    const elapsed = r.days_elapsed;
+                    const deadline = r.deadline_days ?? 7;
+                    const overdue = !!r.overdue;
+                    const waived = !!r.waived;
+                    let badge: { label: string; bg: string; fg: string };
+                    if (waived) {
+                      badge = { label: "기한 면제", bg: "#F3F4F6", fg: "#4B5563" };
+                    } else if (overdue) {
+                      badge = { label: `기한 초과 (${elapsed}일)`, bg: "#FEE2E2", fg: "#991B1B" };
+                    } else if (elapsed !== null && elapsed !== undefined) {
+                      const remaining = deadline - elapsed;
+                      badge = {
+                        label: `D-${remaining} 이내 작성`,
+                        bg: "#FEF3C7",
+                        fg: "#92400E",
+                      };
+                    } else {
+                      badge = { label: "완료일 미상", bg: "#F3F4F6", fg: "#6B7280" };
+                    }
+                    const completedAt = r.completed_at
+                      ? new Date(r.completed_at).toLocaleDateString("ko-KR")
+                      : (r.date ? new Date(r.date).toLocaleDateString("ko-KR") : "-");
+                    return (
+                      <tr key={r.booking_id}>
+                        <td style={{ fontWeight: 600 }}>{r.student_name}</td>
+                        <td>{r.type}</td>
+                        <td>{completedAt}</td>
+                        <td style={{ fontSize: 12, color: "#6B7280" }}>
+                          {elapsed !== null && elapsed !== undefined ? `${elapsed}일` : "-"}
+                        </td>
+                        <td>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "2px 8px",
+                              borderRadius: 10,
+                              background: badge.bg,
+                              color: badge.fg,
+                              fontSize: 11,
+                              fontWeight: 600,
+                            }}
+                            title={waived ? (r.waive_reason || "최고 관리자 면제") : undefined}
+                          >
+                            {badge.label}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-primary btn-sm"
+                            style={{ fontSize: 11, padding: "2px 8px" }}
+                            onClick={() => router.push(`/consultation`)}
+                          >
+                            기록 작성
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

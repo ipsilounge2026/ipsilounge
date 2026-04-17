@@ -176,6 +176,21 @@ export async function updateBookingStatus(id: string, status: string, cancelReas
   });
 }
 
+// 상담 기록 작성 기한 수동 해제/취소 (super_admin 전용)
+// 공통 §5-1 / §4-8 / §3-7
+export async function waiveNoteDeadline(bookingId: string, reason: string) {
+  return request(`/api/admin/consultation/bookings/${bookingId}/waive-note-deadline`, {
+    method: "PUT",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function revokeNoteDeadlineWaiver(bookingId: string) {
+  return request(`/api/admin/consultation/bookings/${bookingId}/waive-note-deadline`, {
+    method: "DELETE",
+  });
+}
+
 export async function searchUsersForBooking(q: string) {
   return request(`/api/admin/consultation/users/search?q=${encodeURIComponent(q)}`);
 }
