@@ -7,6 +7,18 @@
 
 ## 2026-04-17
 
+### school-record-analyzer 통합 이식 계획서 작성
+- **배경**: 현재 분석기와 운영 서비스가 별도 디렉토리로 분리되어, 상담사 수동 작업 부담
+- **목표**: `school-record-analyzer/*` → `ipsilounge/analyzer/` 통합 이식
+- **범위**: 이번은 파일 이식까지만. 자동 분석 wrapper · 상담사 검수 UI 는 별도 단계
+- `ipsilounge/docs/integration-plan.md` 신규 작성 — Phase 0~7 실행 계획, 민감 데이터 격리, 롤백 전략, 검증 체크리스트 포함
+- 승인 확정 사항:
+  · `uploads/` gitignore 추가는 별도 커밋으로 분리
+  · 학생 데이터 gitignore 는 whitelist 방식 (`_template.py`, `의대샘플.py` 포함)
+  · Presigned URL 만료 시간은 1시간 유지 (발급 시점 기준, 재클릭 시 자동 재발급)
+  · `school-record-analyzer/` 당분간 유지 · 추후 삭제
+  · `analyzer/requirements.txt` 는 Pin (`==`) 방식
+
 ### 연계규칙 V1 점검 후 기획서·구현 정합 작업
 기획서: `선배상담_상담사상담_연계규칙_V1.md`
 - **기획서 §4 L207 정정**: "5각형 레이더" → "4각형 레이더" (고등학교 V3 §4-1 기준).
