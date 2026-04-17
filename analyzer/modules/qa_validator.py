@@ -13,9 +13,23 @@ from datetime import date
 
 
 # ── 설정 ──
-SETUEK_WEIGHTS_NO_MAJOR = [0.19, 0.19, 0.19, 0.19, 0.08, 0.16]
+# 세특 가중치 (두 모드)
+SETUEK_WEIGHTS_NO_MAJOR   = [0.19, 0.19, 0.19, 0.19, 0.08, 0.16]            # 6항목
+SETUEK_WEIGHTS_WITH_MAJOR = [0.17, 0.17, 0.17, 0.17, 0.10, 0.07, 0.15]      # 7항목 (CLAUDE.md 원안)
 GRADE_THRESHOLDS = {"S": 8.5, "A": 7.0, "B": 5.0, "C": 3.5, "D": 0.0}
 TOLERANCE = 0.05  # 가중합산 허용 오차
+
+
+def _resolve_setuek_mode(setuek_data, is_major: bool):
+    """세특 모드별 슬라이스/가중치 계산.
+    반환: (n_items, score_end, weights)
+      - n_items: 항목 수 (6 or 7)
+      - score_end: 튜플 슬라이싱 종료 인덱스 (8 or 9). 점수 = d[2:score_end], 가중합산 = d[score_end], 등급 = d[score_end+1]
+      - weights: 해당 모드의 가중치 리스트
+    """
+    if is_major:
+        return 7, 9, SETUEK_WEIGHTS_WITH_MAJOR
+    return 6, 8, SETUEK_WEIGHTS_NO_MAJOR
 
 MIN_CHARS = {
     "setuek_comment": 200,
@@ -146,15 +160,16 @@ def check_structural_completeness(setuek_data, setuek_comments, good_sentences,
     return results
 
 
-def check_score_ranges(setuek_data, changche_data, haengtuk_data):
-    """P1-B: 점수 범위 검증 (1~10)"""
+def check_score_ranges(setuek_data, changche_data, haengtuk_data, is_major: bool = False):
+    """P1-B: 점수 범위 검증 (1~10). is_major=True 면 세특 7항목 모드."""
+    n_items, score_end, _ = _resolve_setuek_mode(setuek_data, is_major)
     results = []
     all_ok = True
 
     # 세특 점수
     for d in setuek_data:
         yr, subj = d[0], d[1]
-        scores = d[2:8]
+        scores = d[2:score_end]
         for i, s in enumerate(scores):
             if not (1 <= s <= 10):
                 results.append(QAResult("P1-B-001", f"세특 점수 범위 - {subj}({yr}학년)", "P1", "FAIL",
@@ -182,24 +197,25 @@ def check_score_ranges(setuek_data, changche_data, haengtuk_data):
                 all_ok = False
 
     if all_ok:
-        total = len(setuek_data) * 6 + len(changche_data) * 5 + len(haengtuk_data) * 5
+        total = len(setuek_data) * n_items + len(changche_data) * 5 + len(haengtuk_data) * 5
         results.append(QAResult("P1-B-000", f"전체 점수 범위 검증 ({total}개 점수)", "P1", "PASS"))
 
     return results
 
 
-def check_weighted_averages(setuek_data, weights=None):
-    """P1-C: 가중합산 수학 검증"""
+def check_weighted_averages(setuek_data, weights=None, is_major: bool = False):
+    """P1-C: 가중합산 수학 검증. is_major=True 면 7항목 가중치 사용."""
+    n_items, score_end, default_weights = _resolve_setuek_mode(setuek_data, is_major)
     if weights is None:
-        weights = SETUEK_WEIGHTS_NO_MAJOR
+        weights = default_weights
 
     results = []
     all_ok = True
 
     for d in setuek_data:
         yr, subj = d[0], d[1]
-        scores = d[2:8]
-        recorded_avg = d[8]
+        scores = d[2:score_end]
+        recorded_avg = d[score_end]
 
         calculated = sum(s * w for s, w in zip(scores, weights))
         diff = abs(calculated - recorded_avg)
@@ -226,15 +242,16 @@ def score_to_grade(score):
     else: return "D"
 
 
-def check_grade_matching(setuek_data):
-    """P1-D: 등급 일치 검증"""
+def check_grade_matching(setuek_data, is_major: bool = False):
+    """P1-D: 등급 일치 검증. is_major=True 면 7항목 튜플 구조 기준."""
+    _, score_end, _ = _resolve_setuek_mode(setuek_data, is_major)
     results = []
     all_ok = True
 
     for d in setuek_data:
         yr, subj = d[0], d[1]
-        avg = d[8]
-        recorded_grade = d[9]
+        avg = d[score_end]
+        recorded_grade = d[score_end + 1]
         expected_grade = score_to_grade(avg)
 
         if recorded_grade != expected_grade:
@@ -444,15 +461,16 @@ def check_comment_repetition(setuek_comments):
     return results
 
 
-def check_grade_score_consistency(setuek_data):
-    """P3-B: 등급-점수 정합성"""
+def check_grade_score_consistency(setuek_data, is_major: bool = False):
+    """P3-B: 등급-점수 정합성. is_major=True 면 7항목 튜플 구조 기준."""
+    _, score_end, _ = _resolve_setuek_mode(setuek_data, is_major)
     results = []
     issues = []
 
     for d in setuek_data:
         yr, subj = d[0], d[1]
-        scores = d[2:8]
-        grade = d[9]
+        scores = d[2:score_end]
+        grade = d[score_end + 1]
 
         # 모든 점수 8+인데 등급이 B 이하
         if all(s >= 8 for s in scores) and grade in ("B", "C", "D"):
@@ -471,26 +489,76 @@ def check_grade_score_consistency(setuek_data):
     return results
 
 
+def check_mode_consistency(setuek_data, target_major: str):
+    """P1-E: 메타(TARGET_MAJOR) ↔ setuek_data 튜플 길이 일관성 검증.
+    - 지정 모드 (TARGET_MAJOR 있음): 튜플 길이 11 이어야 함 (학년+과목+7점수+합산+등급)
+    - 미지정 모드 (TARGET_MAJOR 없음): 튜플 길이 10 이어야 함
+    """
+    results = []
+    is_major = bool(target_major and str(target_major).strip())
+    expected_len = 11 if is_major else 10
+    mode_label = "지정 모드 (7항목)" if is_major else "미지정 모드 (6항목)"
+
+    if not setuek_data:
+        return results  # 데이터 없으면 스킵 (다른 체크에서 잡힘)
+
+    mismatch = []
+    for d in setuek_data:
+        if len(d) != expected_len:
+            subj_label = f"{d[1]}({d[0]}학년)" if len(d) >= 2 else "?"
+            mismatch.append(f"{subj_label} 튜플 길이 {len(d)}")
+
+    if mismatch:
+        results.append(QAResult(
+            "P1-E-001", f"모드-데이터 일관성 ({mode_label})", "P1", "FAIL",
+            f"TARGET_MAJOR='{target_major}' 기준 튜플 길이 {expected_len} 예상. 불일치 {len(mismatch)}건: "
+            + ", ".join(mismatch[:3]) + ("..." if len(mismatch) > 3 else ""),
+            f"{mismatch[0]} 등", str(expected_len),
+            "TARGET_MAJOR 값과 setuek_data 튜플 점수 개수가 일치하도록 수정"))
+    else:
+        results.append(QAResult(
+            "P1-E-000", f"모드-데이터 일관성 ({mode_label})", "P1", "PASS"))
+
+    return results
+
+
 # ══════════════════════════════════════════════
 #  통합 실행
 # ══════════════════════════════════════════════
 
 def run_full_qa(setuek_data, setuek_comments, good_sentences,
                 changche_data, haengtuk_data, haengtuk_comments,
-                linkage_data, fix_data, student_name=""):
-    """전체 QA 검증 실행"""
+                linkage_data, fix_data, student_name="",
+                target_major: str = ""):
+    """전체 QA 검증 실행.
+    target_major: 지원 학과명 (빈 문자열이면 미지정 모드, 값 있으면 지정 모드).
+    """
     report = QAReport(
         student_name=student_name,
         date_str=date.today().strftime("%Y-%m-%d"),
     )
+    is_major = bool(target_major and str(target_major).strip())
 
     # P1 - 필수
     report.results.extend(
         check_structural_completeness(setuek_data, setuek_comments, good_sentences,
                                        changche_data, haengtuk_comments, linkage_data, fix_data))
-    report.results.extend(check_score_ranges(setuek_data, changche_data, haengtuk_data))
-    report.results.extend(check_weighted_averages(setuek_data))
-    report.results.extend(check_grade_matching(setuek_data))
+
+    # 모드-데이터 일관성 먼저 확인. FAIL 이면 튜플 구조가 깨져 있어
+    # 세특 계산 체크(weighted_averages, grade_matching 등) 가 크래시할 수 있으므로 스킵.
+    mode_results = check_mode_consistency(setuek_data, target_major)
+    report.results.extend(mode_results)
+    mode_ok = all(r.status != "FAIL" for r in mode_results)
+
+    if mode_ok:
+        report.results.extend(check_score_ranges(setuek_data, changche_data, haengtuk_data, is_major=is_major))
+        report.results.extend(check_weighted_averages(setuek_data, is_major=is_major))
+        report.results.extend(check_grade_matching(setuek_data, is_major=is_major))
+    else:
+        # 세특 계산 검증 스킵 안내만 기록
+        report.results.append(QAResult(
+            "P1-SKIP", "세특 계산 검증 스킵", "P1", "INFO",
+            "모드-데이터 불일치로 인해 점수 범위/가중합산/등급 일치 검증을 스킵함. P1-E 항목 먼저 수정 필요."))
 
     # P2 - 중요
     report.results.extend(check_char_counts(setuek_comments, haengtuk_comments, linkage_data, fix_data))
@@ -500,7 +568,8 @@ def run_full_qa(setuek_data, setuek_comments, good_sentences,
 
     # P3 - 참고
     report.results.extend(check_comment_repetition(setuek_comments))
-    report.results.extend(check_grade_score_consistency(setuek_data))
+    if mode_ok:
+        report.results.extend(check_grade_score_consistency(setuek_data, is_major=is_major))
 
     return report
 

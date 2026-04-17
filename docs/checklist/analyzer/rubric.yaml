@@ -8,7 +8,9 @@
 #
 # 주요 발견사항:
 #   1. 세특 항목: CLAUDE.md=7항목(전공적합성 포함), 구현=6항목(전공적합성 제외)
-#      → 구현 전체에서 6항목 일관. "미지정 모드"가 기본이며 7항목 코드 경로 없음
+#      → [2026-04-17 해소] B안 구현: TARGET_MAJOR 값으로 자동 분기 (7항목/6항목).
+#        report_constants.is_major_mode / resolve_setuek_items / _weights 도입.
+#        기존 학생(연승훈·의대샘플)은 TARGET_MAJOR="" 로 미지정 모드 유지 (역호환).
 #   2. 점수 척도: 프롬프트=1~5점, 데이터/QA/리포트=1~10점
 #      → [2026-04-17 해소] 프롬프트·config.yaml·구버전 모듈 전부 1~10점으로 통일
 #   3. config.yaml 일부 설정이 코드에서 미참조 (rubric_grades 등)
@@ -40,43 +42,57 @@ meta:
 items:
   - id: RUB-A1-setuek_items
     requirement: |
-      세특 평가 항목 정의:
-      - CLAUDE.md: 7항목 (교과연계성/탐구동기/탐구과정/결과성찰/전공적합성/차별성/학업태도)
-      - 구현: 6항목 (전공적합성 제외) → SETUEK_ITEMS 상수
-      - 미지정 모드가 기본이므로 6항목이 실제 운영 기준
-    spec_ref: "report_constants.py L17 SETUEK_ITEMS"
+      세특 평가 항목 정의 (2026-04-17 B안 구현 — 지정/미지정 모드 자동 분기):
+      - 지정 모드 (TARGET_MAJOR 값 있음): 7항목 (교과연계성/탐구동기/탐구과정/결과성찰/전공적합성/차별성/학업태도)
+        → SETUEK_ITEMS_WITH_MAJOR, SETUEK_WEIGHTS_WITH_MAJOR
+      - 미지정 모드 (TARGET_MAJOR 빈문자열): 6항목 (전공적합성 제외)
+        → SETUEK_ITEMS_NO_MAJOR, SETUEK_WEIGHTS_NO_MAJOR
+      - 판별: report_constants.is_major_mode(sd) — TARGET_MAJOR 값 유무 기반
+    spec_ref: "report_constants.py L17~65 (SETUEK_ITEMS_*, resolvers)"
     priority: P0
     code_review:
       status: pass
-      verified_at: "2026-04-16"
-      evidence: "SETUEK_ITEMS = ['교과연계성','탐구동기','탐구과정','결과성찰','차별성','학업태도'] — 정확히 6항목. 전공적합성 제외 모드가 유일 코드 경로"
+      verified_at: "2026-04-17"
+      evidence: |
+        [2026-04-17 B안 구현 완료]
+        - SETUEK_ITEMS_NO_MAJOR = ['교과연계성','탐구동기','탐구과정','결과성찰','차별성','학업태도']
+        - SETUEK_ITEMS_WITH_MAJOR = ['교과연계성','탐구동기','탐구과정','결과성찰','전공적합성','차별성','학업태도']
+        - resolve_setuek_items(sd), resolve_setuek_weights(sd), setuek_score_slice_end(sd), is_major_mode(sd) 헬퍼
+        - report_logic.py / qa_validator.py 모두 동적 분기 적용
+        - QA P1-E-001 메타-데이터 일관성 검증 추가 (튜플 길이 10 vs 11)
 
   - id: RUB-A2-setuek_weights
     requirement: |
-      세특 가중치:
-      - config.yaml (7항목): 교과연계 17%, 탐구동기 17%, 탐구과정 17%, 결과성찰 17%, 전공적합 10%, 차별성 7%, 학업태도 15%
-      - 구현 (6항목 no_major): 교과연계 19%, 탐구동기 19%, 탐구과정 19%, 결과성찰 19%, 차별성 8%, 학업태도 16%
-      - 6항목 가중치 합 = 1.00
-    spec_ref: "report_constants.py L18, qa_validator.py L16, config.yaml"
+      세특 가중치 (두 모드):
+      - 지정 모드 (7항목): 교과연계 17%, 탐구동기 17%, 탐구과정 17%, 결과성찰 17%, 전공적합 10%, 차별성 7%, 학업태도 15% (합=1.00)
+      - 미지정 모드 (6항목, 전공적합성 제외 재배분): 19% × 4 + 8% + 16% (합=1.00)
+    spec_ref: "report_constants.py L18~33, qa_validator.py L16~17"
     priority: P0
     code_review:
       status: pass
-      verified_at: "2026-04-16"
-      evidence: "SETUEK_WEIGHTS_NO_MAJOR = [0.19,0.19,0.19,0.19,0.08,0.16]. sum=1.00. report_constants.py와 qa_validator.py에서 동일 값 중복 정의"
+      verified_at: "2026-04-17"
+      evidence: |
+        [2026-04-17 B안 구현 완료]
+        - SETUEK_WEIGHTS_NO_MAJOR = [0.19, 0.19, 0.19, 0.19, 0.08, 0.16] (sum=1.00)
+        - SETUEK_WEIGHTS_WITH_MAJOR = [0.17, 0.17, 0.17, 0.17, 0.10, 0.07, 0.15] (sum=1.00)
+        - qa_validator._resolve_setuek_mode() 가 is_major 플래그로 동적 선택
 
   - id: RUB-A3-setuek_scoring
     requirement: |
-      세특 채점 범위: 각 항목 1~10점
-      - 데이터: setuek_data[i][2:8] = 6개 점수
-      - QA: 1<=score<=10 범위 검증
-      - 가중합산: sum(score*weight) 계산, d[8]에 저장
-      - 등급: d[9]에 저장 (S/A/B/C/D)
-    spec_ref: "qa_validator.py check_score_ranges() L155, check_weighted_averages() L191"
+      세특 채점 범위: 각 항목 1~10점 (모드별 튜플 길이 다름)
+      - 미지정: setuek_data[i][2:8] = 6점수, d[8] wavg, d[9] grade (튜플 길이 10)
+      - 지정:   setuek_data[i][2:9] = 7점수, d[9] wavg, d[10] grade (튜플 길이 11)
+      - QA check_score_ranges / check_weighted_averages / check_grade_matching 동적 분기
+    spec_ref: "qa_validator.py check_* (is_major 인자), report_constants.setuek_score_slice_end()"
     priority: P0
     code_review:
       status: pass
-      verified_at: "2026-04-16"
-      evidence: "d[2:8] 6점수, d[8] wavg, d[9] grade. QA check_score_ranges: 1<=s<=10. check_weighted_averages: sum(s*w) vs d[8], TOLERANCE=0.05"
+      verified_at: "2026-04-17"
+      evidence: |
+        [2026-04-17 B안 구현 완료]
+        - qa_validator._resolve_setuek_mode(is_major) 가 (n_items, score_end, weights) 반환
+        - check_score_ranges/weighted_averages/grade_matching/grade_score_consistency 모두 is_major 인자 받음
+        - run_full_qa(target_major=) → is_major 파생 → 하위 체크로 전달
 
   - id: RUB-A4-setuek_grade_thresholds
     requirement: |

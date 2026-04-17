@@ -26,10 +26,13 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 from .report_constants import (
-    SETUEK_ITEMS, SETUEK_WEIGHTS_NO_MAJOR,
+    SETUEK_ITEMS_NO_MAJOR, SETUEK_WEIGHTS_NO_MAJOR,
+    SETUEK_ITEMS_WITH_MAJOR, SETUEK_WEIGHTS_WITH_MAJOR,
     CHANGCHE_ITEMS, HAENGTUK_ITEMS,
     FONT_NAME, FONT_NAME_BD,
     register_fonts,
+    is_major_mode, resolve_setuek_items, resolve_setuek_weights,
+    setuek_score_slice_end,
 )
 
 # 폰트 등록 (모듈 로드 시 1회)
@@ -140,21 +143,28 @@ def create_excel(sd, xlsx_path):
     ws.freeze_panes = "A2"
 
     # ── Sheet 2: 세특분석 ──
+    # TARGET_MAJOR 유무에 따라 6항목/7항목 동적 분기
+    setuek_items_local = resolve_setuek_items(sd)
+    n_items = len(setuek_items_local)           # 6 또는 7
+    score_end = setuek_score_slice_end(sd)      # 8(미지정) 또는 9(지정)
+
     ws = wb.create_sheet("세특분석")
-    headers = ["학년", "과목"] + SETUEK_ITEMS + ["가중합산", "등급"]
+    headers = ["학년", "과목"] + setuek_items_local + ["가중합산", "등급"]
     style_header(ws, headers)
     for r, d in enumerate(setuek_data, 2):
         yr, subj = d[0], d[1]
-        scores = d[2:8]
-        wavg, grade = d[8], d[9]
+        scores = d[2:score_end]
+        wavg, grade = d[score_end], d[score_end + 1]
         style_cell(ws, r, 1, yr)
         style_cell(ws, r, 2, subj)
         for ci, s in enumerate(scores):
-            style_cell(ws, r, 3+ci, s)
-        style_cell(ws, r, 9, wavg)
-        gc = style_cell(ws, r, 10, grade)
+            style_cell(ws, r, 3 + ci, s)
+        style_cell(ws, r, 3 + n_items, wavg)
+        gc = style_cell(ws, r, 4 + n_items, grade)
         apply_grade_color(gc, grade)
-    set_col_widths(ws, [6, 18, 12, 10, 10, 10, 8, 10, 10, 8])
+    # 컬럼 폭: [학년, 과목, 각 항목..., 가중합산, 등급]
+    col_widths = [6, 18] + [10] * n_items + [10, 8]
+    set_col_widths(ws, col_widths)
     ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
     ws.freeze_panes = "A2"
 
@@ -838,8 +848,9 @@ def create_pdf(sd, pdf_path):
         """1~10점 척도를 0~100 스케일로 변환"""
         return v * 10
 
-    # 세특 평점 평균 (이미 1~10 스케일)
-    setuek_avg = sum(d[8] for d in setuek_data) / len(setuek_data) if setuek_data else 0
+    # 세특 평점 평균 (이미 1~10 스케일). 튜플의 가중합산은 score_end 위치.
+    _pdf_score_end = setuek_score_slice_end(sd)
+    setuek_avg = sum(d[_pdf_score_end] for d in setuek_data) / len(setuek_data) if setuek_data else 0
     setuek_100 = _to_100(setuek_avg)
 
     # 창체 환산점수 평균 (이미 100 스케일)
@@ -961,21 +972,69 @@ def create_pdf(sd, pdf_path):
             continue
         subj_names = ", ".join([d[1] for d in cat_subjects])
         n = len(cat_subjects)
-        avgs = [round(sum(d[i] for d in cat_subjects) / n, 1) for i in range(2, 8)]
-        weighted_avg = round(sum(d[8] for d in cat_subjects) / n, 2)
+        avgs = [round(sum(d[i] for d in cat_subjects) / n, 1) for i in range(2, _pdf_score_end)]
+        weighted_avg = round(sum(d[_pdf_score_end] for d in cat_subjects) / n, 2)
         grade = score_to_grade(weighted_avg)
         cat_rows.append((cat, subj_names, avgs, weighted_avg, grade))
 
     style_ref_note = ParagraphStyle("RefNote", fontName="Malgun", fontSize=8, leading=11, textColor=colors.HexColor("#999999"), spaceBefore=2, spaceAfter=4)
     elements.append(Paragraph("※ 각 항목은 1~10점 척도로 평가됩니다. 상세 평가 기준은 '평가 기준 안내' 페이지를 참고하세요.", style_ref_note))
+
+    # ── 세특 PDF 테이블 헤더/SPAN 스펙 빌더 (지정/미지정 모드 공용) ──
+    _major = is_major_mode(sd)
+
+    def _setuek_pdf_spec(col1_label, col1_w, col2_label, col2_w):
+        """세특 PDF 테이블의 2-row 헤더, 컬럼폭, SPAN 리스트, 등급 컬럼 인덱스 생성.
+        지정 모드(7항목)면 '전공적합성' 컬럼이 교과연계성 뒤에 추가됨.
+        """
+        if _major:
+            # 11열: col1 | col2 | 교과연계 | 전공적합 | 탐구활동(3) | 차별성 | 학업태도 | 평점 | 등급
+            hdr0 = [PH(col1_label), PH(col2_label), PH("교과\n연계성"), PH("전공\n적합성"),
+                    PH("탐구활동"), PH(""), PH(""),
+                    PH("차별성"), PH("학업태도"), PH("평점"), PH("등급")]
+            hdr1 = [PH("")] * 4 + [PH("동기"), PH("과정"), PH("결과")] + [PH("")] * 4
+            n_dyn = 7  # 교과연계+전공적합+탐구3+차별+학업
+            fixed_w = col1_w + col2_w + 50 + 34
+            each_w = (page_w - fixed_w) / n_dyn
+            cw_out = [col1_w, col2_w] + [each_w] * n_dyn + [50, 34]
+            spans = [
+                ("SPAN", (4, 0), (6, 0)),   # 탐구활동 (3열)
+                ("SPAN", (0, 0), (0, 1)),   # col1
+                ("SPAN", (1, 0), (1, 1)),   # col2
+                ("SPAN", (2, 0), (2, 1)),   # 교과연계성
+                ("SPAN", (3, 0), (3, 1)),   # 전공적합성
+                ("SPAN", (7, 0), (7, 1)),   # 차별성
+                ("SPAN", (8, 0), (8, 1)),   # 학업태도
+                ("SPAN", (9, 0), (9, 1)),   # 평점
+                ("SPAN", (10, 0), (10, 1)), # 등급
+            ]
+            grade_col = 10
+        else:
+            # 10열 (기존): col1 | col2 | 교과연계 | 탐구활동(3) | 차별성 | 학업태도 | 평점 | 등급
+            hdr0 = [PH(col1_label), PH(col2_label), PH("교과\n연계성"),
+                    PH("탐구활동"), PH(""), PH(""),
+                    PH("차별성"), PH("학업태도"), PH("평점"), PH("등급")]
+            hdr1 = [PH("")] * 3 + [PH("동기"), PH("과정"), PH("결과")] + [PH("")] * 4
+            n_dyn = 6
+            fixed_w = col1_w + col2_w + 50 + 34
+            each_w = (page_w - fixed_w) / n_dyn
+            cw_out = [col1_w, col2_w] + [each_w] * n_dyn + [50, 34]
+            spans = [
+                ("SPAN", (3, 0), (5, 0)),
+                ("SPAN", (0, 0), (0, 1)),
+                ("SPAN", (1, 0), (1, 1)),
+                ("SPAN", (2, 0), (2, 1)),
+                ("SPAN", (6, 0), (6, 1)),
+                ("SPAN", (7, 0), (7, 1)),
+                ("SPAN", (8, 0), (8, 1)),
+                ("SPAN", (9, 0), (9, 1)),
+            ]
+            grade_col = 9
+        return hdr0, hdr1, cw_out, spans, grade_col
+
     elements.append(P("■ 교과 중심 분석", style_subtitle))
-    # 2-row header: Row 0 main, Row 1 sub
-    hdr0 = [PH("교과"), PH("이수과목"), PH("교과\n연계성"), PH("탐구활동"), PH(""), PH(""), PH("차별성"), PH("학업태도"), PH("평점"), PH("등급")]
-    hdr1 = [PH(""), PH(""), PH(""), PH("동기"), PH("과정"), PH("결과"), PH(""), PH(""), PH(""), PH("")]
+    hdr0, hdr1, cw_cat, spans_cat, grade_col_cat = _setuek_pdf_spec("교과", 40, "이수과목", 120)
     tdata_cat = [hdr0, hdr1]
-    _s_fixed = 40 + 120 + 50 + 34
-    _s_each = (page_w - _s_fixed) / 6
-    cw_cat = [40, 120] + [_s_each]*6 + [50, 34]
     for cat, subj_names, avgs, wavg, grade in cat_rows:
         row = [PC(cat), PL(subj_names)]
         row += [PC(str(a)) for a in avgs]
@@ -985,34 +1044,22 @@ def create_pdf(sd, pdf_path):
     # Apply 2-row header styling
     t_cat.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 1), BLUE),
-        ("SPAN", (3, 0), (5, 0)),  # 탐구활동 spans 3 cols
-        ("SPAN", (0, 0), (0, 1)),  # 교과 spans 2 rows
-        ("SPAN", (1, 0), (1, 1)),  # 이수과목 spans 2 rows
-        ("SPAN", (2, 0), (2, 1)),  # 교과연계성 spans 2 rows
-        ("SPAN", (6, 0), (6, 1)),  # 차별성 spans 2 rows
-        ("SPAN", (7, 0), (7, 1)),  # 학업태도 spans 2 rows
-        ("SPAN", (8, 0), (8, 1)),  # 평점 spans 2 rows
-        ("SPAN", (9, 0), (9, 1)),  # 등급 spans 2 rows
+        *spans_cat,
         ("BACKGROUND", (0, 2), (-1, -1), WHITE),
     ]))
     for r in range(2, len(tdata_cat)):
         g = cat_rows[r-2][4]
         t_cat.setStyle(TableStyle([
-            ("BACKGROUND", (9, r), (9, r), colors.white),
-            ("TEXTCOLOR", (9, r), (9, r), grade_font_color(g)),
+            ("BACKGROUND", (grade_col_cat, r), (grade_col_cat, r), colors.white),
+            ("TEXTCOLOR", (grade_col_cat, r), (grade_col_cat, r), grade_font_color(g)),
         ]))
     elements.append(t_cat)
     elements.append(Spacer(1, 6*mm))
 
     # ── 학년별/과목별 상세 분석 테이블 (학년 셀병합) ──
     elements.append(P("■ 학년별 · 과목별 분석", style_subtitle))
-    # 2-row header
-    hdr0 = [PH("학년"), PH("과목"), PH("교과\n연계성"), PH("탐구활동"), PH(""), PH(""), PH("차별성"), PH("학업태도"), PH("평점"), PH("등급")]
-    hdr1 = [PH(""), PH(""), PH(""), PH("동기"), PH("과정"), PH("결과"), PH(""), PH(""), PH(""), PH("")]
+    hdr0, hdr1, cw, spans_yr, grade_col_yr = _setuek_pdf_spec("학년", 42, "과목", 90)
     tdata = [hdr0, hdr1]
-    _s_fixed2 = 42 + 90 + 50 + 34
-    _s_each2 = (page_w - _s_fixed2) / 6
-    cw = [42, 90] + [_s_each2]*6 + [50, 34]
 
     # 학년별로 그룹핑 (데이터에 존재하는 학년만)
     setuek_years_in_data = sorted(set(d[0] for d in setuek_data))
@@ -1020,7 +1067,10 @@ def create_pdf(sd, pdf_path):
         yr_subjects = [d for d in setuek_data if d[0] == yr]
         for idx, d in enumerate(yr_subjects):
             yr_label = f"{yr}학년" if idx == 0 else ""
-            row = [PC(yr_label), PL(d[1])] + [PC(str(s)) for s in d[2:8]] + [PC(f"{d[8]:.2f}"), grade_paragraph(d[9])]
+            scores_pd = d[2:_pdf_score_end]
+            wavg_pd = d[_pdf_score_end]
+            grade_pd = d[_pdf_score_end + 1]
+            row = [PC(yr_label), PL(d[1])] + [PC(str(s)) for s in scores_pd] + [PC(f"{wavg_pd:.2f}"), grade_paragraph(grade_pd)]
             tdata.append(row)
 
     t = make_table(tdata, col_widths=cw, has_header=False, repeat_rows=2)
@@ -1028,14 +1078,7 @@ def create_pdf(sd, pdf_path):
     # Apply 2-row header styling
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 1), BLUE),
-        ("SPAN", (3, 0), (5, 0)),  # 탐구활동 spans 3 cols
-        ("SPAN", (0, 0), (0, 1)),  # 학년 spans 2 rows
-        ("SPAN", (1, 0), (1, 1)),  # 과목 spans 2 rows
-        ("SPAN", (2, 0), (2, 1)),  # 교과연계성 spans 2 rows
-        ("SPAN", (6, 0), (6, 1)),  # 차별성 spans 2 rows
-        ("SPAN", (7, 0), (7, 1)),  # 학업태도 spans 2 rows
-        ("SPAN", (8, 0), (8, 1)),  # 평점 spans 2 rows
-        ("SPAN", (9, 0), (9, 1)),  # 등급 spans 2 rows
+        *spans_yr,
         ("BACKGROUND", (0, 2), (-1, -1), WHITE),
     ]))
 
@@ -1052,10 +1095,10 @@ def create_pdf(sd, pdf_path):
 
     # Grade coloring - offset by 2 for 2 header rows
     for r in range(2, len(tdata)):
-        g = setuek_data[r-2][9]
+        g = setuek_data[r-2][_pdf_score_end + 1]
         t.setStyle(TableStyle([
-            ("BACKGROUND", (9, r), (9, r), colors.white),
-            ("TEXTCOLOR", (9, r), (9, r), grade_font_color(g)),
+            ("BACKGROUND", (grade_col_yr, r), (grade_col_yr, r), colors.white),
+            ("TEXTCOLOR", (grade_col_yr, r), (grade_col_yr, r), grade_font_color(g)),
         ]))
     elements.append(t)
     elements.append(PageBreak())

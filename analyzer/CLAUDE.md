@@ -242,8 +242,10 @@ school-record-analyzer/
   - **이유**: 해당 문장이 입시에서 높은 평가를 받을 수 있는 핵심 문장인 이유
   - **표현 역량**: 해당 문장이 학생의 어떤 역량(학업역량/진로역량/공동체역량의 세부 항목)을 잘 표현하고 있는지 서술
   - ※ 핵심 문장이 없는 과목(예: 단순 수업 참여만 기록된 경우)은 "해당 없음"으로 표기하고, 해당 과목에서 핵심 문장이 부재한 이유를 간단히 기술
-- 지원 학과 지정 시 → 전공적합성 항목 활성화
-- 미지정 시 → 전공적합성 항목 제외, 나머지 6개로 재배분
+- **지정/미지정 모드 자동 판별** (2026-04-17 구현):
+  - 학생 데이터 파일의 `TARGET_MAJOR` 값이 있으면 → **지정 모드** (7항목 루브릭, 전공적합성 활성)
+  - `TARGET_MAJOR` 가 빈 문자열이면 → **미지정 모드** (6항목 루브릭, 전공적합성 제외 후 가중치 재배분)
+  - 튜플 구조도 모드에 따라 길이 달라짐 (미지정=10, 지정=11). QA P1-E 에서 자동 검증.
 - 상세 루브릭: 아래 「세특 평가 루브릭」 참조
 
 ### Step 6: 창체 분석 (Claude)
@@ -385,12 +387,18 @@ school-record-analyzer/
 #### 9-0. 학생 데이터 파일 작성 (선행 작업)
 - 분석 결과를 `data/students/<학생명>.py`에 작성
 - `data/students/_template.py`를 복사하여 시작
-- 15개 필수 변수 모두 채워야 함:
+- 17개 필수 변수 모두 채워야 함:
   - 메타: `STUDENT`, `SCHOOL`, `TODAY`
+  - 지원: `TARGET_UNIV`, `TARGET_MAJOR` (미지정이면 빈 문자열 `""`)
   - 세특: `setuek_data`, `setuek_comments`, `comment_keys`, `good_sentences`
   - 창체: `changche_data`, `changche_comments`
   - 행특: `haengtuk_data`, `haengtuk_comments`
   - 종합: `linkage_data`, `eval_data`, `fix_data`, `summary_data`
+
+**세특 루브릭 모드는 `TARGET_MAJOR` 값으로 자동 결정**:
+- `TARGET_MAJOR = ""` → 미지정 모드, `setuek_data` 튜플 길이 10 (6항목)
+- `TARGET_MAJOR = "경영학과"` → 지정 모드, `setuek_data` 튜플 길이 11 (7항목, 전공적합성 포함)
+- QA P1-E-001 이 메타-데이터 일관성을 자동 검증하여 불일치 시 리포트 생성 차단.
 
 #### 9-1. 명령행 진입점 실행
 ```bash

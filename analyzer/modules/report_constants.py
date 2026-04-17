@@ -13,9 +13,56 @@ from reportlab.pdfbase.ttfonts import TTFont
 # ═══════════════════════════════════════════════════════
 # 세특 평가 상수
 # ═══════════════════════════════════════════════════════
+#
+# 두 가지 모드:
+#   - 미지정 모드 (6항목): TARGET_MAJOR 가 없을 때. 전공적합성 제외 후 재배분.
+#   - 지정 모드   (7항목): TARGET_MAJOR 가 있을 때. CLAUDE.md § 세특 루브릭 원안 가중치.
+#
+# 동적 전환:
+#   from .report_constants import resolve_setuek_items, resolve_setuek_weights
+#   items   = resolve_setuek_items(sd)
+#   weights = resolve_setuek_weights(sd)
 
-SETUEK_ITEMS = ["교과연계성", "탐구동기", "탐구과정", "결과성찰", "차별성", "학업태도"]
+# 미지정 모드 (6항목) — 전공적합성 제외 + 가중치 재배분 (합계 1.0)
+SETUEK_ITEMS_NO_MAJOR   = ["교과연계성", "탐구동기", "탐구과정", "결과성찰", "차별성", "학업태도"]
 SETUEK_WEIGHTS_NO_MAJOR = [0.19, 0.19, 0.19, 0.19, 0.08, 0.16]
+
+# 지정 모드 (7항목) — CLAUDE.md § 세특 루브릭 원안 가중치 (합계 1.0)
+SETUEK_ITEMS_WITH_MAJOR   = ["교과연계성", "탐구동기", "탐구과정", "결과성찰", "전공적합성", "차별성", "학업태도"]
+SETUEK_WEIGHTS_WITH_MAJOR = [0.17, 0.17, 0.17, 0.17, 0.10, 0.07, 0.15]
+
+# 레거시 호환 — 기존 코드가 SETUEK_ITEMS 를 import 하던 경로 유지 (미지정 모드 별칭)
+SETUEK_ITEMS = SETUEK_ITEMS_NO_MAJOR
+
+
+def is_major_mode(sd) -> bool:
+    """학생 데이터 모듈(sd) 의 TARGET_MAJOR 값 유무로 지정/미지정 판별.
+
+    판별 기준:
+      - TARGET_MAJOR 미정의 또는 빈 문자열/공백 → 미지정 모드 (6항목)
+      - TARGET_MAJOR 에 값 존재 → 지정 모드 (7항목, 전공적합성 포함)
+    """
+    target_major = getattr(sd, "TARGET_MAJOR", "")
+    return bool(target_major and str(target_major).strip())
+
+
+def resolve_setuek_items(sd):
+    """학생 데이터 기반으로 세특 항목 리스트 반환."""
+    return SETUEK_ITEMS_WITH_MAJOR if is_major_mode(sd) else SETUEK_ITEMS_NO_MAJOR
+
+
+def resolve_setuek_weights(sd):
+    """학생 데이터 기반으로 세특 가중치 리스트 반환."""
+    return SETUEK_WEIGHTS_WITH_MAJOR if is_major_mode(sd) else SETUEK_WEIGHTS_NO_MAJOR
+
+
+def setuek_score_slice_end(sd) -> int:
+    """setuek_data 튜플에서 점수 슬라이싱 종료 인덱스.
+    튜플 구조: (학년, 과목, 점수1..점수N, 가중합산, 등급)
+      - 미지정: 6항목 → 점수 인덱스 2..7 (슬라이스 [2:8]), 종료=8
+      - 지정:   7항목 → 점수 인덱스 2..8 (슬라이스 [2:9]), 종료=9
+    """
+    return 9 if is_major_mode(sd) else 8
 
 
 # ═══════════════════════════════════════════════════════

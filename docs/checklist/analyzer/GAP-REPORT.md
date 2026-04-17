@@ -156,15 +156,18 @@ pdf_path  = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}.pdf"
 
 ## 3. 부분 구현 / 운영 모드 차이
 
-### P1 (P2) §5 Step 5 세특 루브릭 7항목 vs 6항목
+### P1 (P2) §5 Step 5 세특 루브릭 7항목 vs 6항목 — 해소 완료 ✅
 
-**CLAUDE.md §5 Step 5 / §7**: 7항목 (교과연계성·탐구동기·탐구과정·결과성찰·**전공적합성**·차별성·학업태도)
+**[2026-04-17 해소]** B안 (동적 전환 모드) 로 구현 완료:
 
-**실제 `SETUEK_ITEMS`** (report_constants.py): 6항목 (전공적합성 **제외**)
-
-**대응**: config.yaml 에 `setuek_weights_no_major:` 로 6항목 가중치 재배분(0.19×4 + 0.08 + 0.16)이 기본값처럼 운영 중. 지원 학과 미지정 시나리오를 기본값으로 삼은 셈.
-
-※ 이미 `analyzer/rubric.yaml` P2 gap 으로 문서화됨. 추가 조치 불필요.
+- `SETUEK_ITEMS_NO_MAJOR` (6항목) + `SETUEK_ITEMS_WITH_MAJOR` (7항목) 양쪽 상수 정의
+- `is_major_mode(sd)`: 학생 데이터의 `TARGET_MAJOR` 값 유무로 자동 판별
+- `resolve_setuek_items(sd)` / `resolve_setuek_weights(sd)` / `setuek_score_slice_end(sd)` 헬퍼
+- `report_logic.create_excel/create_pdf`, `qa_validator.run_full_qa` 모두 동적 분기 적용
+- QA P1-E-001: `TARGET_MAJOR` ↔ `setuek_data` 튜플 길이 일관성 자동 검증 (미지정=10, 지정=11)
+- `_template.py` 에 `TARGET_UNIV`, `TARGET_MAJOR` 필수 메타 추가
+- 기존 학생(연승훈, 의대샘플)은 `TARGET_MAJOR=""` 로 미지정 모드 유지 (역호환)
+- `REQUIRED_VARS` 15개 → 17개 (TARGET_UNIV, TARGET_MAJOR 추가)
 
 ---
 

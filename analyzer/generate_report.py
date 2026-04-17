@@ -24,6 +24,7 @@ OUTPUT_DIR   = PROJECT_ROOT / "output"
 
 REQUIRED_VARS = [
     "STUDENT", "SCHOOL", "TODAY",
+    "TARGET_UNIV", "TARGET_MAJOR",  # 지원 대학·학과 (빈 문자열이면 미지정 모드)
     "setuek_data", "setuek_comments", "comment_keys", "good_sentences",
     "changche_data", "changche_comments",
     "haengtuk_data", "haengtuk_comments",
@@ -140,8 +141,14 @@ def main():
         linkage_data=sd.linkage_data,
         fix_data=sd.fix_data,
         student_name=sd.STUDENT,
+        target_major=getattr(sd, "TARGET_MAJOR", "") or "",
     )
     print_qa_report(qa_report)
+
+    # 모드 안내 출력
+    _is_major = bool(getattr(sd, "TARGET_MAJOR", "") and str(sd.TARGET_MAJOR).strip())
+    _mode_label = f"지정 모드 (7항목, 지원 학과: {sd.TARGET_MAJOR})" if _is_major else "미지정 모드 (6항목, 전공적합성 제외)"
+    print(f"세특 루브릭: {_mode_label}")
 
     if not qa_report.all_blocking_passed():
         print("QA FAIL - 리포트 생성 차단. FAIL 항목 수정 후 재실행하세요.")
