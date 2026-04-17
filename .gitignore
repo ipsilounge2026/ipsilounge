@@ -63,3 +63,19 @@ backend/dev.db-shm
 backend/dev.db-wal
 docs/checklist/_evidence/
 docs/checklist/_runs/
+
+# analyzer (학생부 분석기) — 민감 데이터 및 OS별 바이너리
+analyzer/input/
+analyzer/output/
+analyzer/tools/
+analyzer/__pycache__/
+analyzer/**/__pycache__/
+
+# analyzer 학생 데이터 (실제 학생은 제외, 샘플·템플릿만 포함)
+analyzer/data/students/*.py
+!analyzer/data/students/_template.py
+!analyzer/data/students/의대샘플.py
+!analyzer/data/students/__init__.py
+
+# 웹 업로드 파일 (민감 정보) — 통합 이식 전부터 누락되어 있던 이슈 보강
+uploads/
