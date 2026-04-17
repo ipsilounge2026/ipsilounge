@@ -40,11 +40,12 @@ BLOCKED_CATEGORIES: frozenset[str] = frozenset({"D8", "F", "G"})
 # V1 §6 상담사 설문(ConsultationSurvey) 선배 공유 기본 토글 (True=공유, False=비공개)
 DEFAULT_SURVEY_SENIOR_SHARING: dict[str, bool] = {
     "academic_tier_label": True,      # 학업 현황 요약 레이블 (B: naesin, C: mock)
-    "career_direction": True,         # 진로·전형 방향 (E1)
-    "target_school_name": False,      # 구체적 목표 학교명 (E2/E3) — 기본 비공개
+    "career_direction": True,         # 진로 방향 (E1 계열)
+    "exam_track_label": True,         # 전형 방향 레이블 (E3 수시/정시/미정) — V1 §4-1 독립 토글
+    "target_school_name": False,      # 구체적 목표 학교명 (E2 구체 학교명) — 시스템 차단
     "subject_difficulties": True,     # D6 과목 고민 요약
     "study_methods": True,            # D7 학습법 요약
-    "roadmap_top_summary": True,      # 맞춤 로드맵 최상위 요약
+    "roadmap_top_summary": True,      # 맞춤 로드맵 최상위 요약 (E2 목표 수준)
     "action_plan_detail": False,      # 상세 액션 플랜 — 기본 비공개
     "subject_selection": True,        # E5 선택과목 목록
     "radar_grades": True,             # 레이더 등급 (점수 제외)
@@ -157,6 +158,14 @@ def abstract_consultation_for_senior(
         if e1:
             summary["career_direction"] = _extract_career_direction(e1)
 
+    # --- E3 전형 방향 (exam_track_label) — V1 §4-1 독립 토글 ---
+    # 수시/정시/미정 레이블만 노출 (상세 수능 최저·주력 전형은 공유 안 함)
+    if effective_sharing.get("exam_track_label", True):
+        e3 = cat_e.get("E3", {}) if isinstance(cat_e, dict) else {}
+        exam_track = _extract_exam_track_label(e3)
+        if exam_track:
+            summary["exam_track"] = exam_track
+
     # --- E2/E3: 목표 수준 (대학명 제외) (target_school_name) ---
     if effective_sharing.get("target_school_name", False):
         e2 = cat_e.get("E2", {}) if isinstance(cat_e, dict) else {}
@@ -165,11 +174,11 @@ def abstract_consultation_for_senior(
         if target_level:
             summary["target_level"] = target_level
 
-    # --- roadmap_top_summary: E2/E3 최상위 요약 한 줄 (roadmap_top_summary) ---
+    # --- roadmap_top_summary: E2 목표 수준 한 줄 (roadmap_top_summary) ---
+    # V1 §4-1: 맞춤 로드맵 최상위 요약(Phase별 주요 방향). E3 전형 방향은 exam_track_label 로 분리됨.
     if effective_sharing.get("roadmap_top_summary", True):
         e2 = cat_e.get("E2", {}) if isinstance(cat_e, dict) else {}
-        e3 = cat_e.get("E3", {}) if isinstance(cat_e, dict) else {}
-        roadmap_top = _extract_roadmap_top_summary(e2, e3)
+        roadmap_top = _extract_roadmap_top_summary(e2)
         if roadmap_top:
             summary["roadmap_top_summary"] = roadmap_top
 
@@ -431,17 +440,30 @@ def _extract_target_level(e2: dict, e3: dict) -> str | None:
     return None
 
 
-def _extract_roadmap_top_summary(e2: dict, e3: dict) -> str | None:
-    """E2/E3 최상위 요약 1줄 텍스트 (대학명 제외)."""
-    parts: list[str] = []
-    if isinstance(e2, dict):
-        level = e2.get("target_level")
-        if level and level != "미정":
-            parts.append(str(level))
-    if isinstance(e3, dict):
-        track = e3.get("main_track")
-        if track and track != "미정":
-            parts.append(f"{track} 중심")
-    if not parts:
+def _extract_roadmap_top_summary(e2: dict) -> str | None:
+    """V1 §4-1: 로드맵 최상위 요약 — E2 목표 수준만 1줄 (대학명 제외).
+
+    E3 전형 방향은 `exam_track_label` 토글에서 독립적으로 처리되므로 여기서 제외.
+    """
+    if not isinstance(e2, dict):
         return None
-    return " / ".join(parts)
+    level = e2.get("target_level")
+    if level and level != "미정":
+        return str(level)
+    return None
+
+
+def _extract_exam_track_label(e3: dict) -> str | None:
+    """V1 §4-1: E3 전형 방향 레이블 — 수시/정시/미정 중 하나만 추출.
+
+    전형 이해도 점수나 상세 수능 최저는 포함하지 않는다 (레이블만).
+    """
+    if not isinstance(e3, dict):
+        return None
+    track = e3.get("main_track")
+    if not track or track == "미정":
+        return None
+    # 허용되는 값만 그대로 반환 (예상 외 값은 안전하게 무시)
+    if track in ("수시", "정시", "혼합"):
+        return str(track)
+    return None

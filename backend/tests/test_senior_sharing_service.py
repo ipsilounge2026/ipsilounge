@@ -191,3 +191,68 @@ def test_default_sharing_applied_when_none() -> None:
     assert summary.get("career_direction") == "공학계열"
     # target_school_name 은 기본 False → 포함되지 않음
     assert "target_level" not in summary
+
+
+# ============================================================
+# V1 §4-1: E3 전형 방향 독립 토글 (exam_track_label)
+# ============================================================
+
+def test_exam_track_label_default_shared() -> None:
+    """기본 토글(None) 적용 시 E3.main_track 이 exam_track 으로 노출된다."""
+    answers = {
+        "E": {
+            "E2": {"target_level": "상위권"},
+            "E3": {"main_track": "수시", "understanding": 8},
+        }
+    }
+    summary = abstract_consultation_for_senior(answers=answers)
+
+    # 기본 True → 레이블만 노출 (상세 수능 최저·이해도 점수는 제외)
+    assert summary.get("exam_track") == "수시"
+    # roadmap_top_summary 는 E2 목표 수준만 (E3 main_track 제외됨)
+    assert summary.get("roadmap_top_summary") == "상위권"
+
+
+def test_exam_track_label_off_hidden() -> None:
+    """exam_track_label=False 일 때 exam_track 키 자체가 포함되지 않음."""
+    answers = {
+        "E": {
+            "E3": {"main_track": "정시"},
+        }
+    }
+    sharing = {"exam_track_label": False}
+    summary = abstract_consultation_for_senior(answers=answers, sharing=sharing)
+
+    assert "exam_track" not in summary
+
+
+def test_exam_track_label_undecided_not_shared() -> None:
+    """main_track='미정' 이면 노출하지 않는다 (의미 없는 레이블)."""
+    answers = {"E": {"E3": {"main_track": "미정"}}}
+    summary = abstract_consultation_for_senior(answers=answers)
+    assert "exam_track" not in summary
+
+
+def test_exam_track_label_ignores_unknown_values() -> None:
+    """수시/정시/혼합 외의 값은 안전하게 무시."""
+    answers = {"E": {"E3": {"main_track": "기타"}}}
+    summary = abstract_consultation_for_senior(answers=answers)
+    assert "exam_track" not in summary
+
+
+def test_roadmap_top_summary_no_longer_includes_e3() -> None:
+    """회귀 테스트: roadmap_top_summary 는 E2 목표 수준만 담아야 하고 E3 전형 방향은
+    exam_track_label 로 분리되었으므로 'X 중심' 같은 문구가 들어가지 않는다."""
+    answers = {
+        "E": {
+            "E2": {"target_level": "상위권"},
+            "E3": {"main_track": "수시"},
+        }
+    }
+    summary = abstract_consultation_for_senior(answers=answers)
+
+    roadmap = summary.get("roadmap_top_summary") or ""
+    # 분리 이전에는 "상위권 / 수시 중심" 이었으나, 분리 후 E2 만 있어야 한다
+    assert "중심" not in roadmap
+    assert "수시" not in roadmap
+    assert roadmap == "상위권"
