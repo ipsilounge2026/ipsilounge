@@ -22,6 +22,26 @@ meta:
   implementation_notes:
     - "analyzer/pipeline.yaml 과 범위 분리: pipeline 은 end-to-end 동작, 여기는 스크립트 자체 품질"
     - "QA 검증 (Step 8.5) 은 qa_validator.py 가 담당, 여기서는 진입점이 호출하는지만 확인"
+  verification_summary:
+    verified_at: "2026-04-17"
+    pass: 12
+    partial: 1         # F1 2회차 _v{N} 접미사 — 진입점 코드에 미구현 (수동 워크플로우)
+    fail: 0
+    documented_gap: 0
+    method: "generate_report.py 코드 라인별 검증 + CLI 실행 3가지 (인자 없음 / 없는 학생 / 정상)"
+    completion_note: |
+      A1~A3 상단 메타 (encoding 선언, PROJECT_ROOT/STUDENTS_DIR/OUTPUT_DIR, REQUIRED_VARS 15) 정상.
+      B1 인자 없음 → 사용법 + 학생 목록 + exit 1 (Phase 5 실행 확인).
+      B2 없는 학생 → [ERROR] + 목록 + exit 1.
+      B3 _template·__init__ 필터링 정상 (list_available_students).
+      C1 한글 파일명 안전 로드 (importlib.util.spec_from_file_location).
+      C2 로드 예외 처리 + exit 2. C3 REQUIRED_VARS hasattr 검증.
+      D1~D3 QA 연동 (run_full_qa / print_qa_report / all_blocking_passed → exit 3).
+      E1 OUTPUT_DIR mkdir parents=True / E2 파일명 규칙 / E3 create_excel+create_pdf 호출.
+      G1 exit code 규약 (0/1/2/3).
+      H1 Claude 드래그 워크플로우 / H2 한글 에러 메시지 + 구체 안내.
+      F1 partial: 2회차 _v{N} 접미사는 진입점에 미구현 — CLAUDE.md §0-4 에 따라
+      Claude 대화형 수동 처리로 분류 (진입점 자동화는 추후 과제).
 
 # ─── A. 파일 상단 메타 정보 ────────────────────────────────────────
 items:

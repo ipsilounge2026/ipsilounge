@@ -7,6 +7,26 @@
 
 ## 2026-04-17
 
+### analyzer 보완 6종 체크리스트 L1/L2 검증 완료 — ready 승격
+작성한 6종 체크리스트(총 86항목)에 대해 자동 스캔 기반 검증 후
+`drafted → ready` 일괄 승격.
+
+- **검증 방식**
+  · 파일 존재성 (16+11+8 = 35건 Glob)
+  · config.yaml 산술 (가중치 4건 합계 1.0 / 등급 경계 / 임계값 16건)
+  · requirements.txt 현재 설치 버전 매칭 (3건)
+  · REQUIRED_VARS 15개 generate_report.py ↔ _template.py 교차 매칭
+  · 격리 경계 grep (backend/*-web/mobile 에 "from analyzer" 0건)
+  · gitignore whitelist 동작 (git check-ignore 로 연승훈/의대샘플 구분 확인)
+  · SHARED_DATA_ROOT 해석 (analyzer/data) 및 실존성
+- **결과 집계**: 86/86 항목 중 pass 75 + partial 5 + documented_gap 6
+  · partial 5건: 워드클라우드 섹션 2 (향후 기능) + 2회차 자동화 3 (수동 처리 중)
+  · gap 6건: 미사용 패키지 5 + 1~10 vs 1~5 척도 불일치 (rubric.yaml 에 이미 문서화)
+- 각 yaml 의 meta 블록에 verification_summary 추가
+- `_index.yaml` 6건 status ready 승격 + promotion_summary + verification_summary 반영
+- index_version 2.13.0 → 2.14.0
+- analyzer 영역 체크리스트 **9종 전체 ready** (기존 3 + 보완 6)
+
 ### analyzer 체크리스트 보완 6종 신규 작성
 `ipsilounge/docs/checklist/analyzer/` 에 신규 6개 체크리스트 추가.
 기존 3종(pipeline/rubric/report-output)이 파이프라인·루브릭·리포트 산출물을

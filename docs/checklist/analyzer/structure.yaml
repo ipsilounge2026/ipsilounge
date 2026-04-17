@@ -17,6 +17,18 @@ meta:
     - "2026-04-17 통합 이식 완료: school-record-analyzer/* → ipsilounge/analyzer/*"
     - "격리 원칙: backend/*-web/mobile 어디서도 analyzer.* 를 직접 import 하지 않음"
     - "input/output/tools 는 gitignore 대상 (민감·OS별)"
+  verification_summary:
+    verified_at: "2026-04-17"
+    pass: 16
+    fail: 0
+    partial: 0
+    method: "파일 존재성 자동 스캔 (Glob) + git ls-files + git check-ignore + SHARED_DATA_ROOT 해석 검증"
+    completion_note: |
+      L1: 루트 파일 5개 + modules 12개 + prompts 8개 + config 2개 +
+      공용 DB 4개 + students 3개 (_template/의대샘플/__init__) + fonts/assets 모두 실존.
+      L2: backend/*-web/mobile 에서 "from analyzer" / "import analyzer " grep 결과 0건.
+      L3: SHARED_DATA_ROOT 해석 결과 (.../analyzer/data) + DATA_ROOT.exists() True.
+      gitignore whitelist 동작: 연승훈.py ignored, 의대샘플.py tracked 확인.
 
 # ─── A. 루트 진입점 파일 ────────────────────────────────────────────
 items:

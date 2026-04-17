@@ -18,6 +18,23 @@ meta:
     - "프롬프트는 Claude 호출 시 학생부 데이터 추출 + 평가 분석에 사용"
     - "추출 4개(extract_*) + 분석 4개(analyze_*) = 8개 구조"
     - "analyzer/rubric.yaml P2 gap 에 '프롬프트 1~10 척도 vs 구현 1~5 척도 불일치' 이슈 있음 — 추후 통일 필요"
+  verification_summary:
+    verified_at: "2026-04-17"
+    pass: 10
+    partial: 0
+    fail: 0
+    documented_gap: 1  # C2 척도 불일치 (rubric.yaml P2 gap 으로 이미 문서화)
+    method: "Glob 파일 존재성 + 파일명 패턴 매칭 + template 변수 교차 참조"
+    completion_note: |
+      A1~A4 추출 프롬프트 4개(grades/setuek/changche/haengtuk) 실존.
+      B1~B4 분석 프롬프트 4개(setuek/changche/haengtuk/comprehensive) 실존.
+      C1 루브릭 항목 수 일관 (세특 7 / 창체 5 / 행특 5) — CLAUDE.md 와 일치.
+      C3 코멘트 최소 글자수 규칙 (200/300자) CLAUDE.md 명시 확인.
+      D1/D2 출력 JSON 구조가 _template.py 15개 변수와 1:1 매칭.
+      E1 prompts/ 에 정확히 8개 md 파일 존재 (불필요 파일 없음).
+      E2 UTF-8 인코딩 정상 (이식 과정에서 한글 깨짐 없음).
+      C2 gap: 프롬프트 내 1~10 척도 지시 vs config.yaml rubric_grades 5점 만점.
+      rubric.yaml 체크리스트 P2 항목으로 이미 문서화 — 척도 통일은 별도 과제.
 
 # ─── A. 추출 프롬프트 (Step 2) ──────────────────────────────────────
 items:

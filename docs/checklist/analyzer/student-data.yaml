@@ -22,6 +22,25 @@ meta:
     - "15개 필수 변수는 generate_report.py 의 REQUIRED_VARS 리스트와 1:1 매칭"
     - "부분 학년 학생부 지원: 1학년 1학기만 있어도 리포트 생성 가능 (신규 상담 초기)"
     - "실제 학생 데이터는 gitignore (whitelist 로 _template, 의대샘플, __init__ 만 포함)"
+  verification_summary:
+    verified_at: "2026-04-17"
+    pass: 14
+    partial: 2         # G1/G2 2회차 변화 추적 (진입점 미구현, 수동 처리)
+    fail: 0
+    documented_gap: 0
+    method: "_template.py · 의대샘플.py · generate_report.py 교차 스캔 + gitignore 동작 검증"
+    completion_note: |
+      A1~A5 15개 필수 변수 (메타 3 + 세특 4 + 창체 2 + 행특 2 + 종합 4)
+      _template.py 와 의대샘플.py 에 모두 존재.
+      B1 generate_report.py REQUIRED_VARS 리스트와 _template.py 변수명 15/15 일치 확인.
+      C1~C5 부분 학년 지원 _template.py 상단 주석에 명시 + report_logic 자동 감지 로직 구현.
+      D1 setuek_data 10요소 튜플 구조 + D2 코멘트 최소 분량 (200/300자) qa_validator 검증 +
+      D3 등급 라벨 S/A/B/C/D (config rubric_grades).
+      E1 _template 완전성 + E2 의대샘플 유효 (Phase 5 에서 리포트 생성 성공) + E3 docstring 완비.
+      F1 whitelist gitignore (git check-ignore 확인: 연승훈.py ignored / 의대샘플.py tracked) +
+      F2/F3 실제 개인정보 없음 (가명 "학생이름" / "의대샘플").
+      G1/G2 partial: 2회차 변화 추적 (CLAUDE.md §0-4) 은 Claude 대화형 워크플로우로 수동 처리 —
+      진입점 자동화 미구현. 추후 wrapper 연결 시점에 재검토.
 
 # ─── A. 필수 변수 15개 존재 ─────────────────────────────────────────
 items:

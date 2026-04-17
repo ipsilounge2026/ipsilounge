@@ -19,6 +19,20 @@ meta:
     - "CLAUDE.md 명시 중 미사용 5개(pdf2image, kiwipiepy, wordcloud, matplotlib, pandas) 제외"
     - "pdf2image 를 쓰지 않으므로 poppler(tools/) 도 이식 제외"
     - "향후 §8-4 워드클라우드 키워드 추출 등 확장 기능 구현 시 requirements.txt 재조정"
+  verification_summary:
+    verified_at: "2026-04-17"
+    pass: 7          # A1 + B1~B3 + E1~E2 + F1 (실제 가능한 자동 검증)
+    partial: 0
+    fail: 0
+    documented_gap: 5  # C1~C5 (미사용 패키지 5개) 는 gap 으로 문서화만
+    method: "importlib.metadata.version() + requirements.txt grep + smoke test 결과 재활용"
+    completion_note: |
+      A1 Python 3.14.3 확인. B1~B3 설치 버전 (openpyxl 3.1.5, reportlab 4.4.10,
+      PyYAML 6.0.3) requirements.txt pin 과 일치. E1 backend/requirements 와 분리
+      (openpyxl 만 겹치며 호환). E2 Pin 방식 채택 근거 명시. F1 설치 절차 README 에 문서화.
+      C1~C5 gap: pdf2image/kiwipiepy/wordcloud/matplotlib/pandas 는 CLAUDE.md 명시되었으나
+      실제 import 없음. §8-4 워드클라우드 구현 시 재검토 예정.
+      F2 런타임 smoke: python generate_report.py 의대샘플/연승훈 모두 정상 (이식 Phase 5).
 
 # ─── A. Python 런타임 ──────────────────────────────────────────────
 items:

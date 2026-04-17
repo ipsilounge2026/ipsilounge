@@ -21,6 +21,23 @@ meta:
     - "실제 config.yaml 은 CLAUDE.md 예시보다 더 많은 필드 포함 (rubric_grades, changche_volume, remedial_threshold 등)"
     - "세특은 CLAUDE.md 7항목이나 전공적합성 제외 버전(no_major) 도 별도 가중치 제공"
     - "analyzer/rubric.yaml P2 gap 에 '채점 척도 불일치' 이슈 문서화되어 있음 — 프롬프트 1~10 vs 구현 1~5"
+  verification_summary:
+    verified_at: "2026-04-17"
+    pass: 16
+    partial: 2         # E1/E2 워드클라우드 (기능 미구현, 정의만 존재)
+    fail: 0
+    documented_gap: 0
+    method: "PyYAML 로드 + 산술 합계 검증 + 경계값 연속성 스캔"
+    completion_note: |
+      A1 setuek 7항목 합계 1.0000 OK · A2 no_major 6항목 1.0000 OK ·
+      A3 changche 0.333+0.333+0.334=1.000 OK · A4 overall 5항목 1.0000 OK.
+      B1 grades S/A/B/C/D 5등급 + B2 rubric_grades 5등급 모두 존재.
+      C1 창체 글자수 (자율/동아리 500, 진로 700) + C2 분량 임계값 (95%/80%) 정확.
+      D1 remedial 3.0 · D2 trend 0.3 · D3 jinro A~E 1~5 매핑 · D4 attendance 100점
+      만점 · D5 공통/인문/자연 3분류 모두 정확.
+      E1/E2 워드클라우드 섹션은 정의만 존재 (향후 기능) — partial 로 분류.
+      F1 grade_conversion_source = "부산광역시교육청" OK.
+      G1/G2 load_config 함수 + 하드코딩 없음 확인 (code review).
 
 # ─── A. scoring 섹션 ────────────────────────────────────────────────
 items:
