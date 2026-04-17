@@ -489,6 +489,64 @@ def check_grade_score_consistency(setuek_data, is_major: bool = False):
     return results
 
 
+def check_attendance_structure(attendance_data, volunteer_data):
+    """P1-F: 출결/봉사 데이터 구조 검증 (G7, 2026-04-17).
+    - 출결 카운트가 음수이면 FAIL
+    - 봉사 시간이 음수이면 FAIL
+    - attendance_data 비어있으면 INFO (건너뜀)
+    """
+    results = []
+    issues = []
+
+    # 출결
+    if isinstance(attendance_data, dict) and attendance_data:
+        for yr, entry in attendance_data.items():
+            if not isinstance(entry, dict):
+                continue
+            for t in ("결석", "지각", "조퇴", "결과"):
+                sub = entry.get(t, {})
+                if not isinstance(sub, dict):
+                    continue
+                for r in ("질병", "미인정", "기타"):
+                    v = sub.get(r, 0)
+                    try:
+                        n = int(v)
+                    except (TypeError, ValueError):
+                        issues.append(f"{yr}학년 {t}_{r} 값 '{v}' (정수 아님)")
+                        continue
+                    if n < 0:
+                        issues.append(f"{yr}학년 {t}_{r} = {n} (음수)")
+    # 봉사
+    if isinstance(volunteer_data, dict) and volunteer_data:
+        for yr, entry in volunteer_data.items():
+            if not isinstance(entry, dict):
+                continue
+            hrs = entry.get("hours", 0)
+            try:
+                h = int(hrs)
+            except (TypeError, ValueError):
+                issues.append(f"{yr}학년 봉사시간 '{hrs}' (정수 아님)")
+                continue
+            if h < 0:
+                issues.append(f"{yr}학년 봉사시간 = {h} (음수)")
+
+    # 결과 판정
+    has_data = bool(attendance_data) or bool(volunteer_data)
+    if issues:
+        results.append(QAResult(
+            "P1-F-001", "출결/봉사 데이터 구조", "P1", "FAIL",
+            f"이상치 {len(issues)}건: " + "; ".join(issues[:3]) + ("..." if len(issues) > 3 else ""),
+            str(issues[0]), "모든 카운트 ≥ 0 정수",
+            "attendance_data / volunteer_data 값 수정"))
+    elif has_data:
+        results.append(QAResult("P1-F-000", "출결/봉사 데이터 구조", "P1", "PASS"))
+    else:
+        results.append(QAResult(
+            "P1-F-INFO", "출결/봉사 데이터 미입력", "P1", "INFO",
+            "attendance_data / volunteer_data 비어있음. 출결·봉사 시트 생성 스킵됨."))
+    return results
+
+
 def check_mode_consistency(setuek_data, target_major: str):
     """P1-E: 메타(TARGET_MAJOR) ↔ setuek_data 튜플 길이 일관성 검증.
     - 지정 모드 (TARGET_MAJOR 있음): 튜플 길이 11 이어야 함 (학년+과목+7점수+합산+등급)
@@ -529,15 +587,19 @@ def check_mode_consistency(setuek_data, target_major: str):
 def run_full_qa(setuek_data, setuek_comments, good_sentences,
                 changche_data, haengtuk_data, haengtuk_comments,
                 linkage_data, fix_data, student_name="",
-                target_major: str = ""):
+                target_major: str = "",
+                attendance_data=None, volunteer_data=None):
     """전체 QA 검증 실행.
     target_major: 지원 학과명 (빈 문자열이면 미지정 모드, 값 있으면 지정 모드).
+    attendance_data / volunteer_data: G7 출결·봉사 (선택, None/빈 dict 허용).
     """
     report = QAReport(
         student_name=student_name,
         date_str=date.today().strftime("%Y-%m-%d"),
     )
     is_major = bool(target_major and str(target_major).strip())
+    attendance_data = attendance_data or {}
+    volunteer_data = volunteer_data or {}
 
     # P1 - 필수
     report.results.extend(
@@ -559,6 +621,9 @@ def run_full_qa(setuek_data, setuek_comments, good_sentences,
         report.results.append(QAResult(
             "P1-SKIP", "세특 계산 검증 스킵", "P1", "INFO",
             "모드-데이터 불일치로 인해 점수 범위/가중합산/등급 일치 검증을 스킵함. P1-E 항목 먼저 수정 필요."))
+
+    # P1-F (G7 2026-04-17): 출결/봉사 데이터 구조
+    report.results.extend(check_attendance_structure(attendance_data, volunteer_data))
 
     # P2 - 중요
     report.results.extend(check_char_counts(setuek_comments, haengtuk_comments, linkage_data, fix_data))

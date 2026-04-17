@@ -142,6 +142,8 @@ def main():
         fix_data=sd.fix_data,
         student_name=sd.STUDENT,
         target_major=getattr(sd, "TARGET_MAJOR", "") or "",
+        attendance_data=getattr(sd, "attendance_data", None),
+        volunteer_data=getattr(sd, "volunteer_data", None),
     )
     print_qa_report(qa_report)
 

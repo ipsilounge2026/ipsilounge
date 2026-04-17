@@ -294,8 +294,104 @@ def create_excel(sd, xlsx_path):
     except Exception as e:
         print(f"[WARN] 키워드분석 시트 생성 실패 (스킵): {type(e).__name__}: {e}")
 
+    # ── Sheet 11: 출결·봉사 (G7 / CLAUDE.md § 4, §12) ──
+    # attendance_data / volunteer_data 모두 비어있으면 스킵.
+    try:
+        from .attendance_calculator import has_attendance_or_volunteer
+        if has_attendance_or_volunteer(sd):
+            _write_attendance_sheet(wb, sd, style_header, style_cell, set_col_widths,
+                                     center, left_align, get_column_letter)
+    except Exception as e:
+        print(f"[WARN] 출결·봉사 시트 생성 실패 (스킵): {type(e).__name__}: {e}")
+
     wb.save(str(xlsx_path))
     print(f"Excel saved: {xlsx_path}")
+
+
+def _write_attendance_sheet(wb, sd, style_header, style_cell, set_col_widths,
+                             center, left_align, get_column_letter_fn):
+    """Excel 출결·봉사 시트 작성. G7 (2026-04-17)."""
+    from .attendance_calculator import calculate_attendance_score, summarize_volunteer
+    from openpyxl.styles import Font, PatternFill
+
+    att_data = getattr(sd, "attendance_data", {}) or {}
+    vol_data = getattr(sd, "volunteer_data", {}) or {}
+    att_report = calculate_attendance_score(att_data)
+    vol_summary = summarize_volunteer(vol_data)
+
+    ws = wb.create_sheet("출결·봉사")
+
+    # ── 1부: 출결 학년별 상세 (4종×3사유) ──
+    ws.cell(row=1, column=1, value="출결 현황 (학년별)").font = Font(name="Arial", bold=True, size=12)
+    ws.cell(row=1, column=1).fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+
+    headers = ["학년",
+               "결석_질병", "결석_미인정", "결석_기타",
+               "지각_질병", "지각_미인정", "지각_기타",
+               "조퇴_질병", "조퇴_미인정", "조퇴_기타",
+               "결과_질병", "결과_미인정", "결과_기타",
+               "특기사항"]
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(row=2, column=c, value=h)
+        cell.font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
+        cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        cell.alignment = center
+
+    row_end = 2
+    if att_report.has_data:
+        for i, (yr, entry) in enumerate(sorted(att_report.by_year.items()), 1):
+            r = 2 + i
+            row_end = r
+            style_cell(ws, r, 1, f"{yr}학년")
+            col = 2
+            for t in ("결석", "지각", "조퇴", "결과"):
+                sub = entry[t]
+                for reason in ("질병", "미인정", "기타"):
+                    style_cell(ws, r, col, sub[reason])
+                    col += 1
+            style_cell(ws, r, col, entry.get("특기사항", ""), left_align)
+    else:
+        style_cell(ws, 3, 1, "출결 데이터 없음 (만점 100점 가정)", left_align)
+        row_end = 3
+
+    # ── 2부: 출결 점수 요약 ──
+    summary_row = row_end + 2
+    ws.cell(row=summary_row, column=1, value="출결 점수 (100점 만점)").font = Font(name="Arial", bold=True, size=11)
+    ws.cell(row=summary_row + 1, column=1, value="기본점수").font = Font(name="Arial", bold=True)
+    ws.cell(row=summary_row + 1, column=2, value=att_report.base)
+    ws.cell(row=summary_row + 2, column=1, value="감점 합계").font = Font(name="Arial", bold=True)
+    total_ded = sum(att_report.deductions.values())
+    ws.cell(row=summary_row + 2, column=2, value=round(total_ded, 1))
+    ws.cell(row=summary_row + 3, column=1, value="최종점수").font = Font(name="Arial", bold=True)
+    final_cell = ws.cell(row=summary_row + 3, column=2, value=att_report.score)
+    final_cell.font = Font(name="Arial", bold=True,
+                            color="2E75B6" if att_report.score >= 95 else "F4B183" if att_report.score >= 80 else "FF0000")
+
+    # 감점 내역 (있을 때만)
+    if att_report.deductions:
+        detail_row = summary_row + 5
+        ws.cell(row=detail_row, column=1, value="감점 내역").font = Font(name="Arial", bold=True)
+        for i, (label, val) in enumerate(att_report.deductions.items(), 1):
+            ws.cell(row=detail_row + i, column=1, value=label)
+            ws.cell(row=detail_row + i, column=2, value=round(val, 1))
+
+    # ── 3부: 봉사활동 ──
+    vol_row = summary_row + 7 + len(att_report.deductions)
+    ws.cell(row=vol_row, column=1, value="봉사활동 시수").font = Font(name="Arial", bold=True, size=11)
+    ws.cell(row=vol_row + 1, column=1, value="총 봉사시간").font = Font(name="Arial", bold=True)
+    ws.cell(row=vol_row + 1, column=2, value=f"{vol_summary.total_hours}시간" if vol_summary.has_data else "-")
+
+    if vol_summary.has_data:
+        ws.cell(row=vol_row + 2, column=1, value="학년별 봉사시간 / 주요 활동").font = Font(name="Arial", bold=True)
+        for i, (yr, entry) in enumerate(sorted(vol_summary.by_year.items()), 1):
+            style_cell(ws, vol_row + 2 + i, 1, f"{yr}학년 ({entry['hours']}h)")
+            acts = entry.get("activities") or []
+            style_cell(ws, vol_row + 2 + i, 2, ", ".join(acts) if acts else "-", left_align)
+
+    # 컬럼 폭
+    col_widths = [14, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 40]
+    set_col_widths(ws, col_widths)
+    ws.freeze_panes = "A3"
 
 
 def _write_keyword_sheet(wb, sd, style_header, style_cell, set_col_widths,
@@ -1004,10 +1100,39 @@ def create_pdf(sd, pdf_path):
     elements.append(comment_table)
     elements.append(PageBreak())
 
-    # ── 2. 세부능력 및 특기사항 ──
-    elements.append(section_title("2. 세부능력 및 특기사항"))
+    # ── 2. 출결 및 봉사활동 (G7 / CLAUDE.md § 4, §12) ──
+    # attendance_data / volunteer_data 둘 다 비어있으면 섹션 자체 생략
+    # (기존 섹션 번호 2~8 은 3~9 로 자동 rename, 하위 2-1/2-2/2-3 도 3-1/3-2/3-3 으로 rename).
+    _has_attendance_section = False
+    try:
+        from .attendance_calculator import has_attendance_or_volunteer
+        if has_attendance_or_volunteer(sd):
+            _append_pdf_attendance_section(elements, sd, section_title,
+                                            P, PC, PL, PH, make_table,
+                                            style_subtitle, page_w)
+            elements.append(PageBreak())
+            _has_attendance_section = True
+    except Exception as e:
+        print(f"[WARN] PDF 출결·봉사 섹션 생성 실패 (스킵): {type(e).__name__}: {e}")
+
+    # ── 섹션 번호 동적 할당 ──
+    # 1. 종합의견 (고정)
+    # 2. 출결 및 봉사활동 (선택)
+    # 2 or 3. 세부능력 및 특기사항
+    # ...
+    _n = 2 if _has_attendance_section else 1  # 직전 섹션 번호
+    _n += 1; _sec_setuek   = _n  # 세특
+    _n += 1; _sec_changche = _n  # 창체
+    _n += 1; _sec_haengtuk = _n  # 행특
+    _n += 1; _sec_linkage  = _n  # 연계성
+    _n += 1; _sec_eval     = _n  # 대학평가요소
+    _n += 1; _sec_fix      = _n  # 역량별보완법
+    _n += 1; _sec_keyword  = _n  # 키워드분석
+
+    # ── 세부능력 및 특기사항 ──
+    elements.append(section_title(f"{_sec_setuek}. 세부능력 및 특기사항"))
     elements.append(Spacer(1, 2*mm))
-    elements.append(section_title("2-1. 과목 별 분석"))
+    elements.append(section_title(f"{_sec_setuek}-1. 과목 별 분석"))
 
     # ── 교과 중심 분석 테이블 ──
     subject_to_category = {
@@ -1160,7 +1285,7 @@ def create_pdf(sd, pdf_path):
     elements.append(PageBreak())
 
     # ── 2-2. 세부능력 및 특기사항 과목 별 세부내용 ──
-    elements.append(section_title("2-2. 과목 별 세부내용"))
+    elements.append(section_title(f"{_sec_setuek}-2. 과목 별 세부내용"))
     # 과목명 칸 넓이: 9pt 맑은고딕 기준 한글 1자 ~9pt, 영문/숫자/괄호 ~5pt
     max_subj_w = 0
     for d in setuek_data:
@@ -1195,7 +1320,7 @@ def create_pdf(sd, pdf_path):
     elements.append(PageBreak())
 
     # ── 2-3. 세부능력 및 특기사항 핵심평가문장 ──
-    elements.append(section_title("2-3. 핵심평가문장"))
+    elements.append(section_title(f"{_sec_setuek}-3. 핵심평가문장"))
     # Change 7: 표현역량 -> 핵심역량
     hdr = [PH("과목"), PH("핵심문장"), PH("이유"), PH("핵심역량")]
     tdata = [hdr]
@@ -1287,7 +1412,7 @@ def create_pdf(sd, pdf_path):
     elements.append(PageBreak())
 
     # ── 3. 창의적 체험활동 ──
-    elements.append(section_title("3. 창의적 체험활동"))
+    elements.append(section_title(f"{_sec_changche}. 창의적 체험활동"))
     elements.append(Paragraph("※ 각 항목은 1~10점 척도로 평가됩니다. 상세 평가 기준은 '평가 기준 안내' 페이지를 참고하세요.", style_ref_note))
     elements.append(Spacer(1, 2*mm))
 
@@ -1411,7 +1536,7 @@ def create_pdf(sd, pdf_path):
     elements.append(PageBreak())
 
     # ── 4. 행동특성 및 종합의견 ──
-    elements.append(section_title("4. 행동특성 및 종합의견"))
+    elements.append(section_title(f"{_sec_haengtuk}. 행동특성 및 종합의견"))
     elements.append(Paragraph("※ 각 항목은 1~10점 척도로 평가됩니다. 상세 평가 기준은 '평가 기준 안내' 페이지를 참고하세요.", style_ref_note))
     hdr = [PH("학년"), PH("강점"), PH("보완점"), PH("핵심역량")]
     tdata = [hdr]
@@ -1430,7 +1555,7 @@ def create_pdf(sd, pdf_path):
     elements.append(PageBreak())
 
     # ── 5. 연계성분석 ──
-    elements.append(section_title("5. 연계성분석"))
+    elements.append(section_title(f"{_sec_linkage}. 연계성분석"))
     hdr = [PH("분석영역"), PH("연계도"), PH("상세내용")]
     tdata = [hdr]
     cw = [90, 36, page_w - 126]
@@ -1441,7 +1566,7 @@ def create_pdf(sd, pdf_path):
     elements.append(Spacer(1, 10*mm))
 
     # ── 6. 대학평가요소 ──
-    elements.append(section_title("6. 대학평가요소"))
+    elements.append(section_title(f"{_sec_eval}. 대학평가요소"))
     hdr = [PH("대분류"), PH("세부항목"), PH("등급"), PH("근거")]
     tdata = [hdr]
     cw = [60, 80, 28, page_w - 168]
@@ -1484,7 +1609,7 @@ def create_pdf(sd, pdf_path):
     elements.append(PageBreak())
 
     # ── 7. 역량별보완법 ──
-    elements.append(section_title("7. 역량별보완법"))
+    elements.append(section_title(f"{_sec_fix}. 역량별보완법"))
     hdr = [PH("역량"), PH("항목"), PH("현재"), PH("진단"), PH("보완활동"), PH("중요도")]
     tdata = [hdr]
     # 역량40(전체/학업/진로/공동체 한줄), 항목60(3학년비교과 등), 현재32(B~C 한줄), 진단90, 중요도38(중 한줄)
@@ -1495,15 +1620,16 @@ def create_pdf(sd, pdf_path):
     t = make_table(tdata, col_widths=cw)
     elements.append(t)
 
-    # ── 8. 키워드분석 (G5 / CLAUDE.md § Step 8-4) ──
-    # raw_texts 가 비어있으면 이 섹션 스킵.
+    # ── 키워드분석 섹션 (G5 / CLAUDE.md § Step 8-4) ──
+    # raw_texts 가 비어있으면 이 섹션 스킵. 섹션 번호는 _sec_keyword 변수로 동적.
     try:
         from .keyword_extractor import has_raw_texts
         if has_raw_texts(sd):
             elements.append(PageBreak())
             _append_pdf_keyword_section(elements, sd, pdf_path, section_title,
                                          P, PC, PL, PH, make_table,
-                                         style_subtitle, page_w)
+                                         style_subtitle, page_w,
+                                         section_number=_sec_keyword)
     except Exception as e:
         print(f"[WARN] PDF 키워드분석 섹션 생성 실패 (스킵): {type(e).__name__}: {e}")
 
@@ -1513,8 +1639,11 @@ def create_pdf(sd, pdf_path):
 
 def _append_pdf_keyword_section(elements, sd, pdf_path, section_title,
                                  P, PC, PL, PH, make_table,
-                                 style_subtitle, page_w):
-    """PDF "8. 키워드분석" 섹션 추가. 워드클라우드 이미지 + 카테고리 요약 + 학년별 변화."""
+                                 style_subtitle, page_w,
+                                 section_number: int = 8):
+    """PDF 키워드분석 섹션 추가. 워드클라우드 이미지 + 카테고리 요약 + 학년별 변화.
+    section_number: 동적 섹션 번호 (기본 8, 출결 섹션 있을 때 9 등).
+    """
     from .keyword_extractor import extract_keywords, generate_wordcloud_image
     from pathlib import Path
 
@@ -1522,7 +1651,7 @@ def _append_pdf_keyword_section(elements, sd, pdf_path, section_title,
     if not report.keywords:
         return
 
-    elements.append(section_title("8. 키워드분석"))
+    elements.append(section_title(f"{section_number}. 키워드분석"))
 
     # ── 워드클라우드 이미지 생성 & 삽입 ──
     pdf_dir = Path(pdf_path).resolve().parent
@@ -1576,3 +1705,97 @@ def _append_pdf_keyword_section(elements, sd, pdf_path, section_title,
         gone_list = ", ".join(ch.get("disappeared", [])[:10]) or "-"
         tdata.append([PC(f"{yr}학년"), PL(new_list), PL(gone_list)])
     elements.append(make_table(tdata, col_widths=cw))
+
+
+def _append_pdf_attendance_section(elements, sd, section_title,
+                                    P, PC, PL, PH, make_table,
+                                    style_subtitle, page_w,
+                                    section_number: int = 2):
+    """PDF "2. 출결 및 봉사활동" 섹션 추가 (G7 / CLAUDE.md § 4).
+    attendance_data / volunteer_data 있을 때만 호출됨.
+    """
+    from .attendance_calculator import calculate_attendance_score, summarize_volunteer
+    from reportlab.lib import colors as _rl_colors
+    from reportlab.platypus import Spacer as _RLSpacer, TableStyle as _RLTableStyle
+
+    att_report = calculate_attendance_score(getattr(sd, "attendance_data", {}) or {})
+    vol_summary = summarize_volunteer(getattr(sd, "volunteer_data", {}) or {})
+
+    elements.append(section_title(f"{section_number}. 출결 및 봉사활동"))
+    elements.append(_RLSpacer(1, 2*mm))
+
+    # ── 출결 학년별 매트릭스 테이블 ──
+    if att_report.has_data:
+        elements.append(P("■ 출결 현황 (학년별)", style_subtitle))
+        # 2-row 헤더: Row0 "결석/지각/조퇴/결과" merge, Row1 "질병/미인정/기타"
+        hdr0 = [PH("학년"), PH("결석"), PH(""), PH(""), PH("지각"), PH(""), PH(""),
+                PH("조퇴"), PH(""), PH(""), PH("결과"), PH(""), PH("")]
+        hdr1 = [PH("")] + [PH("질"), PH("미"), PH("기")] * 4
+        tdata = [hdr0, hdr1]
+        _yr_col = 36
+        _each = (page_w - _yr_col) / 12
+        cw = [_yr_col] + [_each] * 12
+        for yr, entry in sorted(att_report.by_year.items()):
+            row = [PC(f"{yr}학년")]
+            for t in ("결석", "지각", "조퇴", "결과"):
+                for r in ("질병", "미인정", "기타"):
+                    v = entry[t][r]
+                    # 미인정 은 붉은색 강조
+                    if r == "미인정" and v > 0:
+                        row.append(P(f"<font color='#C00000'><b>{v}</b></font>", style_subtitle))
+                    else:
+                        row.append(PC(str(v)))
+            tdata.append(row)
+
+        t = make_table(tdata, col_widths=cw, has_header=False, repeat_rows=2)
+        t.setStyle(_RLTableStyle([
+            ("BACKGROUND", (0, 0), (-1, 1), _rl_colors.HexColor("#0E2841")),
+            ("TEXTCOLOR", (0, 0), (-1, 1), _rl_colors.white),
+            ("SPAN", (1, 0), (3, 0)),   # 결석 merge
+            ("SPAN", (4, 0), (6, 0)),   # 지각 merge
+            ("SPAN", (7, 0), (9, 0)),   # 조퇴 merge
+            ("SPAN", (10, 0), (12, 0)), # 결과 merge
+            ("SPAN", (0, 0), (0, 1)),   # 학년 merge
+            ("BACKGROUND", (0, 2), (-1, -1), _rl_colors.white),
+            ("FONTNAME", (0, 0), (-1, -1), "MalgunBd"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.3, _rl_colors.HexColor("#D0D0D0")),
+        ]))
+        elements.append(t)
+        elements.append(_RLSpacer(1, 4*mm))
+
+        # 출결 점수 요약
+        elements.append(P("■ 출결 점수 (100점 만점, 미인정만 감점)", style_subtitle))
+        score_hdr = [PH("기본"), PH("감점 합계"), PH("최종점수")]
+        total_ded = sum(att_report.deductions.values())
+        score_row = [PC(f"{att_report.base:.0f}"),
+                     PC(f"{total_ded:+.1f}"),
+                     P(f"<b>{att_report.score:.1f}</b>", style_subtitle)]
+        elements.append(make_table([score_hdr, score_row],
+                                    col_widths=[page_w/3]*3))
+
+        # 감점 내역 (있을 때)
+        if att_report.deductions:
+            elements.append(_RLSpacer(1, 2*mm))
+            det_lines = " · ".join(f"{k}: {v:+.1f}" for k, v in att_report.deductions.items())
+            elements.append(P(f"감점 내역 — {det_lines}", style_subtitle))
+    else:
+        elements.append(P("■ 출결 데이터 미입력 (만점 100점으로 가정)", style_subtitle))
+
+    elements.append(_RLSpacer(1, 5*mm))
+
+    # ── 봉사활동 ──
+    elements.append(P("■ 봉사활동 시수", style_subtitle))
+    if vol_summary.has_data:
+        hdr = [PH("학년"), PH("시간"), PH("주요 활동")]
+        tdata = [hdr]
+        cw = [50, 50, page_w - 100]
+        for yr, entry in sorted(vol_summary.by_year.items()):
+            acts = ", ".join(entry.get("activities") or []) or "-"
+            tdata.append([PC(f"{yr}학년"), PC(f"{entry['hours']}h"), PL(acts)])
+        tdata.append([PC("합계"), PC(f"{vol_summary.total_hours}h"), PL("")])
+        elements.append(make_table(tdata, col_widths=cw))
+    else:
+        elements.append(P("봉사활동 시수 데이터 미입력", style_subtitle))
