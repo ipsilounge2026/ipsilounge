@@ -3,15 +3,15 @@
 # ===================================================================
 # 영역: cross-cutting / DATA_SHARE
 # spec:
-#   - school-record-analyzer/CLAUDE.md § 교과 이수 기준표 — 공유 원칙
+#   - ipsilounge/analyzer/CLAUDE.md § 교과 이수 기준표 — 공유 원칙
 #   - ipsilounge/backend/app/config.py (SHARED_DATA_ROOT + DATA_ROOT property)
 #   - ipsilounge/backend/app/services/course_requirement_service.py
 #   - ipsilounge/backend/app/services/suneung_minimum_service.py
 #   - ipsilounge/backend/app/services/counselor_type_service.py
-#   - school-record-analyzer/modules/grade_analyzer.py (load_course_requirements)
-#   - school-record-analyzer/modules/admission_matcher.py
+#   - ipsilounge/analyzer/modules/grade_analyzer.py (load_course_requirements)
+#   - ipsilounge/analyzer/modules/admission_matcher.py
 #
-# 공유 대상 파일 (school-record-analyzer/data/):
+# 공유 대상 파일 (ipsilounge/analyzer/data/):
 #   1. course_requirements.xlsx  — 권장과목 DB (ipsilounge + analyzer 동시 참조)
 #   2. admission_db.xlsx         — 수시/정시 입결 DB (counselor_type_service + analyzer)
 #   3. 수능최저_db.xlsx           — 수능 최저 기준 DB (suneung_minimum_service)
@@ -27,16 +27,16 @@ meta:
   title: "분석기↔서비스 데이터 공유 (SHARED_DATA_ROOT)"
   created_at: "2026-04-16"
   spec_refs:
-    - "school-record-analyzer/CLAUDE.md § 교과 이수 기준표 — 공유 원칙"
+    - "ipsilounge/analyzer/CLAUDE.md § 교과 이수 기준표 — 공유 원칙"
     - "ipsilounge/backend/app/config.py"
     - "ipsilounge/backend/app/services/course_requirement_service.py"
     - "ipsilounge/backend/app/services/suneung_minimum_service.py"
     - "ipsilounge/backend/app/services/counselor_type_service.py"
-    - "school-record-analyzer/modules/grade_analyzer.py"
-    - "school-record-analyzer/modules/admission_matcher.py"
+    - "ipsilounge/analyzer/modules/grade_analyzer.py"
+    - "ipsilounge/analyzer/modules/admission_matcher.py"
   implementation_notes:
-    - "공유 원칙: school-record-analyzer/data 가 단일 원천(single source of truth). ipsilounge 백엔드가 환경변수 SHARED_DATA_ROOT 또는 자동 기본값으로 동일 파일 참조"
-    - "기본 경로: ipsilounge/backend/app/config.py → parents[3]/school-record-analyzer/data. 즉 config.py(깊이 0) → app(1) → backend(2) → ipsilounge(3) → (parent) → school-record-analyzer/data"
+    - "공유 원칙: ipsilounge/analyzer/data 가 단일 원천(single source of truth). ipsilounge 백엔드가 환경변수 SHARED_DATA_ROOT 또는 자동 기본값으로 동일 파일 참조"
+    - "기본 경로: ipsilounge/backend/app/config.py → parents[3]/ipsilounge/analyzer/data. 즉 config.py(깊이 0) → app(1) → backend(2) → ipsilounge(3) → (parent) → ipsilounge/analyzer/data"
     - "운영(EC2) 배포 시 SHARED_DATA_ROOT 환경변수로 재지정 필요 — 이 부분은 배포 가이드(docs/deployment.md) 과제로 분리"
     - "admission_db.xlsx 는 ADMISSION_DB_PATH 환경변수 단일 파일 오버라이드도 지원. DB 우선 + Excel 폴백 이중 전략"
     - "course_requirements.xlsx 는 2026-04 스키마 정규화 완료: 단일 시트 '권장과목', Wide + 쉼표구분. 양쪽 로더 동일 해석"
@@ -46,8 +46,8 @@ items:
   - id: DS-A1-default-path
     requirement: |
       ipsilounge/backend/app/config.py
-      - _DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[3] / "school-record-analyzer" / "data"
-      - 경로 계산: config.py → app → backend → ipsilounge → parent(학생부분석프로그램) → school-record-analyzer/data
+      - _DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[3] / "analyzer" / "data"
+      - 경로 계산: config.py → app → backend → ipsilounge → (parent) → ipsilounge/analyzer/data
       - 실행 시점에 절대경로로 해석 (resolve())
     spec_ref: "backend/app/config.py L10~12"
     priority: P0
@@ -57,7 +57,7 @@ items:
       evidence: |
         config.py L10~12 _DEFAULT_DATA_ROOT 정의 확인. parents[3] 계산이
         C:\...\ipsilounge\backend\app\config.py 에서 C:\...\ (학생부분석프로그램)
-        으로 올라간 뒤 school-record-analyzer/data 로 합류됨.
+        으로 올라간 뒤 ipsilounge/analyzer/data 로 합류됨.
         실제 파일 시스템에 동일 경로 존재 (ls 로 확인).
 
   - id: DS-A2-env-override
@@ -94,12 +94,12 @@ items:
 
   - id: DS-A4-single-source-doc
     requirement: |
-      school-record-analyzer/CLAUDE.md § 교과 이수 기준표 — 공유 원칙
-      - "이 파일은 school-record-analyzer/data/ 가 단일 원천(single source of truth)"
+      ipsilounge/analyzer/CLAUDE.md § 교과 이수 기준표 — 공유 원칙
+      - "이 파일은 ipsilounge/analyzer/data/ 가 단일 원천(single source of truth)"
       - "입시라운지 백엔드(ipsilounge/backend)는 환경변수 SHARED_DATA_ROOT 또는
          자동 계산된 기본값을 통해 동일한 파일을 참조함"
       - "매년 대학 발표를 한 곳에서만 갱신하면 두 시스템 모두 반영됨"
-    spec_ref: "school-record-analyzer/CLAUDE.md L447~453 (공유 원칙 3줄 요약)"
+    spec_ref: "ipsilounge/analyzer/CLAUDE.md L447~453 (공유 원칙 3줄 요약)"
     priority: P1
     code_review:
       status: pass
@@ -113,10 +113,10 @@ items:
 # ─── B. 공유 파일 존재성 ────────────────────────────────────────────
   - id: DS-B1-course-requirements
     requirement: |
-      school-record-analyzer/data/course_requirements.xlsx 존재
+      ipsilounge/analyzer/data/course_requirements.xlsx 존재
       - 권장 이수 과목 매칭 기준 파일
       - ipsilounge course_requirement_service + analyzer load_course_requirements 양쪽에서 참조
-    spec_ref: "school-record-analyzer/data/course_requirements.xlsx"
+    spec_ref: "ipsilounge/analyzer/data/course_requirements.xlsx"
     priority: P0
     code_review:
       status: pass
@@ -125,11 +125,11 @@ items:
 
   - id: DS-B2-admission-db
     requirement: |
-      school-record-analyzer/data/admission_db.xlsx 존재
+      ipsilounge/analyzer/data/admission_db.xlsx 존재
       - 수시/정시 입결 RAW 데이터
       - 시트 2개: 수시입결RAW, 정시입결RAW
       - counselor_type_service (Excel 폴백) + analyzer admission_matcher 양쪽에서 참조
-    spec_ref: "school-record-analyzer/data/admission_db.xlsx"
+    spec_ref: "ipsilounge/analyzer/data/admission_db.xlsx"
     priority: P0
     code_review:
       status: pass
@@ -138,11 +138,11 @@ items:
 
   - id: DS-B3-suneung-minimum
     requirement: |
-      school-record-analyzer/data/수능최저_db.xlsx 존재
+      ipsilounge/analyzer/data/수능최저_db.xlsx 존재
       - 수능 최저학력기준 DB
       - suneung_minimum_service 에서 단독 참조 (analyzer 미참조)
       - 한글 파일명 (윈도우/WSL 환경 UTF-8 처리 필수)
-    spec_ref: "school-record-analyzer/data/수능최저_db.xlsx"
+    spec_ref: "ipsilounge/analyzer/data/수능최저_db.xlsx"
     priority: P0
     code_review:
       status: pass
@@ -151,10 +151,10 @@ items:
 
   - id: DS-B4-university-grading
     requirement: |
-      school-record-analyzer/data/university_grading.xlsx 존재
+      ipsilounge/analyzer/data/university_grading.xlsx 존재
       - 대학별 내신 산출 방식 DB (반영교과, 학년별 비율 등)
       - 현재 analyzer 전용이지만 공유 data/ 하위에 위치하여 향후 서비스 확장 시 공유 가능
-    spec_ref: "school-record-analyzer/data/university_grading.xlsx"
+    spec_ref: "ipsilounge/analyzer/data/university_grading.xlsx"
     priority: P2
     code_review:
       status: pass
@@ -169,7 +169,7 @@ items:
       - 핵심/권장 과목은 쉼표 구분
       - ※ 로 시작하는 행은 주석 처리 (양쪽 로더에서 skip)
       - 헤더 행 1, 데이터 행 2~
-    spec_ref: "school-record-analyzer/CLAUDE.md L421~434 (교과 이수 기준표 스키마)"
+    spec_ref: "ipsilounge/analyzer/CLAUDE.md L421~434 (교과 이수 기준표 스키마)"
     priority: P0
     code_review:
       status: pass
@@ -192,10 +192,10 @@ items:
       status: pass
       verified_at: "2026-04-16"
       evidence: |
-        course_requirement_service.py L15~17 헤더 주석: "school-record-analyzer 와
-        동일 파일을 공유하며, school-record-analyzer/modules/grade_analyzer.py 의
+        course_requirement_service.py L15~17 헤더 주석: "analyzer 와
+        동일 파일을 공유하며, ipsilounge/analyzer/modules/grade_analyzer.py 의
         load_course_requirements() 도 이 스키마를 기준으로 동작한다."
-        grade_analyzer.py L309 주석: "school-record-analyzer 와 ipsilounge 가 동일 파일 공유".
+        grade_analyzer.py L309 주석: "analyzer 와 ipsilounge 가 동일 파일 공유".
         양쪽에 대칭 주석 존재.
 
   - id: DS-C3-admission-db-sheets
@@ -370,11 +370,11 @@ items:
   - id: DS-G1-ec2-deploy-consideration
     requirement: |
       운영(EC2) 배포 시 SHARED_DATA_ROOT 전략
-      - school-record-analyzer 가 EC2 에 동일 구조로 배포되지 않는 경우,
-        data/ 폴더만 별도 위치에 복사하고 SHARED_DATA_ROOT 로 지정
+      - analyzer/data/ 가 EC2 에 동일 경로로 배포되지 않는 경우,
+        data 폴더만 별도 위치에 복사하고 SHARED_DATA_ROOT 로 지정
       - 또는 rsync/scp 로 주기적 동기화
       - 현재 배포 자동화 스크립트에 admission_db.xlsx scp 명령 존재 (settings.local.json)
-    spec_ref: "school-record-analyzer/.claude/settings.local.json L215, L319 (scp 명령)"
+    spec_ref: "ipsilounge/analyzer/.claude/settings.local.json L215, L319 (scp 명령)"
     priority: P1
     code_review:
       status: pass
@@ -391,7 +391,7 @@ items:
       - 신규 course_requirements.xlsx 와 병존
       - 로더는 신규 파일만 참조 (legacy 무시)
       - 운영 리스크 낮으나 향후 정리 과제
-    spec_ref: "school-record-analyzer/data/ 파일 목록"
+    spec_ref: "ipsilounge/analyzer/data/ 파일 목록"
     priority: P2
     code_review:
       status: pass

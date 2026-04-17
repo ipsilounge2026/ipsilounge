@@ -242,7 +242,7 @@ ipsilounge/
 │   │       ├── auth.ts
 │   │       └── surveyTypes.ts          # (고등학교 상담 V3) 설문 타입 정의
 │
-└── mobile/                             # Flutter 모바일 앱 (Android SDK 36, AGP 8.9.1, Kotlin 2.1.0)
+├── mobile/                             # Flutter 모바일 앱 (Android SDK 36, AGP 8.9.1, Kotlin 2.1.0)
     ├── lib/
     │   ├── main.dart
     │   ├── screens/
@@ -281,10 +281,45 @@ ipsilounge/
     │   ├── services/
     │   ├── providers/
     │   └── widgets/
-    ├── scripts/
-    │   └── generate_launcher_icons.py  # 아이콘 전 사이즈 자동 생성 (Pillow)
-    └── pubspec.yaml
+│   ├── scripts/
+│   │   └── generate_launcher_icons.py  # 아이콘 전 사이즈 자동 생성 (Pillow)
+│   └── pubspec.yaml
+│
+└── analyzer/                           # 학생부 분석기 (통합 이식 2026-04-17)
+    │                                     상세 설계: analyzer/CLAUDE.md 참조
+    │                                     관련 체크리스트: docs/checklist/analyzer/*.yaml
+    │                                     통합 배경: docs/integration-plan.md
+    ├── CLAUDE.md                       # analyzer 프로젝트 설계서 (파이프라인·루브릭·DB)
+    ├── README.md                       # 개발 모드 사용법 (CLI 실행·드래그 분석)
+    ├── generate_report.py              # CLI 진입점: python generate_report.py <학생명>
+    ├── analyze.py                      # 구버전 스크립트 (참고)
+    ├── requirements.txt                # openpyxl/reportlab/PyYAML (Pin 방식)
+    ├── config/                         # config.yaml + grade_conversion.xlsx
+    ├── data/
+    │   ├── admission_db.xlsx           # 공용 입결 DB (SHARED_DATA_ROOT)
+    │   ├── course_requirements.xlsx    # 권장 이수 과목
+    │   ├── university_grading.xlsx     # 대학별 내신 산출
+    │   ├── 수능최저_db.xlsx              # 수능 최저 기준
+    │   └── students/
+    │       ├── _template.py            # 학생 데이터 작성 템플릿
+    │       ├── 의대샘플.py              # 결과 리포트 샘플 (git 포함)
+    │       └── <실제 학생>.py           # gitignore (민감)
+    ├── assets/logo.png
+    ├── fonts/                          # NanumSquareRound (PDF 한글)
+    ├── modules/                        # 12개 분석 모듈 (grade/세특/창체/행특/종합/리포트)
+    ├── prompts/                        # 8개 추출·분석 프롬프트 (Claude 호출용)
+    ├── input/                          # 학생부 원본 투입 (gitignore)
+    ├── output/                         # 생성된 리포트 (gitignore)
+    └── docs/                           # 개발 메모
 ```
+
+### 관련 인프라: analyzer 통합
+
+- **물리적 위치**: `ipsilounge/analyzer/` (2026-04-17 통합 이식 완료)
+- **논리적 격리**: 기존 ipsilounge 본체(`backend`, `*-web`, `mobile`)는 `analyzer` 를 **직접 import 하지 않는다**. 접점은 향후 `backend/app/services/analyzer_service.py` wrapper 1곳으로 한정
+- **개발 모드**: `cd ipsilounge/analyzer && python generate_report.py <학생명>` (기존 CLI 흐름 그대로 유지)
+- **운영 모드**: 향후 상담사 검수 UI 준비 시점에 wrapper 를 통해 자동 분석 파이프라인 연결 예정 (업로드→자동 분석→상담사 검수→사용자 전달)
+- **공유 데이터 루트**: `SHARED_DATA_ROOT` 는 `analyzer/data/` 로 자동 해석되며, `.env` 로 재지정 가능
 
 ---
 

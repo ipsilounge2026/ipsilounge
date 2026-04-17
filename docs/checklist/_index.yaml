@@ -212,12 +212,12 @@ checklists:
         백엔드 버그 1개 수정: admin_stats SQL 쿼리에서 ConsultationSlot join 추가.
     next_step: "검증 완료. 상담 영역(booking+satisfaction) 전체 완료."
 
-  # ───── 분석기 영역 (school-record-analyzer) ─────
+  # ───── 분석기 영역 (ipsilounge/analyzer) ─────
   - file: "analyzer/pipeline.yaml"
     area_code: ANALYZER
     title: "학생부 분석기 파이프라인 (Step 0~9)"
     spec_files:
-      - path: "school-record-analyzer/CLAUDE.md"
+      - path: "ipsilounge/analyzer/CLAUDE.md"
         last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
         section: "Step 0 ~ Step 9"
         size_bytes: 51342
@@ -250,7 +250,7 @@ checklists:
     area_code: ANALYZER
     title: "학생부 평가 루브릭 (세특/창체/행특)"
     spec_files:
-      - path: "school-record-analyzer/CLAUDE.md"
+      - path: "ipsilounge/analyzer/CLAUDE.md"
         last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
         section: "세특/창체/행특 평가 루브릭, 종합 경쟁력 산출"
         size_bytes: 51342
@@ -283,7 +283,7 @@ checklists:
     area_code: ANALYZER
     title: "리포트 출력 구조 (Excel 13개 시트, PDF, 하이라이트)"
     spec_files:
-      - path: "school-record-analyzer/CLAUDE.md"
+      - path: "ipsilounge/analyzer/CLAUDE.md"
         last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
         section: "리포트 출력 구조, Step 9"
         size_bytes: 51342
@@ -394,7 +394,7 @@ checklists:
     area_code: DATA_SHARE
     title: "분석기↔서비스 데이터 공유 (SHARED_DATA_ROOT)"
     spec_files:
-      - path: "school-record-analyzer/CLAUDE.md"
+      - path: "ipsilounge/analyzer/CLAUDE.md"
         last_known_hash: "3b955afaf22e90822a166b1a174f9d6ff084c48d6afc6d9eda116bdbeeff9b82"
         section: "교과 이수 기준표 — 공유 원칙"
         size_bytes: 51342
@@ -416,7 +416,7 @@ checklists:
         last_known_hash: null
         section: "admission_db.xlsx 로더 (DB-first + Excel fallback)"
         last_synced: "2026-04-16"
-      - path: "school-record-analyzer/modules/grade_analyzer.py"
+      - path: "ipsilounge/analyzer/modules/grade_analyzer.py"
         last_known_hash: null
         section: "load_course_requirements (analyzer 측 동일 스키마 로더)"
         last_synced: "2026-04-16"
@@ -441,7 +441,7 @@ checklists:
         공유 파일 실존(B, 4) + 스키마 일관성(C, 4) + 백엔드 서비스 연계(D, 3) +
         폴백/오버라이드(E, 3) + 캐싱/갱신(F, 2) + 운영/배포 연계(G, 2) 전부 pass.
         4개 XLSX 파일(course_requirements/admission_db/수능최저_db/university_grading)
-        모두 school-record-analyzer/data/ 에 실존. ipsilounge 3개 서비스 + analyzer 2개 모듈이
+        모두 ipsilounge/analyzer/data/ 에 실존. ipsilounge 3개 서비스 + analyzer 2개 모듈이
         동일 파일을 동일 스키마로 해석함을 코드에서 확인. gap 3건 모두 운영/저장소 정리 과제(P2).
     next_step: "검증 완료. cross-cutting 영역 남은 대상: ux-policy.yaml"
 

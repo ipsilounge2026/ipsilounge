@@ -7,6 +7,30 @@
 
 ## 2026-04-17
 
+### school-record-analyzer → ipsilounge/analyzer 통합 이식 완료
+
+- 파일 이식: `school-record-analyzer/*` → `ipsilounge/analyzer/*` (42 files, 12MB)
+  · 민감 경로 3종(input/output/tools) gitignore 처리
+  · 학생 데이터는 whitelist 방식(`_template.py`, `의대샘플.py`, `__init__.py`만 포함)
+  · CLAUDE.md 명시 중 실제 미사용 패키지 5종 제외 → requirements.txt 는 실제 사용 3종만 Pin
+- 경로 재조정: `backend/app/config.py` `_DEFAULT_DATA_ROOT` 를 `parents[2]/analyzer/data` 로 1줄 수정
+  · 주석 동기화 3곳(config.py / course_requirement_service / counselor_type_service)
+  · backend pytest 22/22 통과 + 224 routes 유지
+- 문서 정비:
+  · `ipsilounge/CLAUDE.md` 디렉토리 트리에 `analyzer/` 섹션 추가 + 격리 원칙 명시
+  · `docs/checklist/_index.yaml` + `docs/checklist/cross-cutting/data-sharing.yaml` 의
+    `school-record-analyzer/*` 경로 → `ipsilounge/analyzer/*` 로 전체 업데이트
+  · CLAUDE.md 해시 동일 (이식 과정에서 내용 변경 없음)
+- 보안 보강: 이식과 별개로 기존 누락 `uploads/` gitignore 추가
+- 동작 검증: `python ipsilounge/analyzer/generate_report.py 의대샘플/연승훈` 모두 정상
+  xlsx + pdf 리포트 생성 확인
+
+`school-record-analyzer/` 원본 폴더는 당분간 유지(백업), 추후 삭제.
+자동 분석 wrapper(backend/app/services/analyzer_service.py) 및 상담사 검수 UI 는
+별도 단계로 분리 (상담사 UI 준비 시점에 진행).
+
+상세: `ipsilounge/docs/integration-plan.md`
+
 ### school-record-analyzer 통합 이식 계획서 작성
 - **배경**: 현재 분석기와 운영 서비스가 별도 디렉토리로 분리되어, 상담사 수동 작업 부담
 - **목표**: `school-record-analyzer/*` → `ipsilounge/analyzer/` 통합 이식
