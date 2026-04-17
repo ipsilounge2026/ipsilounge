@@ -217,33 +217,37 @@ pdf_path  = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}.pdf"
 
 ## 4. 스펙-구현 불일치 (문서 업데이트 필요)
 
-### D1 CLAUDE.md §5 Step 9 "필수 단계" 표현
+### D1 CLAUDE.md §5 Step 9 "필수 단계" 표현 — 해소 완료 ✅
 
-**현재**: "이 단계는 분석 완료 후 반드시 실행해야 하며, 사용자의 추가 지시를 기다리지 않고 자동 진행한다."
-
-**실제**: Claude 대화형 워크플로우 기준으로 "자동 진행" 임. 진입점 자체는 학생 데이터 파일 작성 이후에만 호출 가능 (수동 선행 작업 필요).
-
-**조치 권고**: `9-0. 학생 데이터 파일 작성 (선행 작업)` 단계가 Claude 측 수동 작업임을 명시.
-
----
-
-### D2 CLAUDE.md §3 디렉토리 구조 — input/, output/ 폴더
-
-**현재**: 디렉토리 구조 트리에 `input/`, `output/` 포함.
-
-**실제**: `ipsilounge/analyzer/input/`, `ipsilounge/analyzer/output/` 은 gitignore 처리. 통합 이식 과정에서 실제 파일은 분리(dev workspace) 했음.
-
-**조치 권고**: `input/ # (gitignore, 개발용 임시 워크스페이스)` 주석 추가.
+**[2026-04-17 해소]**:
+- 헤더 문구 수정: "사용자의 추가 지시를 기다리지 않고 자동 진행한다"
+  → "Step 8.5 QA P1 전체 PASS 후, Claude 대화 세션에서 리포트 생성까지 자동 진행한다."
+- Step 9-0 "학생 데이터 파일 작성" 을 **Claude 수동 선행 작업**으로 명시
+  (`9-0. 학생 데이터 파일 작성 (Claude 수동 선행 작업)` 라벨링)
+- Step 9-1 CLI 실행 이후 자동화 범위 명확화 (QA → Excel → PDF → 완료)
+- 진입점 검증 변수 개수 "15개 → 17개" 업데이트 (TARGET_UNIV/TARGET_MAJOR 포함)
 
 ---
 
-### D3 config.yaml `wordcloud:` 섹션 dead config
+### D2 CLAUDE.md §3 디렉토리 구조 — input/, output/ 주석 — 해소 완료 ✅
 
-**현재**: config.yaml L67~72 에 워드클라우드 설정 존재.
+**[2026-04-17 해소]**:
+- `input/`, `output/` 뒤에 `(gitignore, 개발용 임시 워크스페이스)` 주석 추가
+- 디렉토리 트리 아래 blockquote 로 운영 환경 분리 설명 추가:
+  - 운영 환경 업로드는 `ipsilounge/uploads/` (dev) / `s3://ipsilounge-files/` (prod)
+  - `backend/app/services/file_service.py` 가 담당
+  - analyzer 의 input/output 은 로컬 워크스페이스 전용이므로 gitignore
 
-**실제**: 아무 코드도 이 섹션을 읽지 않음.
+---
 
-**조치 권고**: 섹션 제거하거나 `# TODO: 워드클라우드 기능 도입 시 활성화` 주석 추가.
+### D3 config.yaml dead config 섹션 명시 — 해소 완료 ✅
+
+**[2026-04-17 해소]** 3개 섹션에 `[DEAD CONFIG - 2026-04-17]` 주석 일괄 추가:
+- `grades` (100점 만점): 하드코딩 기준과 값 동일 유지, 코드 미참조
+- `rubric_grades` (10점 만점): score_to_grade 하드코딩과 값 동일 유지, 코드 미참조
+- `wordcloud`: 워드클라우드 기능(§8-4) 미구현 — 도입 시 활성화 예정
+- `remedial_threshold: 6.0`: fix_data 를 학생 파일에서 직접 읽으므로 코드 미참조
+- 각 섹션에 "향후 config 참조 전환 리팩터 시 활성화 예정" 명시
 
 ---
 

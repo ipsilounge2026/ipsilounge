@@ -68,9 +68,14 @@ school-record-analyzer/
 ├── fonts/
 │   ├── NanumSquareRoundR.ttf         # 한글 본문 폰트
 │   └── NanumSquareRoundB.ttf         # 한글 굵은 폰트
-├── input/                            # 학생부 파일 넣는 폴더
-└── output/                           # 리포트 출력 폴더
+├── input/                            # 학생부 파일 넣는 폴더 (gitignore, 개발용 임시 워크스페이스)
+└── output/                           # 리포트 출력 폴더 (gitignore, 개발용 임시 워크스페이스)
 ```
+
+> **`input/`, `output/` 은 로컬 개발 워크스페이스 전용**.
+> 운영 환경(ipsilounge 앱/웹) 에서 사용자 업로드 파일은 `ipsilounge/uploads/` (dev)
+> 또는 `s3://ipsilounge-files/` (prod) 로 저장되며, 이는 `backend/app/services/file_service.py` 가 담당.
+> analyzer 의 `input/`, `output/` 에 실제 데이터가 남아있으면 안 되므로 gitignore 처리됨.
 
 ### 데이터/로직 분리 구조 (방식 B)
 
@@ -382,10 +387,17 @@ school-record-analyzer/
 
 ### Step 9: 리포트 생성 (Python) — 필수 단계
 
-**이 단계는 분석 완료 후 반드시 실행해야 하며, 사용자의 추가 지시를 기다리지 않고 자동 진행한다.**
+**Step 8.5 QA P1 전체 PASS 후, Claude 대화 세션에서 리포트 생성까지 자동 진행한다.**
 
-#### 9-0. 학생 데이터 파일 작성 (선행 작업)
-- 분석 결과를 `data/students/<학생명>.py`에 작성
+- **Step 9-0 (학생 데이터 파일 작성)** 은 **Claude 가 분석 결과를 바탕으로 수동으로 작성**하는 선행 작업.
+  분석 완료 직후 Claude 가 `data/students/<학생명>.py` 를 생성하고, 그 뒤 진입점을 실행한다.
+- **Step 9-1 (CLI 실행)** 이후는 `python generate_report.py <학생명>` 단일 명령으로 자동 진행
+  (QA 검증 → Excel 생성 → PDF 생성 → 완료).
+- 분석 결과를 대화창에 텍스트로만 출력하고 끝내는 것은 불완전한 실행임 — 반드시 Step 9-0 ~ 9-5
+  까지 진행하여 Excel+PDF 파일이 `output/` 폴더에 저장되어야 한다.
+
+#### 9-0. 학생 데이터 파일 작성 (Claude 수동 선행 작업)
+- 분석 결과를 `data/students/<학생명>.py`에 작성 (Claude 가 작성)
 - `data/students/_template.py`를 복사하여 시작
 - 17개 필수 변수 모두 채워야 함:
   - 메타: `STUDENT`, `SCHOOL`, `TODAY`
@@ -406,7 +418,7 @@ python generate_report.py <학생명>
 ```
 - 자동 실행 흐름:
   1. 학생 데이터 파일 동적 로드
-  2. 필수 변수 15개 검증
+  2. 필수 변수 17개 검증 (메타 3 + 지원 2 + 세특 4 + 창체 2 + 행특 2 + 종합 4)
   3. **Step 8.5: QA 검증** 자동 실행 (P1 통과 시에만 다음 단계)
   4. Excel + PDF 리포트 생성
   5. 출력 경로 콘솔 안내
