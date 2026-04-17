@@ -1,0 +1,105 @@
+# 학생부 분석 프로그램 설정
+
+scoring:
+  # 세특 평가 가중치 (7항목, 총 100%)
+  setuek_weights:
+    교과연계성: 0.17
+    탐구동기: 0.17
+    탐구과정: 0.17
+    결과성찰: 0.17
+    전공적합성: 0.10
+    차별성: 0.07
+    학업태도: 0.15
+
+  # 전공적합성 제외 시 가중치 재배분
+  setuek_weights_no_major:
+    교과연계성: 0.19
+    탐구동기: 0.19
+    탐구과정: 0.19
+    결과성찰: 0.19
+    차별성: 0.08
+    학업태도: 0.16
+
+  # 창체 영역별 가중치
+  changche_weights:
+    자율: 0.333
+    동아리: 0.333
+    진로: 0.334
+
+  # 종합 경쟁력 가중치
+  overall_weights:
+    내신: 0.30
+    세특: 0.30
+    창체: 0.25
+    행특: 0.10
+    출결: 0.05
+
+  # 소인수 과목 기준 (수강자수)
+  small_class_threshold: 13
+
+# 종합 등급 기준 (100점 만점)
+grades:
+  S: { min: 90, max: 100, label: "최상위권 학종 경쟁력" }
+  A: { min: 75, max: 89, label: "상위권" }
+  B: { min: 55, max: 74, label: "평균 수준" }
+  C: { min: 35, max: 54, label: "보완 필요" }
+  D: { min: 0, max: 34, label: "경쟁력 재고 필요" }
+
+# 세특/창체/행특 등급 기준 (5점 만점 가중평균)
+rubric_grades:
+  S: { min: 4.3, max: 5.0 }
+  A: { min: 3.5, max: 4.2 }
+  B: { min: 2.6, max: 3.4 }
+  C: { min: 1.8, max: 2.5 }
+  D: { min: 1.0, max: 1.7 }
+
+# 창체 분량 비율 분석 기준
+changche_volume:
+  limits:
+    자율: 500
+    동아리: 500
+    진로: 700
+  thresholds:
+    충실활용: 0.95    # 95% 이상
+    활용부족: 0.80    # 80% 미만
+
+# 워드클라우드 설정
+wordcloud:
+  max_keywords: 50
+  min_frequency: 2
+  font_path: "NanumGothic.ttf"
+  width: 800
+  height: 400
+
+# 역량별 보완법 기준 (이 점수 이하면 보완 대상)
+remedial_threshold: 3.0
+
+# 5등급→9등급 환산표 출처 시트명
+grade_conversion_source: "부산광역시교육청"
+
+# 성적 추이 패턴 판별 임계값 (등급 차이)
+trend_threshold: 0.3
+
+# 주요교과 교과군 목록
+major_subject_groups:
+  공통: ["국어", "수학", "영어"]
+  인문: ["국어", "수학", "영어", "사회", "한국사"]
+  자연: ["국어", "수학", "영어", "과학"]
+
+# 진로선택과목 성취도 → 등급 환산
+jinro_grade_map:
+  A: 1
+  B: 2
+  C: 3
+  D: 4
+  E: 5
+
+# 출결 감점 기준 (100점 만점)
+attendance_scoring:
+  base: 100
+  미인정결석_per_day: -5
+  질병결석_per_day: -1
+  지각_per_count: -0.5
+  조퇴_per_count: -0.5
+  결과_per_count: -0.5
+  min_score: 0

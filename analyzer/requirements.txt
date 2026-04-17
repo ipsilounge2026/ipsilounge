@@ -1,0 +1,15 @@
+# analyzer (학생부 분석기) 런타임 의존성
+# - 실제 코드에서 import 하는 패키지만 포함
+# - Pin 방식 (==) — CLI 독립 실행 프로그램이므로 버전 고정
+# - 재현성 최우선 (특정 버전이 아니면 리포트 출력 결과가 달라질 수 있음)
+#
+# CLAUDE.md 에 "향후 확장 기능"으로 예정된 패키지 (pdf2image / kiwipiepy /
+# wordcloud / matplotlib / pandas) 는 실제 구현 시점에 추가한다.
+#
+# 설치 방법:
+#   cd ipsilounge/analyzer
+#   pip install -r requirements.txt
+
+openpyxl==3.1.5
+reportlab==4.4.10
+PyYAML==6.0.3
