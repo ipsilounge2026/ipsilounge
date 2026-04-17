@@ -30,6 +30,13 @@ REQUIRED_VARS = [
     "haengtuk_data", "haengtuk_comments",
     "linkage_data", "eval_data", "fix_data", "summary_data",
 ]
+# 선택 필드 (없어도 generate_report 동작, 있으면 해당 시트·섹션·QA 추가)
+OPTIONAL_VARS = [
+    "raw_texts",       # G5 워드클라우드·키워드분석
+    "attendance_data", # G7 출결
+    "volunteer_data",  # G7 봉사
+    "compare_data",    # G3+G4 이전 대비 변화
+]
 
 
 def list_available_students():
@@ -131,6 +138,25 @@ def main():
     print(f"  Step 8.5: QA 검증 실행 - {sd.STUDENT}")
     print("=" * 60)
 
+    # ── 이전 리포트 자동 탐색 (G3) ──
+    # compare_data 가 있을 경우 QA P1-G-001/002 가 "이전 리포트에 몇 개였는지" 를 필요로 함.
+    # compare_generator 로 이전 리포트 파싱해서 expected_*_count 계산.
+    _expected_st = 0
+    _expected_is = 0
+    try:
+        from modules.compare_generator import find_previous_reports, extract_previous_info, build_tracking_targets
+        _prev_list = find_previous_reports(sd.STUDENT, OUTPUT_DIR)
+        if _prev_list and (getattr(sd, "compare_data", {}) or {}):
+            _prev_path, _prev_ver, _prev_date, _prev_round = _prev_list[-1]
+            _prev_info = extract_previous_info(_prev_path, round_num=_prev_round)
+            _targets = build_tracking_targets(_prev_info)
+            _expected_st = len(_targets.strengths_to_track)
+            _expected_is = len(_targets.issues_to_track)
+            print(f"[INFO] 이전 리포트 발견: {_prev_path.name}")
+            print(f"       판정 대상 - 강점 {_expected_st}개 / 보완점 {_expected_is}개")
+    except Exception as _e:
+        print(f"[WARN] 이전 리포트 파싱 중 예외 (스킵): {type(_e).__name__}: {_e}")
+
     qa_report = run_full_qa(
         setuek_data=sd.setuek_data,
         setuek_comments=sd.setuek_comments,
@@ -144,6 +170,9 @@ def main():
         target_major=getattr(sd, "TARGET_MAJOR", "") or "",
         attendance_data=getattr(sd, "attendance_data", None),
         volunteer_data=getattr(sd, "volunteer_data", None),
+        compare_data=getattr(sd, "compare_data", None),
+        expected_strengths_count=_expected_st,
+        expected_issues_count=_expected_is,
     )
     print_qa_report(qa_report)
 
@@ -160,8 +189,23 @@ def main():
     print("QA 통과 - 리포트 생성 시작")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    xlsx_path = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}.xlsx"
-    pdf_path  = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}.pdf"
+
+    # ── G4 (2026-04-17): _v{N} 자동 접미사 ──
+    # output/ 에 기존 리포트 있으면 다음 버전 번호 부여.
+    from modules.compare_generator import get_next_version_number
+    _next_ver = get_next_version_number(sd.STUDENT, sd.TODAY, OUTPUT_DIR)
+    if _next_ver is None:
+        # 최초 분석
+        _suffix = ""
+    else:
+        # 2회차 이상
+        _suffix = f"_v{_next_ver}"
+        if not (getattr(sd, "compare_data", {}) or {}):
+            print(f"[WARN] 기존 리포트가 있지만 compare_data 가 비어있습니다. _v{_next_ver} 로 저장하되,")
+            print(f"       CLAUDE.md § Step 0-4 에 따라 이전 대비 변화 분석을 compare_data 에 기록하는 것을 권장합니다.")
+
+    xlsx_path = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}{_suffix}.xlsx"
+    pdf_path  = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}{_suffix}.pdf"
 
     from modules.report_logic import create_excel, create_pdf
     create_excel(sd, xlsx_path)

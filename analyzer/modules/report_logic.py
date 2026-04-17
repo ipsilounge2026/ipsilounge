@@ -304,8 +304,139 @@ def create_excel(sd, xlsx_path):
     except Exception as e:
         print(f"[WARN] 출결·봉사 시트 생성 실패 (스킵): {type(e).__name__}: {e}")
 
+    # ── Sheet 12: 이전분석대비변화 (G3+G4 / CLAUDE.md § Step 0-4, §12) ──
+    # compare_data 비어있으면 스킵 (최초 분석).
+    try:
+        from .compare_generator import has_compare_data
+        if has_compare_data(sd):
+            _write_compare_sheet(wb, sd, style_header, style_cell, set_col_widths,
+                                  center, left_align, get_column_letter)
+    except Exception as e:
+        print(f"[WARN] 이전분석대비변화 시트 생성 실패 (스킵): {type(e).__name__}: {e}")
+
     wb.save(str(xlsx_path))
     print(f"Excel saved: {xlsx_path}")
+
+
+def _write_compare_sheet(wb, sd, style_header, style_cell, set_col_widths,
+                          center, left_align, get_column_letter_fn):
+    """Excel 이전분석대비변화 시트 작성. G3+G4 (2026-04-17)."""
+    from openpyxl.styles import Font, PatternFill
+
+    cd = sd.compare_data or {}
+    ws = wb.create_sheet("이전분석대비변화")
+
+    row = 1
+    # ── 1. 이전 리포트 정보 ──
+    ws.cell(row=row, column=1, value="이전 리포트 정보").font = Font(name="Arial", bold=True, size=12)
+    ws.cell(row=row, column=1).fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+    row += 1
+    ws.cell(row=row, column=1, value="회차").font = Font(name="Arial", bold=True)
+    ws.cell(row=row, column=2, value=f"이전 {cd.get('previous_round', '?')}회차 → 현재")
+    row += 1
+    ws.cell(row=row, column=1, value="이전 리포트 날짜").font = Font(name="Arial", bold=True)
+    ws.cell(row=row, column=2, value=cd.get("previous_date", "-"))
+    row += 1
+    ws.cell(row=row, column=1, value="이전 버전").font = Font(name="Arial", bold=True)
+    ws.cell(row=row, column=2, value=f"v{cd.get('previous_version', 1)}")
+    row += 2
+
+    # ── 2. 등급 변화 추이 ──
+    ws.cell(row=row, column=1, value="등급 변화 추이").font = Font(name="Arial", bold=True, size=11)
+    row += 1
+    headers = ["영역", "이전", "현재", "변화"]
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(row=row, column=c, value=h)
+        cell.font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
+        cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        cell.alignment = center
+    row += 1
+    for gc in cd.get("grade_changes", []) or []:
+        style_cell(ws, row, 1, gc.get("영역", "-"))
+        style_cell(ws, row, 2, gc.get("이전", "-"))
+        style_cell(ws, row, 3, gc.get("현재", "-"))
+        arrow = gc.get("변화", "-")
+        arrow_cell = style_cell(ws, row, 4, arrow)
+        if arrow == "↑":
+            arrow_cell.font = Font(name="Arial", bold=True, color="2E75B6")
+        elif arrow == "↓":
+            arrow_cell.font = Font(name="Arial", bold=True, color="C00000")
+        row += 1
+    row += 1
+
+    # ── 3. 이전 핵심강점 추적 ──
+    ws.cell(row=row, column=1, value="이전 핵심강점 추적 (현재 상태)").font = Font(name="Arial", bold=True, size=11)
+    row += 1
+    headers = ["이전 강점", "출처", "현재 상태", "근거"]
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(row=row, column=c, value=h)
+        cell.font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
+        cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        cell.alignment = center
+    row += 1
+    for s in cd.get("strengths_tracking", []) or []:
+        style_cell(ws, row, 1, s.get("이전강점", ""), left_align)
+        style_cell(ws, row, 2, s.get("출처", ""))
+        state = s.get("현재상태", "")
+        state_cell = style_cell(ws, row, 3, state)
+        if state == "강화됨":
+            state_cell.font = Font(name="Arial", bold=True, color="2E75B6")
+        elif state == "약화됨":
+            state_cell.font = Font(name="Arial", bold=True, color="C00000")
+        style_cell(ws, row, 4, s.get("근거", ""), left_align)
+        row += 1
+    row += 1
+
+    # ── 4. 이전 보완점 반영도 ──
+    ws.cell(row=row, column=1, value="이전 보완점 반영도").font = Font(name="Arial", bold=True, size=11)
+    row += 1
+    headers = ["이전 보완점", "출처", "상태", "근거"]
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(row=row, column=c, value=h)
+        cell.font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
+        cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        cell.alignment = center
+    row += 1
+    for s in cd.get("issues_tracking", []) or []:
+        style_cell(ws, row, 1, s.get("이전보완점", ""), left_align)
+        style_cell(ws, row, 2, s.get("출처", ""))
+        state = s.get("상태", "")
+        state_cell = style_cell(ws, row, 3, state)
+        if state == "반영됨":
+            state_cell.font = Font(name="Arial", bold=True, color="2E75B6")
+        elif state == "미반영":
+            state_cell.font = Font(name="Arial", bold=True, color="C00000")
+        elif state == "부분반영":
+            state_cell.font = Font(name="Arial", bold=True, color="ED7D31")
+        style_cell(ws, row, 4, s.get("근거", ""), left_align)
+        row += 1
+    row += 1
+
+    # ── 5. 새 강점 / 새 보완점 ──
+    ws.cell(row=row, column=1, value="새로 발견된 강점").font = Font(name="Arial", bold=True, size=11)
+    row += 1
+    for i, s in enumerate(cd.get("new_strengths", []) or [], 1):
+        style_cell(ws, row, 1, f"{i}. {s}", left_align)
+        row += 1
+    row += 1
+
+    ws.cell(row=row, column=1, value="새로 발견된 보완점").font = Font(name="Arial", bold=True, size=11)
+    row += 1
+    for i, s in enumerate(cd.get("new_issues", []) or [], 1):
+        style_cell(ws, row, 1, f"{i}. {s}", left_align)
+        row += 1
+    row += 1
+
+    # ── 6. 성장 코멘트 ──
+    ws.cell(row=row, column=1, value="성장 코멘트 (200자 이상)").font = Font(name="Arial", bold=True, size=11)
+    row += 1
+    style_cell(ws, row, 1, cd.get("growth_comment", ""), left_align)
+    growth = str(cd.get("growth_comment", "") or "")
+    if growth and len(growth) < 200:
+        ws.cell(row=row, column=1).font = Font(name="Arial", color="C00000")
+
+    set_col_widths(ws, [35, 24, 12, 70])
+    ws.freeze_panes = "A2"
 
 
 def _write_attendance_sheet(wb, sd, style_header, style_cell, set_col_widths,
@@ -1100,34 +1231,59 @@ def create_pdf(sd, pdf_path):
     elements.append(comment_table)
     elements.append(PageBreak())
 
-    # ── 2. 출결 및 봉사활동 (G7 / CLAUDE.md § 4, §12) ──
-    # attendance_data / volunteer_data 둘 다 비어있으면 섹션 자체 생략
-    # (기존 섹션 번호 2~8 은 3~9 로 자동 rename, 하위 2-1/2-2/2-3 도 3-1/3-2/3-3 으로 rename).
-    _has_attendance_section = False
-    try:
-        from .attendance_calculator import has_attendance_or_volunteer
-        if has_attendance_or_volunteer(sd):
-            _append_pdf_attendance_section(elements, sd, section_title,
-                                            P, PC, PL, PH, make_table,
-                                            style_subtitle, page_w)
-            elements.append(PageBreak())
-            _has_attendance_section = True
-    except Exception as e:
-        print(f"[WARN] PDF 출결·봉사 섹션 생성 실패 (스킵): {type(e).__name__}: {e}")
-
     # ── 섹션 번호 동적 할당 ──
     # 1. 종합의견 (고정)
-    # 2. 출결 및 봉사활동 (선택)
-    # 2 or 3. 세부능력 및 특기사항
-    # ...
-    _n = 2 if _has_attendance_section else 1  # 직전 섹션 번호
-    _n += 1; _sec_setuek   = _n  # 세특
-    _n += 1; _sec_changche = _n  # 창체
-    _n += 1; _sec_haengtuk = _n  # 행특
-    _n += 1; _sec_linkage  = _n  # 연계성
-    _n += 1; _sec_eval     = _n  # 대학평가요소
-    _n += 1; _sec_fix      = _n  # 역량별보완법
-    _n += 1; _sec_keyword  = _n  # 키워드분석
+    # 2. 이전 분석 대비 변화 (선택, compare_data)     ← G3+G4
+    # 3. 출결 및 봉사활동 (선택, attendance/volunteer) ← G7
+    # 이후 세특/창체/행특/연계성/대학평가요소/역량별보완법/키워드분석 섹션 번호 동적 rename
+    _has_compare_section = False
+    _has_attendance_section = False
+    try:
+        from .compare_generator import has_compare_data
+        _has_compare_section = has_compare_data(sd)
+    except Exception as e:
+        print(f"[WARN] compare 판정 예외: {type(e).__name__}: {e}")
+    try:
+        from .attendance_calculator import has_attendance_or_volunteer
+        _has_attendance_section = has_attendance_or_volunteer(sd)
+    except Exception as e:
+        print(f"[WARN] attendance 판정 예외: {type(e).__name__}: {e}")
+
+    _n = 1  # 1. 종합의견
+    _sec_compare = _sec_attendance = None
+    if _has_compare_section:
+        _n += 1; _sec_compare = _n
+    if _has_attendance_section:
+        _n += 1; _sec_attendance = _n
+    _n += 1; _sec_setuek   = _n
+    _n += 1; _sec_changche = _n
+    _n += 1; _sec_haengtuk = _n
+    _n += 1; _sec_linkage  = _n
+    _n += 1; _sec_eval     = _n
+    _n += 1; _sec_fix      = _n
+    _n += 1; _sec_keyword  = _n
+
+    # ── 이전 분석 대비 변화 섹션 (compare_data 있을 때) ──
+    if _has_compare_section:
+        try:
+            _append_pdf_compare_section(elements, sd, section_title,
+                                         P, PC, PL, PH, make_table,
+                                         style_subtitle, page_w,
+                                         section_number=_sec_compare)
+            elements.append(PageBreak())
+        except Exception as e:
+            print(f"[WARN] PDF 이전분석대비변화 섹션 생성 실패 (스킵): {type(e).__name__}: {e}")
+
+    # ── 출결 및 봉사활동 섹션 (attendance/volunteer 있을 때) ──
+    if _has_attendance_section:
+        try:
+            _append_pdf_attendance_section(elements, sd, section_title,
+                                            P, PC, PL, PH, make_table,
+                                            style_subtitle, page_w,
+                                            section_number=_sec_attendance)
+            elements.append(PageBreak())
+        except Exception as e:
+            print(f"[WARN] PDF 출결·봉사 섹션 생성 실패 (스킵): {type(e).__name__}: {e}")
 
     # ── 세부능력 및 특기사항 ──
     elements.append(section_title(f"{_sec_setuek}. 세부능력 및 특기사항"))
@@ -1707,11 +1863,114 @@ def _append_pdf_keyword_section(elements, sd, pdf_path, section_title,
     elements.append(make_table(tdata, col_widths=cw))
 
 
+def _append_pdf_compare_section(elements, sd, section_title,
+                                  P, PC, PL, PH, make_table,
+                                  style_subtitle, page_w,
+                                  section_number: int = 2):
+    """PDF 이전 분석 대비 변화 섹션 (G3+G4 / CLAUDE.md § Step 0-4).
+    compare_data 있을 때만 호출됨.
+    """
+    from reportlab.platypus import Spacer as _RLSpacer
+
+    cd = sd.compare_data or {}
+    elements.append(section_title(f"{section_number}. 이전 분석 대비 변화"))
+    elements.append(_RLSpacer(1, 2*mm))
+
+    # ── 이전 리포트 정보 ──
+    prev_round = cd.get("previous_round", "?")
+    prev_date = cd.get("previous_date", "-")
+    prev_version = cd.get("previous_version", 1)
+    elements.append(P(
+        f"<b>이전 리포트</b>: {prev_round}회차 (v{prev_version}, {prev_date}) → 현재",
+        style_subtitle))
+    elements.append(_RLSpacer(1, 2*mm))
+
+    # ── 등급 변화 추이 ──
+    elements.append(P("■ 등급 변화 추이", style_subtitle))
+    hdr = [PH("영역"), PH("이전"), PH("현재"), PH("변화")]
+    tdata = [hdr]
+    cw = [80, 50, 50, 50]
+    for gc in cd.get("grade_changes", []) or []:
+        arrow = gc.get("변화", "-")
+        arrow_str = arrow
+        if arrow == "↑":
+            arrow_str = f'<font color="#2E75B6"><b>↑</b></font>'
+        elif arrow == "↓":
+            arrow_str = f'<font color="#C00000"><b>↓</b></font>'
+        tdata.append([PC(gc.get("영역", "-")), PC(gc.get("이전", "-")),
+                       PC(gc.get("현재", "-")), P(arrow_str, style_subtitle)])
+    if len(tdata) > 1:
+        elements.append(make_table(tdata, col_widths=cw))
+    else:
+        elements.append(P("등급 변화 데이터 없음", style_subtitle))
+    elements.append(_RLSpacer(1, 4*mm))
+
+    # ── 이전 핵심강점 추적 ──
+    elements.append(P("■ 이전 핵심강점 추적", style_subtitle))
+    hdr = [PH("이전 강점"), PH("현재 상태"), PH("근거")]
+    tdata = [hdr]
+    cw = [page_w * 0.30, 60, page_w - 60 - page_w * 0.30]
+    for s in cd.get("strengths_tracking", []) or []:
+        state = s.get("현재상태", "")
+        state_str = state
+        if state == "강화됨":
+            state_str = f'<font color="#2E75B6"><b>{state}</b></font>'
+        elif state == "약화됨":
+            state_str = f'<font color="#C00000"><b>{state}</b></font>'
+        tdata.append([PL(s.get("이전강점", "")), P(state_str, style_subtitle), PL(s.get("근거", ""))])
+    if len(tdata) > 1:
+        elements.append(make_table(tdata, col_widths=cw))
+    else:
+        elements.append(P("추적 데이터 없음", style_subtitle))
+    elements.append(_RLSpacer(1, 4*mm))
+
+    # ── 이전 보완점 반영도 ──
+    elements.append(P("■ 이전 보완점 반영도", style_subtitle))
+    hdr = [PH("이전 보완점"), PH("상태"), PH("근거")]
+    tdata = [hdr]
+    cw = [page_w * 0.30, 60, page_w - 60 - page_w * 0.30]
+    for s in cd.get("issues_tracking", []) or []:
+        state = s.get("상태", "")
+        state_str = state
+        if state == "반영됨":
+            state_str = f'<font color="#2E75B6"><b>{state}</b></font>'
+        elif state == "미반영":
+            state_str = f'<font color="#C00000"><b>{state}</b></font>'
+        elif state == "부분반영":
+            state_str = f'<font color="#ED7D31"><b>{state}</b></font>'
+        tdata.append([PL(s.get("이전보완점", "")), P(state_str, style_subtitle), PL(s.get("근거", ""))])
+    if len(tdata) > 1:
+        elements.append(make_table(tdata, col_widths=cw))
+    else:
+        elements.append(P("추적 데이터 없음", style_subtitle))
+    elements.append(_RLSpacer(1, 4*mm))
+
+    # ── 새 강점 / 새 보완점 ──
+    new_s = cd.get("new_strengths", []) or []
+    new_i = cd.get("new_issues", []) or []
+    if new_s:
+        elements.append(P("■ 새로 발견된 강점", style_subtitle))
+        for i, s in enumerate(new_s, 1):
+            elements.append(P(f"{i}. {s}", style_subtitle))
+        elements.append(_RLSpacer(1, 3*mm))
+    if new_i:
+        elements.append(P("■ 새로 발견된 보완점", style_subtitle))
+        for i, s in enumerate(new_i, 1):
+            elements.append(P(f"{i}. {s}", style_subtitle))
+        elements.append(_RLSpacer(1, 3*mm))
+
+    # ── 성장 코멘트 ──
+    growth = str(cd.get("growth_comment", "") or "")
+    if growth:
+        elements.append(P("■ 성장 코멘트", style_subtitle))
+        elements.append(P(growth, style_subtitle))
+
+
 def _append_pdf_attendance_section(elements, sd, section_title,
                                     P, PC, PL, PH, make_table,
                                     style_subtitle, page_w,
                                     section_number: int = 2):
-    """PDF "2. 출결 및 봉사활동" 섹션 추가 (G7 / CLAUDE.md § 4).
+    """PDF "출결 및 봉사활동" 섹션 추가 (G7 / CLAUDE.md § 4).
     attendance_data / volunteer_data 있을 때만 호출됨.
     """
     from .attendance_calculator import calculate_attendance_score, summarize_volunteer

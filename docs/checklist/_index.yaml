@@ -12,11 +12,12 @@
 # ===================================================================
 
 meta:
-  index_version: "2.14.0"
+  index_version: "2.15.0"
   last_audited: "2026-04-17"
   hash_algorithm: "sha256"
   paths_relative_to: "C:\\Users\\orbik\\Dropbox\\AI Project\\Claude\\학생부분석프로그램\\"
   changelog:
+    - "2.15.0 (2026-04-17): ★ C안 로드맵 진척 — G5(워드클라우드·키워드분석) + G7(출결·봉사) + G3+G4(이전 리포트 자동 탐색·_v{N}·이전분석대비변화) 전부 구현 완료. analyzer/compare-data.yaml 신규 등록 (C안 하이브리드: 자동 추출 Python + 판정 enum + QA 자동 검증). keyword_extractor/attendance_calculator/compare_generator 3개 신규 모듈. QA P1-F + P1-G + P2-G 확장. 2026-04-17 GAP 5건→2건."
     - "2.14.0 (2026-04-17): ★ analyzer 보완 6종 전체 L1/L2 검증 완료 + ready 승격. 총 86/86 항목 중 pass 75 + partial 5(워드클라우드 미구현 + 2회차 수동 처리) + gap 6(미사용 패키지 5 + 척도 불일치 1). 구조/의존성/설정/프롬프트/진입점/학생데이터 스키마 자동 스캔(파일 존재·산술 합계·REQUIRED_VARS 매칭·gitignore whitelist 동작·격리 경계). analyzer 영역 9종 전체 ready. gap 은 모두 기존 체크리스트(rubric.yaml)에서 이미 문서화되었거나 향후 기능으로 분류."
     - "2.13.0 (2026-04-17): ★ analyzer 영역 보완 6종 체크리스트 신규 작성 (structure/dependencies/config/prompts/entry-point/student-data). 기존 3종(pipeline/rubric/report-output)이 파이프라인·루브릭·리포트를 커버하는 반면 이들은 인프라·구조 측면 보완. analyzer 영역 체크리스트 9개로 확장. school-record-analyzer → ipsilounge/analyzer 통합 이식(0dbe1d8) 이후 첫 체크리스트 보강."
     - "2.12.0 (2026-04-16): ★ cross-cutting/ux-policy.yaml 20/20 전체 L3 검증 완료! 자동저장(디바운스 1200ms + 낙관적 잠금 + 충돌 알림 배너) + 무기명 B옵션(raw 조회 super_admin/admin 전용 + counselor 집계만) + 재시도(결제 fail 페이지 + family 코드 10회 + 수동 새로고침) + 상태 피드백(StatusBadge + 저장중/제출중 + Presigned 1시간) + 이어쓰기(draft + delta prefill + 학부모 읽기전용) + 자동 타이밍 추천 전부 코드 정합. P2 gap 2건(재시도 라이브러리 미도입/ux-policy.md 통합 문서 부재) 문서화. status: not_started→ready. ★ cross-cutting 영역 5개 전체 완료(test-env/auth/data-sharing/ux-policy + booking/senior/high 연계)"
@@ -498,6 +499,40 @@ checklists:
       verified_at: "2026-04-17"
       method: "L1 자동 검증 (파일 존재·산술 합계·REQUIRED_VARS 매칭) + L2 코드 리뷰 (격리 경계·하드코딩 부재)"
     next_step: "검증 완료. 2회차 변화 추적 partial 2건 (CLAUDE.md §0-4 수동 워크플로우)"
+
+  - file: "analyzer/compare-data.yaml"
+    area_code: ANALYZER
+    title: "analyzer compare_data 작성 체크리스트 (2회차 이상)"
+    spec_files:
+      - path: "ipsilounge/analyzer/CLAUDE.md"
+        last_known_hash: null
+        section: "Step 0 · Step 0-4 이전 대비 변화 분석"
+        last_synced: "2026-04-17"
+      - path: "ipsilounge/analyzer/modules/compare_generator.py"
+        last_known_hash: null
+        last_synced: "2026-04-17"
+      - path: "ipsilounge/analyzer/modules/qa_validator.py"
+        last_known_hash: null
+        section: "P1-G / P2-G check_compare_data_structure()"
+        last_synced: "2026-04-17"
+    status: "ready"   # 2026-04-17 G3+G4 구현 + 판정 기준 + QA 연동 완비
+    promotion_summary:
+      promoted_count: 7
+      promoted_at: "2026-04-17"
+      priority_distribution:
+        P0: 0
+        P1: 5  # P1-G-001~005
+        P2: 2  # P2-G-001/002
+      note: "C안 (하이브리드) 구현. 자동 추출 = Python, 판정 기준 = enum + QA 자동 검증. Claude 세션마다 기준 흔들림 방지"
+    verification_summary:
+      pass: 7
+      partial: 0
+      unverified: 0
+      fail: 0
+      documented_gap: 0
+      verified_at: "2026-04-17"
+      method: "구현 검증 (compare_generator.py + qa_validator.py P1-G/P2-G + report_logic _write_compare_sheet) + E2E 테스트 3 시나리오"
+    next_step: "실 2회차 분석 케이스 누적 시 판정 기준(강화됨/유지됨/약화됨, 반영됨/부분반영/미반영) 미세 조정 검토"
 
   # ───── 공통 정책 영역 ─────
 

@@ -1,0 +1,169 @@
+# ═══════════════════════════════════════════════════════════════
+# compare_data (2회차 이상 분석 시) 작성 체크리스트
+# ═══════════════════════════════════════════════════════════════
+# spec: ipsilounge/analyzer/CLAUDE.md § Step 0 · § Step 0-4
+#       ipsilounge/analyzer/modules/compare_generator.py
+# 목적: Claude 가 compare_data 를 작성할 때 판정 기준이 세션마다
+#       흔들리지 않도록 명시적 enum + 필수 근거 + QA 검증으로 강제.
+#
+# 작성 흐름:
+#   1. python -m modules.compare_generator <학생명> 실행
+#      → 이전 리포트 파싱 결과 (core_strengths, core_issues, fix_items) 확인
+#   2. 본 체크리스트의 판정 기준으로 각 대상 판정
+#   3. data/students/<학생명>.py 의 compare_data 에 기록
+#   4. python generate_report.py <학생명> 실행
+#      → QA P1-G / P2-G 자동 검증, 미달 시 FAIL 로 리포트 생성 차단
+# ═══════════════════════════════════════════════════════════════
+
+meta:
+  area_code: ANALYZER
+  title: "compare_data 작성 체크리스트 (2회차 이상)"
+  created_at: "2026-04-17"
+  spec_refs:
+    - "ipsilounge/analyzer/CLAUDE.md § Step 0 기존 리포트 확인"
+    - "ipsilounge/analyzer/CLAUDE.md § Step 0-4 이전 대비 변화 분석"
+    - "ipsilounge/analyzer/modules/compare_generator.py"
+    - "ipsilounge/analyzer/modules/qa_validator.py P1-G / P2-G"
+
+# ════════════════════════════════════════════════════════════════
+# 1. 자동 추출 대상 (Python 담당, Claude 무개입)
+# ════════════════════════════════════════════════════════════════
+auto_extracted:
+  - field: "previous_date"
+    description: "이전 리포트 파일명의 YYYYMMDD 부분"
+    source: "modules.compare_generator.find_previous_reports()"
+
+  - field: "previous_round"
+    description: "이전 리포트가 몇 회차였는지 (find_previous_reports 결과의 round_num)"
+
+  - field: "previous_version"
+    description: "이전 리포트 파일명의 _v{N} (없으면 1)"
+
+  - field: "grade_changes"
+    description: |
+      영역별 대표 등급 이전 vs 현재 자동 비교.
+      세특: setuek_data 의 등급 최빈값
+      창체: changche_data 의 환산점수 → score_to_grade()
+      행특: haengtuk_data 의 등급 최빈값
+    source: "modules.compare_generator.compute_grade_changes(prev, sd)"
+
+# ════════════════════════════════════════════════════════════════
+# 2. Claude 작성 대상 (체크리스트 기준 필수)
+# ════════════════════════════════════════════════════════════════
+
+# ── strengths_tracking (이전 핵심강점 3개 각각 현재 상태 판정) ──
+strengths_tracking:
+  required:
+    - "이전 리포트의 핵심강점1, 2, 3 모두 tracking 필수 (누락 금지)"
+    - "각 항목에 '현재상태' enum 필수: 강화됨 / 유지됨 / 약화됨"
+    - "각 항목에 '근거' 필드 필수 (빈 문자열 허용 안 함)"
+    - "'출처' 필드에 'ᄌ합요약-핵심강점N' 형식 유지 (자동 추출에서 제공)"
+
+  현재상태_판정기준:
+    강화됨:
+      정의: "이전 강점 영역에서 동일 주제의 심화 기록이 현재에도 존재하며, 분량/깊이/학술성 중 1개 이상 향상"
+      필수조건:
+        - "구체적 심화 근거 문장 인용 (학생부 원문 또는 현재 리포트 평가)"
+        - "어떤 측면이 향상됐는지 명시 (분량 / 학술성 / 응용 범위 등)"
+      예시: "이전 '경제학 선형계획법 탐구' 강점 → 현재 3학년 정수계획법으로 확장, 논문 인용 포함 보고서 제출로 학술성 심화"
+
+    유지됨:
+      정의: "이전 수준과 유사한 기록 유지 (심화 증거 약하지만 약화 징후도 없음)"
+      필수조건:
+        - "이전 강점 영역에 현재도 관련 활동이 존재함을 확인"
+        - "변화 없음을 단순 서술로만 표기 금지 (비교 근거 필수)"
+      예시: "1~2학년 학급 리더십 강점 → 3학년에도 학생회 위원 활동 유지, 변화는 크지 않음"
+
+    약화됨:
+      정의: "이전 강점 영역의 관련 기록이 현재 학년 학생부에서 감소·소실"
+      필수조건:
+        - "분량 수치 비교 또는 관련 기록 부재 근거 명시"
+        - "왜 약화됐는지 추정 (시간 분배·우선순위 변화 등)"
+      예시: "1~2학년 봉사 지속성 강점 → 3학년 봉사시간 0, 관련 활동 기록 없음"
+
+# ── issues_tracking (이전 보완점 모두 반영도 판정) ──
+issues_tracking:
+  required:
+    - "자동 추출된 issues_to_track 전체를 tracking 필수 (누락 금지)"
+    - "대상 = 종합요약 보완영역1~3 + 역량별보완법 fix_items 전체"
+    - "각 항목에 '상태' enum 필수: 반영됨 / 부분반영 / 미반영"
+    - "각 항목에 '근거' 필드 필수 (빈 문자열 허용 안 함)"
+
+  상태_판정기준:
+    반영됨:
+      정의: "이전 보완점이 현재 학생부에 구체적 기록으로 명확히 반영됨"
+      필수조건:
+        - "구체적 근거 문장 명시 (현재 학생부 원문 인용 또는 기록 요약)"
+        - "어떤 학년/시트/영역에 반영됐는지 위치 표기"
+      예시: "이전 '영어 세특에서 전공 연계 부족' → 현재 3학년 영어 세특에 Nature 기사 분석 + 의학 용어 번역 기록 확인"
+
+    부분반영:
+      정의: "방향성은 반영되었으나 분량/구체성/지속성 중 1개 이상 부족"
+      필수조건:
+        - "반영된 부분과 부족한 부분 모두 명시"
+        - "추가 보완 방향 제시"
+      예시: "이전 '봉사 지속성 강화' → 2학년에 20시간으로 증가했으나 3학년 다시 10시간으로 감소 (지속성 부분 달성)"
+
+    미반영:
+      정의: "이전 보완점과 관련된 변화가 현재 학생부에 관찰되지 않음"
+      필수조건:
+        - "미반영 근거 (분량 수치 동일 / 관련 기록 부재 등) 명시"
+        - "해당 보완점 재우선화 필요 여부 판단"
+      예시: "이전 '3학년 자율 탐구 동기 강화' → 3학년 자율활동 분량·구체성 변화 없음"
+
+# ── new_strengths / new_issues ──
+new_strengths_criteria:
+  - "이전 분석에 언급되지 않은 요소여야 함 (중복 금지)"
+  - "현재 학생부에 구체적 에피소드로 기록된 것만 포함"
+  - "최소 1개, 최대 5개 권장"
+  - "각 항목이 어떤 역량에 해당하는지 명시 권장 (학업/진로/공동체)"
+
+new_issues_criteria:
+  - "이전 분석에 언급되지 않았으나 현재 학생부에서 발견된 보완 필요 요소"
+  - "최소 1개, 최대 5개 권장"
+  - "각 항목에 왜 보완이 필요한지 근거 포함"
+
+# ── growth_comment ──
+growth_comment:
+  min_length: 200
+  필수포함:
+    - "이전→현재 전반적 성장 방향 (상승/유지/하락 중 어느 쪽)"
+    - "가장 두드러진 변화 1가지 (강화 또는 약화 중)"
+    - "남은 주요 과제 1가지 (향후 보완 방향)"
+  권장포함:
+    - "과목·영역·학년 단위 세부 패턴 (strengths/issues_tracking 에서 커버 못 한 세부 변화)"
+    - "종합 경쟁력 영향 (등급 변화가 학종·교과 전형 선택에 미치는 영향)"
+
+# ════════════════════════════════════════════════════════════════
+# 3. QA 자동 검증 항목 (P1-G / P2-G)
+# ════════════════════════════════════════════════════════════════
+qa_checks:
+  - id: P1-G-001
+    priority: P1
+    check: "compare_data 있을 때 strengths_tracking 항목 수 ≥ 이전 핵심강점 수"
+    fail_effect: "리포트 생성 차단"
+
+  - id: P1-G-002
+    priority: P1
+    check: "compare_data 있을 때 issues_tracking 항목 수 ≥ 이전 보완영역+fix_items 수"
+    fail_effect: "리포트 생성 차단"
+
+  - id: P1-G-003
+    priority: P1
+    check: "strengths_tracking[].현재상태 enum: 강화됨|유지됨|약화됨"
+
+  - id: P1-G-004
+    priority: P1
+    check: "issues_tracking[].상태 enum: 반영됨|부분반영|미반영"
+
+  - id: P1-G-005
+    priority: P1
+    check: "strengths_tracking[] / issues_tracking[] 각 항목 '근거' 필드 비어있지 않음"
+
+  - id: P2-G-001
+    priority: P2
+    check: "growth_comment 길이 ≥ 200자"
+
+  - id: P2-G-002
+    priority: P2
+    check: "new_strengths / new_issues 각 1개 이상"

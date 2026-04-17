@@ -547,6 +547,128 @@ def check_attendance_structure(attendance_data, volunteer_data):
     return results
 
 
+def check_compare_data_structure(compare_data, expected_strengths_count: int = 0,
+                                   expected_issues_count: int = 0):
+    """P1-G / P2-G (G3+G4 2026-04-17): compare_data 구조/enum/근거/글자수 검증.
+
+    expected_strengths_count: 이전 리포트에서 추출한 핵심강점 개수 (compare_generator 제공)
+    expected_issues_count: 이전 보완영역 + fix_items 개수 (compare_generator 제공)
+
+    compare_data 가 비어있으면 모든 체크 스킵 (최초 분석).
+    """
+    results = []
+    if not isinstance(compare_data, dict) or not compare_data:
+        # 최초 분석 — 검증 스킵
+        return results
+
+    # 가져오기
+    st_tracking = compare_data.get("strengths_tracking", []) or []
+    is_tracking = compare_data.get("issues_tracking", []) or []
+    new_strengths = compare_data.get("new_strengths", []) or []
+    new_issues = compare_data.get("new_issues", []) or []
+    growth_comment = str(compare_data.get("growth_comment", "") or "")
+
+    # ── P1-G-001: strengths_tracking 항목 수 ──
+    if expected_strengths_count > 0 and len(st_tracking) < expected_strengths_count:
+        results.append(QAResult(
+            "P1-G-001", "이전 핵심강점 tracking 누락", "P1", "FAIL",
+            f"이전 핵심강점 {expected_strengths_count}개 중 {len(st_tracking)}개만 tracking",
+            str(len(st_tracking)), str(expected_strengths_count),
+            "이전 리포트의 모든 핵심강점을 strengths_tracking 에 포함"))
+    else:
+        results.append(QAResult("P1-G-001", "strengths_tracking 개수", "P1", "PASS"))
+
+    # ── P1-G-002: issues_tracking 항목 수 ──
+    if expected_issues_count > 0 and len(is_tracking) < expected_issues_count:
+        results.append(QAResult(
+            "P1-G-002", "이전 보완점 tracking 누락", "P1", "FAIL",
+            f"이전 보완영역+fix_items {expected_issues_count}개 중 {len(is_tracking)}개만 tracking",
+            str(len(is_tracking)), str(expected_issues_count),
+            "이전 리포트의 모든 보완점(종합요약 보완영역+역량별보완법 fix_items) 을 issues_tracking 에 포함"))
+    else:
+        results.append(QAResult("P1-G-002", "issues_tracking 개수", "P1", "PASS"))
+
+    # ── P1-G-003: strengths_tracking 현재상태 enum ──
+    valid_st = {"강화됨", "유지됨", "약화됨"}
+    st_enum_issues = []
+    for i, s in enumerate(st_tracking):
+        if not isinstance(s, dict):
+            st_enum_issues.append(f"#{i+1}: dict 아님")
+            continue
+        state = s.get("현재상태", "")
+        if state not in valid_st:
+            st_enum_issues.append(f"#{i+1} '{state}'")
+    if st_enum_issues:
+        results.append(QAResult(
+            "P1-G-003", "strengths_tracking.현재상태 enum", "P1", "FAIL",
+            f"유효 값 {valid_st} 이외: " + "; ".join(st_enum_issues[:3]) + ("..." if len(st_enum_issues) > 3 else ""),
+            "?", " | ".join(sorted(valid_st)),
+            "현재상태 값을 강화됨/유지됨/약화됨 중 하나로 수정"))
+    elif st_tracking:
+        results.append(QAResult("P1-G-003", "strengths_tracking.현재상태 enum", "P1", "PASS"))
+
+    # ── P1-G-004: issues_tracking 상태 enum ──
+    valid_is = {"반영됨", "부분반영", "미반영"}
+    is_enum_issues = []
+    for i, s in enumerate(is_tracking):
+        if not isinstance(s, dict):
+            is_enum_issues.append(f"#{i+1}: dict 아님")
+            continue
+        state = s.get("상태", "")
+        if state not in valid_is:
+            is_enum_issues.append(f"#{i+1} '{state}'")
+    if is_enum_issues:
+        results.append(QAResult(
+            "P1-G-004", "issues_tracking.상태 enum", "P1", "FAIL",
+            f"유효 값 {valid_is} 이외: " + "; ".join(is_enum_issues[:3]) + ("..." if len(is_enum_issues) > 3 else ""),
+            "?", " | ".join(sorted(valid_is)),
+            "상태 값을 반영됨/부분반영/미반영 중 하나로 수정"))
+    elif is_tracking:
+        results.append(QAResult("P1-G-004", "issues_tracking.상태 enum", "P1", "PASS"))
+
+    # ── P1-G-005: 근거 필드 비어있지 않음 ──
+    reason_missing = []
+    for i, s in enumerate(st_tracking):
+        if isinstance(s, dict) and not str(s.get("근거", "")).strip():
+            reason_missing.append(f"strengths#{i+1}")
+    for i, s in enumerate(is_tracking):
+        if isinstance(s, dict) and not str(s.get("근거", "")).strip():
+            reason_missing.append(f"issues#{i+1}")
+    if reason_missing:
+        results.append(QAResult(
+            "P1-G-005", "tracking 근거 필드 누락", "P1", "FAIL",
+            f"근거 비어있음 {len(reason_missing)}건: " + ", ".join(reason_missing[:5]) + ("..." if len(reason_missing) > 5 else ""),
+            "empty", "비어있지 않은 근거 문자열",
+            "각 tracking 항목에 구체적 근거(학생부 원문 인용 또는 비교 분석) 기록"))
+    elif st_tracking or is_tracking:
+        results.append(QAResult("P1-G-005", "tracking 근거 필드", "P1", "PASS"))
+
+    # ── P2-G-001: growth_comment 글자수 ──
+    if growth_comment:
+        if len(growth_comment) < 200:
+            results.append(QAResult(
+                "P2-G-001", "growth_comment 글자수", "P2", "WARN",
+                f"{len(growth_comment)}자 (최소 200자)",
+                str(len(growth_comment)), "≥200",
+                "성장 코멘트를 최소 200자 이상으로 확장 (방향/두드러진 변화/남은 과제 포함)"))
+        else:
+            results.append(QAResult("P2-G-001", f"growth_comment 글자수 ({len(growth_comment)}자)", "P2", "PASS"))
+
+    # ── P2-G-002: new_strengths / new_issues 개수 ──
+    if not new_strengths:
+        results.append(QAResult(
+            "P2-G-002a", "new_strengths 개수", "P2", "WARN",
+            "새로 발견된 강점 0개. 이전 분석에 없던 강점 포함 권장 (최소 1개)"))
+    if not new_issues:
+        results.append(QAResult(
+            "P2-G-002b", "new_issues 개수", "P2", "WARN",
+            "새로 발견된 보완점 0개. 이전 분석에 없던 보완점 포함 권장 (최소 1개)"))
+    if new_strengths and new_issues:
+        results.append(QAResult("P2-G-002", "new_strengths/new_issues 개수", "P2", "PASS"))
+
+    return results
+
+
 def check_mode_consistency(setuek_data, target_major: str):
     """P1-E: 메타(TARGET_MAJOR) ↔ setuek_data 튜플 길이 일관성 검증.
     - 지정 모드 (TARGET_MAJOR 있음): 튜플 길이 11 이어야 함 (학년+과목+7점수+합산+등급)
@@ -588,10 +710,15 @@ def run_full_qa(setuek_data, setuek_comments, good_sentences,
                 changche_data, haengtuk_data, haengtuk_comments,
                 linkage_data, fix_data, student_name="",
                 target_major: str = "",
-                attendance_data=None, volunteer_data=None):
+                attendance_data=None, volunteer_data=None,
+                compare_data=None,
+                expected_strengths_count: int = 0,
+                expected_issues_count: int = 0):
     """전체 QA 검증 실행.
     target_major: 지원 학과명 (빈 문자열이면 미지정 모드, 값 있으면 지정 모드).
     attendance_data / volunteer_data: G7 출결·봉사 (선택, None/빈 dict 허용).
+    compare_data: G3/G4 이전 대비 변화 (선택).
+    expected_*_count: compare_generator 가 이전 리포트에서 추출한 개수 (P1-G-001/002 검증용).
     """
     report = QAReport(
         student_name=student_name,
@@ -600,6 +727,7 @@ def run_full_qa(setuek_data, setuek_comments, good_sentences,
     is_major = bool(target_major and str(target_major).strip())
     attendance_data = attendance_data or {}
     volunteer_data = volunteer_data or {}
+    compare_data = compare_data or {}
 
     # P1 - 필수
     report.results.extend(
@@ -624,6 +752,13 @@ def run_full_qa(setuek_data, setuek_comments, good_sentences,
 
     # P1-F (G7 2026-04-17): 출결/봉사 데이터 구조
     report.results.extend(check_attendance_structure(attendance_data, volunteer_data))
+
+    # P1-G / P2-G (G3+G4 2026-04-17): compare_data 구조/enum/근거/글자수
+    report.results.extend(check_compare_data_structure(
+        compare_data,
+        expected_strengths_count=expected_strengths_count,
+        expected_issues_count=expected_issues_count,
+    ))
 
     # P2 - 중요
     report.results.extend(check_char_counts(setuek_comments, haengtuk_comments, linkage_data, fix_data))

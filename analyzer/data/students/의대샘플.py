@@ -29,6 +29,9 @@ raw_texts = {"setuek": {}, "changche": {}, "haengtuk": {}}
 attendance_data = {}
 volunteer_data = {}
 
+# G3+G4 (2026-04-17) 이전 대비 변화 — 최초 분석이므로 빈 dict.
+compare_data = {}
+
 
 # ═══════════════════════════════════════════════════════
 # 세특 데이터 (1~2학년, 3학년 미기록)

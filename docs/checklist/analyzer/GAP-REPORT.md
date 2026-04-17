@@ -13,7 +13,7 @@
 | 구분 | 건수 | 진척 |
 |---|---|---|
 | **일치 (PASS)** | 9 영역 | - |
-| **명시적 Gap (미구현)** | 7 건 | 2026-04-17 G5 해소 → 6건 → G7 해소 → **5 건** |
+| **명시적 Gap (미구현)** | 7 건 | 2026-04-17 G5/G7/G3+G4 해소 → **2 건** (내신/입결/전형적합도는 대학 DB 선행, G6 남음) |
 | **부분 구현 / 운영 모드 차이** | 3 건 | 2026-04-17 세특 7/6 항목, 척도 1~10 해소 → **1 건** (미사용 패키지만 잔여) |
 | **스펙-구현 불일치 (문서 업데이트 필요)** | 3 건 | 2026-04-17 D1/D2/D3 전부 해소 ✅ → **0 건** |
 
@@ -56,7 +56,7 @@
 | 전형적합도 | — | ❌ 미구현 (내신분석 선행) |
 | 대학평가요소 | 대학평가요소 | ✅ |
 | 역량별보완법 | 역량별보완법 | ✅ |
-| 이전분석대비변화 | — | ❌ 미구현 (2회차 전용, G3/G4 선행) |
+| **이전분석대비변화** | **이전분석대비변화** | ✅ **(G3+G4 해소, 2026-04-17)** |
 | **출결·봉사** | **출결·봉사** | ✅ **(G7 해소, 2026-04-17)** |
 
 **영향**: CLAUDE.md 는 "전체 분석" 모드 기준으로 기술되어 있으나, 실제 운영은 "내신/입결 제외 모드"가 사실상 기본값.
@@ -83,33 +83,49 @@
 
 ---
 
-### G3 (P1) §5 Step 0 기존 리포트 자동 확인 미구현
+### G3+G4+G1-이전분석대비변화 — 해소 완료 ✅ (2026-04-17)
 
-**CLAUDE.md §5 Step 0 명세**:
-- output/ 폴더 자동 탐색
-- 동일 인물 확인 (학교명 / 생년월일 / 학년 대조)
-- 이전 리포트 검토 (이전 보완점, 강점 메모리 로드)
+C안 로드맵 세 번째 과제로 **G3 (기존 리포트 자동 탐색) + G4 (`_v{N}` 접미사) + G1-이전분석대비변화 시트** 동시 구현.
 
-**실제 generate_report.py**: Step 0 로직 없음.
+**추가된 파일**:
+- `modules/compare_generator.py` (신규, ~300 lines):
+  - `find_previous_reports()`: output/ 탐색, date/version 오름차순
+  - `extract_previous_info()`: 이전 Excel 파싱 (종합요약·역량별보완법·각 영역 시트 대표 등급)
+  - `compute_grade_changes()`: 이전 vs 현재 영역별 등급 자동 diff
+  - `build_tracking_targets()`: 판정 대상 리스트 생성 (핵심강점 3 + 보완영역 3 + fix_items 전체)
+  - `get_next_version_number()`: `_v{N}` 자동 번호 결정
+  - `has_compare_data()`: 역호환 체크
+  - CLI: `python -m modules.compare_generator <학생명>`
+- `docs/checklist/analyzer/compare-data.yaml` (신규): 판정 기준 enum + QA 연동 명시
+  - strengths_tracking: 강화됨/유지됨/약화됨
+  - issues_tracking: 반영됨/부분반영/미반영
+  - 각 판정별 필수조건 + 예시
 
-**실제 운영 방식**: Claude 대화형 세션에서 수동으로 output/ 폴더 탐색 + 이전 리포트 대조. 진입점 자동화 아님.
+**수정된 파일**:
+- `modules/qa_validator.py`:
+  - `check_compare_data_structure()` 신규 (P1-G-001~005 + P2-G-001/002)
+  - `run_full_qa()` 에 `compare_data`, `expected_*_count` 인자 추가
+- `generate_report.py`:
+  - 이전 리포트 자동 탐색 → `expected_*_count` 계산 → QA 전달
+  - `_v{N}` 접미사 자동 부여 (`get_next_version_number()`)
+  - compare_data 비어있는데 이전 리포트 있을 때 경고 안내
+- `_template.py`: `compare_data` 선택 필드 + 상세 사용 예시
+- `의대샘플.py`, `연승훈.py`: 빈 dict `compare_data = {}` 역호환
+- `modules/report_logic.py`:
+  - `_write_compare_sheet()`: Excel "이전분석대비변화" 시트 자동 생성
+  - `_append_pdf_compare_section()`: PDF 섹션 (종합의견 직후)
+  - 섹션 번호 동적 할당 확장 (compare + attendance 동시 고려)
+  - 색상 강조 (↑/↓, 강화됨/약화됨, 반영됨/미반영/부분반영)
 
-**조치 권고**: CLAUDE.md §5 Step 0 에 `※ 현재는 Claude 대화형 수동 처리. 진입점 자동화는 향후 과제.` 주석 추가.
+**해결된 사용자 지적사항**:
+1. **보완점 범위**: 종합요약 3개만 → **종합요약 3개 + 역량별보완법 fix_items 전체** 추적
+2. **강점 변화**: 새 강점만 → **이전 핵심강점 전부 강화/유지/약화 추적 + 새 강점**
+3. **Claude 기준 흔들림**: **체크리스트 enum + QA 자동 검증** 으로 강제
 
----
-
-### G4 (P1) §5 Step 0-4 / §13 2회차 이상 분석 `_v{N}` 접미사 미구현
-
-**CLAUDE.md**: `연승훈_학생부분석_20260407_v2.xlsx` 자동 접미사.
-
-**실제**: generate_report.py L154~155:
-```python
-xlsx_path = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}.xlsx"
-pdf_path  = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}.pdf"
-```
-단순히 `{STUDENT}_학생부분석_{TODAY}.xlsx` 형식. `_v2`, `_v3` 로직 없음.
-
-**조치 권고**: CLAUDE.md 에 "현재는 Claude 대화형 수동 파일명 지정" 주석 + 향후 과제로 분리.
+**검증 완료 (3 시나리오)**:
+- 역호환: 의대샘플 (compare_data={}) → 10시트 유지 (기존 9 + 출결봉사 1), PDF 섹션 2~9 ✓
+- E2E 2회차: compare_data 완전 작성 → 이전분석대비변화 시트 37행, PDF 섹션 추가, `_v{N}` 자동 ✓
+- QA FAIL: issues_tracking 에 "유지됨" 잘못된 enum 삽입 → P1-G-004 FAIL 정상 감지 ✓
 
 ---
 
