@@ -1,6 +1,126 @@
 # 변경 이력 (CHANGELOG)
 
 입시라운지 프로젝트의 주요 수정사항을 날짜별로 기록합니다.
+기획서가 있는 기능(고등학교 상담 V3 / 예비고1 V2_2 / 선배 상담 V1 / 선배-상담사 연계규칙 V1 / 만족도 설문)의 상세 사양 변경은 각 기획서 파일에 기록되고, 여기에는 커밋 요약만 남깁니다.
+
+---
+
+## 2026-04-17
+
+### 선배상담-상담사 연계 V1 P3 — UX/정책 마무리
+기획서: `선배상담_상담사상담_연계규칙_V1.md`
+- **P3-① 비공유 필드 명시** — 공유 OFF 처리된 필드를 `_redacted_fields` 메타로 전달하여 "원래 빈 값"과 "의도된 비공유"를 구분
+  - backend `_apply_sharing_filter`, `filter_note_for_senior` 양방향 필터에 적용
+  - admin-web 세션 화면의 "선배 기록" 탭에 🔒 "선배 비공유" 배지 + 대체 플레이스홀더 블록
+  - admin-web counselor-sharing 검토 화면 preview 에서 `_`-prefix 메타 숨김
+- **P3-② 전면 철회 안내** — user-web `/mypage/senior-sharing` 하단에 "부분 철회 vs 전면 철회(회원 탈퇴)" 비교 카드 + 고객센터 요청 안내
+- 테스트: `test_redacted_fields.py` 6건 신규 (backend pytest 17/17 pass)
+
+### 선배상담-상담사 연계 V1 P2 — 운영 안정화
+- **P2-① 사후 철회 API** — `consultation_surveys` / `consultation_notes` 에 `senior_sharing_revoked_at` / `revoke_reason` 필드 + `/api/user/consultation-sharing/{status,revoke,restore}` 3종 신설
+- **P2-② 세션 시점 매핑** — `/api/admin/senior-consultation/student/{id}/counselor-timeline` (timing→date→created_at 정렬) + senior 역할은 `SeniorStudentAssignment` 매칭 학생만
+- **P2-③ 실시간 미리보기** — `/api/admin/counselor-sharing/{type}/{id}/preview` (DB write 없음) + admin-web 300ms debounce 실시간 호출 · 갱신 중 배지 · D8/F/G 실제 포함 여부 동적 강조 · 공유 토글 카운터
+
+## 2026-04-16
+
+### 선배상담-상담사 연계 V1 P1 — 보안 기반 3단 방어
+- **P1-① 관리자 검토 게이트** — `consultation_surveys` / `consultation_notes` 에 `senior_review_status` 등 5개 필드 + `admin_counselor_sharing_review.py` 라우터 (검토 대기/상세/제출)
+- **P1-② 시스템 차단 카테고리** — `senior_sharing_service.BLOCKED_CATEGORIES = {D8, F, G}` + 기본 공유 화이트리스트 + `_strip_blocked_categories` 방어
+- **P1-③ 공유 이력 감사 로그** — `consultation_data_access_logs` 테이블 + `/api/admin/audit/consultation-data-access` (super_admin 전용)
+- 이용약관·개인정보처리방침에 V1 §6 / §6-1 / §10-1 원칙 반영
+- admin-web 검토 UI 2페이지 + 감사 로그 뷰어 + 사이드바 메뉴 2개
+
+### 고등학교 상담시스템 V3 gap 보완 (P0·P1·P2)
+기획서: `고등학교 상담시스템_기획서_V3.md`
+- backend·admin-web·user-web·mobile 4개 surface 동시 보완
+
+### 선배 상담 V1 P1 보완
+기획서: `선배상담_프로그램_기획서_V1.md`
+- backend: 매칭 검증·timing 통일·가시성 필터
+- admin-web: 민감정보 자동탐지·사전설문 전용 뷰
+- user-web: 다수 선배 선택·사전설문 게이트·변경요청 이력
+- mobile: 상담 기록 진입점·사전설문 자동 연계
+
+## 2026-04-15
+
+### 백엔드 인프라
+- **SHARED_DATA_ROOT 도입** (`backend/app/config.py`): `school-record-analyzer/data/` 를 단일 원천으로 지정. 환경변수 `SHARED_DATA_ROOT` 오버라이드 지원. `settings.DATA_ROOT` property 로 일관된 접근.
+- **연계규칙 V1 문서 추가**: `선배상담_상담사상담_연계규칙_V1.md`
+- **Flutter/Gradle 빌드 인프라 보강**: Android SDK 36, AGP 8.9.1, Kotlin 2.1.0 (CHANGELOG 2026-04-07~08 섹션 참조)
+- **.gitignore 보강**: 빌드 캐시 / 로컬 환경 / IDE 설정 / 임시 파일
+
+### 기획서 영역 구현
+- 만족도 설문 자동 발송 + 권한/무기명 정책 (만족도 설문 기획서 P1 #3)
+- 고등학교 상담 V3 §4-8-1: 자동 분석 결과 검증(4-State) + 권장과목 매칭
+- 고등학교 상담 V3: 신규 질문 타입 3종 (school_grade_matrix / mock_exam_session_grid / weak_type_per_subject)
+
+## 2026-04-14
+
+### 전반 기능
+- **약관동의 백엔드 저장**: 회원가입 시 이용약관·개인정보처리방침 동의 이력 DB 저장
+- **가이드북 시스템** (`guidebook` 모델 + `admin_guidebook` 라우터 + admin-web 페이지): 시점별+항목별 구조로 관리, 선배 상담 세션 패널에 연동
+- **학습상담 7일 리드타임 + 선배상담 매칭 전제 예약 흐름**: user-web 상담 라운지에서 상담 유형별로 상이한 예약 가드 적용
+- **관리자웹 상담시간 설정에서 선배 슬롯 관리 지원**: super_admin 이 선배 슬롯도 생성/관리
+- **user-web 메뉴 정리**: 중복 "상담 관리"·"대입 정보" 제거, `admission-info` 페이지 삭제
+
+### 기획서 영역
+- 선배 사전 설문 UI (user-web + mobile)
+- 만족도 설문 + 선배 변경 요청 UI
+- 선배 품질 대시보드 + 만족도 추이 시각화 보완
+- 사용자웹 리포트에 과목별 경쟁력 섹션 추가
+
+## 2026-04-13
+
+### 전반 기능
+- **역할별 대시보드 분기 + 메뉴 권한 체계 정립** (super_admin/admin/counselor/senior + student/parent/branch_manager)
+- **역할 변경/승격 시 기본 메뉴 권한 자동 설정**
+- **관리자 웹 로그인 "아이디 저장" / "로그인 유지"** (admin-web login 페이지 재작성 + 401 자동 재로그인)
+- **Navbar에 상담 관리 탭 분리** (상담 슬롯 vs 예약)
+
+### 기획서 영역
+- 예비고1 E2 영어 설문 확대 (외고/국제고 판별) + 교과선행도 배점
+- 예비고1 고교유형 적합도 분석
+- 예비고1 리포트 3대 시각화 (성적추이/학습습관/로드맵)
+- 고등학생 리포트 차트 (내신/모의/비교) + 학습 로드맵 자동 생성 (timing별 Phase×4트랙)
+- Delta 설문 UI + 선배-상담사 데이터 공유
+- 상담사 검토/수정 기능 (C4 유형 판정 + 코멘트 + 로드맵 편집), 최근 3년 평균 기준
+- 관리자 선배기록 검토 화면 + 상담사 선배기록 탭
+- 시점별 상담 주제 가이드 + 변화 추적 탭
+- 10-STEP 설문순서 + 학습방법 매트릭스 + 수능최저 시뮬레이션
+- 선배 상담 기록 10-섹션 작성 폼 + 누적 데이터 요약
+- 학생용 선배 상담 기록 열람 (API + user-web + mobile)
+
+## 2026-04-10 ~ 2026-04-11
+
+### 전반 기능
+- **재원생 여부 + `is_academy_student` 컬럼 추가** (회원가입/마이페이지 편집 UI)
+- **5-tab 네비게이션 (mobile)** + 학생부/학종 분리
+- **학생-학부모 가족 연결 시스템 Phase A/B/C/D**: 초대 코드 기반 양방향 연결 · 가족 가시성 헬퍼 (read-only 조회) · 학부모 신청 시 자녀 선택 · 사전조사 학부모 카테고리 분리 · 낙관적 잠금(last_known_updated_at)
+- **마이페이지 빠른 메뉴 분석 내역 학생부/학종 분리**
+
+### 기획서 영역
+- 사전 상담 설문 시스템 Week 1~8 (모델+CRUD+자동판정+이어쓰기 → 동적 폼 렌더러 → 상담사 대시보드 → recharts 시각화 → PDF 리포트)
+- 사전조사 검증·게이팅 (빈 조사 제출 차단 + 스킵 차단 + 최종 제출 시 모든 카테고리 검증)
+- 빈 사전조사 정리 스크립트 (dry-run 기본, `--apply` 필요)
+- Week5 상담사 대시보드 — 자동분석/변경비교/메모
+- Week6 시각화 — 내신추이/모의고사/등급분포/학습레이더
+- Week7 PDF report, action plan, consultation session page
+- Week8 버그 수정 — cancel_reason, PDF error, category enum
+- 4영역 점수 산출 엔진 + 4각형 레이더 차트
+- 상담사 검토/수정 범위 + 예비고1→고1 전환 데이터 자동 연계 (source_survey_id)
+- 상담 기록 불변 정책 적용 (수정/삭제 불가, 추가 기록만 가능)
+- **선배 역할/매칭 시스템** + 대면/비대면 상담 방식
+- 예비고1 5축 레이더 점수 산출 엔진
+- 예비고1 리포트 뷰어 + 과목별 준비율 차트 + 로드맵 자동 초안
+- 관리자 웹 선배 매칭/변경 요청/대면·비대면 UI
+
+### 버그 수정
+- 상담 라운지 사전 조사 단계에서 예비고1 설문 연결 오류
+- 카테고리 탭 클릭 네비게이션 (학부모만 허용, 학생은 순차 진행)
+- Flutter MapEntry 타입 명시 오류
+- 백엔드 BaseModel import 누락
+- `isCurrentReadOnly` 선언 순서 오류
+- 설문 카테고리 탭 클릭 활성화
 
 ---
 

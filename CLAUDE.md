@@ -50,59 +50,123 @@ ipsilounge/
 ├── backend/                            # FastAPI 백엔드
 │   ├── app/
 │   │   ├── main.py                     # FastAPI 앱 진입점 + DB 마이그레이션
-│   │   ├── config.py                   # 환경변수 설정 (Settings)
+│   │   ├── config.py                   # 환경변수 설정 (Settings, SHARED_DATA_ROOT 포함)
 │   │   ├── database.py                 # DB 연결 (async_session, engine)
 │   │   │
 │   │   ├── models/                     # SQLAlchemy 모델
+│   │   │   # ── 회원·인증·권한 ──
 │   │   │   ├── user.py                 # 회원
-│   │   │   ├── admin.py                # 관리자 + AdminStudentAssignment
+│   │   │   ├── admin.py                # 관리자 + AdminStudentAssignment + SeniorStudentAssignment
+│   │   │   ├── password_reset_token.py # 비밀번호 재설정 토큰
+│   │   │   ├── family_link.py          # 학생-학부모 계정 연결
+│   │   │   ├── family_invite.py        # 가족 초대 코드
+│   │   │   # ── 분석(학생부/학종 라운지) ──
 │   │   │   ├── analysis_order.py       # 분석 요청 (학생부라운지/학종라운지)
 │   │   │   ├── analysis_share.py       # 분석 결과 공유 (7일 토큰)
-│   │   │   ├── consultation_slot.py    # 상담 시간대 (admin_id, repeat_group_id)
-│   │   │   ├── consultation_booking.py # 상담 예약
-│   │   │   ├── consultation_note.py    # 상담 기록
 │   │   │   ├── interview_question.py   # 면접 예상 질문
 │   │   │   ├── admission_case.py       # 입시 사례
+│   │   │   ├── admission_data.py       # 수시 입결 DB (대학·학과 드롭다운 데이터)
+│   │   │   ├── jeongsi_admission_data.py   # 정시 입결 DB
+│   │   │   # ── 상담 공통 (슬롯·예약·결제·알림) ──
+│   │   │   ├── consultation_slot.py    # 상담 시간대 (admin_id, repeat_group_id, google_event_id)
+│   │   │   ├── consultation_booking.py # 상담 예약 (google_event_id, senior 예약 포함)
+│   │   │   ├── counselor_change_request.py # 담당자 변경 요청
 │   │   │   ├── payment.py              # 결제
 │   │   │   ├── notification.py         # 알림
-│   │   │   └── password_reset_token.py # 비밀번호 재설정 토큰
+│   │   │   # ── 공지·세미나·가이드북 ──
+│   │   │   ├── notice.py               # 공지사항
+│   │   │   ├── guidebook.py            # 가이드북
+│   │   │   ├── seminar_schedule.py     # 설명회 일정
+│   │   │   ├── seminar_reservation.py  # 설명회 예약
+│   │   │   ├── seminar_mail_log.py     # 설명회 메일 로그
+│   │   │   # ── 기획서 영역 (상세는 각 기획서 참조) ──
+│   │   │   ├── consultation_note.py    # 상담 기록 (고등학교 상담 V3 + 연계규칙 V1 공유 필드)
+│   │   │   ├── consultation_survey.py  # 상담 설문 (고등학교 상담 V3)
+│   │   │   ├── senior_consultation_note.py # 선배 상담 기록 (선배 상담 V1)
+│   │   │   ├── senior_pre_survey.py    # 선배 사전 설문 (선배 상담 V1)
+│   │   │   ├── senior_change_request.py    # 선배 변경 요청 (선배 상담 V1)
+│   │   │   ├── satisfaction_survey.py  # 상담 만족도 설문 (만족도 설문 기획서)
+│   │   │   └── consultation_data_access_log.py # 연계규칙 V1 §10-2 감사 로그
 │   │   │
 │   │   ├── schemas/                    # Pydantic 요청/응답 스키마
 │   │   │   ├── user.py
 │   │   │   ├── analysis.py
 │   │   │   ├── consultation.py
-│   │   │   └── payment.py
+│   │   │   ├── consultation_survey.py  # (기획서 영역)
+│   │   │   ├── payment.py
+│   │   │   ├── notice.py
+│   │   │   ├── seminar.py
+│   │   │   └── family.py
 │   │   │
 │   │   ├── routers/                    # API 엔드포인트
+│   │   │   # ── 전반 기능 ──
 │   │   │   ├── auth.py                 # 인증 (회원가입/로그인/비밀번호 재설정)
 │   │   │   ├── users.py                # 회원 정보/FCM 토큰/알림
 │   │   │   ├── analysis.py             # 사용자 분석 관련
 │   │   │   ├── consultation.py         # 사용자 상담 예약 (상담자 선택 포함)
-│   │   │   ├── consultation_notes.py   # 사용자 상담 기록 열람
 │   │   │   ├── admission_cases.py      # 입시 사례 + 면접 질문 + 공유 링크
 │   │   │   ├── payment.py              # 결제 처리
+│   │   │   ├── notice.py               # 공지사항
+│   │   │   ├── seminar.py              # 설명회 예약 (지점관리자)
+│   │   │   ├── family.py               # 가족(학부모-학생) 연결
+│   │   │   ├── schools.py              # 학교명 검색
+│   │   │   ├── universities.py         # 대학/학과 검색 (입결 DB 기반)
+│   │   │   ├── dev_routes.py           # 개발용 유틸 엔드포인트
 │   │   │   ├── admin_dashboard.py      # 관리자 대시보드
 │   │   │   ├── admin_analysis.py       # 관리자 분석 관리 (매칭 필터링)
-│   │   │   ├── admin_consultation.py   # 관리자 상담 시간/예약 관리
-│   │   │   ├── admin_consultation_notes.py # 관리자 상담 기록 관리
+│   │   │   ├── admin_consultation.py   # 관리자 상담 시간/예약 관리 (선배 슬롯 포함)
 │   │   │   ├── admin_admission_cases.py    # 관리자 입시 사례 관리
 │   │   │   ├── admin_users.py          # 관리자 회원 관리
 │   │   │   ├── admin_payments.py       # 관리자 결제 관리
-│   │   │   └── admin_admins.py         # 관리자 계정/역할/매칭 관리
+│   │   │   ├── admin_admins.py         # 관리자 계정/역할/매칭 관리
+│   │   │   ├── admin_notice.py         # 관리자 공지사항
+│   │   │   ├── admin_guidebook.py      # 관리자 가이드북
+│   │   │   ├── admin_seminar.py        # 관리자 설명회 관리
+│   │   │   ├── admin_audit_log.py      # 관리자 감사 로그 뷰어 (super_admin 전용)
+│   │   │   # ── 기획서 영역 (상세는 각 기획서 참조) ──
+│   │   │   ├── consultation_notes.py           # (고등학교 상담 V3)
+│   │   │   ├── consultation_survey.py          # (고등학교 상담 V3)
+│   │   │   ├── admin_consultation_notes.py     # (고등학교 상담 V3)
+│   │   │   ├── admin_consultation_survey.py    # (고등학교 상담 V3)
+│   │   │   ├── admin_senior_consultation.py    # (선배 상담 V1)
+│   │   │   ├── senior_notes.py                 # (선배 상담 V1)
+│   │   │   ├── senior_pre_survey.py            # (선배 상담 V1)
+│   │   │   ├── satisfaction_survey.py          # (만족도 설문 기획서)
+│   │   │   ├── admin_counselor_sharing_review.py # (연계규칙 V1)
+│   │   │   └── user_consultation_sharing.py    # (연계규칙 V1 §10-1)
 │   │   │
 │   │   ├── services/                   # 비즈니스 로직
+│   │   │   # ── 전반 기능 ──
 │   │   │   ├── auth_service.py         # JWT 토큰 발급/검증
 │   │   │   ├── file_service.py         # S3/로컬 파일 업로드/다운로드
 │   │   │   ├── consultation_service.py # 상담 시간 계산/벌크 생성
 │   │   │   ├── notification_service.py # FCM 푸시 + DB 알림 저장
 │   │   │   ├── email_service.py        # SMTP 이메일 발송
 │   │   │   ├── payment_service.py      # 결제 검증 (토스/구글)
-│   │   │   └── scheduler_service.py    # APScheduler (상담 리마인드)
+│   │   │   ├── scheduler_service.py    # APScheduler (상담 리마인드)
+│   │   │   ├── calendar_service.py     # Google Calendar 다중 연동
+│   │   │   ├── school_service.py       # 학교 검색·정규화
+│   │   │   ├── course_requirement_service.py  # 권장과목 DB (SHARED_DATA_ROOT)
+│   │   │   ├── counselor_type_service.py      # 수시/정시 입결 판정
+│   │   │   ├── suneung_minimum_service.py     # 수능 최저 기준 DB
+│   │   │   ├── consultation_access_log_service.py # V1 감사 로그 기록
+│   │   │   # ── 기획서 영역 ──
+│   │   │   ├── senior_sharing_service.py       # (연계규칙 V1 §6/§6-1)
+│   │   │   ├── survey_scoring_service.py       # (고등학교 상담 V3)
+│   │   │   ├── survey_timing_service.py        # (고등학교 상담 V3)
+│   │   │   ├── survey_qa_validator.py          # (고등학교 상담 V3)
+│   │   │   ├── survey_resume_service.py        # (고등학교 상담 V3)
+│   │   │   ├── survey_report_service.py        # (고등학교 상담 V3)
+│   │   │   └── comment_generation_service.py   # (고등학교 상담 V3)
 │   │   │
 │   │   └── utils/
 │   │       ├── security.py             # 비밀번호 해시, JWT
-│   │       └── dependencies.py         # get_current_user, get_current_admin
+│   │       ├── dependencies.py         # get_current_user, get_current_admin
+│   │       ├── family.py               # 가족 연결 유틸
+│   │       └── rate_limiter.py         # slowapi 기반 IP 레이트 리미터
 │   │
+│   ├── tests/                          # pytest 단위 테스트
+│   ├── scripts/                        # 데이터 마이그레이션 스크립트 (import_admission_data 등)
 │   ├── requirements.txt
 │   └── Dockerfile
 │
@@ -111,89 +175,114 @@ ipsilounge/
 │   │   ├── app/
 │   │   │   ├── layout.tsx              # 전체 레이아웃
 │   │   │   ├── page.tsx                # 대시보드 (권한 체크 포함)
-│   │   │   ├── login/page.tsx          # 로그인 (역할별 기본 경로 리다이렉트)
-│   │   │   ├── analysis/page.tsx       # 분석 목록 (매칭 필터링)
-│   │   │   ├── analysis/[id]/page.tsx  # 분석 상세
-│   │   │   ├── consultation/page.tsx   # 상담 예약 현황
-│   │   │   ├── consultation/settings/page.tsx  # 상담 시간 설정 (달력 기반)
-│   │   │   ├── consultation/notes/page.tsx     # 상담 기록 관리
-│   │   │   ├── users/page.tsx          # 회원 목록
-│   │   │   ├── users/[id]/page.tsx     # 회원 상세
-│   │   │   ├── payments/page.tsx       # 결제 현황
-│   │   │   ├── admins/page.tsx         # 담당자 관리
-│   │   │   ├── assignments/page.tsx    # 학생-담당자 매칭
-│   │   │   ├── admission-cases/page.tsx # 입시 사례 관리
-│   │   │   ├── settings/page.tsx       # 설정
-│   │   │   └── settings/admins/page.tsx
+│   │   │   ├── login/page.tsx          # 로그인 (아이디 저장·로그인 유지·역할별 리다이렉트)
+│   │   │   # ── 전반 기능 ──
+│   │   │   ├── analysis/                    # 분석 관리
+│   │   │   ├── consultation/                # 상담 시간/예약/기록 관리 (기획서 영역 혼재)
+│   │   │   ├── users/                       # 회원 관리
+│   │   │   ├── payments/                    # 결제 현황
+│   │   │   ├── admins/                      # 담당자 관리
+│   │   │   ├── assignments/                 # 학생-담당자 매칭
+│   │   │   ├── admission-cases/             # 입시 사례 관리
+│   │   │   ├── notice/                      # 공지사항 관리
+│   │   │   ├── guidebook/                   # 가이드북 관리
+│   │   │   ├── seminar/                     # 설명회 관리
+│   │   │   ├── settings/                    # 설정 (/settings, /settings/admins)
+│   │   │   ├── super-admin/                 # super_admin 전용 (감사 로그 뷰어 등)
+│   │   │   # ── 기획서 영역 ──
+│   │   │   ├── my-students/                 # (선배 상담 V1) 선배 전용 담당 학생 뷰
+│   │   │   ├── senior-quality/              # (선배 상담 V1) 선배 품질 대시보드
+│   │   │   └── surveys/                     # (고등학교 상담 V3) 상담 설문 열람
 │   │   │
 │   │   ├── components/
 │   │   │   ├── Sidebar.tsx             # 사이드바 (역할별 메뉴 필터링)
 │   │   │   ├── StatusBadge.tsx
-│   │   │   └── FileUploader.tsx
+│   │   │   ├── FileUploader.tsx
+│   │   │   ├── SatisfactionTrendsCard.tsx  # (만족도 설문 기획서) 추이 카드
+│   │   │   └── SurveyCharts.tsx            # (고등학교 상담 V3) 설문 차트
 │   │   │
 │   │   └── lib/
 │   │       ├── api.ts                  # 백엔드 API 호출 함수 모음
-│   │       └── auth.ts                 # 인증 + 메뉴 권한 + 기본 경로
+│   │       ├── auth.ts                 # 인증 + 메뉴 권한 + 기본 경로
+│   │       └── senior-topics.ts        # (선배 상담 V1) 세션별 주제 상수
 │
 ├── user-web/                           # 사용자 웹 (Next.js)
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── page.tsx                # 메인 (랜딩)
 │   │   │   ├── login/page.tsx          # 로그인
-│   │   │   ├── register/page.tsx       # 회원가입
+│   │   │   ├── register/page.tsx       # 회원가입 (이용약관+개인정보처리방침 통합 동의)
 │   │   │   ├── forgot-password/page.tsx
 │   │   │   ├── reset-password/page.tsx
 │   │   │   ├── terms/page.tsx          # 이용약관
 │   │   │   ├── privacy/page.tsx        # 개인정보처리방침
-│   │   │   ├── mypage/page.tsx
-│   │   │   ├── analysis/page.tsx       # 내 분석 목록
-│   │   │   ├── analysis/apply/page.tsx # 분석 신청
-│   │   │   ├── analysis/upload/page.tsx
-│   │   │   ├── analysis/[id]/page.tsx  # 분석 상세
-│   │   │   ├── analysis/[id]/upload/page.tsx
-│   │   │   ├── analysis/[id]/interview/page.tsx  # 면접 질문
-│   │   │   ├── consultation/page.tsx   # 상담 예약 (상담자 선택 → 달력 → 시간)
-│   │   │   ├── consultation/my/page.tsx
-│   │   │   ├── consultation/notes/page.tsx  # 내 상담 기록
-│   │   │   ├── admission-cases/page.tsx     # 입시 사례 열람
-│   │   │   ├── payment/page.tsx
-│   │   │   ├── payment/success/page.tsx
-│   │   │   └── payment/fail/page.tsx
+│   │   │   ├── mypage/                 # 마이페이지 (가족 연결, 담당자 변경 요청 등 통합)
+│   │   │   │   └── senior-sharing/     # (연계규칙 V1 §10-1) 선배 연계 부분 철회
+│   │   │   ├── analysis/                # 분석 신청/업로드/조회/면접질문
+│   │   │   ├── consultation/            # 상담 예약/내 예약/기록
+│   │   │   ├── admission-cases/         # 입시 사례 열람
+│   │   │   ├── payment/                 # 결제 (토스 + 성공/실패)
+│   │   │   ├── seminar/                 # 설명회 예약 (지점관리자)
+│   │   │   # ── 기획서 영역 ──
+│   │   │   ├── consultation-survey/     # (고등학교 상담 V3) 상담 설문 작성
+│   │   │   ├── satisfaction-survey/     # (만족도 설문 기획서)
+│   │   │   └── senior-pre-survey/       # (선배 상담 V1) 선배 사전 설문
 │   │   │
 │   │   ├── components/
 │   │   │   ├── Navbar.tsx
+│   │   │   ├── Footer.tsx
 │   │   │   ├── StatusBadge.tsx
-│   │   │   └── Footer.tsx
+│   │   │   ├── NoticeBanner.tsx        # 공지 배너
+│   │   │   ├── SearchableSelect.tsx    # 대학/학과 검색 드롭다운 (입결 DB 연계)
+│   │   │   ├── ChildSelector.tsx       # 학부모용 자녀 선택 (가족 연결)
+│   │   │   └── FamilyLinkSection.tsx   # 가족 연결 섹션
 │   │   │
 │   │   └── lib/
 │   │       ├── api.ts
-│   │       └── auth.ts
+│   │       ├── auth.ts
+│   │       └── surveyTypes.ts          # (고등학교 상담 V3) 설문 타입 정의
 │
-└── mobile/                             # Flutter 모바일 앱
+└── mobile/                             # Flutter 모바일 앱 (Android SDK 36, AGP 8.9.1, Kotlin 2.1.0)
     ├── lib/
     │   ├── main.dart
-    │   ├── screens/                    # 16개 화면
+    │   ├── screens/
+    │   │   # ── 전반 기능 ──
     │   │   ├── splash_screen.dart
     │   │   ├── login_screen.dart
     │   │   ├── register_screen.dart
     │   │   ├── forgot_password_screen.dart
     │   │   ├── home_screen.dart
+    │   │   ├── mypage_screen.dart
+    │   │   ├── notification_screen.dart
+    │   │   ├── notices_screen.dart               # 공지사항
     │   │   ├── analysis_list_screen.dart
     │   │   ├── analysis_apply_screen.dart
     │   │   ├── analysis_upload_screen.dart
     │   │   ├── analysis_detail_screen.dart
     │   │   ├── interview_questions_screen.dart
     │   │   ├── admission_cases_screen.dart
-    │   │   ├── consultation_screen.dart      # 상담자 선택 → 달력 → 시간
+    │   │   ├── admission_info_screen.dart        # 대학/학과 검색 (입결 DB)
+    │   │   ├── consultation_screen.dart          # 상담자 선택 → 달력 → 시간
     │   │   ├── consultation_list_screen.dart
+    │   │   ├── consultation_management_screen.dart # 내 상담 관리
+    │   │   ├── consultation_notes_screen.dart    # 내 상담 기록
     │   │   ├── payment_screen.dart
-    │   │   ├── mypage_screen.dart
-    │   │   └── notification_screen.dart
+    │   │   ├── seminar_screen.dart               # 설명회 예약 (지점관리자)
+    │   │   ├── seminar_list_screen.dart
+    │   │   # ── 기획서 영역 ──
+    │   │   ├── survey_screen.dart                   # (고등학교 상담 V3)
+    │   │   ├── high_survey_timing_screen.dart       # (고등학교 상담 V3) 타이밍 선택
+    │   │   ├── survey_report_screen.dart            # (고등학교 상담 V3)
+    │   │   ├── senior_pre_survey_screen.dart        # (선배 상담 V1)
+    │   │   ├── senior_consultation_notes_screen.dart # (선배 상담 V1)
+    │   │   └── satisfaction_survey_screen.dart      # (만족도 설문 기획서)
     │   │
     │   ├── models/
     │   ├── services/
     │   ├── providers/
     │   └── widgets/
+    ├── scripts/
+    │   └── generate_launcher_icons.py  # 아이콘 전 사이즈 자동 생성 (Pillow)
     └── pubspec.yaml
 ```
 
@@ -207,6 +296,14 @@ ipsilounge/
 | super_admin | 최고관리자 | 전체 데이터 접근 |
 | admin | 관리자 (담당자) | 매칭된 학생의 분석만, 본인 슬롯의 상담만 |
 | counselor | 상담자 | 매칭된 학생의 분석만, 본인 슬롯의 상담만 |
+| senior | 선배 상담자 | `SeniorStudentAssignment` 로 매칭된 학생만. 상세 운영은 **선배 상담 V1 기획서** 참조 |
+
+### 사용자(user) 역할
+| 역할 | 설명 |
+|------|------|
+| student | 학생 |
+| parent | 학부모 (가족 연결로 자녀 데이터 열람) |
+| branch_manager | 지점관리자 (설명회 예약 전용) |
 
 ### 메뉴 권한 시스템
 super_admin은 전체 접근, admin/counselor는 `allowed_menus` 배열에 따라 접근 제어.
@@ -291,6 +388,54 @@ applied(신청) → uploaded(학생부 업로드) → processing(분석중) → 
 - FCM 푸시 알림: 분석 완료, 상담 확정, 상담 리마인드
 - APScheduler: 매일 9시(서울 시간) 내일 상담 예약자에게 리마인드 발송
 - 이메일 알림: 비밀번호 재설정, 상담 리마인드
+
+### 6. 가족 연결 (학생-학부모)
+
+- 초대 코드 발급 → 상대방이 입력하여 양방향 연결
+- 학부모가 자녀 마이페이지 / 분석 / 상담 기록 등 조회 가능 (자녀 선택)
+- `family_link` / `family_invite` 테이블 + `/api/family/*` 라우터
+- 동의·권한 스키마는 이용약관·개인정보처리방침에 명시
+
+### 7. 공지사항 / 가이드북 / 설명회
+
+- 공지사항: 관리자 작성, 사용자 웹·모바일에 배너로 노출 (`NoticeBanner`)
+- 가이드북: 관리자가 PDF/링크 등록, 사용자에게 제공
+- 설명회(세미나): 지점관리자 전용. 예약 → 마감일 이전 수정/취소 → 관리자 재승인
+  - `seminar_*` 3종 테이블 + `seminar` / `admin_seminar` 라우터
+  - 시간대: 오전 11:00~13:00 / 오후 14:00~16:00 / 저녁 19:00~21:00
+
+### 8. Google Calendar 연동
+
+- 서비스 계정(`ipsilounge-calendar@...`) 기반, 관리자 개인 + 입시라운지 공식 캘린더(`ipsinoreply@gmail.com`) 다중 연동
+- 설명회 예약 승인/수정/취소 시 일정 자동 생성/수정/삭제
+- 상담 예약 확정/취소 시 자동 생성/삭제 (30분 전 팝업 알림)
+- `google_event_id` 컬럼(Text)에 복수 이벤트 ID 저장
+- `GOOGLE_CALENDAR_CREDENTIALS_PATH` / `GOOGLE_CALENDAR_ID` / `GOOGLE_CALENDAR_EXTRA_IDS` 환경변수
+
+### 9. 입결 DB 기반 대학/학과 검색
+
+- `school-record-analyzer/data/admission_db.xlsx` → `admission_data` 테이블로 적재 (35,000+ rows, 2024~2027)
+- 최신 학년도 자동 감지 (`SELECT MAX(year) FROM admission_data`)
+- `/api/universities`, `/api/universities/majors?university=...` 제공
+- user-web 은 `SearchableSelect`, mobile 은 `Autocomplete<String>` 사용
+- `backend/scripts/import_admission_data.py` 로 재적재 (`--clear` 옵션)
+
+### 10. 공유 데이터 루트 (SHARED_DATA_ROOT)
+
+- `school-record-analyzer/data/` 가 단일 원천
+- 기본 경로: `ipsilounge/backend/app/config.py` 에서 `parents[3]/school-record-analyzer/data` 자동 계산
+- 운영 배포 시 `SHARED_DATA_ROOT` 환경변수로 재지정
+- 공유 파일: `admission_db.xlsx` / `수능최저_db.xlsx` / `course_requirements.xlsx` / `university_grading.xlsx`
+- `ADMISSION_DB_PATH` 로 admission_db.xlsx 단독 오버라이드 지원
+- 관련 서비스: `course_requirement_service` / `suneung_minimum_service` / `counselor_type_service`
+
+### 11. 기획서 영역 기능 (상세는 각 기획서 참조)
+
+- **고등학교 상담 시스템 V3** → `고등학교 상담시스템_기획서_V3.md`
+- **예비고1 상담 시스템 V2_2** → `예비고1 상담시스템_기획서_V2_2.md`
+- **선배 상담 프로그램 V1** → `선배상담_프로그램_기획서_V1.md`
+- **선배-상담사 연계 규칙 V1** → `선배상담_상담사상담_연계규칙_V1.md`
+- 만족도 설문 — 선배·고등학교 기획서에 병합된 섹션
 
 ---
 
@@ -428,15 +573,71 @@ applied(신청) → uploaded(학생부 업로드) → processing(분석중) → 
 | POST | /promote | 기존 회원을 관리자로 승격 |
 | PUT | /{id} | 관리자 정보 수정 |
 | PUT | /{id}/reset-password | 비밀번호 초기화 |
-| GET | /assignments | 매칭 목록 |
+| GET | /assignments | 매칭 목록 (학생-담당자) |
 | POST | /assignments | 매칭 생성 |
 | DELETE | /assignments/{id} | 매칭 삭제 |
 | GET | /my-students | 내 담당 학생 목록 |
+| GET | /senior-assignments | 선배-학생 매칭 목록 |
+| POST | /senior-assignments | 선배-학생 매칭 생성 |
+| DELETE | /senior-assignments/{id} | 선배-학생 매칭 삭제 |
+
+### 공지사항 (/api/notices, /api/admin/notices)
+| 메서드 | 경로 | 기능 |
+|--------|------|------|
+| GET | /api/notices | 공지 목록 (사용자) |
+| GET | /api/notices/{id} | 공지 상세 |
+| POST | /api/admin/notices | 공지 등록 |
+| PUT | /api/admin/notices/{id} | 공지 수정 |
+| DELETE | /api/admin/notices/{id} | 공지 삭제 |
+
+### 가이드북 (/api/admin/guidebook)
+| 메서드 | 경로 | 기능 |
+|--------|------|------|
+| GET | /api/admin/guidebook | 가이드북 목록/등록/수정 |
+
+### 설명회 / 세미나 (/api/seminar, /api/admin/seminar)
+| 메서드 | 경로 | 기능 |
+|--------|------|------|
+| GET | /api/seminar/schedules | 공개 일정 목록 |
+| POST | /api/seminar/reservations | 예약 신청 (지점관리자) |
+| PUT | /api/seminar/reservations/{id} | 예약 수정 (마감일 이전만) |
+| DELETE | /api/seminar/reservations/{id} | 예약 취소 (마감일 이전만) |
+| GET | /api/admin/seminar/* | 관리자 일정·예약 관리 |
+
+### 가족 연결 (/api/family)
+| 메서드 | 경로 | 기능 |
+|--------|------|------|
+| POST | /api/family/invite | 초대 코드 발급 |
+| POST | /api/family/accept | 초대 코드 입력으로 연결 |
+| GET | /api/family/links | 내 연결 목록 |
+| DELETE | /api/family/links/{id} | 연결 해제 |
+
+### 학교/대학/학과 (/api/schools, /api/universities)
+| 메서드 | 경로 | 기능 |
+|--------|------|------|
+| GET | /api/schools/search | 학교명 검색 |
+| GET | /api/universities | 대학 목록 (입결 DB 기반, 최신 학년도 자동) |
+| GET | /api/universities/majors?university=... | 대학별 학과 목록 |
 
 ### 파일 서빙
 | 메서드 | 경로 | 기능 |
 |--------|------|------|
 | GET | /api/files/{folder}/{filename} | 로컬 파일 다운로드 (S3 미사용 시) |
+
+### 기획서 영역 API (상세는 각 기획서 참조)
+
+아래 엔드포인트 군은 기획서에서 구조·항목·흐름을 정의한다. 세부 엔드포인트 목록·요청 스키마·응답 필드는 이 문서가 아닌 해당 기획서를 단일 원천으로 삼는다.
+
+| 라우터 prefix | 영역 | 해당 기획서 |
+|---|---|---|
+| `/api/consultation-notes`, `/api/admin/consultation-notes` | 상담 기록 | 고등학교 상담 V3 |
+| `/api/consultation-survey`, `/api/admin/consultation-survey` | 상담 설문 | 고등학교 상담 V3 |
+| `/api/satisfaction-survey` | 만족도 설문 | 만족도 설문 기획서 |
+| `/api/admin/senior-consultation` | 선배 상담 기록 | 선배 상담 V1 |
+| `/api/senior-notes`, `/api/senior-pre-survey` | 선배 기록/사전설문 | 선배 상담 V1 |
+| `/api/admin/counselor-sharing` | 상담사→선배 공유 검토 | 연계규칙 V1 §6 |
+| `/api/user/consultation-sharing` | 학생 사후 철회 | 연계규칙 V1 §10-1 |
+| `/api/admin/audit/consultation-data-access` | 열람 감사 로그 | 연계규칙 V1 §10-2 |
 
 ---
 
@@ -524,24 +725,6 @@ applied(신청) → uploaded(학생부 업로드) → processing(분석중) → 
 | status | VARCHAR | requested / confirmed / completed / cancelled |
 | created_at | DATETIME | 신청일 |
 
-### consultation_notes
-| 컬럼 | 타입 | 설명 |
-|------|------|------|
-| id | UUID | PK |
-| user_id | UUID → users | 학생 |
-| admin_id | UUID → admins | 작성 관리자 |
-| booking_id | UUID → consultation_bookings | 연결 예약 (선택) |
-| category | VARCHAR | 분석/전략/학교생활/공부법/진로/심리/기타 |
-| consultation_date | DATE | 상담일 |
-| student_grade | VARCHAR | 학년 |
-| goals | TEXT | 상담 목표 |
-| main_content | TEXT | 주요 내용 |
-| advice_given | TEXT | 조언 |
-| next_steps | TEXT | 다음 단계 |
-| next_topic | TEXT | 다음 주제 |
-| admin_private_notes | TEXT | 비공개 메모 |
-| is_visible_to_user | BOOLEAN | 사용자 공개 여부 |
-
 ### interview_questions
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
@@ -597,16 +780,49 @@ applied(신청) → uploaded(학생부 업로드) → processing(분석중) → 
 | token | VARCHAR | 재설정 토큰 |
 | expires_at | DATETIME | 만료일 |
 
+### admission_data / jeongsi_admission_data
+수시/정시 입결 RAW (대학/학과 드롭다운 데이터). 매년 `scripts/import_admission_data.py` 로 적재. `SELECT MAX(year)` 로 최신 학년도 자동 판정.
+
+### family_links / family_invites
+학생-학부모 계정 연결. invite 는 일회용 코드 기반, link 는 확정된 쌍방 연결(`status`, `revoked_at`).
+
+### counselor_change_request / senior_change_request
+사용자 → 담당자(상담자·선배) 변경 요청 이력. `status=pending|approved|rejected` + 관리자 판정 타임스탬프.
+
+### notices
+공지사항. 제목/본문/노출범위/기간 필드. user-web `NoticeBanner` + mobile `notices_screen` 에서 조회.
+
+### guidebooks
+가이드북. 제목/카테고리/파일 또는 URL.
+
+### seminar_schedules / seminar_reservations / seminar_mail_log
+설명회 일정·예약·메일 로그. `seminar_reservations` 의 `google_event_id`(Text) 에 Google Calendar 이벤트 ID 복수 저장.
+
+### 기획서 영역 테이블 (상세는 각 기획서 참조)
+
+| 테이블 | 영역 | 해당 기획서 |
+|---|---|---|
+| `consultation_notes` | 상담 기록 | 고등학교 상담 V3 / 연계규칙 V1 공유 필드 |
+| `consultation_surveys` | 상담 설문 | 고등학교 상담 V3 |
+| `senior_consultation_notes` | 선배 상담 기록 | 선배 상담 V1 |
+| `senior_pre_surveys` | 선배 사전 설문 | 선배 상담 V1 |
+| `satisfaction_surveys` | 상담 만족도 | 만족도 설문 기획서 |
+| `consultation_data_access_logs` | 열람 감사 로그 | 연계규칙 V1 §10-2 |
+
 ---
 
 ## DB 마이그레이션 (main.py startup)
 
-서버 시작 시 자동 실행:
-1. `Base.metadata.create_all` - 전체 테이블 생성
-2. `admins.user_id` 컬럼 추가 (없는 경우)
-3. `consultation_slots.admin_id` 컬럼 추가 (없는 경우)
-4. `consultation_slots.repeat_group_id` 컬럼 추가 (없는 경우)
+서버 시작 시 `_check_and_migrate()` 가 자동 실행. SQLite(DEV_MODE) 는 `create_all` 로 충분히 커버하고, PostgreSQL 운영 환경은 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 로 기존 테이블에 신규 컬럼만 점증적으로 반영한다.
+
+주요 마이그레이션 블록:
+1. `Base.metadata.create_all` — 전체 테이블 생성
+2. 기본 스키마 보강: `admins.user_id` / `consultation_slots.admin_id` / `consultation_slots.repeat_group_id` 등
+3. Google Calendar 연동: `seminar_reservations.google_event_id`, `consultation_bookings.google_event_id` (Text 타입으로 복수 ID 저장)
+4. 연계규칙 V1 §6 상담사 검토 게이트 필드 추가: `consultation_surveys` / `consultation_notes` 에 `senior_review_status` 등 5개 컬럼 + `senior_sharing_revoked_at`·`senior_sharing_revoke_reason` (V1 §10-1)
 5. 초기 super_admin 계정 생성 (없는 경우)
+
+기획서 영역 테이블의 신규 컬럼도 여기에 점증 추가된다. 운영 DB 에 새 컬럼을 수동 반영해야 할 때는 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 패턴을 그대로 따른다.
 
 ---
 
@@ -640,5 +856,9 @@ applied(신청) → uploaded(학생부 업로드) → processing(분석중) → 
 1. **구현 전**: 해당 기능과 관련된 기획서 파일을 먼저 읽고, 기획서에 정의된 내용(주제, 구조, 흐름, 항목 수, 시점 등)을 정확히 파악한다.
 2. **구현 중**: 기획서에 명시된 내용을 기준으로 구현한다. 기획서에 없는 내용을 임의로 추가하거나, 기획서의 내용을 임의로 변경하지 않는다.
 3. **구현 후**: 구현 결과를 기획서 내용과 다시 비교/대조하여, 항목 수·항목명·구조·시점 등이 기획서와 일치하는지 검증한다. 불일치가 발견되면 즉시 수정한다.
+4. **문서 반영 (구현 완료 시 필수)**: 커밋 직전에 아래 규칙에 따라 CLAUDE.md / CHANGELOG.md 를 동기화한다.
+   - **기획서가 있는 기능** (예비고1·고등학교 상담·선배 상담·선배-상담사 연계): 변경 상세는 **각 기획서 파일**에 반영한다. CLAUDE.md 본문(인벤토리·API·DB 테이블)은 **건드리지 않는다**. CLAUDE.md는 "해당 기획서를 따름" 이상으로 상세를 기재하지 않는다.
+   - **기획서가 없는 전반 기능** (인증·결제·분석·파일·캘린더·매칭·입결·세미나·공지·가이드북·가족 연결·역할/권한·배포 등): **즉시 CLAUDE.md 본문에 반영**한다. 신규 모델/라우터/서비스/페이지/화면은 해당 섹션의 표·디렉토리 트리·API 엔드포인트 목록·DB 테이블 목록에 바로 추가한다.
+   - **모든 변경** (기획서 유무 무관): **CHANGELOG.md 에 날짜별로 기록**한다. 기능 추가는 번들 단위로 요약하고, 버그 수정·운영 변경은 원인·파일까지 짧게 명시한다.
 
 기획서와 다르게 구현해야 할 합리적 이유가 있는 경우, 사용자에게 차이점을 설명하고 확인을 받은 후 진행한다.
