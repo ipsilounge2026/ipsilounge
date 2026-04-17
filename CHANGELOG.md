@@ -7,6 +7,34 @@
 
 ## 2026-04-17
 
+### 상담 기록 작성 기한 — 3개 기획서 공통 기준 명문화 + 강제 구현
+기획서: `선배상담_프로그램_기획서_V1.md`, `고등학교 상담시스템_기획서_V3.md`, `예비고1 상담시스템_기획서_V2_2.md`
+- **공통 원칙 명문화**: 세 기획서 모두에 동일 문구 추가
+  - 작성 기한: 상담 종료(`booking.completed_at`) 후 **7일 이내** 최초 기록 제출 필수
+  - 기한 이내 미작성: 대시보드 "기록 미작성 알림" 섹션에 경과일과 함께 표시
+  - 기한 초과 (≥7일): 해당 상담사/선배의 **신규 상담 예약 자동 차단**
+  - 예외 해제: super_admin 이 수동으로 해제 가능 (사유 기록 필수)
+- **Backend 구현**
+  - `ConsultationBooking` 에 `completed_at` / `note_deadline_waived_at` /
+    `note_deadline_waive_reason` 3개 컬럼 추가 + ALTER TABLE 마이그레이션
+  - `status="completed"` 전환 시 `completed_at` 자동 세팅
+  - 예약 생성 시 `_check_note_writing_deadline()` 검사:
+    담당자의 `completed_at ≤ now-7일` + 기록 없음 + 면제 아님 건이 있으면
+    400 차단 ("담당 상담사/선배의 이전 상담 기록 작성이 완료되어야 신규 예약이 가능합니다")
+  - 수동 해제 API 2개 신규:
+    `PUT /api/admin/consultation/bookings/{id}/waive-note-deadline` (사유 필수)
+    `DELETE /api/admin/consultation/bookings/{id}/waive-note-deadline` (해제 취소)
+    super_admin 전용
+  - 대시보드 응답에 `days_elapsed`, `deadline_days`, `overdue`, `waived`,
+    `waive_reason` 메타데이터 추가
+- **admin-web 구현**
+  - 대시보드 "기록 미작성 알림" 테이블에 경과일 + 상태 배지 추가
+    (D-N 이내 작성 / 기한 초과 / 기한 면제 등)
+  - 기한 초과 건 존재 시 섹션 상단에 붉은색 경고 배너
+    "기한 초과 건이 있어 신규 상담 예약이 차단됩니다"
+  - super_admin 수동 해제용 UI 는 후속 관리 페이지로 분리 (API 는 제공됨)
+- 신규 routes 2개 (222→224), pytest 17/17 pass
+
 ### 고등학교 상담 V3 §4-8-1 — 실구현 반영 (기획서 정정)
 기획서: `고등학교 상담시스템_기획서_V3.md`
 - **§4-8-1 P1 로드맵 구조 검증 항목**: 괄호 안 트랙 명칭 오기 정정
