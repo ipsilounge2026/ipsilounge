@@ -17,7 +17,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak,
-    KeepTogether, Flowable
+    KeepTogether, Flowable, Image as RLImage
 )
 from reportlab.graphics.shapes import Drawing, Circle, Rect, String, Line, Group
 from reportlab.lib.styles import ParagraphStyle
@@ -284,8 +284,64 @@ def create_excel(sd, xlsx_path):
     ws.auto_filter.ref = f"A1:F1"
     ws.freeze_panes = "A2"
 
+    # ── Sheet 10: 키워드분석 (G5 / CLAUDE.md § Step 8-4) ──
+    # raw_texts 가 비어있으면 이 시트 스킵.
+    try:
+        from .keyword_extractor import has_raw_texts
+        if has_raw_texts(sd):
+            _write_keyword_sheet(wb, sd, style_header, style_cell, set_col_widths,
+                                  center, left_align, get_column_letter)
+    except Exception as e:
+        print(f"[WARN] 키워드분석 시트 생성 실패 (스킵): {type(e).__name__}: {e}")
+
     wb.save(str(xlsx_path))
     print(f"Excel saved: {xlsx_path}")
+
+
+def _write_keyword_sheet(wb, sd, style_header, style_cell, set_col_widths,
+                          center, left_align, get_column_letter_fn):
+    """Excel 키워드분석 시트 작성. raw_texts 존재 시에만 호출됨."""
+    from .keyword_extractor import extract_keywords
+    report = extract_keywords(sd.raw_texts, top_n=50, min_frequency=2)
+    if not report.keywords:
+        return  # 키워드 0개면 시트 생성 안 함
+
+    # 학년 목록 (빈도 기록된 학년만)
+    all_years = sorted({yr for e in report.keywords for yr in e.year_frequencies.keys()})
+
+    ws = wb.create_sheet("키워드분석")
+
+    # 1부: 빈도 상위 키워드 테이블
+    headers = ["키워드", "총빈도", "역량 카테고리", "출현 영역"] + [f"{yr}학년" for yr in all_years]
+    style_header(ws, headers)
+    for r, e in enumerate(report.keywords, 2):
+        style_cell(ws, r, 1, e.word)
+        style_cell(ws, r, 2, e.frequency)
+        style_cell(ws, r, 3, e.category)
+        style_cell(ws, r, 4, " / ".join(e.areas) if e.areas else "-")
+        for i, yr in enumerate(all_years):
+            style_cell(ws, r, 5 + i, e.year_frequencies.get(yr, 0))
+    col_widths = [14, 8, 14, 18] + [8] * len(all_years)
+    set_col_widths(ws, col_widths)
+    ws.auto_filter.ref = f"A1:{get_column_letter_fn(len(headers))}1"
+    ws.freeze_panes = "A2"
+
+    # 하단에 여백 후 2부: 학년별 변화 요약 (신규 등장 / 사라진 키워드)
+    change_start_row = len(report.keywords) + 4
+    ws.cell(row=change_start_row - 1, column=1, value="학년별 키워드 변화 추이").font = \
+        __import__("openpyxl").styles.Font(name="Arial", bold=True, size=11)
+
+    ws.cell(row=change_start_row, column=1, value="학년").font = \
+        __import__("openpyxl").styles.Font(name="Arial", bold=True, size=10)
+    ws.cell(row=change_start_row, column=2, value="신규 등장 키워드").font = \
+        __import__("openpyxl").styles.Font(name="Arial", bold=True, size=10)
+    ws.cell(row=change_start_row, column=3, value="사라진 키워드").font = \
+        __import__("openpyxl").styles.Font(name="Arial", bold=True, size=10)
+
+    for i, (yr, ch) in enumerate(sorted(report.yearly_changes.items()), 1):
+        ws.cell(row=change_start_row + i, column=1, value=f"{yr}학년")
+        ws.cell(row=change_start_row + i, column=2, value=", ".join(ch.get("new", [])[:15]) or "-")
+        ws.cell(row=change_start_row + i, column=3, value=", ".join(ch.get("disappeared", [])[:15]) or "-")
 
 
 # ===================================================================
@@ -1439,5 +1495,84 @@ def create_pdf(sd, pdf_path):
     t = make_table(tdata, col_widths=cw)
     elements.append(t)
 
+    # ── 8. 키워드분석 (G5 / CLAUDE.md § Step 8-4) ──
+    # raw_texts 가 비어있으면 이 섹션 스킵.
+    try:
+        from .keyword_extractor import has_raw_texts
+        if has_raw_texts(sd):
+            elements.append(PageBreak())
+            _append_pdf_keyword_section(elements, sd, pdf_path, section_title,
+                                         P, PC, PL, PH, make_table,
+                                         style_subtitle, page_w)
+    except Exception as e:
+        print(f"[WARN] PDF 키워드분석 섹션 생성 실패 (스킵): {type(e).__name__}: {e}")
+
     doc.build(elements, onFirstPage=_footer_cover_page, onLaterPages=_footer_content_pages)
     print(f"PDF saved: {pdf_path}")
+
+
+def _append_pdf_keyword_section(elements, sd, pdf_path, section_title,
+                                 P, PC, PL, PH, make_table,
+                                 style_subtitle, page_w):
+    """PDF "8. 키워드분석" 섹션 추가. 워드클라우드 이미지 + 카테고리 요약 + 학년별 변화."""
+    from .keyword_extractor import extract_keywords, generate_wordcloud_image
+    from pathlib import Path
+
+    report = extract_keywords(sd.raw_texts, top_n=50, min_frequency=2)
+    if not report.keywords:
+        return
+
+    elements.append(section_title("8. 키워드분석"))
+
+    # ── 워드클라우드 이미지 생성 & 삽입 ──
+    pdf_dir = Path(pdf_path).resolve().parent
+    wc_png = pdf_dir / f"{sd.STUDENT}_wordcloud_{sd.TODAY}.png"
+    try:
+        generated = generate_wordcloud_image(report, wc_png)
+    except Exception as e:
+        print(f"[WARN] 워드클라우드 이미지 생성 실패: {type(e).__name__}: {e}")
+        generated = None
+
+    if generated and generated.exists():
+        elements.append(P("■ 핵심 키워드 워드클라우드", style_subtitle))
+        # 이미지 크기: 페이지 너비 90%
+        img_w = page_w * 0.95
+        img_h = img_w * 0.5  # 2:1 비율
+        try:
+            img = RLImage(str(generated), width=img_w, height=img_h)
+            elements.append(img)
+            elements.append(Spacer(1, 4*mm))
+        except Exception as e:
+            print(f"[WARN] 워드클라우드 PDF 삽입 실패: {type(e).__name__}: {e}")
+
+    # ── 카테고리별 상위 키워드 테이블 ──
+    elements.append(P("■ 역량 카테고리별 상위 키워드", style_subtitle))
+    CATS = ["학업역량", "진로역량", "공동체역량", "일반"]
+    by_cat = {c: [] for c in CATS}
+    for e in report.keywords:
+        if e.category in by_cat:
+            by_cat[e.category].append(e)
+
+    hdr = [PH("카테고리"), PH("상위 키워드 (빈도)")]
+    tdata = [hdr]
+    cw = [80, page_w - 80]
+    for cat in CATS:
+        entries = by_cat.get(cat, [])[:10]
+        if not entries:
+            tdata.append([PL(cat), PL("해당 없음")])
+        else:
+            txt = ", ".join(f"{e.word}({e.frequency})" for e in entries)
+            tdata.append([PL(cat), PL(txt)])
+    elements.append(make_table(tdata, col_widths=cw))
+    elements.append(Spacer(1, 4*mm))
+
+    # ── 학년별 변화 추이 ──
+    elements.append(P("■ 학년별 키워드 변화 추이", style_subtitle))
+    hdr = [PH("학년"), PH("신규 등장"), PH("사라진 키워드")]
+    tdata = [hdr]
+    cw = [40, (page_w - 40) / 2, (page_w - 40) / 2]
+    for yr, ch in sorted(report.yearly_changes.items()):
+        new_list = ", ".join(ch.get("new", [])[:10]) or "-"
+        gone_list = ", ".join(ch.get("disappeared", [])[:10]) or "-"
+        tdata.append([PC(f"{yr}학년"), PL(new_list), PL(gone_list)])
+    elements.append(make_table(tdata, col_widths=cw))
