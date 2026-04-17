@@ -12,10 +12,12 @@ from app.database import get_db
 from app.models.admin import Admin, AdminStudentAssignment, SeniorStudentAssignment
 from app.models.analysis_order import AnalysisOrder
 from app.models.consultation_booking import ConsultationBooking
+from app.models.consultation_note import ConsultationNote
 from app.models.consultation_slot import ConsultationSlot
 from app.models.consultation_survey import ConsultationSurvey
 from app.models.counselor_change_request import CounselorChangeRequest
 from app.models.senior_change_request import SeniorChangeRequest
+from app.models.senior_consultation_note import SeniorConsultationNote
 from app.models.user import User
 from app.schemas.consultation import (
     AvailableSlotResponse,
@@ -148,6 +150,89 @@ async def _check_lead_time(
                     f"7일 이후({earliest.isoformat()})부터 예약 가능합니다."
                 ),
             )
+
+
+# ============================================================
+# 상담 기록 작성 기한 (선배 V1 §5-1 / 고등 V3 §4-8 / 예비고1 §3-7 공통)
+# ============================================================
+
+NOTE_WRITE_DEADLINE_DAYS = 7
+
+
+async def _check_note_writing_deadline(
+    consultation_type: str,
+    slot_admin_id,
+    db: AsyncSession,
+) -> None:
+    """담당자(상담사·선배)의 기한 초과 미작성 기록이 있으면 신규 예약 차단.
+
+    - 대상 booking: status="completed" + completed_at ≥ 7일 경과
+    - 면제 조건: `note_deadline_waived_at` 이 None 이 아닌 booking 은 검사 제외
+    - 기록 판정: 상담사 → ConsultationNote / 선배 → SeniorConsultationNote
+    - 리드타임이 없는 유형(심리/기타/선배)에도 적용 (선배는 기록 품질이 오히려 더 중요)
+    """
+    if slot_admin_id is None:
+        return
+
+    cutoff = datetime.utcnow() - timedelta(days=NOTE_WRITE_DEADLINE_DAYS)
+
+    # 이 담당자의 슬롯에서 "completed + 7일 경과 + 면제 아님" 인 booking 조회
+    overdue_q = (
+        select(ConsultationBooking.id, ConsultationBooking.type)
+        .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
+        .where(
+            ConsultationSlot.admin_id == slot_admin_id,
+            ConsultationBooking.status == "completed",
+            ConsultationBooking.completed_at.isnot(None),
+            ConsultationBooking.completed_at <= cutoff,
+            ConsultationBooking.note_deadline_waived_at.is_(None),
+        )
+    )
+    overdue_rows = (await db.execute(overdue_q)).all()
+    if not overdue_rows:
+        return
+
+    # 각 overdue booking 에 대해 기록 존재 여부 체크 (상담 유형별로 테이블 다름)
+    overdue_bookings = [r for r in overdue_rows]
+    overdue_ids = [r.id for r in overdue_bookings]
+
+    # 상담사 노트 존재 booking_id
+    counselor_note_ids = set(
+        (await db.execute(
+            select(ConsultationNote.booking_id).where(
+                ConsultationNote.booking_id.in_(overdue_ids)
+            )
+        )).scalars().all()
+    )
+    # 선배 노트 존재 booking_id
+    senior_note_ids = set(
+        (await db.execute(
+            select(SeniorConsultationNote.booking_id).where(
+                SeniorConsultationNote.booking_id.in_(overdue_ids)
+            )
+        )).scalars().all()
+    )
+
+    # 이 담당자 슬롯이 어느 종류인지 한 건도 기록 없는 booking 이 있으면 차단
+    unwritten_count = 0
+    for r in overdue_bookings:
+        if r.type == "선배상담":
+            if r.id not in senior_note_ids:
+                unwritten_count += 1
+        else:
+            if r.id not in counselor_note_ids:
+                unwritten_count += 1
+
+    if unwritten_count > 0:
+        is_senior_consult = consultation_type == "선배상담"
+        subject = "담당 선배" if is_senior_consult else "담당 상담사"
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{subject}의 이전 상담 기록 작성이 완료되어야 신규 예약이 가능합니다. "
+                f"(기한 경과 미작성 {unwritten_count}건)"
+            ),
+        )
 
 
 async def _compute_slot_availability(
@@ -476,6 +561,9 @@ async def book_consultation(
 
     # 기획서 §4-8-2: 상담 유형별 7일 리드타임 검증
     await _check_lead_time(data.type, owner_id, slot.date, db)
+
+    # 공통 §5-1 / §4-8 / §3-7: 담당자의 기록 작성 기한(7일) 초과 미작성 건 → 신규 예약 차단
+    await _check_note_writing_deadline(data.type, slot.admin_id, db)
 
     # 동일 시간대 중복 예약 확인 (owner 기준)
     existing = await db.execute(

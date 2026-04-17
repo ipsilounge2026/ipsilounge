@@ -169,7 +169,9 @@ async def get_dashboard(
         ]
 
         # --- 기록 미작성 알림 ---
-        # 완료된 상담 중 상담기록이 없는 건
+        # 완료된 상담 중 상담기록이 없는 건 (기한: 상담 완료 후 7일, §5-1/§4-8/§3-7 공통)
+        NOTE_DEADLINE_DAYS = 7
+        now_utc = datetime.utcnow()
         if role == "counselor":
             note_exists_subq = select(ConsultationNote.booking_id).where(
                 ConsultationNote.booking_id == ConsultationBooking.id
@@ -179,6 +181,9 @@ async def get_dashboard(
                     ConsultationBooking.id,
                     ConsultationBooking.type,
                     ConsultationSlot.date,
+                    ConsultationBooking.completed_at,
+                    ConsultationBooking.note_deadline_waived_at,
+                    ConsultationBooking.note_deadline_waive_reason,
                     User.name.label("student_name"),
                 )
                 .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
@@ -200,6 +205,9 @@ async def get_dashboard(
                     ConsultationBooking.id,
                     ConsultationBooking.type,
                     ConsultationSlot.date,
+                    ConsultationBooking.completed_at,
+                    ConsultationBooking.note_deadline_waived_at,
+                    ConsultationBooking.note_deadline_waive_reason,
                     User.name.label("student_name"),
                 )
                 .join(ConsultationSlot, ConsultationBooking.slot_id == ConsultationSlot.id)
@@ -214,15 +222,25 @@ async def get_dashboard(
             )
         unwritten_result = await db.execute(unwritten_query)
         unwritten_rows = unwritten_result.all()
-        result["unwritten_records"] = [
-            {
+        result["unwritten_records"] = []
+        for r in unwritten_rows:
+            days_elapsed = None
+            overdue = False
+            if r.completed_at is not None:
+                days_elapsed = (now_utc - r.completed_at).days
+                overdue = days_elapsed >= NOTE_DEADLINE_DAYS
+            result["unwritten_records"].append({
                 "booking_id": str(r.id),
                 "type": r.type,
                 "date": r.date.isoformat() if r.date else None,
                 "student_name": r.student_name,
-            }
-            for r in unwritten_rows
-        ]
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                "days_elapsed": days_elapsed,
+                "deadline_days": NOTE_DEADLINE_DAYS,
+                "overdue": overdue,
+                "waived": r.note_deadline_waived_at is not None,
+                "waive_reason": r.note_deadline_waive_reason,
+            })
 
         # --- 담당 학생 설문 현황 ---
         if my_student_ids:

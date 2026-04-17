@@ -246,6 +246,20 @@ async def startup():
                     connection.execute(text("ALTER TABLE consultation_bookings ADD COLUMN cancel_reason TEXT"))
                     logger.info("consultation_bookings 테이블에 cancel_reason 컬럼 추가 완료")
 
+                # 상담 기록 작성 기한 필드 (공통 기준 §5-1 / §4-8 / §3-7)
+                for col, ddl in [
+                    ("completed_at", "TIMESTAMP"),
+                    ("note_deadline_waived_at", "TIMESTAMP"),
+                    ("note_deadline_waive_reason", "TEXT"),
+                ]:
+                    if col not in booking_columns:
+                        connection.execute(text(
+                            f"ALTER TABLE consultation_bookings ADD COLUMN {col} {ddl}"
+                        ))
+                        logger.info(
+                            f"consultation_bookings 테이블에 {col} 컬럼 추가 완료"
+                        )
+
             # HSGAP-P2-senior-counselor-context-share-ui: 상담사→선배 인수인계용 요약 필드
             if inspector.has_table("consultation_notes"):
                 note_columns = [c["name"] for c in inspector.get_columns("consultation_notes")]

@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -497,6 +497,10 @@ async def update_booking_status(
             )
 
     if data.status == "completed":
+        # 기록 작성 기한 산정 기준 (공통 원칙: 선배 V1 §5-1 / 고등 V3 §4-8 / 예비고1 §3-7)
+        # completed_at + 7일이 최초 기록 작성 기한
+        if booking.completed_at is None:
+            booking.completed_at = datetime.utcnow()
         # 만족도 설문 자동 발송 (기획서 §10-2)
         await _trigger_satisfaction_survey(booking, slot, db)
 
@@ -692,3 +696,78 @@ async def search_users(
     )
     users = result.scalars().all()
     return [{"id": str(u.id), "name": u.name, "email": u.email, "phone": u.phone} for u in users]
+
+
+# ============================================================
+# 상담 기록 작성 기한 관리자 수동 해제
+# (선배 V1 §5-1 / 고등 V3 §4-8 / 예비고1 §3-7 공통)
+# ============================================================
+
+class NoteDeadlineWaiveRequest(_BaseModel):
+    reason: str  # 해제 사유 (감사 용도, 필수)
+
+
+@router.put("/bookings/{booking_id}/waive-note-deadline")
+async def waive_note_deadline(
+    booking_id: uuid.UUID,
+    data: NoteDeadlineWaiveRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """상담 기록 작성 기한(7일) 체크를 개별 booking 에 대해 수동 해제.
+
+    장기 부재 등 예외 사유가 있을 때 super_admin 이 해당 건의 기한 검사를 면제.
+    면제되면 해당 booking 은 `_check_note_writing_deadline` 검사에서 제외되어
+    담당자(상담사·선배)의 신규 예약이 다시 가능해진다. 사유는 감사 용도로 저장.
+    """
+    if admin.role != "super_admin":
+        raise HTTPException(
+            status_code=403,
+            detail="기록 작성 기한 해제는 최고 관리자만 가능합니다.",
+        )
+
+    reason = (data.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="해제 사유를 입력해주세요.")
+
+    result = await db.execute(
+        select(ConsultationBooking).where(ConsultationBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다")
+
+    booking.note_deadline_waived_at = datetime.utcnow()
+    booking.note_deadline_waive_reason = reason
+    await db.commit()
+    return {
+        "message": "기록 작성 기한이 해제되었습니다.",
+        "waived_at": booking.note_deadline_waived_at.isoformat(),
+        "reason": reason,
+    }
+
+
+@router.delete("/bookings/{booking_id}/waive-note-deadline")
+async def revoke_note_deadline_waiver(
+    booking_id: uuid.UUID,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """수동 해제를 취소하여 다시 기한 검사 대상으로 되돌림."""
+    if admin.role != "super_admin":
+        raise HTTPException(
+            status_code=403,
+            detail="기한 해제 취소는 최고 관리자만 가능합니다.",
+        )
+
+    result = await db.execute(
+        select(ConsultationBooking).where(ConsultationBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다")
+
+    booking.note_deadline_waived_at = None
+    booking.note_deadline_waive_reason = None
+    await db.commit()
+    return {"message": "기록 작성 기한 해제가 취소되었습니다."}

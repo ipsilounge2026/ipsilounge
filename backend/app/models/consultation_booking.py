@@ -26,6 +26,15 @@ class ConsultationBooking(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     google_event_id: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # 상담 기록 작성 기한 관리
+    # (선배 V1 §5-1 / 고등학교 V3 §4-8 / 예비고1 V2_2 §3-7 공통 기준)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # status="completed" 로 전환된 시점. 이 시점 + 7일이 기록 작성 기한.
+    note_deadline_waived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # super_admin 이 수동으로 기한 체크를 면제한 경우 세팅. None이면 정상 검사 대상.
+    note_deadline_waive_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 면제 사유 (장기 부재 등, 감사 용도).
+
     user = relationship("User", back_populates="consultation_bookings")
     slot = relationship("ConsultationSlot", back_populates="bookings")
     payments = relationship("Payment", back_populates="consultation_booking")
