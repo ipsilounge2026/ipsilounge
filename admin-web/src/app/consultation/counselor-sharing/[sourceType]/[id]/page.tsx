@@ -53,11 +53,12 @@ interface SharingDetail {
 
 const SURVEY_SHARING_LABELS: Record<string, string> = {
   academic_tier_label: "학업 현황 레이블",
-  career_direction: "진로·전형 방향",
+  career_direction: "진로 방향 (계열)",
+  exam_track_label: "전형 방향 (수시/정시)",
   target_school_name: "구체 목표 학교명",
   subject_difficulties: "과목 고민",
   study_methods: "학습법",
-  roadmap_top_summary: "맞춤 로드맵 상위",
+  roadmap_top_summary: "로드맵 최상위 (목표 수준)",
   action_plan_detail: "상세 액션 플랜",
   subject_selection: "선택과목",
   radar_grades: "레이더 등급",
@@ -79,7 +80,8 @@ const SURVEY_PREVIEW_LABELS: Record<string, string> = {
   mock: "모의고사",
   subject_difficulties: "과목 고민",
   study_methods: "학습법",
-  career_direction: "진로 방향",
+  career_direction: "진로 방향 (계열)",
+  exam_track: "전형 방향",
   target_level: "목표 수준",
   subject_selection: "선택과목",
   radar_grades: "레이더 등급",
@@ -87,7 +89,7 @@ const SURVEY_PREVIEW_LABELS: Record<string, string> = {
   timing: "시점",
   academic_tier_label: "학업 현황",
   target_school_name: "목표 학교",
-  roadmap_top_summary: "맞춤 로드맵",
+  roadmap_top_summary: "로드맵 최상위",
   action_plan_detail: "상세 액션 플랜",
 };
 
