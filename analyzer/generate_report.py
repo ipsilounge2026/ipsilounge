@@ -117,6 +117,15 @@ def load_student_data(student_name: str):
     return module
 
 
+def _parse_optional_flag(argv, flag_name):
+    """argv 에서 '--flag value' 형태의 값 추출 (없으면 None)."""
+    try:
+        idx = argv.index(flag_name)
+        return argv[idx + 1] if idx + 1 < len(argv) else None
+    except ValueError:
+        return None
+
+
 def main():
     # 명령행 인자 검증
     if len(sys.argv) < 2:
@@ -124,6 +133,12 @@ def main():
         sys.exit(1)
 
     student_name = sys.argv[1]
+
+    # Phase C (2026-04-17): analyzer ↔ backend 연동 옵션
+    # --analysis-id <ID>: backend 의 analysis_orders.id (upload 시 참조)
+    # --auto-upload: 리포트 생성 직후 analysis_fetcher.upload() 호출
+    _analysis_id = _parse_optional_flag(sys.argv, "--analysis-id")
+    _auto_upload = "--auto-upload" in sys.argv
 
     # 학생 데이터 로드
     sd = load_student_data(student_name)
@@ -211,6 +226,25 @@ def main():
     create_excel(sd, xlsx_path)
     create_pdf(sd, pdf_path)
     print("Done.")
+
+    # Phase C (2026-04-17): --auto-upload 시 backend 에 자동 업로드 + review 전이
+    if _auto_upload:
+        # analysis_id 우선순위: CLI 인자 > 학생 데이터 파일 내 analysis_id 필드
+        aid = _analysis_id or getattr(sd, "analysis_id", None)
+        if not aid:
+            print("[WARN] --auto-upload 지정되었으나 --analysis-id 도 없고 sd.analysis_id 도 비어있음. 업로드 스킵.")
+        else:
+            try:
+                from modules.analysis_fetcher import upload as _fetcher_upload
+                print("=" * 60)
+                print(f"  Phase C: backend 자동 업로드 (analysis_id={aid})")
+                print("=" * 60)
+                _fetcher_upload(sd.STUDENT, str(aid))
+                print("[OK] 업로드 완료. 관리자 검수 대기 (status=review).")
+            except Exception as _upload_e:
+                print(f"[ERROR] 자동 업로드 실패: {type(_upload_e).__name__}: {_upload_e}")
+                print("        → admin-web 에서 수동 업로드 또는 환경변수/토큰 확인 필요")
+                sys.exit(4)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python generate_report.py *)",
+      "Bash(python -m modules.analysis_fetcher *)",
+      "Bash(python -m modules.compare_generator *)",
+      "Edit(data/students/*.py)",
+      "Write(data/students/*.py)",
+      "Edit(input/*)",
+      "Read"
+    ],
+    "deny": [
+      "Edit(modules/*)",
+      "Write(modules/*)",
+      "Edit(config/*)",
+      "Write(config/*)",
+      "Edit(CLAUDE.md)",
+      "Edit(../backend/**)",
+      "Edit(../admin-web/**)",
+      "Edit(../user-web/**)",
+      "Edit(../mobile/**)",
+      "Edit(../docs/**)",
+      "Bash(git commit*)",
+      "Bash(git push*)"
+    ]
+  }
+}

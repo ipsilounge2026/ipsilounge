@@ -314,3 +314,23 @@ volunteer_data = {}
 #       ),
 #   }
 compare_data = {}
+
+
+# ═══════════════════════════════════════════════════════
+# Phase C (2026-04-17) analyzer ↔ backend 연동 메타 (선택 필드)
+# ═══════════════════════════════════════════════════════
+#
+# analysis_fetcher.fetch() 가 학생 데이터 파일 스캐폴딩 시 자동 주입.
+# 수동 분석(로컬 PDF) 시에는 빈 문자열로 두어도 무방.
+#
+# analysis_id:
+#   - backend analysis_orders.id (UUID string)
+#   - generate_report.py --auto-upload 시 이 값으로 업로드 대상 식별
+#   - 빈 값이면 CLI 에서 --analysis-id 별도 전달 필요
+#
+# source_pdf_path:
+#   - 학생부 원본 PDF 경로 (analyzer 기준 상대 경로 또는 절대 경로)
+#   - G6 하이라이트 PDF 생성 시 참조 (Phase D 에서 사용 예정)
+#   - 빈 문자열이면 하이라이트 PDF 생성 스킵
+analysis_id     = ""   # 예: "0f9a3c2b-..." (UUID)
+source_pdf_path = ""   # 예: "input/0f9a3c2b-..._연승훈.pdf"

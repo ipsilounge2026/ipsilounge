@@ -46,6 +46,14 @@ nginx/ssl/
 *.iml
 .claude/
 
+# Claude Code 프로젝트 설정 whitelist
+# (개인 local 설정은 여전히 ignore, 팀 공유 설정만 commit)
+!analyzer/.claude/
+!analyzer/.claude/commands/
+!analyzer/.claude/commands/*.md
+!analyzer/.claude/settings.json
+analyzer/.claude/settings.local.json
+
 # OS
 .DS_Store
 Thumbs.db
