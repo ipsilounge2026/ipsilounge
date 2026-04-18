@@ -64,3 +64,8 @@ class AdminAnalysisResponse(BaseModel):
     processing_at: datetime | None
     completed_at: datetime | None
     has_report: bool = False
+    # G6 Phase B (2026-04-17): 스캔 PDF 판별 결과
+    # - True:  텍스트 레이어 있음 → 하이라이트 PDF 생성 가능
+    # - False: 스캔본 PDF → 하이라이트 PDF 생성 불가 (분석은 가능)
+    # - None:  학생부 미업로드 또는 판별 불가
+    is_text_pdf: bool | None = None

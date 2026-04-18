@@ -29,6 +29,11 @@ interface AnalysisDetail {
   processing_at: string | null;
   completed_at: string | null;
   has_report: boolean;
+  // G6 Phase B: 학생부 PDF 텍스트 레이어 여부
+  //   true:  텍스트 PDF → 하이라이트 PDF 생성 가능
+  //   false: 스캔본 PDF → 하이라이트 PDF 생성 불가 (분석은 가능)
+  //   null:  학생부 미업로드 또는 판별 실패
+  is_text_pdf: boolean | null;
 }
 
 export default function AnalysisDetailPage() {
@@ -140,10 +145,50 @@ export default function AnalysisDetailPage() {
         {/* 학생부 다운로드 */}
         <div className="card" style={{ marginBottom: 16 }}>
           <h2 style={{ fontSize: 16, marginBottom: 16 }}>학생부 파일</h2>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: data.is_text_pdf === false ? 12 : 0 }}>
             <span>{data.school_record_filename}</span>
             <button className="btn btn-primary btn-sm" onClick={handleDownload}>다운로드</button>
+            {/* G6 Phase B (2026-04-17): PDF 텍스트 레이어 상태 배지 */}
+            {data.is_text_pdf === true && (
+              <span style={{
+                padding: "2px 8px",
+                background: "#d4edda",
+                color: "#155724",
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 500,
+              }}>
+                ✓ 텍스트 PDF
+              </span>
+            )}
+            {data.is_text_pdf === false && (
+              <span style={{
+                padding: "2px 8px",
+                background: "#fff3cd",
+                color: "#856404",
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 500,
+              }}>
+                ⚠️ 스캔 PDF
+              </span>
+            )}
           </div>
+          {data.is_text_pdf === false && (
+            <div style={{
+              padding: "10px 12px",
+              background: "#fff3cd",
+              border: "1px solid #ffeaa7",
+              borderRadius: 8,
+              fontSize: 13,
+              color: "#856404",
+              lineHeight: 1.5,
+            }}>
+              <strong>⚠️ 스캔 PDF 감지</strong><br />
+              이 학생부는 텍스트 레이어가 없는 스캔본입니다. 학생부 분석 자체는 정상 진행되지만,
+              <strong> 핵심문장 하이라이트 PDF 생성은 스킵됩니다</strong> (OCR 미지원, 추후 과제).
+            </div>
+          )}
         </div>
 
         {/* 리포트 업로드 */}

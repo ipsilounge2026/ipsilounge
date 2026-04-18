@@ -200,3 +200,58 @@ def get_local_file_path(storage_key: str) -> str:
             detail="파일을 찾을 수 없습니다",
         )
     return file_path
+
+
+# ─── G6 Phase B (2026-04-17): PDF 텍스트 레이어 감지 ─────────────────
+# 학생부 PDF 가 "스캔본" 인지 판별.
+# - 텍스트 레이어 있음 → G6 하이라이트 PDF 생성 가능
+# - 스캔본 → 분석은 Claude Vision 으로 가능하나 하이라이트 좌표 추출 불가
+# admin-web 이 이 결과를 분석 접수 상세 페이지에 "스캔 PDF 경고" 배지로 표시.
+
+_TEXT_DETECTION_MIN_CHARS = 50  # 이 글자수 미만이면 "텍스트 없음" 으로 판단
+
+
+def _load_pdf_bytes_for_storage(storage_key: str) -> bytes:
+    """storage_key 로 PDF 바이트 로드 (S3 또는 로컬)."""
+    if USE_S3:
+        import boto3
+        s3 = boto3.client(
+            "s3",
+            region_name=settings.AWS_REGION,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        )
+        obj = s3.get_object(Bucket=settings.AWS_S3_BUCKET, Key=storage_key)
+        return obj["Body"].read()
+    # 로컬
+    file_path = get_local_file_path(storage_key)
+    with open(file_path, "rb") as f:
+        return f.read()
+
+
+def is_text_pdf(storage_key: str) -> bool:
+    """PDF 에 텍스트 레이어가 있는지 확인. 최소 1페이지 이상 텍스트 추출 가능 시 True.
+    스캔본·이미지 PDF 는 False. 파일 로드 실패 시 None (이 경우 admin-web 에서 구분 표기).
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        # PyMuPDF 미설치 환경 → 판단 불가. 안전하게 True (기존 동작 유지)
+        return True
+
+    try:
+        data = _load_pdf_bytes_for_storage(storage_key)
+        doc = fitz.open(stream=data, filetype="pdf")
+        try:
+            # 최대 3페이지만 체크 (대용량 PDF 방어)
+            pages_to_check = min(3, doc.page_count)
+            for i in range(pages_to_check):
+                text = doc[i].get_text().strip()
+                if len(text) >= _TEXT_DETECTION_MIN_CHARS:
+                    return True
+            return False
+        finally:
+            doc.close()
+    except Exception:
+        # 파싱 실패 시 "텍스트 없음" 으로 간주 (안전)
+        return False

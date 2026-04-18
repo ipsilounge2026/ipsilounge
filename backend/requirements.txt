@@ -23,3 +23,8 @@ jinja2==3.1.5
 google-api-python-client==2.114.0
 google-auth==2.27.0
 reportlab==4.1.0
+
+# G6 Phase B (2026-04-17): 학생부 PDF 텍스트 레이어 감지용
+# - 업로드된 학생부가 스캔 PDF 인지 자동 판별 → admin-web 경고 배지 노출
+# - analyzer 의 G6 하이라이트 PDF 생성 가능 여부 사전 확인
+PyMuPDF==1.25.0

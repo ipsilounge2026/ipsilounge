@@ -14,7 +14,7 @@ from app.models.user import User
 from app.schemas.analysis import AdminAnalysisResponse, AnalysisStatusUpdate
 from app.models.interview_question import InterviewQuestion, QuestionCategory
 from app.services.email_service import send_analysis_complete_email
-from app.services.file_service import generate_download_url, upload_file
+from app.services.file_service import generate_download_url, is_text_pdf, upload_file
 from app.services.notification_service import send_analysis_complete_notification
 from app.utils.dependencies import get_current_admin
 
@@ -138,6 +138,16 @@ async def get_analysis_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="분석 요청을 찾을 수 없습니다")
 
     order, user = row
+
+    # G6 Phase B: 학생부 PDF 텍스트 레이어 감지 (스캔 PDF 경고용)
+    # school_record_url 이 없으면 None, 있으면 True/False 판별
+    _is_text = None
+    if order.school_record_url:
+        try:
+            _is_text = is_text_pdf(order.school_record_url)
+        except Exception:
+            _is_text = None  # 판별 실패 시 None
+
     return AdminAnalysisResponse(
         id=order.id,
         user_id=user.id,
@@ -156,6 +166,7 @@ async def get_analysis_detail(
         processing_at=order.processing_at,
         completed_at=order.completed_at,
         has_report=bool(order.report_excel_url or order.report_pdf_url),
+        is_text_pdf=_is_text,
     )
 
 
