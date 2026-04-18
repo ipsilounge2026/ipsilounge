@@ -42,7 +42,10 @@ class AnalysisListResponse(BaseModel):
 
 
 class AnalysisStatusUpdate(BaseModel):
-    status: str  # applied / uploaded / processing / completed / cancelled
+    # 상태 전이 (Phase C 2026-04-17: review 추가):
+    # applied → uploaded → processing → review → completed / cancelled
+    #   review → processing (재분석 루프, approve/reject 엔드포인트 사용 권장)
+    status: str
     admin_memo: str | None = None
 
 

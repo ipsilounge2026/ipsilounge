@@ -356,9 +356,12 @@ async def download_report_excel(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """리포트 Excel 다운로드 URL (본인 + 연결된 자녀)"""
+    """리포트 Excel 다운로드 URL (본인 + 연결된 자녀).
+    Phase C (2026-04-17): status=completed 인 경우에만 공개.
+    review 상태(관리자 검수 대기) 에서는 파일이 있더라도 사용자에게 노출 안 됨.
+    """
     order = await _get_visible_order(order_id, user, db)
-    if not order.report_excel_url:
+    if order.status != "completed" or not order.report_excel_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="리포트가 아직 준비되지 않았습니다")
     url = generate_download_url(order.report_excel_url)
     return {"download_url": url}
@@ -370,9 +373,11 @@ async def download_report_pdf(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """리포트 PDF 다운로드 URL (본인 + 연결된 자녀)"""
+    """리포트 PDF 다운로드 URL (본인 + 연결된 자녀).
+    Phase C (2026-04-17): status=completed 인 경우에만 공개.
+    """
     order = await _get_visible_order(order_id, user, db)
-    if not order.report_pdf_url:
+    if order.status != "completed" or not order.report_pdf_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="리포트가 아직 준비되지 않았습니다")
     url = generate_download_url(order.report_pdf_url)
     return {"download_url": url}
@@ -436,6 +441,11 @@ async def compare_analysis(
 
 
 def _to_response(order: AnalysisOrder) -> AnalysisOrderResponse:
+    # Phase C (2026-04-17): has_report 는 사용자 관점이므로 status=completed 일 때만 True.
+    # review 상태(관리자 검수 대기) 에서는 리포트 파일이 있어도 사용자에게 숨김.
+    _report_visible = (order.status == "completed") and bool(
+        order.report_excel_url or order.report_pdf_url
+    )
     return AnalysisOrderResponse(
         id=order.id,
         service_type=order.service_type,
@@ -449,5 +459,5 @@ def _to_response(order: AnalysisOrder) -> AnalysisOrderResponse:
         uploaded_at=order.uploaded_at,
         processing_at=order.processing_at,
         completed_at=order.completed_at,
-        has_report=bool(order.report_excel_url or order.report_pdf_url),
+        has_report=_report_visible,
     )
