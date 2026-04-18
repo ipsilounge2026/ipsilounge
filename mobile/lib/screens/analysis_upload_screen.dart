@@ -27,9 +27,10 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
   }
 
   Future<void> _pickFile() async {
+    // [2026-04-17 Phase A] PDF 전용. JPG/PNG 차단 (backend file_service 동기화)
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      allowedExtensions: ['pdf'],
     );
     if (result != null && result.files.isNotEmpty) {
       setState(() {
@@ -103,7 +104,7 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'PDF, JPG, PNG 지원 (최대 20MB)',
+                            'PDF 파일 전용 (최대 20MB)',
                             style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
                           ),
                         ],
@@ -134,6 +135,12 @@ class _AnalysisUploadScreenState extends State<AnalysisUploadScreen> {
                         ],
                       ),
               ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '※ 정부24·학교에서 다운로드한 텍스트 레이어 포함 PDF 를 권장합니다. '
+              '이미지 파일(JPG/PNG)은 업로드가 불가능하며, 스캔본 PDF 는 일부 분석 기능이 제한될 수 있습니다.',
+              style: TextStyle(fontSize: 11, color: Color(0xFF6B7280), height: 1.5),
             ),
             if (_errorMessage != null) ...[
               const SizedBox(height: 16),

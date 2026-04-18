@@ -16,8 +16,12 @@ LOCAL_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 
 # 용도별 허용 확장자
+# ※ [2026-04-17 G6/Phase A] school-records 에서 JPG/PNG 제거:
+#   - 하이라이트 PDF 생성은 텍스트 레이어 있는 PDF 에서만 가능 (PyMuPDF 좌표 검색)
+#   - 이미지 파일은 OCR 필요 → 추후 과제 (G9)
+#   - 사용자 측 업로드 UI 에도 "PDF만 가능" 안내 문구 동기화 필요
 ALLOWED_EXTENSIONS = {
-    "school-records": {"pdf", "jpg", "jpeg", "png"},       # 사용자: 학생부 업로드
+    "school-records": {"pdf"},                               # 사용자: 학생부 업로드 (PDF 전용)
     "reports": {"pdf", "xlsx", "xls"},                       # 관리자: 리포트 업로드
 }
 
