@@ -1,0 +1,19 @@
+{
+  "name": "ipsilounge-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "E2E 테스트 스위트 (Playwright) — admin-web + user-web 통합 검증",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1",
+    "@types/node": "20.14.10",
+    "typescript": "5.5.3"
+  }
+}
