@@ -58,13 +58,13 @@ export default function LoginPage() {
           {error && <div className="error-msg">{error}</div>}
 
           <div className="form-group">
-            <label>이메일</label>
-            <input type="email" className="form-control" value={email}
+            <label htmlFor="login-email">이메일</label>
+            <input id="login-email" name="email" autoComplete="email" type="email" className="form-control" value={email}
               onChange={(e) => setEmail(e.target.value)} placeholder="이메일을 입력하세요" required />
           </div>
           <div className="form-group">
-            <label>비밀번호</label>
-            <input type="password" className="form-control" value={password}
+            <label htmlFor="login-password">비밀번호</label>
+            <input id="login-password" name="password" autoComplete="current-password" type="password" className="form-control" value={password}
               onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호를 입력하세요" required />
           </div>
 

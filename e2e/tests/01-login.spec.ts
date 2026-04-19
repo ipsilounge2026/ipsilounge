@@ -21,10 +21,10 @@ test.describe("로그인 플로우 (실제 폼)", () => {
   test("e2e 테스트 계정으로 로그인하면 홈으로 리다이렉트되고 토큰이 저장된다", async ({ page }) => {
     await page.goto("/login");
 
-    // 로그인 페이지 렌더 확인
+    // 로그인 페이지 렌더 확인 — label 이 htmlFor 로 input 에 연결되어 getByLabel 사용 가능 (2026-04-19 개선)
     await expect(page.getByRole("heading", { name: "로그인" })).toBeVisible();
-    const emailInput = page.getByPlaceholder("이메일을 입력하세요");
-    const passwordInput = page.getByPlaceholder("비밀번호를 입력하세요");
+    const emailInput = page.getByLabel("이메일");
+    const passwordInput = page.getByLabel("비밀번호", { exact: true });
     await expect(emailInput).toBeVisible();
     await expect(passwordInput).toBeVisible();
 
@@ -63,8 +63,8 @@ test.describe("로그인 플로우 (실제 폼)", () => {
   test("잘못된 비밀번호는 에러 응답을 받고 로그인되지 않는다", async ({ page }) => {
     await page.goto("/login");
 
-    await page.getByPlaceholder("이메일을 입력하세요").fill(E2E_LOGIN_TEST_USER.email);
-    await page.getByPlaceholder("비밀번호를 입력하세요").fill("wrong-password-xyz");
+    await page.getByLabel("이메일").fill(E2E_LOGIN_TEST_USER.email);
+    await page.getByLabel("비밀번호", { exact: true }).fill("wrong-password-xyz");
 
     const [loginResponse] = await Promise.all([
       page.waitForResponse(
