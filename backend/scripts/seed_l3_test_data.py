@@ -78,6 +78,7 @@ from app.models import (  # noqa: E402, F401
     user as _user_mod,
 )
 from app.models.admin import Admin  # noqa: E402
+from app.models.consultation_slot import ConsultationSlot  # noqa: E402
 from app.models.consultation_survey import ConsultationSurvey  # noqa: E402
 from app.models.family_link import FamilyLink  # noqa: E402
 from app.models.user import User  # noqa: E402
@@ -198,6 +199,42 @@ async def _ensure_family_link(db, parent_id, child_id, created_by) -> FamilyLink
     return link
 
 
+async def _ensure_slot(
+    db,
+    admin_id,
+    slot_date,
+    start_time_obj,
+    end_time_obj,
+) -> ConsultationSlot:
+    """상담 슬롯 멱등 생성. 동일 admin_id + date + start_time 존재 시 재사용.
+
+    admin_id 는 str 로 저장됨(consultation_slots.admin_id = String(36)).
+    """
+    admin_id_str = str(admin_id)
+    res = await db.execute(
+        select(ConsultationSlot).where(
+            ConsultationSlot.admin_id == admin_id_str,
+            ConsultationSlot.date == slot_date,
+            ConsultationSlot.start_time == start_time_obj,
+        )
+    )
+    existing = res.scalar_one_or_none()
+    if existing:
+        return existing
+    slot = ConsultationSlot(
+        admin_id=admin_id_str,
+        date=slot_date,
+        start_time=start_time_obj,
+        end_time=end_time_obj,
+        max_bookings=1,
+        current_bookings=0,
+        is_active=True,
+    )
+    db.add(slot)
+    await db.flush()
+    return slot
+
+
 async def _ensure_survey(db, user_id, timing: str) -> ConsultationSurvey:
     """학생당 1개의 high 설문 (timing=학생 시점, A4 사전 응답 포함)."""
     res = await db.execute(
@@ -252,7 +289,13 @@ async def _create_schema() -> None:
 
 
 async def _seed() -> dict:
-    output = {"users": {}, "admins": {}, "family_link": None, "surveys": {}}
+    output = {
+        "users": {},
+        "admins": {},
+        "family_link": None,
+        "surveys": {},
+        "slots": [],
+    }
     async with async_session() as db:
         # 학생 4명
         students: dict[str, User] = {}
@@ -276,13 +319,40 @@ async def _seed() -> dict:
         }
 
         # 관리자 2명
+        admin_objs: dict[str, Admin] = {}
         for ident, email, name, role in ADMIN_DEFS:
             a = await _ensure_admin(db, email, name, role)
+            admin_objs[ident] = a
             output["admins"][ident] = {
                 "id": str(a.id),
                 "email": a.email,
                 "role": a.role,
             }
+
+        # ─── Sprint 3 (2026-04-19): counselor_a 의 예약 가능 슬롯 ───
+        # 상담 예약 E2E 테스트(Sprint 3)용. 리드타임(학습상담 설문제출+7일 경과) 고려해
+        # 오늘로부터 8~21일 범위에 하루 3개(오전 10시, 오후 2시, 오후 4시) 총 14일 × 3 = 42 슬롯.
+        # 멱등: 동일 (admin_id, date, start_time) 존재 시 재사용.
+        from datetime import date as _date_type, time as _time_type, timedelta as _tdelta
+        counselor = admin_objs.get("counselor_a")
+        if counselor is not None:
+            today = _date_type.today()
+            for day_offset in range(8, 22):
+                slot_date = today + _tdelta(days=day_offset)
+                for start_h in (10, 14, 16):
+                    slot = await _ensure_slot(
+                        db,
+                        admin_id=counselor.id,
+                        slot_date=slot_date,
+                        start_time_obj=_time_type(start_h, 0),
+                        end_time_obj=_time_type(start_h + 1, 0),
+                    )
+                    output["slots"].append({
+                        "id": str(slot.id),
+                        "admin_id": slot.admin_id,
+                        "date": slot.date.isoformat(),
+                        "start_time": slot.start_time.strftime("%H:%M"),
+                    })
 
         # parent_a ↔ student_t2 가족 연결
         link = await _ensure_family_link(
