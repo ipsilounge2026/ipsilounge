@@ -12,6 +12,7 @@ import path from "path";
 const REPO_ROOT = path.resolve(__dirname, "..");
 const BACKEND_DIR = path.join(REPO_ROOT, "backend");
 const USER_WEB_DIR = path.join(REPO_ROOT, "user-web");
+const ADMIN_WEB_DIR = path.join(REPO_ROOT, "admin-web");
 
 export default defineConfig({
   testDir: "./tests",
@@ -75,6 +76,21 @@ export default defineConfig({
       },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+    {
+      // Sprint 5 (2026-04-19): admin-web 자동 기동 (port 3001).
+      // admin-web 테스트는 절대 URL `http://localhost:3001/...` 로 접근.
+      // 첫 컴파일이 큰 편이라 timeout 여유 있게 (300s).
+      command: "npm run dev",
+      cwd: ADMIN_WEB_DIR,
+      url: "http://localhost:3001/login",
+      env: {
+        NEXT_PUBLIC_API_URL: "http://127.0.0.1:8000",
+      },
+      reuseExistingServer: !process.env.CI,
+      timeout: 300_000,
       stdout: "pipe",
       stderr: "pipe",
     },
