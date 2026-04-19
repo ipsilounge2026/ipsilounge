@@ -251,6 +251,24 @@ def main():
     from modules.report_logic import create_excel, create_pdf
     create_excel(sd, xlsx_path, mode_config=mode_cfg)
     create_pdf(sd, pdf_path, mode_config=mode_cfg)
+
+    # ── G6 v1+v2 (2026-04-19): 상담용 학생부 하이라이트 PDF ──
+    # source_pdf_path + good_sentences 또는 highlight_quotes 가 있을 때 생성.
+    # v1: 노란색 (good_sentences 핵심평가문장)
+    # v2: 초록·주황 (highlight_quotes.setuek 의 강점·보완점 근거)
+    # partial 모드에서 세특 제외 시 전체 스킵.
+    if mode_cfg.include_setuek:
+        try:
+            from modules.highlight_pdf_generator import generate_highlight_pdf, print_highlight_summary
+            highlight_report = generate_highlight_pdf(
+                sd, project_root=PROJECT_ROOT, output_dir=OUTPUT_DIR, suffix=_suffix
+            )
+            print_highlight_summary(highlight_report)
+        except Exception as _hl_e:
+            print(f"[WARN] G6 하이라이트 PDF 생성 실패 (스킵): {type(_hl_e).__name__}: {_hl_e}")
+    else:
+        print("[INFO] partial 모드 setuek 제외 → G6 하이라이트 PDF 스킵")
+
     print("Done.")
 
     # Phase C (2026-04-17): --auto-upload 시 backend 에 자동 업로드 + review 전이

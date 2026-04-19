@@ -20,3 +20,8 @@ PyYAML==6.0.3
 kiwipiepy==0.23.1
 wordcloud==1.9.6
 matplotlib==3.10.8
+
+# G6 v1 (2026-04-19 구현): 상담용 학생부 하이라이트 PDF
+# - pymupdf (import fitz): 원본 PDF 에 텍스트 검색 + 하이라이트 주석 삽입
+#   (CLAUDE.md §Step 9-4, 핵심평가문장만 노란색 하이라이트 - v1 MVP)
+pymupdf==1.27.2.2
