@@ -21,7 +21,13 @@ class Admin(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    consultation_notes = relationship("ConsultationNote", back_populates="admin")
+    # ConsultationNote 는 admin 을 가리키는 FK 가 2개 (admin_id + senior_reviewer_admin_id)
+    # 이 관계는 담당 상담사용(admin_id) 만 참조 — SQLAlchemy mapper 모호성 제거 (2026-04-19)
+    consultation_notes = relationship(
+        "ConsultationNote",
+        back_populates="admin",
+        foreign_keys="ConsultationNote.admin_id",
+    )
     assigned_students = relationship("AdminStudentAssignment", back_populates="admin")
     notices = relationship("Notice", back_populates="admin")
     senior_students = relationship("SeniorStudentAssignment", back_populates="senior")

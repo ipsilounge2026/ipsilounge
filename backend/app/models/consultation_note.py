@@ -104,4 +104,10 @@ class ConsultationNote(Base):
 
     user = relationship("User", back_populates="consultation_notes")
     booking = relationship("ConsultationBooking", back_populates="note")
-    admin = relationship("Admin", back_populates="consultation_notes")
+    # admin_id 와 senior_reviewer_admin_id 두 FK 가 admins.id 를 가리키므로
+    # 이 관계는 admin_id(담당 상담사) 기준임을 명시 (2026-04-19 SQLAlchemy 모호성 수정)
+    admin = relationship(
+        "Admin",
+        back_populates="consultation_notes",
+        foreign_keys=[admin_id],
+    )
