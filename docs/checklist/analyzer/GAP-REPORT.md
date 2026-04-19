@@ -1,6 +1,6 @@
 # analyzer CLAUDE.md ↔ 실구현 Gap 보고서
 
-- **작성일**: 2026-04-17
+- **작성일**: 2026-04-17 (2026-04-19 업데이트)
 - **검증자**: Claude (C-안 전체 섹션 순회)
 - **대상**: `ipsilounge/analyzer/CLAUDE.md` vs `ipsilounge/analyzer/` 실제 구현
 - **범위**: 현재 운영 버전 (`generate_report.py` + `modules/report_logic.py` + `modules/qa_validator.py`) 기준
@@ -13,11 +13,11 @@
 | 구분 | 건수 | 진척 |
 |---|---|---|
 | **일치 (PASS)** | 9 영역 | - |
-| **명시적 Gap (미구현)** | 7 건 | 2026-04-17 G5/G7/G3+G4 해소 → **2 건** (내신/입결/전형적합도는 대학 DB 선행, G6 남음) |
-| **부분 구현 / 운영 모드 차이** | 3 건 | 2026-04-17 세특 7/6 항목, 척도 1~10 해소 → **1 건** (미사용 패키지만 잔여) |
+| **명시적 Gap (미구현)** | 7 건 | 2026-04-17 G5/G7/G3+G4 해소 → 2026-04-19 **G6 + §13 실행 모드 해소** → 잔여 **1 건** (내신/입결/전형적합도 — 대학 DB 선행) |
+| **부분 구현 / 운영 모드 차이** | 3 건 | 2026-04-17 세특 7/6 항목, 척도 1~10 해소 → 2026-04-19 kiwipiepy/wordcloud/matplotlib/pymupdf 도입으로 미사용 패키지 해소 → **잔여 0 건** |
 | **스펙-구현 불일치 (문서 업데이트 필요)** | 3 건 | 2026-04-17 D1/D2/D3 전부 해소 ✅ → **0 건** |
 
-운영에는 지장 없는 상태(Claude 대화형 수동 워크플로우로 실질 기능 제공 중). C안 로드맵 기준 **G5 키워드분석 + 워드클라우드** 완전 구현 완료 (2026-04-17). 나머지 미구현 항목은 각 선행 의존성에 따라 순차 진행 중.
+운영에 지장 없는 상태. C안 로드맵 기준 **G5 키워드분석·워드클라우드** (2026-04-17) + **G7 출결·봉사** (2026-04-17) + **G3+G4 이전분석대비변화** (2026-04-17) + **G6 하이라이트 PDF v1+v2** (2026-04-19) + **§13 실행 모드 CLI** (2026-04-19) 전부 구현 완료. 잔여는 내신/입결/전형적합도 (대학 DB 선행 필요) 1 건.
 
 ---
 
@@ -39,9 +39,9 @@
 
 ## 2. Gap 상세
 
-### G1 (P1) §12 Excel 시트 13개 명세 → 실제 10개 구현 (2026-04-17 키워드분석 추가)
+### G1 (P2) §12 Excel 시트 13개 명세 → 실제 12시트 구현 (내신/입결/전형적합도 3종 대학 DB 대기)
 
-**CLAUDE.md §12 명시 13 시트** vs **실제 구현**:
+**CLAUDE.md §12 명시 13 시트** vs **실제 구현** (2026-04-19 기준):
 
 | CLAUDE.md 명세 | report_logic.py 구현 | 상태 |
 |---|---|---|
@@ -52,34 +52,57 @@
 | 창체분석 | 창체분석 | ✅ |
 | 행특분석 | 행특분석 | ✅ |
 | 연계성분석 | 연계성분석 | ✅ |
-| **키워드분석** | **키워드분석** | ✅ **(G5 해소, 2026-04-17)** |
+| **키워드분석** | **키워드분석** (raw_texts 있으면) | ✅ **(G5 해소, 2026-04-17)** |
 | 전형적합도 | — | ❌ 미구현 (내신분석 선행) |
 | 대학평가요소 | 대학평가요소 | ✅ |
 | 역량별보완법 | 역량별보완법 | ✅ |
-| **이전분석대비변화** | **이전분석대비변화** | ✅ **(G3+G4 해소, 2026-04-17)** |
-| **출결·봉사** | **출결·봉사** | ✅ **(G7 해소, 2026-04-17)** |
+| **이전분석대비변화** | **이전분석대비변화** (compare_data 있으면) | ✅ **(G3+G4 해소, 2026-04-17)** |
+| **출결·봉사** | **출결·봉사** (attendance/volunteer 있으면) | ✅ **(G7 해소, 2026-04-17)** |
 
-**영향**: CLAUDE.md 는 "전체 분석" 모드 기준으로 기술되어 있으나, 실제 운영은 "내신/입결 제외 모드"가 사실상 기본값.
+**2026-04-19 추가**: `--mode partial --areas <...>` 옵션으로 선택 영역 시트만 생성 가능 (§13 해소).
 
-**조치 권고**:
-- (A) CLAUDE.md §12 를 "현재 운영 모드: 9개 시트" + "향후 확장: 내신·입결·키워드·전형적합도·출결봉사 추가" 로 업데이트
-- (B) 5개 미구현 시트를 향후 과제로 `future-tasks.md` 에 분리
+**영향**: 잔여 3종(내신/입결/전형적합도) 은 대학별 내신 산출 DB + 입결 DB 데이터 축적이 선행되어야 하는 구조적 gap. 코드 뼈대는 `no-grade` 모드에서 준비됨.
+
+**조치**: ~~CLAUDE.md §12 업데이트~~ 완료. 잔여 3시트는 `data/university_grading.xlsx` + `data/admission_db.xlsx` 데이터 입력 후 구현 예정.
 
 ---
 
-### G2 (P1) §13 실행 모드별 처리 (전체/내신 제외/특정 영역) 미구현
+### G2 — 해소 완료 ✅ (2026-04-19)
 
-**CLAUDE.md §13 실행 모드별 처리 표** 3가지:
-- 전체 분석 (내신+세특+창체+행특+입결)
-- 내신 제외 분석
-- 특정 영역 분석
+§13 실행 모드별 처리 — **A안 `--mode/--areas` CLI 전체 구현**.
 
-**실제 generate_report.py**:
-- 인자는 `<학생명>` 하나뿐 (`sys.argv[1]`)
-- 모드 스위칭 로직 없음
-- 항상 동일한 9개 시트 생성
+**추가된 파일**:
+- `modules/mode_config.py` (신규):
+  - `ModeConfig` 데이터클래스 + `build_mode_config(mode, areas)` 팩토리
+  - 3가지 모드 파싱 + 영역(setuek/changche/haengtuk) 선택 + 검증
+  - `area_included()` / `excluded_areas` / `label()` 헬퍼
 
-**조치 권고**: CLAUDE.md §13 의 "실행 모드별 처리" 섹션을 "현재는 단일 모드만 지원. 모드별 분기는 향후 CLI 옵션(`--mode full|no-grade|partial`)으로 확장 예정" 으로 업데이트.
+**수정된 파일**:
+- `generate_report.py`:
+  - `--mode full|no-grade|partial` + `--areas <csv>` CLI 옵션
+  - `build_mode_config()` 호출 후 ValueError → exit 1 + 한글 안내
+  - 실행 모드 라벨 콘솔 출력
+  - `mode_config=mode_cfg` 를 `run_full_qa` / `create_excel` / `create_pdf` 에 전파
+- `modules/qa_validator.py`:
+  - `check_structural_completeness(..., mode_config=None)` 인자 추가
+  - `partial` 모드에서 미선택 영역은 P1 구조 검증을 **INFO 로 스킵** (FAIL 차단 없음)
+  - 단일 영역 선택 시 연계성 검증도 스킵 (성립 불가)
+  - `run_full_qa(..., mode_config=None)` 가 구조 체크에 전파
+- `modules/report_logic.py`:
+  - `create_excel / create_pdf` 에 `mode_config` 인자 (기본 None → full)
+  - partial 모드 시 Excel 시트 · PDF 섹션 선택적 생성
+  - 세특 PDF 블록은 list-swap 트릭으로 재들여쓰기 회피
+  - PDF 섹션 번호는 선택 영역에 따라 동적 재할당
+
+**회귀 테스트 (의대샘플 기준)**:
+- `full` (기본) → 9시트 / PDF 238KB
+- `no-grade` → 9시트 (내신/입결 미구현이라 NOOP, 향후 자동 스킵)
+- `partial --areas setuek` → 7시트 (세특 3 + 교차 3 + 종합요약) / PDF 213KB
+- `partial --areas changche,haengtuk` → 6시트 / PDF 199KB
+- CLI 에러 (partial 단독) → "--areas 필수" 메시지 + exit 1
+
+**문서 갱신**:
+- `analyzer/CLAUDE.md §13` + `school-record-analyzer/CLAUDE.md §13` CLI 옵션·영역 매핑·동작 원리 반영
 
 ---
 
@@ -160,13 +183,39 @@ C안 로드맵 세 번째 과제로 **G3 (기존 리포트 자동 탐색) + G4 (
 
 ---
 
-### G6 (P1) §5 Step 9-4 상담용 학생부 하이라이트 PDF 미구현
+### G6 — 해소 완료 ✅ (2026-04-19)
 
-**CLAUDE.md**: 학생부 원본에 번호 태그 + 반투명 형광(노랑/초록/주황) 하이라이트 + 범례 페이지.
+§5 Step 9-4 상담용 학생부 하이라이트 PDF — **v1 + v2 전체 구현**.
 
-**실제**: `create_pdf()` 는 분석 리포트 PDF 1개만 생성. 하이라이트 PDF 별도 생성 없음.
+**추가된 파일**:
+- `modules/highlight_pdf_generator.py` (신규, ~330 lines):
+  - PyMuPDF(fitz) 기반 3색 형광 하이라이트
+  - `HighlightEntry` 데이터클래스 + `COLOR_META` 테이블 (노랑/초록/주황)
+  - `_collect_entries(good_sentences, highlight_quotes)`: 번호 부여 (노랑→초록→주황)
+  - `_search_rects()` 순차 폴백: 정확 → 앞 40/25/15자 → 쉼표·마침표 세그먼트
+  - `_annotate_entry()` 색상별 add_highlight_annot + 툴팁 정보
+  - `_append_legend_page()` 범례 페이지 (번호 원형 배지 + 매치 O/X)
+  - `print_highlight_summary()` 색상별 통계 출력
+- `requirements.txt`: `pymupdf==1.27.2.2` 추가
 
-**조치 권고**: CLAUDE.md §5 Step 9-4 를 "향후 구현 예정 (P2)" 으로 표시.
+**색상 매핑 (CLAUDE.md 원안)**:
+- 노란색: `good_sentences` (v1, 2-3 핵심평가문장)
+- 초록색: `highlight_quotes.setuek.*.green` (v2, 2-2 세부내용 강점 근거)
+- 주황색: `highlight_quotes.setuek.*.orange` (v2, 2-2 세부내용 보완점 근거)
+
+**수정된 파일**:
+- `generate_report.py`: 리포트 생성 직후 `generate_highlight_pdf()` 자동 호출
+- `data/students/_template.py`: `highlight_quotes` 선택 필드 + 사용 예시 docstring
+- `data/students/의대샘플.py`, `연승훈.py`: `highlight_quotes = {}` 역호환
+
+**스킵 조건**:
+- `source_pdf_path` 없음 → [SKIP]
+- `good_sentences` + `highlight_quotes` 전부 비어있음 → [SKIP]
+- partial 모드 setuek 미선택 → 전체 스킵
+
+**검증 완료 (3색 E2E + 엣지 5건)**:
+- 노랑 2/15 + 초록 3/3 + 주황 1/1 매치, 색상별 주석 정상 삽입 + 툴팁 확인
+- 엣지: 빈 highlight_quotes / 알 수 없는 최상위 키 / 존재하지 않는 과목 / 전부 비어있음 / good_sentences 해당없음+highlight_quotes有 → 모두 정상
 
 ---
 
@@ -254,19 +303,27 @@ C안 로드맵 세 번째 과제로 **G3 (기존 리포트 자동 탐색) + G4 (
 
 ---
 
-### P3 (P3) §2 기술 스택 — 5종 미사용 패키지
+### P3 — 부분 해소 ✅ (2026-04-17 ~ 19)
 
-**CLAUDE.md §2 명시**: openpyxl, reportlab, **pdf2image, kiwipiepy, wordcloud, matplotlib**, PyYAML (pandas 암시)
+§2 기술 스택 미사용 패키지 5종 중 **3종 도입으로 해소**:
 
-**실제 requirements.txt**: openpyxl, reportlab, PyYAML 3종만 pin
+**[2026-04-17 해소]**:
+- `kiwipiepy==0.23.1` → G5 `modules/keyword_extractor.py` 에서 import (한국어 형태소 분석)
+- `wordcloud==1.9.6` → G5 워드클라우드 이미지 생성
+- `matplotlib==3.10.8` → wordcloud savefig 백엔드 (헤드리스 Agg)
 
-**참조처**: pdf2image/kiwipiepy/wordcloud/matplotlib/pandas 는 구버전 모듈(`extractor.py`, `comprehensive_analyzer.py`, `report_generator.py`) 에서만 import 되며, 현재 파이프라인에서는 호출되지 않음.
+**[2026-04-19 해소]**:
+- `pymupdf==1.27.2.2` → G6 `modules/highlight_pdf_generator.py` 에서 import (PDF 하이라이트)
+  ※ CLAUDE.md §2 원안에는 없었으나 G6 구현 시 추가된 신규 의존성
 
-※ 이미 `analyzer/dependencies.yaml` P1 gap 으로 문서화됨.
+**잔여 (여전히 미사용)**:
+- `pdf2image` (P2): 실제 코드 미사용. Claude 대화형으로 PDF 를 직접 이미지 분석하므로 불필요.
+  향후 backend wrapper 자동 변환 필요 시 재도입 검토.
+- `pandas` (P3): 실제 코드 미사용. openpyxl 직접 사용으로 충분.
 
-**조치 권고** (택 1):
-- (A) CLAUDE.md §2 기술 스택 에서 5종 제거 + "향후 워드클라우드·형태소 분석 기능 도입 시 재추가" 주석
-- (B) 구버전 모듈 3종을 `modules/legacy/` 로 이동 + requirements.txt 에 extras 섹션으로 분리
+**조치 완료**:
+- `analyzer/dependencies.yaml`: C2/C3/C4 gap → B4/B5/B6 으로 승격 + B7 pymupdf 신규 pass
+- `requirements.txt`: pin 반영
 
 ---
 
@@ -308,21 +365,24 @@ C안 로드맵 세 번째 과제로 **G3 (기존 리포트 자동 탐색) + G4 (
 
 ## 5. 결론 및 조치 우선순위
 
-### 즉시 조치 (문서 정합성 확보)
-1. CLAUDE.md §12 "시트 13개" → "현재 9개 / 향후 5개 추가" 업데이트
-2. CLAUDE.md §13 "실행 모드별 처리" → "현재 단일 모드" 주석
-3. CLAUDE.md §5 Step 0 / 0-4 / 8-4 / 9-4 → "현재 대화형 수동 / 향후 자동화 과제" 주석
-4. CLAUDE.md §4 봉사활동 → "현재 미반영" 주석
-5. config.yaml wordcloud 섹션 주석 처리
+### 즉시 조치 (문서 정합성 확보) — 전부 완료 ✅
+1. ~~CLAUDE.md §12 "시트 13개"~~ → 12시트 구현 (잔여 3종 대학 DB 대기)
+2. ~~CLAUDE.md §13 "실행 모드별 처리"~~ → A안 `--mode/--areas` 해소 (2026-04-19)
+3. ~~CLAUDE.md §5 Step 0/0-4/8-4/9-4 대화형 수동~~ → G3+G4/G5/G6 전부 자동화 해소
+4. ~~CLAUDE.md §4 봉사활동 미반영~~ → G7 출결·봉사 해소
+5. ~~config.yaml wordcloud 섹션~~ → G5 구현으로 활성화
 
-### 중기 과제 (향후 구현)
-- 내신분석 / 입결비교 / 키워드분석 / 전형적합도 / 출결·봉사 시트 추가
-- 실행 모드 CLI 옵션 (`--mode`)
-- 2회차 분석 `_v{N}` 자동 접미사
-- Step 0 기존 리포트 자동 탐색 / 동일 인물 확인
-- 워드클라우드 + 형태소 분석 파이프라인
-- 상담용 학생부 하이라이트 PDF
+### 중기 과제 (향후 구현) — 대부분 완료 ✅
+- ~~키워드분석 시트~~ → G5 해소 (2026-04-17)
+- ~~출결·봉사 시트~~ → G7 해소 (2026-04-17)
+- ~~실행 모드 CLI 옵션 (`--mode`)~~ → A안 해소 (2026-04-19)
+- ~~2회차 분석 `_v{N}` 자동 접미사~~ → G4 해소 (2026-04-17)
+- ~~Step 0 기존 리포트 자동 탐색 / 동일 인물 확인~~ → G3 해소 (2026-04-17)
+- ~~워드클라우드 + 형태소 분석 파이프라인~~ → G5 해소 (2026-04-17)
+- ~~상담용 학생부 하이라이트 PDF~~ → G6 v1+v2 해소 (2026-04-19)
+- **잔여**: 내신분석 / 입결비교 / 전형적합도 시트 (3종, 대학 DB 선행 필요)
 
 ### 장기 과제 (확장)
-- 구버전 모듈 3종 `modules/legacy/` 분리 또는 삭제
+- 구버전 모듈 3종 `modules/legacy/` 분리 또는 삭제 (현재 파이프라인 미사용)
 - 다수 학생 비교 분석, 합격 사례 매칭, 면접 예상 질문 생성 (CLAUDE.md §향후 확장 그대로)
+- pdf2image / pandas 재검토 (backend 자동화 wrapper 연결 시)

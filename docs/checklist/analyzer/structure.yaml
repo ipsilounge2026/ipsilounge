@@ -18,13 +18,16 @@ meta:
     - "격리 원칙: backend/*-web/mobile 어디서도 analyzer.* 를 직접 import 하지 않음"
     - "input/output/tools 는 gitignore 대상 (민감·OS별)"
   verification_summary:
-    verified_at: "2026-04-17"
+    verified_at: "2026-04-19"
     pass: 16
     fail: 0
     partial: 0
     method: "파일 존재성 자동 스캔 (Glob) + git ls-files + git check-ignore + SHARED_DATA_ROOT 해석 검증"
     completion_note: |
-      L1: 루트 파일 5개 + modules 12개 + prompts 8개 + config 2개 +
+      [2026-04-19 재검증] modules 개수 12 → 18 (신규 6개: keyword_extractor/
+      attendance_calculator/compare_generator/analysis_fetcher/mode_config/
+      highlight_pdf_generator). STRUCT-B1 항목 본문 업데이트.
+      [기존 2026-04-17] L1: 루트 파일 5개 + modules 12개 + prompts 8개 + config 2개 +
       공용 DB 4개 + students 3개 (_template/의대샘플/__init__) + fonts/assets 모두 실존.
       L2: backend/*-web/mobile 에서 "from analyzer" / "import analyzer " grep 결과 0건.
       L3: SHARED_DATA_ROOT 해석 결과 (.../analyzer/data) + DATA_ROOT.exists() True.
@@ -76,7 +79,8 @@ items:
 # ─── B. 모듈 (비즈니스 로직) ────────────────────────────────────────
   - id: STRUCT-B1-modules-dir
     requirement: |
-      analyzer/modules/ — 12개 분석 모듈
+      analyzer/modules/ — 18개 분석 모듈 (2026-04-19 기준)
+      [코어 12종 — 2026-04-17 이식 완료]
       - __init__.py
       - extractor.py                    학생부 데이터 추출
       - grade_analyzer.py               내신 성적 분석
@@ -89,6 +93,13 @@ items:
       - report_logic.py                 ★ create_excel + create_pdf 본체
       - report_constants.py             ★ 공통 상수 (SETUEK_ITEMS 등)
       - report_generator.py             (구버전 리포트 생성기)
+      [신규 6종 — 2026-04-17 ~ 2026-04-19 추가]
+      - keyword_extractor.py            G5: 형태소 분석 + 워드클라우드 (kiwipiepy)
+      - attendance_calculator.py        G7: 출결 점수 산출 + 봉사 요약
+      - compare_generator.py            G3+G4: 이전 리포트 파싱 + _v{N} 접미사
+      - analysis_fetcher.py             Phase C: backend 연동 (analysis_id / upload)
+      - mode_config.py                  A안: --mode/--areas CLI 실행 모드 설정
+      - highlight_pdf_generator.py      G6: 상담용 학생부 하이라이트 PDF (PyMuPDF)
     spec_ref: "analyzer/CLAUDE.md § 디렉토리 구조"
     priority: P0
 

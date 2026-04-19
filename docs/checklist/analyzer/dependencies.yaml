@@ -16,23 +16,30 @@ meta:
     - "ipsilounge/analyzer/requirements.txt"
   implementation_notes:
     - "Pin 방식 (==) — CLI 독립 실행 프로그램이므로 버전 고정 우선"
-    - "CLAUDE.md 명시 중 미사용 5개(pdf2image, kiwipiepy, wordcloud, matplotlib, pandas) 제외"
-    - "pdf2image 를 쓰지 않으므로 poppler(tools/) 도 이식 제외"
-    - "향후 §8-4 워드클라우드 키워드 추출 등 확장 기능 구현 시 requirements.txt 재조정"
+    - "[2026-04-17] G5 워드클라우드 구현 → kiwipiepy/wordcloud/matplotlib 도입 (C2/C3/C4 해소)"
+    - "[2026-04-19] G6 하이라이트 PDF 구현 → pymupdf 도입 (B7 신규 추가)"
+    - "pdf2image(C1) / pandas(C5) 는 여전히 미사용 gap (필요 시 별도 과제)"
+    - "poppler(D1) 도 여전히 미사용 — pdf2image 미사용이 지속되므로"
   verification_summary:
-    verified_at: "2026-04-17"
-    pass: 7          # A1 + B1~B3 + E1~E2 + F1 (실제 가능한 자동 검증)
+    verified_at: "2026-04-19"
+    pass: 11         # A1 + B1~B3 + B4~B7 (신규) + E1~E2 + F1
     partial: 0
     fail: 0
-    documented_gap: 5  # C1~C5 (미사용 패키지 5개) 는 gap 으로 문서화만
+    documented_gap: 2  # C1 pdf2image + C5 pandas (여전히 미사용)
+    resolved_gap: 3    # [2026-04-17~19] C2 kiwipiepy + C3 wordcloud + C4 matplotlib → B4~B6 로 해소
     method: "importlib.metadata.version() + requirements.txt grep + smoke test 결과 재활용"
     completion_note: |
-      A1 Python 3.14.3 확인. B1~B3 설치 버전 (openpyxl 3.1.5, reportlab 4.4.10,
-      PyYAML 6.0.3) requirements.txt pin 과 일치. E1 backend/requirements 와 분리
-      (openpyxl 만 겹치며 호환). E2 Pin 방식 채택 근거 명시. F1 설치 절차 README 에 문서화.
-      C1~C5 gap: pdf2image/kiwipiepy/wordcloud/matplotlib/pandas 는 CLAUDE.md 명시되었으나
-      실제 import 없음. §8-4 워드클라우드 구현 시 재검토 예정.
-      F2 런타임 smoke: python generate_report.py 의대샘플/연승훈 모두 정상 (이식 Phase 5).
+      [2026-04-19 재검증] B4~B7 신규:
+        - B4 kiwipiepy 0.23.1  (G5 modules/keyword_extractor.py 한국어 형태소 분석)
+        - B5 wordcloud 1.9.6    (G5 워드클라우드 이미지 생성)
+        - B6 matplotlib 3.10.8  (워드클라우드 렌더링 savefig)
+        - B7 pymupdf 1.27.2.2   (G6 modules/highlight_pdf_generator.py 학생부 하이라이트 PDF)
+      기존 gap C2/C3/C4 는 실제 import 되어 해소 (B4~B6 항목으로 승격). 잔여 gap:
+      C1 pdf2image / C5 pandas 2건 (여전히 미사용).
+      [기존 2026-04-17] A1 Python 3.14.3 확인. B1~B3 설치 버전 (openpyxl 3.1.5,
+      reportlab 4.4.10, PyYAML 6.0.3) requirements.txt pin 과 일치. E1 backend/requirements
+      와 분리 (openpyxl 만 겹치며 호환). E2 Pin 방식 채택 근거 명시.
+      F2 런타임 smoke: python generate_report.py 의대샘플/연승훈 모두 정상.
 
 # ─── A. Python 런타임 ──────────────────────────────────────────────
 items:
@@ -71,7 +78,42 @@ items:
     spec_ref: "analyzer/requirements.txt L16"
     priority: P0
 
-# ─── C. 미사용 패키지 (gap: CLAUDE.md 명시되었으나 실제 미사용) ─────
+  - id: DEPS-B4-kiwipiepy
+    requirement: |
+      kiwipiepy==0.23.1 — 한국어 형태소 분석 (2026-04-17 G5 구현으로 도입)
+      - 사용처: modules/keyword_extractor.py
+      - CLAUDE.md § Step 8-4 키워드 추출 — 명사(NNG/NNP) 필터 + 빈도 집계
+      - G5 구현 전 C2 gap 이었으나, 실제 import 반영으로 pass 승격
+    spec_ref: "analyzer/requirements.txt L22 · modules/keyword_extractor.py"
+    priority: P1
+
+  - id: DEPS-B5-wordcloud
+    requirement: |
+      wordcloud==1.9.6 — 워드클라우드 이미지 생성 (2026-04-17 G5 구현으로 도입)
+      - 사용처: modules/keyword_extractor.py generate_wordcloud_image()
+      - PDF 리포트 § 키워드분석 섹션 이미지 삽입용
+    spec_ref: "analyzer/requirements.txt L23 · modules/keyword_extractor.py"
+    priority: P1
+
+  - id: DEPS-B6-matplotlib
+    requirement: |
+      matplotlib==3.10.8 — 워드클라우드 savefig 백엔드 (2026-04-17 G5 구현으로 도입)
+      - 사용처: modules/keyword_extractor.py (wordcloud 가 내부적으로 matplotlib 사용)
+      - 헤드리스 환경 고려 (Agg 백엔드)
+    spec_ref: "analyzer/requirements.txt L24 · modules/keyword_extractor.py"
+    priority: P1
+
+  - id: DEPS-B7-pymupdf
+    requirement: |
+      pymupdf==1.27.2.2 — PDF 텍스트 검색 + 주석 삽입 (2026-04-19 G6 구현으로 도입)
+      - 사용처: modules/highlight_pdf_generator.py (import fitz)
+      - CLAUDE.md § Step 9-4 상담용 학생부 하이라이트 PDF
+      - 노랑(good_sentences) + 초록/주황(highlight_quotes) 3색 형광 + 범례 페이지
+      - page.search_for() 텍스트 매칭 + add_highlight_annot() 색상별 주석
+    spec_ref: "analyzer/requirements.txt L29 · modules/highlight_pdf_generator.py"
+    priority: P1
+
+# ─── C. 미사용 패키지 (잔여 gap) ────────────────────────────────────
   - id: DEPS-C1-pdf2image-gap
     requirement: |
       pdf2image (CLAUDE.md 명시, 실제 코드 미사용)
@@ -82,31 +124,25 @@ items:
     spec_ref: "analyzer/CLAUDE.md § 기술 스택"
     priority: P2
 
-  - id: DEPS-C2-kiwipiepy-gap
+  - id: DEPS-C2-kiwipiepy-resolved
     requirement: |
-      kiwipiepy (CLAUDE.md 명시, 실제 코드 미사용)
-      - CLAUDE.md § 8-4 "한국어 형태소 분석 (키워드 추출용)" 명시
-      - 실제 workflow 에서는 Claude가 키워드 추출 대신 수행
-      - 향후 Python 자동 키워드 추출 구현 시 도입 예정
-    spec_ref: "analyzer/CLAUDE.md § 8-4 워드클라우드"
+      [2026-04-17 해소] kiwipiepy → DEPS-B4 로 승격.
+      G5 keyword_extractor.py 에서 실제 import 확인.
+    spec_ref: "analyzer/CLAUDE.md § 8-4 워드클라우드 → 구현 완료"
     priority: P2
 
-  - id: DEPS-C3-wordcloud-gap
+  - id: DEPS-C3-wordcloud-resolved
     requirement: |
-      wordcloud (CLAUDE.md 명시, 실제 코드 미사용)
-      - CLAUDE.md § 8-4 워드클라우드 이미지 생성
-      - 현재 리포트에 워드클라우드 섹션 미구현
-      - §8-4 구현 시 도입
-    spec_ref: "analyzer/CLAUDE.md § 8-4 워드클라우드"
+      [2026-04-17 해소] wordcloud → DEPS-B5 로 승격.
+      G5 워드클라우드 이미지 생성 실제 동작 확인.
+    spec_ref: "analyzer/CLAUDE.md § 8-4 워드클라우드 → 구현 완료"
     priority: P2
 
-  - id: DEPS-C4-matplotlib-gap
+  - id: DEPS-C4-matplotlib-resolved
     requirement: |
-      matplotlib (CLAUDE.md 명시, 실제 코드 미사용)
-      - 워드클라우드 렌더링 · PDF 차트 생성용
-      - 현재는 reportlab graphics 로만 시각화 처리
-      - §8-4 구현 시 도입
-    spec_ref: "analyzer/CLAUDE.md § 기술 스택"
+      [2026-04-17 해소] matplotlib → DEPS-B6 로 승격.
+      wordcloud 렌더 백엔드로 사용 중.
+    spec_ref: "analyzer/CLAUDE.md § 기술 스택 → 구현 완료"
     priority: P2
 
   - id: DEPS-C5-pandas-gap

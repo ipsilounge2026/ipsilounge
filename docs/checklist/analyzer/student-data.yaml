@@ -19,28 +19,31 @@ meta:
     - "ipsilounge/analyzer/data/students/의대샘플.py"
     - "ipsilounge/analyzer/generate_report.py L25~31 REQUIRED_VARS"
   implementation_notes:
-    - "15개 필수 변수는 generate_report.py 의 REQUIRED_VARS 리스트와 1:1 매칭"
+    - "[2026-04-17] 필수 변수 15 → 17 (TARGET_UNIV, TARGET_MAJOR 추가). generate_report.py REQUIRED_VARS 와 1:1 매칭"
+    - "[2026-04-17~19] 선택 필드(OPTIONAL_VARS) 5종 추가: raw_texts, attendance_data, volunteer_data, compare_data, highlight_quotes"
     - "부분 학년 학생부 지원: 1학년 1학기만 있어도 리포트 생성 가능 (신규 상담 초기)"
     - "실제 학생 데이터는 gitignore (whitelist 로 _template, 의대샘플, __init__ 만 포함)"
   verification_summary:
-    verified_at: "2026-04-17"
-    pass: 14
-    partial: 2         # G1/G2 2회차 변화 추적 (진입점 미구현, 수동 처리)
+    verified_at: "2026-04-19"
+    pass: 16         # A1~A5(기존) + A6(TARGET meta) + H1~H5(OPTIONAL 5종) + B1 + G1/G2 승격
+    partial: 0       # G1/G2 2026-04-17 해소
     fail: 0
     documented_gap: 0
     method: "_template.py · 의대샘플.py · generate_report.py 교차 스캔 + gitignore 동작 검증"
     completion_note: |
-      A1~A5 15개 필수 변수 (메타 3 + 세특 4 + 창체 2 + 행특 2 + 종합 4)
-      _template.py 와 의대샘플.py 에 모두 존재.
-      B1 generate_report.py REQUIRED_VARS 리스트와 _template.py 변수명 15/15 일치 확인.
-      C1~C5 부분 학년 지원 _template.py 상단 주석에 명시 + report_logic 자동 감지 로직 구현.
-      D1 setuek_data 10요소 튜플 구조 + D2 코멘트 최소 분량 (200/300자) qa_validator 검증 +
-      D3 등급 라벨 S/A/B/C/D (config rubric_grades).
-      E1 _template 완전성 + E2 의대샘플 유효 (Phase 5 에서 리포트 생성 성공) + E3 docstring 완비.
-      F1 whitelist gitignore (git check-ignore 확인: 연승훈.py ignored / 의대샘플.py tracked) +
-      F2/F3 실제 개인정보 없음 (가명 "학생이름" / "의대샘플").
-      G1/G2 partial: 2회차 변화 추적 (CLAUDE.md §0-4) 은 Claude 대화형 워크플로우로 수동 처리 —
-      진입점 자동화 미구현. 추후 wrapper 연결 시점에 재검토.
+      [2026-04-19 재검증]
+      - A6 TARGET_UNIV/TARGET_MAJOR 메타 2종 추가 (REQUIRED_VARS 17개)
+      - H1~H5 선택 필드 5종 신규 검증:
+          · H1 raw_texts          (G5 키워드분석)
+          · H2 attendance_data    (G7 출결)
+          · H3 volunteer_data     (G7 봉사)
+          · H4 compare_data       (G3+G4 이전 대비 변화)
+          · H5 highlight_quotes   (G6 v2 강점·보완점 근거 하이라이트, 2026-04-19 신규)
+      - G1/G2 승격 (partial → pass): compare_generator.py + generate_report.py 자동화 완료
+      [기존 2026-04-17]
+      A1~A5 15개 필수 변수 _template/의대샘플 에 모두 존재. B1 REQUIRED_VARS 1:1 일치.
+      C1~C5 부분 학년 지원. D1~D3 튜플 구조·글자수·등급 라벨. E1~E3 템플릿 완전성.
+      F1~F3 gitignore 동작 + 개인정보 없음.
 
 # ─── A. 필수 변수 15개 존재 ─────────────────────────────────────────
 items:
@@ -233,19 +236,68 @@ items:
 # ─── G. 2회차 이상 (증분 분석) ──────────────────────────────────────
   - id: STUDENT-G1-version-data
     requirement: |
-      동일 학생 2회차 분석 시 파일 관리
-      - 같은 이름의 .py 파일 내용을 갱신
-      - 또는 별도 변수로 이전 분석 결과 보존 (CLAUDE.md § 0-4)
-      - 리포트 파일명에 _v{N} 접미사
-    spec_ref: "CLAUDE.md § 0-4 이전 대비 변화 분석"
-    priority: P2
+      동일 학생 2회차 분석 시 파일 관리 (2026-04-17 자동화 구현)
+      - 같은 이름의 .py 파일 내용 갱신 + compare_data 필드 채움
+      - modules/compare_generator.get_next_version_number() 가 output/ 스캔 후 _v{N} 자동 부여
+      - generate_report.py L210~220 자동 접미사 처리
+    spec_ref: "CLAUDE.md § 0-4 · modules/compare_generator.py"
+    priority: P1
 
   - id: STUDENT-G2-change-tracking-fields
     requirement: |
-      2회차 이상 분석 시 summary_data 에 변화 섹션 포함
-      - 등급 변화 추이
-      - 보완점 반영도 (반영됨/부분반영/미반영)
-      - 새 강점·보완점
-      - 성장 코멘트 (최소 200자)
-    spec_ref: "CLAUDE.md § 0-4 변화 추적 분석"
+      2회차 이상 분석 시 compare_data 에 변화 섹션 포함 (2026-04-17 자동화)
+      - previous_round / previous_date / previous_version (메타)
+      - grade_changes: 영역별 이전/현재/변화(↑↓=) 리스트
+      - strengths_tracking: 이전강점·현재상태(강화됨/유지됨/약화됨) + 근거
+      - issues_tracking: 이전보완점·상태(반영됨/부분반영/미반영) + 근거
+      - new_strengths / new_issues
+      - growth_comment (최소 200자)
+      - QA P1-G/P2-G 자동 검증 (enum + 글자수 + 근거 완전성)
+    spec_ref: "CLAUDE.md § 0-4 · compare-data.yaml · modules/qa_validator.py"
+    priority: P1
+
+# ─── H. 선택 필드 (OPTIONAL_VARS, 2026-04-17~19 추가) ───────────────
+  - id: STUDENT-H1-raw-texts
+    requirement: |
+      raw_texts (G5 키워드분석, 2026-04-17 추가)
+      - 구조: {"setuek": {학년: [세특 원문]}, "changche": {학년: {영역: 원문}}, "haengtuk": {학년: 원문}}
+      - 비어있으면 키워드분석 시트·PDF 섹션·워드클라우드 이미지 생성 스킵
+      - modules/keyword_extractor.has_raw_texts() 로 판정
+    spec_ref: "_template.py § G5 키워드 분석 원본 텍스트 · CLAUDE.md § Step 8-4"
     priority: P2
+
+  - id: STUDENT-H2-attendance-data
+    requirement: |
+      attendance_data (G7 출결, 2026-04-17 추가)
+      - 구조: {학년: {"결석": {"질병":N, "미인정":N, "기타":N}, "지각": {...}, "조퇴": {...}, "결과": {...}, "특기사항": str}}
+      - 미인정만 감점 대상 (결석 -5/일, 지각·조퇴·결과 -0.5/건)
+      - 비어있으면 출결·봉사 시트·섹션 스킵, 출결 점수 100 만점 처리
+      - QA P1-F-001 음수·이상치 자동 검증
+    spec_ref: "_template.py § G7 출결 데이터 · modules/attendance_calculator.py"
+    priority: P2
+
+  - id: STUDENT-H3-volunteer-data
+    requirement: |
+      volunteer_data (G7 봉사, 2026-04-17 추가)
+      - 구조: {학년: {"hours": N, "activities": [활동명 리스트]}}
+      - 점수화 없이 시수·활동 요약만 리포트에 표기 (CLAUDE.md § 4)
+    spec_ref: "_template.py § G7 봉사활동 시수 · modules/attendance_calculator.py"
+    priority: P2
+
+  - id: STUDENT-H4-compare-data
+    requirement: |
+      compare_data (G3+G4 이전 분석 대비 변화, 2026-04-17 추가)
+      - 2회차 이상 분석 시 작성. 최초 분석은 빈 dict {}
+      - STUDENT-G2 에서 구조 상세 명시
+    spec_ref: "_template.py § G3+G4 이전 분석 대비 변화 · compare-data.yaml"
+    priority: P1
+
+  - id: STUDENT-H5-highlight-quotes
+    requirement: |
+      highlight_quotes (G6 v2 강점·보완점 근거 하이라이트, 2026-04-19 추가)
+      - 구조: {"setuek": {"과목라벨(학년)": {"green": ["강점 인용 원문"], "orange": ["보완점 인용 원문"]}}}
+      - 원문은 학생부 PDF 에 **있는 그대로** 기록 (패러프레이즈 금지)
+      - 비어있거나 미정의 → 초록/주황 생성 스킵 (노란색 good_sentences 만 처리)
+      - 향후 "changche" / "haengtuk" 키 확장 가능
+    spec_ref: "_template.py § G6 v2 · modules/highlight_pdf_generator.py · CLAUDE.md § Step 9-4"
+    priority: P1

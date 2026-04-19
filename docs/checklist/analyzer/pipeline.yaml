@@ -24,8 +24,12 @@ meta:
     - "school-record-analyzer/modules/report_constants.py"
     - "school-record-analyzer/data/students/_template.py"
   implementation_notes:
-    - "세특 루브릭: CLAUDE.md는 7항목이나 구현은 6항목(전공적합성 제외). template/constants/QA/report 모두 6항목으로 일관됨"
-    - "Step 0(기존 리포트 확인)과 변화 추적은 Claude 대화형으로 수동 처리. 자동화 미구현"
+    - "[2026-04-17 B안] 세특 루브릭: TARGET_MAJOR 유무로 6항목(미지정) ↔ 7항목(지정) 동적 분기. template/constants/QA/report 모두 자동 전환"
+    - "[2026-04-17 해소] Step 0 이전 리포트 자동 탐색 구현 (modules/compare_generator.py) + _v{N} 접미사 자동 부여"
+    - "[2026-04-17 해소] Step 8-4 키워드분석·워드클라우드 구현 (modules/keyword_extractor.py)"
+    - "[2026-04-17 해소] Step 4 출결·봉사 시트 (modules/attendance_calculator.py)"
+    - "[2026-04-19 해소] Step 9-4 상담용 학생부 하이라이트 PDF G6 v1+v2 (modules/highlight_pdf_generator.py)"
+    - "[2026-04-19 신규] §13 실행 모드별 처리: --mode full/no-grade/partial + --areas CLI (modules/mode_config.py)"
 
 # ─── A. 진입점 & 데이터 로드 ─────────────────────────────────────
 items:
@@ -369,35 +373,35 @@ items:
       verified_at: "2026-04-16"
       evidence: "코드 확인: Excel — sorted(haengtuk_comments.keys()). PDF — setuek_years_in_data = sorted(set()), for yr in setuek_years_in_data. 창체: for d in changche_data if d[1]==area. 하드코딩 [1,2,3] 없음"
 
-  # ─── F. 기존 리포트 확인 (Step 0) ──────────────────────────────
+  # ─── F. 기존 리포트 확인 (Step 0, 2026-04-17 자동화) ─────────────
   - id: PIPE-F1-prior_report_search
     requirement: |
-      분석 시작 전 output/ 폴더에서 동일 학생 기존 리포트 탐색:
+      분석 시작 전 output/ 폴더에서 동일 학생 기존 리포트 자동 탐색:
       - {학생이름}_학생부분석_*.xlsx / *.pdf 패턴 검색
-      - 존재 시 동일 인물 확인 (학교명, 생년월일, 학년 연속성)
-    spec_ref: "CLAUDE.md § Step 0-1, 0-2"
-    priority: P2
+      - 존재 시 이전 정보 추출 (종합요약 · 영역별 등급 · 핵심강점 · 보완영역)
+      - modules/compare_generator.find_previous_reports() / extract_previous_info()
+    spec_ref: "CLAUDE.md § Step 0-1, 0-2 · modules/compare_generator.py"
+    priority: P1
     cli:
-      status: na
-      verified_at: "2026-04-16"
-      evidence: "Step 0은 Claude 대화형으로 수동 수행하는 단계. generate_report.py에 자동화 코드 없음 (설계 의도)"
-      note: "Claude가 분석 시작 시 output/ 스캔 후 기존 리포트 확인하는 워크플로우. 코드 자동화 대상 아님"
+      status: pass
+      verified_at: "2026-04-17"
+      evidence: "eb687e9 커밋으로 자동화 완료. generate_report.py L161~173 에서 find_previous_reports() 호출. 이전 리포트 발견 시 판정 대상 개수 (강점/보완점) 계산 후 QA 에 전달"
 
   - id: PIPE-F2-change_tracking
     requirement: |
-      2회차 이상 분석 시 변화 추적:
-      - 이전 분석 대비 영역별 등급 변화 추이
-      - 이전 보완점 반영도: 반영됨/부분반영/미반영 판정 + 근거
+      2회차 이상 분석 시 변화 추적 (2026-04-17 구현):
+      - 이전 분석 대비 영역별 등급 변화 추이 (자동 diff)
+      - 이전 보완점 반영도: 반영됨/부분반영/미반영 판정 + 근거 (enum 강제)
       - 새 강점/보완점 식별
       - 성장 코멘트 최소 200자
-      - 파일명: {학생이름}_학생부분석_{날짜}_v{횟수}.xlsx
-    spec_ref: "CLAUDE.md § Step 0-4, 이전분석대비변화 시트"
-    priority: P2
+      - 파일명: {학생이름}_학생부분석_{날짜}_v{횟수}.xlsx (자동 접미사)
+      - QA P1-G-001~005 + P2-G-001/002 검증
+    spec_ref: "CLAUDE.md § Step 0-4 · compare-data.yaml · modules/compare_generator.py"
+    priority: P1
     cli:
-      status: na
-      verified_at: "2026-04-16"
-      evidence: "변화 추적은 Claude 대화형으로 수행. output/change_tracking_sample.py 실험 파일 존재하나 파이프라인에 미통합. _v{횟수} 파일명은 Claude가 수동 지정"
-      note: "향후 자동화 가능. 현재는 Claude 워크플로우로 처리"
+      status: pass
+      verified_at: "2026-04-17"
+      evidence: "eb687e9 feat(analyzer): G3+G4 이전 리포트 자동 탐색 + _v{N} + 이전분석대비변화. compare_data 작성 시 QA 자동 검증 + 이전분석대비변화 Excel 시트 + PDF 섹션 자동 생성"
 
   # ─── G. 종합 실행 흐름 ─────────────────────────────────────────
   - id: PIPE-G1-end_to_end
@@ -455,3 +459,76 @@ items:
       status: pass
       verified_at: "2026-04-16"
       evidence: "Excel saved: .../연승훈_학생부분석_20260406.xlsx (29,845bytes). PDF saved: .../연승훈_학생부분석_20260406.pdf (242,771bytes). 콘솔에 전체 경로 출력 확인"
+
+  # ─── H. 실행 모드 (§13, 2026-04-19 A안) ────────────────────────
+  - id: PIPE-H1-mode-full
+    requirement: |
+      --mode full (기본값) 실행 시:
+      - 모든 영역(세특/창체/행특/교차) 포함
+      - Excel 최대 12시트 (raw_texts/attendance/compare 있으면)
+      - PDF 섹션 모두 포함
+      - 실행 모드 콘솔 출력: "실행 모드: 전체 분석"
+    spec_ref: "CLAUDE.md § 13 · modules/mode_config.py build_mode_config('full')"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-19"
+      evidence: "의대샘플 --mode full (또는 기본) → 9시트 / PDF 238KB. 실행 모드 라벨 정상 출력"
+
+  - id: PIPE-H2-mode-no-grade
+    requirement: |
+      --mode no-grade 실행 시:
+      - 내신/입결/전형적합도 시트 스킵 (현재 미구현이라 NOOP)
+      - include_grade=False 플래그 설정
+      - 향후 내신 시트 구현 시 자동으로 skip 경로 작동
+      - 실행 모드 콘솔 출력: "실행 모드: 내신 제외 분석"
+    spec_ref: "CLAUDE.md § 13 · modules/mode_config.py"
+    priority: P2
+    cli:
+      status: pass
+      verified_at: "2026-04-19"
+      evidence: "의대샘플 --mode no-grade → full 과 동일 9시트 (NOOP, 내신 시트 미구현). 실행 모드 라벨 정상"
+
+  - id: PIPE-H3-mode-partial
+    requirement: |
+      --mode partial --areas <setuek|changche|haengtuk> 실행 시:
+      - 선택 영역 시트만 + 종합요약 + 교차영역(연계성·대학평가요소·역량별보완법)
+      - 미선택 영역 QA 구조 검증은 INFO 로 스킵 (FAIL 차단 X)
+      - PDF 섹션 번호 동적 재할당
+      - --areas 미지정 시 ValueError + exit 1
+    spec_ref: "CLAUDE.md § 13 · modules/mode_config.py"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-19"
+      evidence: "의대샘플 --mode partial --areas setuek → 7시트 (세특 3 + 교차 3 + 종합요약). --areas changche,haengtuk → 6시트. CLI 에러 (partial 단독) → '--areas 필수' 메시지"
+
+  # ─── I. G6 하이라이트 PDF (§9-4, 2026-04-19) ───────────────────
+  - id: PIPE-I1-highlight-pdf-v1v2
+    requirement: |
+      리포트 생성 후 G6 하이라이트 PDF 자동 호출:
+      - source_pdf_path 있으면 학생부 원본 PDF 로드
+      - good_sentences (노랑) + highlight_quotes (초록/주황) 3색 하이라이트
+      - 마지막 페이지 범례 자동 추가
+      - 실패 시 WARN 로그 + 본 리포트에 영향 안 줌
+      - 파일명: {학생이름}_학생부_하이라이트_{YYYYMMDD}{_v{N}}.pdf
+    spec_ref: "CLAUDE.md § Step 9-4 · modules/highlight_pdf_generator.py"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-19"
+      evidence: "5cfcd41 feat(analyzer): G6 학생부 하이라이트 PDF - 3색 지원. E2E 3색 매치 + 엣지 5건 검증 완료"
+
+  - id: PIPE-I2-highlight-pdf-skip-conditions
+    requirement: |
+      G6 하이라이트 PDF 스킵 조건 올바르게 동작:
+      - source_pdf_path 미정의 / 빈 문자열 → [SKIP] "source_pdf_path 미정의"
+      - PDF 파일 미존재 → [SKIP] "파일 없음: {path}"
+      - good_sentences 전부 "해당 없음" + highlight_quotes 비어있음 → [SKIP] "하이라이트 대상 없음"
+      - partial 모드 setuek 미선택 → [INFO] 전체 스킵
+    spec_ref: "modules/highlight_pdf_generator.py + generate_report.py L256~267"
+    priority: P1
+    cli:
+      status: pass
+      verified_at: "2026-04-19"
+      evidence: "엣지 5건 테스트 전부 통과: 미정의 / 존재하지 않는 경로 / 빈 데이터 / 잘못된 키 / 혼합 케이스"

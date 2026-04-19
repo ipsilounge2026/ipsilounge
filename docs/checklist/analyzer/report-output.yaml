@@ -29,11 +29,12 @@ meta:
     - "school-record-analyzer/modules/report_logic.py"
     - "school-record-analyzer/modules/report_constants.py"
   implementation_notes:
-    - "Excel 9시트 구현: 종합요약/세특분석/세특코멘트/핵심평가문장/창체분석/행특분석/연계성분석/대학평가요소/역량별보완법"
-    - "Spec 명시 13시트 중 6시트 미구현 (내신분석/입결비교/키워드분석/전형적합도/출결·봉사/이전분석대비변화)"
-    - "PDF 7개 섹션 구현 + 표지/목차/평가기준안내 인트로 페이지 (총 17페이지)"
-    - "하이라이트 PDF(CLAUDE.md § 9-4)는 미구현"
-    - "워드클라우드(CLAUDE.md § Step 8-4, PDF)는 미구현"
+    - "[2026-04-19 재검증] Excel 12시트 구현 (조건부 3 포함): 고정 9 + 키워드분석(raw_texts) + 출결·봉사(attendance/volunteer) + 이전분석대비변화(compare_data)"
+    - "고정 9시트: 종합요약/세특분석/세특코멘트/핵심평가문장/창체분석/행특분석/연계성분석/대학평가요소/역량별보완법"
+    - "Spec 명시 13시트 중 3시트 여전히 미구현 (내신분석/입결비교/전형적합도) — 대학 DB 선행 필요"
+    - "[2026-04-17 해소] 키워드분석·출결·봉사·이전분석대비변화 3시트 + 워드클라우드 PDF 섹션"
+    - "[2026-04-19 해소] 하이라이트 PDF(§9-4) G6 v1+v2 → modules/highlight_pdf_generator.py (PyMuPDF 3색)"
+    - "[2026-04-19 신규] --mode/--areas CLI (A안) → partial 모드에서 세특/창체/행특 시트 선택적 생성"
 
 # ─── A. Excel 시트 구조 (9시트 구현 검증) ────────────────────────
 items:
@@ -501,33 +502,82 @@ items:
       verified_at: "2026-04-16"
       evidence: "Excel에 '전형적합도' 시트 없음. summary_data에 '추천전형' 필드 없음. 미구현 확인"
 
-  - id: RO-F5-attendance_missing
+  - id: RO-F5-attendance_resolved
     requirement: |
-      출결·봉사 시트 (spec 명시, 미구현):
-      - 출결 현황 (지각/결석/조퇴)
-      - 봉사시간 정리 (점수화 없이 시수만 표기)
-      - 현재 추출/분석 파이프라인에 해당 데이터 없음
+      [2026-04-17 해소] 출결·봉사 시트 구현 완료.
+      - attendance_data / volunteer_data 선택 필드로 입력
+      - Excel: "출결·봉사" 시트 (학년별 12칸 매트릭스 + 점수 + 미인정 강조)
+      - PDF: §3 "출결 및 봉사활동" 섹션
+      - modules/attendance_calculator.py: 미인정결석 -5/일, 지각·조퇴·결과 -0.5/건
+      - QA P1-F-001 검증 (음수·이상치 자동 체크)
     spec_ref: "CLAUDE.md § 리포트 출력 구조 → 출결·봉사"
-    priority: P2
+    priority: P1
     file_inspection:
       status: pass
-      verified_at: "2026-04-16"
-      evidence: "Excel에 '출결·봉사' 시트 없음. 학생 데이터 구조(15변수)에 출결/봉사 필드 없음. 추출 파이프라인 미운영"
+      verified_at: "2026-04-17"
+      evidence: "0208710 feat(analyzer): G7 출결·봉사 시트 구현. modules/attendance_calculator.py 신규. has_attendance_or_volunteer() 로 데이터 있을 때만 시트 생성"
 
-  - id: RO-F6-highlight_pdf_change_tracking
+  - id: RO-F6-highlight_pdf_resolved
     requirement: |
-      2가지 확장 기능 모두 미구현:
-      (1) 상담용 학생부 하이라이트 PDF (9-4):
-        - 학생부 원본 이미지 + 반투명 형광색 하이라이트 + 번호 태그
-        - 노란(핵심문장)/초록(강점근거)/주황(보완근거)
-        - 범례 페이지 + 파일명 {학생이름}_학생부_하이라이트_{YYYYMMDD}.pdf
-      (2) 이전분석대비변화 시트 (2회차 이상):
-        - 등급 변화 추이 + 이전 보완점 반영도 + 새 강점/보완점 + 성장코멘트
-        - 현재 Claude 대화형 수동 처리. 코드 자동화 없음
-    spec_ref: "CLAUDE.md § Step 9-4, § Step 0-4, § 이전분석대비변화"
-    priority: P2
+      [2026-04-19 해소] 상담용 학생부 하이라이트 PDF (9-4) G6 v1+v2 구현 완료.
+      - modules/highlight_pdf_generator.py (PyMuPDF 기반, ~330 lines)
+      - v1: 노란색 (good_sentences 핵심평가문장)
+      - v2: 초록/주황 (highlight_quotes.setuek.*.green/orange 강점·보완점 근거)
+      - 번호 부여: 색상 무관 연속 (노랑→초록→주황)
+      - 매칭: 정확 → 앞 40/25/15자 → 쉼표·마침표 세그먼트 순차 폴백
+      - 마지막 페이지 범례 (번호·색상 배지·원문·활용처·매치 O/X)
+      - 파일명: {학생이름}_학생부_하이라이트_{YYYYMMDD}{_v{N}}.pdf
+      - 스킵 조건: source_pdf_path 없음, good_sentences+highlight_quotes 비어있음,
+        partial 모드 setuek 미선택
+    spec_ref: "CLAUDE.md § Step 9-4 · modules/highlight_pdf_generator.py"
+    priority: P1
     file_inspection:
       status: pass
-      verified_at: "2026-04-16"
-      evidence: "output/ 폴더에 '*_하이라이트_*.pdf' 파일 0건. PDF 텍스트에 '하이라이트' 키워드 0건. change_tracking_sample.py 실험 파일만 존재, 파이프라인 미통합"
+      verified_at: "2026-04-19"
+      evidence: "5cfcd41 feat(analyzer): G6 학생부 하이라이트 PDF - 3색 지원. E2E 테스트: 노랑 2/15 + 초록 3/3 + 주황 1/1 매치. 엣지 5건 (빈 highlight_quotes / 잘못된 키 / 없는 과목 / 전부 비어있음 / good_sentences 해당없음+highlight_quotes有) 모두 정상"
+
+  - id: RO-F7-change_tracking_resolved
+    requirement: |
+      [2026-04-17 해소] 이전분석대비변화 시트 G3+G4 구현 완료.
+      - compare_data 선택 필드로 입력 (최초 분석은 빈 dict)
+      - Excel: "이전분석대비변화" 시트 (등급 변화 + 강점 추적 + 보완점 반영도 + 성장 코멘트)
+      - PDF: 종합의견 직후 섹션 추가 (동적 섹션 번호)
+      - modules/compare_generator.py: 이전 리포트 자동 파싱 + _v{N} 접미사
+      - QA P1-G-001~005 + P2-G-001/002 검증 (enum + 글자수 + 근거 완전성)
+    spec_ref: "CLAUDE.md § Step 0-4 · compare-data.yaml"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-17"
+      evidence: "eb687e9 feat(analyzer): G3+G4 이전 리포트 자동 탐색 + _v{N} + 이전분석대비변화"
+
+# ─── G. 실행 모드별 출력 (A안, 2026-04-19) ─────────────────────────
+  - id: RO-G1-mode-sheet-selection
+    requirement: |
+      --mode CLI 옵션에 따른 Excel 시트 선택적 생성
+      - full (기본):      모든 시트 (현재 최대 12시트)
+      - no-grade:         내신/입결/전형적합도 시트 스킵 (현재 NOOP, 향후 반영)
+      - partial --areas:  선택 영역 시트만 + 교차영역 유지 (종합요약/연계성/대학평가요소/역량별보완법)
+      - modules/report_logic.py: inc_setuek/inc_changche/inc_haengtuk 분기
+    spec_ref: "CLAUDE.md § 13 · modules/report_logic.py L64~110 · modules/mode_config.py"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-19"
+      evidence: "의대샘플 full=9시트 / no-grade=9 (NOOP) / partial setuek=7시트 / partial changche,haengtuk=6시트 회귀 검증 완료"
+
+  - id: RO-G2-mode-pdf-section-selection
+    requirement: |
+      --mode 옵션에 따른 PDF 섹션 선택적 생성
+      - 세특 섹션: list-swap trick 으로 inc_setuek=False 시 elements 더미 리다이렉트
+      - 창체 섹션: if inc_changche: 블록 래핑
+      - 행특 섹션: if inc_haengtuk: 블록 래핑
+      - 섹션 번호 동적 할당 (_sec_setuek/_sec_changche/_sec_haengtuk None 체크)
+      - 교차영역 섹션(연계성·대학평가요소·역량별보완법)은 항상 포함
+    spec_ref: "modules/report_logic.py L1283~1762"
+    priority: P1
+    file_inspection:
+      status: pass
+      verified_at: "2026-04-19"
+      evidence: "의대샘플 partial 모드별 PDF 크기 차이 확인 (full 238KB / partial setuek 213KB / partial changche,haengtuk 199KB)"
     note: "하이라이트 PDF는 실제 컨설팅 현장 활용도 높은 기능 — 향후 우선 구현 후보"

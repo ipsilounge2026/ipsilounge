@@ -23,25 +23,26 @@ meta:
     - "analyzer/pipeline.yaml 과 범위 분리: pipeline 은 end-to-end 동작, 여기는 스크립트 자체 품질"
     - "QA 검증 (Step 8.5) 은 qa_validator.py 가 담당, 여기서는 진입점이 호출하는지만 확인"
   verification_summary:
-    verified_at: "2026-04-17"
-    pass: 12
-    partial: 1         # F1 2회차 _v{N} 접미사 — 진입점 코드에 미구현 (수동 워크플로우)
+    verified_at: "2026-04-19"
+    pass: 18         # 기존 12 + F1 승격 + I1~I3 (mode) + J1~J2 (Phase C) + K1 (G6)
+    partial: 0       # F1 2026-04-17 해소
     fail: 0
     documented_gap: 0
-    method: "generate_report.py 코드 라인별 검증 + CLI 실행 3가지 (인자 없음 / 없는 학생 / 정상)"
+    method: "generate_report.py 코드 라인별 검증 + CLI 실행 다양한 모드 (인자 없음 / 없는 학생 / full / no-grade / partial / 에러)"
     completion_note: |
-      A1~A3 상단 메타 (encoding 선언, PROJECT_ROOT/STUDENTS_DIR/OUTPUT_DIR, REQUIRED_VARS 15) 정상.
-      B1 인자 없음 → 사용법 + 학생 목록 + exit 1 (Phase 5 실행 확인).
-      B2 없는 학생 → [ERROR] + 목록 + exit 1.
-      B3 _template·__init__ 필터링 정상 (list_available_students).
-      C1 한글 파일명 안전 로드 (importlib.util.spec_from_file_location).
-      C2 로드 예외 처리 + exit 2. C3 REQUIRED_VARS hasattr 검증.
-      D1~D3 QA 연동 (run_full_qa / print_qa_report / all_blocking_passed → exit 3).
-      E1 OUTPUT_DIR mkdir parents=True / E2 파일명 규칙 / E3 create_excel+create_pdf 호출.
-      G1 exit code 규약 (0/1/2/3).
-      H1 Claude 드래그 워크플로우 / H2 한글 에러 메시지 + 구체 안내.
-      F1 partial: 2회차 _v{N} 접미사는 진입점에 미구현 — CLAUDE.md §0-4 에 따라
-      Claude 대화형 수동 처리로 분류 (진입점 자동화는 추후 과제).
+      [2026-04-19 재검증]
+      - F1 승격 (partial → pass): 2026-04-17 eb687e9 커밋으로 _v{N} 자동 접미사 구현.
+        modules/compare_generator.get_next_version_number() 가 output/ 스캔 후 버전 부여.
+      - A3 REQUIRED_VARS 15 → 17 (TARGET_UNIV/TARGET_MAJOR 추가). OPTIONAL_VARS 5개
+        (raw_texts/attendance_data/volunteer_data/compare_data/highlight_quotes) 신설.
+      - 신규 I1~I3 실행 모드 (--mode full/no-grade/partial + --areas setuek,changche,haengtuk).
+      - 신규 J1~J2 Phase C backend 연동 (--analysis-id + --auto-upload).
+      - 신규 K1 G6 하이라이트 PDF 자동 호출 (generate_highlight_pdf).
+      [기존 2026-04-17]
+      A1~A3 상단 메타 (encoding 선언, PROJECT_ROOT/STUDENTS_DIR/OUTPUT_DIR, REQUIRED_VARS) 정상.
+      B1~B3 인자 파싱 + _template·__init__ 필터링. C1~C3 한글 파일명 안전 로드 + 예외 처리
+      + REQUIRED_VARS hasattr 검증. D1~D3 QA 연동. E1~E3 리포트 생성 호출.
+      G1 exit code 규약 (0/1/2/3). H1 Claude 드래그 워크플로우 / H2 한글 에러 메시지.
 
 # ─── A. 파일 상단 메타 정보 ────────────────────────────────────────
 items:
@@ -63,14 +64,22 @@ items:
 
   - id: ENTRY-A3-required-vars
     requirement: |
-      REQUIRED_VARS 리스트 — 15개 필수 변수 명시
+      REQUIRED_VARS 리스트 — 17개 필수 변수 명시 (2026-04-17 기준)
       - STUDENT / SCHOOL / TODAY (메타 3)
+      - TARGET_UNIV / TARGET_MAJOR (지원 대학·학과, 빈 문자열이면 미지정 모드)
       - setuek_data / setuek_comments / comment_keys / good_sentences (세특 4)
       - changche_data / changche_comments (창체 2)
       - haengtuk_data / haengtuk_comments (행특 2)
       - linkage_data / eval_data / fix_data / summary_data (종합 4)
       - _template.py 변수 목록과 1:1 일치
-    spec_ref: "analyzer/generate_report.py L25~31 · data/students/_template.py"
+
+      OPTIONAL_VARS 5개 (없어도 동작, 있으면 해당 시트·섹션 자동 추가):
+      - raw_texts        — G5 키워드분석·워드클라우드
+      - attendance_data  — G7 출결
+      - volunteer_data   — G7 봉사
+      - compare_data     — G3+G4 이전 분석 대비 변화
+      - highlight_quotes — G6 v2 강점·보완점 근거 하이라이트 (2026-04-19 추가)
+    spec_ref: "analyzer/generate_report.py L25~39 · data/students/_template.py"
     priority: P0
 
 # ─── B. CLI 인자 처리 ──────────────────────────────────────────────
@@ -186,12 +195,14 @@ items:
 # ─── F. 2회차 이상 분석 지원 (CLAUDE.md § 0-4) ──────────────────────
   - id: ENTRY-F1-version-suffix
     requirement: |
-      2회차 이상 분석 시 파일명에 _v{N} 접미사
+      2회차 이상 분석 시 파일명에 _v{N} 접미사 (2026-04-17 eb687e9 구현 완료)
       - 예: 연승훈_학생부분석_20260407_v2.xlsx
       - CLAUDE.md § 0-4 "이전 분석 대비 변화" 섹션 추가 시 반영
-      - 현재 진입점 코드에는 _v 처리 미구현 — Claude 대화형 워크플로우로 수동 처리
-    spec_ref: "analyzer/CLAUDE.md § 0-4 · § 실행 흐름 8"
-    priority: P2
+      - modules/compare_generator.get_next_version_number() 가 output/ 폴더 스캔 후
+        다음 버전 번호 자동 산출
+      - compare_data 비어있는데 이전 리포트 있으면 경고 안내
+    spec_ref: "analyzer/generate_report.py L203~220 · modules/compare_generator.py"
+    priority: P1
 
 # ─── G. 종료 코드 규약 ──────────────────────────────────────────────
   - id: ENTRY-G1-exit-codes
@@ -222,3 +233,66 @@ items:
       - 파일 경로 전체 출력
     spec_ref: "analyzer/generate_report.py L69, L88, L95, L102"
     priority: P2
+
+# ─── I. 실행 모드 옵션 (CLAUDE.md §13, 2026-04-19 A안 구현) ──────────
+  - id: ENTRY-I1-mode-cli-parsing
+    requirement: |
+      --mode / --areas CLI 옵션 파싱
+      - _parse_optional_flag(sys.argv, "--mode") → "full"(기본) / "no-grade" / "partial"
+      - _parse_optional_flag(sys.argv, "--areas") → 쉼표 구분 영역 목록
+      - modules/mode_config.build_mode_config(mode, areas) 로 ModeConfig 생성
+      - 에러 시 ValueError 메시지 출력 + exit 1
+    spec_ref: "analyzer/generate_report.py L155~172 · modules/mode_config.py"
+    priority: P1
+
+  - id: ENTRY-I2-mode-propagation
+    requirement: |
+      ModeConfig 3곳 전파
+      - run_full_qa(..., mode_config=mode_cfg) — 영역별 QA 스킵
+      - create_excel(sd, xlsx_path, mode_config=mode_cfg) — 시트 선택적 생성
+      - create_pdf(sd, pdf_path, mode_config=mode_cfg) — 섹션 선택적 생성
+      - 실행 모드 라벨 콘솔 출력 ("실행 모드: {full/no-grade/...}")
+    spec_ref: "analyzer/generate_report.py L172, L216, L252~253"
+    priority: P1
+
+  - id: ENTRY-I3-mode-regression
+    requirement: |
+      모든 모드 회귀 검증 (의대샘플 기준)
+      - full     → 9시트 / PDF 정상 (기본 경로)
+      - no-grade → 9시트 / 내신·입결 미구현이라 NOOP 동일
+      - partial --areas setuek → 7시트 (세특 3 + 교차영역 3 + 종합요약)
+      - partial --areas changche,haengtuk → 6시트
+      - CLI 에러 (partial 단독) → "--areas 필수" 메시지
+    spec_ref: "2026-04-19 세션 회귀 테스트"
+    priority: P1
+
+# ─── J. Phase C backend 연동 (CLAUDE.md 미반영, 2026-04-17 구현) ─────
+  - id: ENTRY-J1-analysis-id-flag
+    requirement: |
+      --analysis-id <UUID> CLI 옵션
+      - backend analysis_orders.id 전달 (수동 분석 워크플로우 통합)
+      - _analysis_id = _parse_optional_flag(sys.argv, "--analysis-id")
+      - 미전달 시 sd.analysis_id 사용 (학생 데이터 파일 내 메타)
+    spec_ref: "analyzer/generate_report.py L149~153, L233~234"
+    priority: P2
+
+  - id: ENTRY-J2-auto-upload-flag
+    requirement: |
+      --auto-upload CLI 옵션
+      - 리포트 생성 직후 modules.analysis_fetcher.upload() 호출
+      - analysis_id 우선순위: CLI 인자 > sd.analysis_id
+      - 업로드 실패 시 [ERROR] + exit 4 (수동 업로드 안내)
+      - 성공 시 "[OK] 업로드 완료. 관리자 검수 대기 (status=review)."
+    spec_ref: "analyzer/generate_report.py L269~285 · modules/analysis_fetcher.py"
+    priority: P2
+
+# ─── K. G6 하이라이트 PDF 호출 (CLAUDE.md §9-4, 2026-04-19) ─────────
+  - id: ENTRY-K1-highlight-pdf-call
+    requirement: |
+      리포트 생성 직후 generate_highlight_pdf() 자동 호출
+      - partial 모드 setuek 미선택 시 전체 스킵 ("[INFO] ...")
+      - source_pdf_path 없거나 good_sentences+highlight_quotes 모두 비면 [SKIP]
+      - 예외는 WARN 로 잡아 본 리포트 파이프라인에 영향 안 줌
+      - print_highlight_summary() 로 색상별 매치/전체 통계 출력
+    spec_ref: "analyzer/generate_report.py L256~267 · modules/highlight_pdf_generator.py"
+    priority: P1
