@@ -136,9 +136,38 @@ e2e/
     └── 02-consultation-entry.spec.ts
 ```
 
+## CI (GitHub Actions)
+
+`.github/workflows/e2e.yml` — `backend/**`, `user-web/**`, `e2e/**`, 본 워크플로우 자체 변경 시 자동 실행.
+
+**트리거**:
+- `main` 브랜치 push
+- PR to `main`
+- 수동 실행 (workflow_dispatch)
+
+**잡 구성**:
+1. Python 3.12 + Node 20 설치 (pip/npm 캐시)
+2. `backend/requirements.txt` + `user-web/package-lock.json` + `e2e/package-lock.json` 설치
+3. Playwright Chromium 설치 (브라우저 바이너리 캐시 — 첫 실행 ≈90s, 캐시 히트 ≈5s)
+4. Playwright 실행 (list/html/junit 리포터 3종)
+5. 실패 시 HTML 리포트 + 스크린샷/비디오/trace 아티팩트 업로드 (7일 보관)
+6. 항상 JUnit XML 업로드 (30일 보관, 테스트 히스토리 추적)
+
+**동시 실행 방지**: `concurrency.group = e2e-${ref}` — 동일 PR/브랜치 새 푸시 시 기존 실행 취소.
+
+**예상 실행 시간**: 2~3분 (서버 기동 + 5 테스트 실행)
+
+### 실패 시 디버깅
+
+1. Actions 탭에서 실패한 job 클릭
+2. 좌측 Artifacts 에서 `playwright-report` 또는 `playwright-test-results` 다운로드
+3. `playwright-report/index.html` 을 브라우저로 열면 각 테스트의 스크린샷/비디오/trace 확인 가능
+
+---
+
 ## 향후 과제
 
 - [ ] Sprint 2 테스트 작성 (5개)
-- [ ] GitHub Actions 워크플로우 (`.github/workflows/e2e.yml`)
+- [x] ~~GitHub Actions 워크플로우~~ (2026-04-19 완료, `.github/workflows/e2e.yml`)
 - [ ] backend 의 bcrypt + passlib 버전 호환성 정리 (현재 WARN 로 로그됨, 기능엔 영향 없음)
 - [ ] Windows 의 `.next` 잠금 회피 (혹은 CI 만 사용하도록 정책화)
