@@ -3,11 +3,23 @@
 generate_report.py - 학생부 분석 리포트 생성기 진입점
 
 사용법:
-    python generate_report.py <학생명>
+    python generate_report.py <학생명> [옵션]
 
-예시:
+기본 사용 (전체 분석):
     python generate_report.py 연승훈
     python generate_report.py 의대샘플
+
+실행 모드 옵션 (CLAUDE.md § 13, 2026-04-19 추가):
+    --mode full        : 전체 분석 (기본값, 내신+세특+창체+행특+입결)
+    --mode no-grade    : 내신 제외 분석 (세특+창체+행특)
+    --mode partial     : 특정 영역만 (--areas 필수)
+    --areas <목록>     : partial 모드에서 포함할 영역 (쉼표 구분)
+                         가능한 값: setuek, changche, haengtuk
+
+예시:
+    python generate_report.py 연승훈 --mode no-grade
+    python generate_report.py 연승훈 --mode partial --areas setuek
+    python generate_report.py 연승훈 --mode partial --areas setuek,changche
 
 학생 데이터 파일은 data/students/<학생명>.py 에 저장되어 있어야 함.
 새 학생을 추가하려면 data/students/_template.py를 복사하여 작성.
@@ -140,11 +152,24 @@ def main():
     _analysis_id = _parse_optional_flag(sys.argv, "--analysis-id")
     _auto_upload = "--auto-upload" in sys.argv
 
+    # 2026-04-19: 실행 모드 옵션 (CLAUDE.md § 13)
+    _mode  = _parse_optional_flag(sys.argv, "--mode")  or "full"
+    _areas = _parse_optional_flag(sys.argv, "--areas") or None
+
     # 학생 데이터 로드
     sd = load_student_data(student_name)
 
     # 모듈 import 경로 설정
     sys.path.insert(0, str(PROJECT_ROOT))
+
+    # ── 실행 모드 설정 ──
+    from modules.mode_config import build_mode_config
+    try:
+        mode_cfg = build_mode_config(_mode, _areas)
+    except ValueError as e:
+        print(f"[ERROR] {e}")
+        sys.exit(1)
+    print(f"실행 모드: {mode_cfg.label()}")
 
     # ── Step 8.5: QA 검증 ──
     from modules.qa_validator import run_full_qa, print_qa_report
@@ -188,6 +213,7 @@ def main():
         compare_data=getattr(sd, "compare_data", None),
         expected_strengths_count=_expected_st,
         expected_issues_count=_expected_is,
+        mode_config=mode_cfg,
     )
     print_qa_report(qa_report)
 
@@ -223,8 +249,8 @@ def main():
     pdf_path  = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}{_suffix}.pdf"
 
     from modules.report_logic import create_excel, create_pdf
-    create_excel(sd, xlsx_path)
-    create_pdf(sd, pdf_path)
+    create_excel(sd, xlsx_path, mode_config=mode_cfg)
+    create_pdf(sd, pdf_path, mode_config=mode_cfg)
     print("Done.")
 
     # Phase C (2026-04-17): --auto-upload 시 backend 에 자동 업로드 + review 전이

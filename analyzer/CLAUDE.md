@@ -818,11 +818,36 @@ python generate_report.py 없는학생
 
 ### 실행 모드별 처리
 
-| 모드 | 분석 범위 | 리포트 포함 시트 |
-|------|----------|----------------|
-| 전체 분석 | 내신+세특+창체+행특+입결 | 전체 시트 |
-| 내신 제외 분석 | 세특+창체+행특 (내신/입결 제외) | 내신분석·입결비교 시트 제외, 나머지 전체 |
-| 특정 영역 분석 | 지정된 영역만 | 해당 영역 시트 + 종합요약 |
+**CLI 옵션** (2026-04-19 구현):
+
+```bash
+python generate_report.py <학생명> [--mode <모드>] [--areas <영역목록>]
+```
+
+| --mode 값 | 분석 범위 | 리포트 포함 시트 |
+|-----------|----------|----------------|
+| `full` (기본값) | 내신+세특+창체+행특+입결 | 전체 시트 (내신/입결은 현재 미구현 → 실질 9~13개) |
+| `no-grade` | 세특+창체+행특 (내신/입결 제외) | 내신분석·입결비교·전형적합도 시트 제외 (현재 NOOP, 내신 시트 구현 시 자동 스킵) |
+| `partial` | `--areas` 로 지정된 영역만 | 선택 영역 시트 + 종합요약 + 교차영역 시트(연계성/대학평가요소/역량별보완법) |
+
+**`--areas` 값** (쉼표 구분, `--mode partial` 시 필수):
+- `setuek` → 세특분석·세특코멘트·핵심평가문장
+- `changche` → 창체분석
+- `haengtuk` → 행특분석
+
+**사용 예시**:
+```bash
+python generate_report.py 연승훈                               # 기본 full
+python generate_report.py 연승훈 --mode no-grade               # 내신 제외
+python generate_report.py 연승훈 --mode partial --areas setuek # 세특만
+python generate_report.py 연승훈 --mode partial --areas setuek,changche
+```
+
+**mode_config 동작**:
+- `modules/mode_config.py` 의 `ModeConfig` 가 create_excel / create_pdf / run_full_qa 에 공통으로 전달
+- partial 모드에서 미선택 영역은 **Excel 시트 생성 스킵** + **PDF 섹션 생성 스킵** + **QA 구조 검증을 INFO 로 스킵** (FAIL 로 차단하지 않음)
+- 교차영역 시트(연계성/대학평가요소/역량별보완법) 는 partial 에서도 항상 포함
+- 선택적 시트(키워드/출결·봉사/이전분석대비변화) 는 기존 데이터 유무 조건만 따름 (mode 와 독립)
 
 ### 부분 학년 학생부 지원
 

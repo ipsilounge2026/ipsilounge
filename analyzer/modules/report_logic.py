@@ -61,8 +61,22 @@ GRADE_COLORS = {
 # EXCEL GENERATION
 # ===================================================================
 
-def create_excel(sd, xlsx_path):
-    """Excel 리포트 생성. sd: 학생 데이터 모듈, xlsx_path: 출력 파일 경로"""
+def create_excel(sd, xlsx_path, mode_config=None):
+    """Excel 리포트 생성. sd: 학생 데이터 모듈, xlsx_path: 출력 파일 경로.
+
+    mode_config (modules.mode_config.ModeConfig, optional):
+      - None → 전체 시트 출력 (기본 full 모드와 동일, 하위호환).
+      - partial 모드 → 미선택 영역 시트 스킵.
+      - no-grade 모드 → 내신/입결 시트 스킵 (현재 미구현이라 NOOP).
+    """
+    # 2026-04-19: mode_config 기본값 처리 (기본=full, 하위호환)
+    if mode_config is None:
+        from .mode_config import default_config
+        mode_config = default_config()
+    inc_setuek   = mode_config.include_setuek
+    inc_changche = mode_config.include_changche
+    inc_haengtuk = mode_config.include_haengtuk
+
     setuek_data       = sd.setuek_data
     setuek_comments   = sd.setuek_comments
     comment_keys      = sd.comment_keys
@@ -142,106 +156,110 @@ def create_excel(sd, xlsx_path):
     ws.auto_filter.ref = f"A1:B{len(rows)+1}"
     ws.freeze_panes = "A2"
 
-    # ── Sheet 2: 세특분석 ──
+    # ── Sheet 2~4: 세특 영역 (mode_config 로 스킵 가능, 2026-04-19) ──
     # TARGET_MAJOR 유무에 따라 6항목/7항목 동적 분기
     setuek_items_local = resolve_setuek_items(sd)
     n_items = len(setuek_items_local)           # 6 또는 7
     score_end = setuek_score_slice_end(sd)      # 8(미지정) 또는 9(지정)
 
-    ws = wb.create_sheet("세특분석")
-    headers = ["학년", "과목"] + setuek_items_local + ["가중합산", "등급"]
-    style_header(ws, headers)
-    for r, d in enumerate(setuek_data, 2):
-        yr, subj = d[0], d[1]
-        scores = d[2:score_end]
-        wavg, grade = d[score_end], d[score_end + 1]
-        style_cell(ws, r, 1, yr)
-        style_cell(ws, r, 2, subj)
-        for ci, s in enumerate(scores):
-            style_cell(ws, r, 3 + ci, s)
-        style_cell(ws, r, 3 + n_items, wavg)
-        gc = style_cell(ws, r, 4 + n_items, grade)
-        apply_grade_color(gc, grade)
-    # 컬럼 폭: [학년, 과목, 각 항목..., 가중합산, 등급]
-    col_widths = [6, 18] + [10] * n_items + [10, 8]
-    set_col_widths(ws, col_widths)
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
-    ws.freeze_panes = "A2"
+    if inc_setuek:
+        # ── Sheet 2: 세특분석 ──
+        ws = wb.create_sheet("세특분석")
+        headers = ["학년", "과목"] + setuek_items_local + ["가중합산", "등급"]
+        style_header(ws, headers)
+        for r, d in enumerate(setuek_data, 2):
+            yr, subj = d[0], d[1]
+            scores = d[2:score_end]
+            wavg, grade = d[score_end], d[score_end + 1]
+            style_cell(ws, r, 1, yr)
+            style_cell(ws, r, 2, subj)
+            for ci, s in enumerate(scores):
+                style_cell(ws, r, 3 + ci, s)
+            style_cell(ws, r, 3 + n_items, wavg)
+            gc = style_cell(ws, r, 4 + n_items, grade)
+            apply_grade_color(gc, grade)
+        # 컬럼 폭: [학년, 과목, 각 항목..., 가중합산, 등급]
+        col_widths = [6, 18] + [10] * n_items + [10, 8]
+        set_col_widths(ws, col_widths)
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
+        ws.freeze_panes = "A2"
 
-    # ── Sheet 3: 세특코멘트 ──
-    ws = wb.create_sheet("세특코멘트")
-    headers = ["학년", "과목", "강점", "보완점"]
-    style_header(ws, headers)
-    for r, key in enumerate(comment_keys, 2):
-        # parse year from key
-        yr = key[-2]  # "1", "2", or "3"
-        subj = key[:-3] if key[-3] == "(" else key  # remove (N)
-        # Better parsing
-        parts = key.rsplit("(", 1)
-        subj_name = parts[0]
-        yr_num = parts[1].rstrip(")") if len(parts) > 1 else ""
-        strength, weakness = setuek_comments[key]
-        style_cell(ws, r, 1, yr_num)
-        style_cell(ws, r, 2, subj_name)
-        style_cell(ws, r, 3, strength, left_align)
-        style_cell(ws, r, 4, weakness, left_align)
-    set_col_widths(ws, [6, 18, 70, 70])
-    ws.auto_filter.ref = f"A1:D1"
-    ws.freeze_panes = "A2"
+        # ── Sheet 3: 세특코멘트 ──
+        ws = wb.create_sheet("세특코멘트")
+        headers = ["학년", "과목", "강점", "보완점"]
+        style_header(ws, headers)
+        for r, key in enumerate(comment_keys, 2):
+            # parse year from key
+            yr = key[-2]  # "1", "2", or "3"
+            subj = key[:-3] if key[-3] == "(" else key  # remove (N)
+            # Better parsing
+            parts = key.rsplit("(", 1)
+            subj_name = parts[0]
+            yr_num = parts[1].rstrip(")") if len(parts) > 1 else ""
+            strength, weakness = setuek_comments[key]
+            style_cell(ws, r, 1, yr_num)
+            style_cell(ws, r, 2, subj_name)
+            style_cell(ws, r, 3, strength, left_align)
+            style_cell(ws, r, 4, weakness, left_align)
+        set_col_widths(ws, [6, 18, 70, 70])
+        ws.auto_filter.ref = f"A1:D1"
+        ws.freeze_panes = "A2"
 
-    # ── Sheet 4: 핵심평가문장 ──
-    ws = wb.create_sheet("핵심평가문장")
-    headers = ["과목", "핵심문장", "이유", "표현역량"]
-    style_header(ws, headers)
-    for r, (subj, sent, reason, comp) in enumerate(good_sentences, 2):
-        style_cell(ws, r, 1, subj)
-        style_cell(ws, r, 2, sent, left_align)
-        style_cell(ws, r, 3, reason, left_align)
-        style_cell(ws, r, 4, comp, left_align)
-    set_col_widths(ws, [16, 60, 55, 40])
-    ws.auto_filter.ref = f"A1:D1"
-    ws.freeze_panes = "A2"
+        # ── Sheet 4: 핵심평가문장 ──
+        ws = wb.create_sheet("핵심평가문장")
+        headers = ["과목", "핵심문장", "이유", "표현역량"]
+        style_header(ws, headers)
+        for r, (subj, sent, reason, comp) in enumerate(good_sentences, 2):
+            style_cell(ws, r, 1, subj)
+            style_cell(ws, r, 2, sent, left_align)
+            style_cell(ws, r, 3, reason, left_align)
+            style_cell(ws, r, 4, comp, left_align)
+        set_col_widths(ws, [16, 60, 55, 40])
+        ws.auto_filter.ref = f"A1:D1"
+        ws.freeze_panes = "A2"
 
-    # ── Sheet 5: 창체분석 ──
-    ws = wb.create_sheet("창체분석")
-    headers = ["학년", "영역", "시간"] + changche_items + ["합계(/50)", "환산(100)", "등급", "분량", "비율", "활용"]
-    style_header(ws, headers)
-    for r, d in enumerate(changche_data, 2):
-        yr, area, hours = d[0], d[1], d[2]
-        scores = d[3]
-        total, scaled = d[4], d[5]
-        vol, pct, usage = d[6], d[7], d[8]
-        grade = score_to_grade(scaled / 10)
-        style_cell(ws, r, 1, yr)
-        style_cell(ws, r, 2, area)
-        style_cell(ws, r, 3, hours)
-        for ci, s in enumerate(scores):
-            style_cell(ws, r, 4+ci, s)
-        style_cell(ws, r, 9, f"{total}/50")
-        style_cell(ws, r, 10, scaled)
-        gc = style_cell(ws, r, 11, grade)
-        apply_grade_color(gc, grade)
-        style_cell(ws, r, 12, vol)
-        style_cell(ws, r, 13, pct)
-        style_cell(ws, r, 14, usage)
-    set_col_widths(ws, [6, 8, 6, 14, 14, 14, 14, 12, 10, 10, 8, 12, 8, 10])
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
-    ws.freeze_panes = "A2"
+    # ── Sheet 5: 창체분석 (mode_config 로 스킵 가능) ──
+    if inc_changche:
+        ws = wb.create_sheet("창체분석")
+        headers = ["학년", "영역", "시간"] + changche_items + ["합계(/50)", "환산(100)", "등급", "분량", "비율", "활용"]
+        style_header(ws, headers)
+        for r, d in enumerate(changche_data, 2):
+            yr, area, hours = d[0], d[1], d[2]
+            scores = d[3]
+            total, scaled = d[4], d[5]
+            vol, pct, usage = d[6], d[7], d[8]
+            grade = score_to_grade(scaled / 10)
+            style_cell(ws, r, 1, yr)
+            style_cell(ws, r, 2, area)
+            style_cell(ws, r, 3, hours)
+            for ci, s in enumerate(scores):
+                style_cell(ws, r, 4+ci, s)
+            style_cell(ws, r, 9, f"{total}/50")
+            style_cell(ws, r, 10, scaled)
+            gc = style_cell(ws, r, 11, grade)
+            apply_grade_color(gc, grade)
+            style_cell(ws, r, 12, vol)
+            style_cell(ws, r, 13, pct)
+            style_cell(ws, r, 14, usage)
+        set_col_widths(ws, [6, 8, 6, 14, 14, 14, 14, 12, 10, 10, 8, 12, 8, 10])
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
+        ws.freeze_panes = "A2"
 
-    # ── Sheet 6: 행특분석 ──
-    ws = wb.create_sheet("행특분석")
-    headers = ["학년", "강점", "보완점"]
-    style_header(ws, headers)
-    haengtuk_years_sorted = sorted(haengtuk_comments.keys())
-    for r, yr in enumerate(haengtuk_years_sorted, 2):
-        vals = haengtuk_comments[yr]
-        strength, weakness = vals[0], vals[1]
-        style_cell(ws, r, 1, yr)
-        style_cell(ws, r, 2, strength, left_align)
-        style_cell(ws, r, 3, weakness, left_align)
-    set_col_widths(ws, [6, 75, 75])
-    ws.auto_filter.ref = "A1:C1"
-    ws.freeze_panes = "A2"
+    # ── Sheet 6: 행특분석 (mode_config 로 스킵 가능) ──
+    if inc_haengtuk:
+        ws = wb.create_sheet("행특분석")
+        headers = ["학년", "강점", "보완점"]
+        style_header(ws, headers)
+        haengtuk_years_sorted = sorted(haengtuk_comments.keys())
+        for r, yr in enumerate(haengtuk_years_sorted, 2):
+            vals = haengtuk_comments[yr]
+            strength, weakness = vals[0], vals[1]
+            style_cell(ws, r, 1, yr)
+            style_cell(ws, r, 2, strength, left_align)
+            style_cell(ws, r, 3, weakness, left_align)
+        set_col_widths(ws, [6, 75, 75])
+        ws.auto_filter.ref = "A1:C1"
+        ws.freeze_panes = "A2"
 
     # ── Sheet 7: 연계성분석 ──
     ws = wb.create_sheet("연계성분석")
@@ -575,8 +593,21 @@ def _write_keyword_sheet(wb, sd, style_header, style_cell, set_col_widths,
 # PDF GENERATION
 # ===================================================================
 
-def create_pdf(sd, pdf_path):
-    """PDF 리포트 생성. sd: 학생 데이터 모듈, pdf_path: 출력 파일 경로"""
+def create_pdf(sd, pdf_path, mode_config=None):
+    """PDF 리포트 생성. sd: 학생 데이터 모듈, pdf_path: 출력 파일 경로.
+
+    mode_config (modules.mode_config.ModeConfig, optional):
+      - None → 전체 섹션 출력 (기본 full 모드와 동일, 하위호환).
+      - partial → 미선택 영역 섹션 스킵 + 섹션 번호 동적 재할당.
+    """
+    # 2026-04-19: mode_config 기본값 처리 (기본=full, 하위호환)
+    if mode_config is None:
+        from .mode_config import default_config
+        mode_config = default_config()
+    inc_setuek   = mode_config.include_setuek
+    inc_changche = mode_config.include_changche
+    inc_haengtuk = mode_config.include_haengtuk
+
     setuek_data       = sd.setuek_data
     setuek_comments   = sd.setuek_comments
     comment_keys      = sd.comment_keys
@@ -1251,13 +1282,18 @@ def create_pdf(sd, pdf_path):
 
     _n = 1  # 1. 종합의견
     _sec_compare = _sec_attendance = None
+    _sec_setuek = _sec_changche = _sec_haengtuk = None
     if _has_compare_section:
         _n += 1; _sec_compare = _n
     if _has_attendance_section:
         _n += 1; _sec_attendance = _n
-    _n += 1; _sec_setuek   = _n
-    _n += 1; _sec_changche = _n
-    _n += 1; _sec_haengtuk = _n
+    # 2026-04-19: mode_config 에 따라 세특/창체/행특 섹션 스킵
+    if inc_setuek:
+        _n += 1; _sec_setuek   = _n
+    if inc_changche:
+        _n += 1; _sec_changche = _n
+    if inc_haengtuk:
+        _n += 1; _sec_haengtuk = _n
     _n += 1; _sec_linkage  = _n
     _n += 1; _sec_eval     = _n
     _n += 1; _sec_fix      = _n
@@ -1285,7 +1321,11 @@ def create_pdf(sd, pdf_path):
         except Exception as e:
             print(f"[WARN] PDF 출결·봉사 섹션 생성 실패 (스킵): {type(e).__name__}: {e}")
 
-    # ── 세부능력 및 특기사항 ──
+    # ── 2. 세부능력 및 특기사항 (mode_config 로 스킵 가능, 2026-04-19) ──
+    # setuek 미포함 시 elements 임시 리다이렉트 (코드 재들여쓰기 회피).
+    _setuek_saved_elements = elements
+    if not inc_setuek:
+        elements = []  # 모든 세특 append 를 버리는 더미 리스트
     elements.append(section_title(f"{_sec_setuek}. 세부능력 및 특기사항"))
     elements.append(Spacer(1, 2*mm))
     elements.append(section_title(f"{_sec_setuek}-1. 과목 별 분석"))
@@ -1566,149 +1606,153 @@ def create_pdf(sd, pdf_path):
 
     elements.append(t_comp)
     elements.append(PageBreak())
+    # ── 세특 블록 종료: elements 복원 (2026-04-19) ──
+    elements = _setuek_saved_elements
 
-    # ── 3. 창의적 체험활동 ──
-    elements.append(section_title(f"{_sec_changche}. 창의적 체험활동"))
-    elements.append(Paragraph("※ 각 항목은 1~10점 척도로 평가됩니다. 상세 평가 기준은 '평가 기준 안내' 페이지를 참고하세요.", style_ref_note))
-    elements.append(Spacer(1, 2*mm))
-
-    # 창체 영역별 항목명
-    ch_items_map = {
-        "자율": ["참여\n주도성", "활동\n구체성", "활동\n완결성", "성장변화", "전공\n적합성"],
-        "동아리": ["전문성", "개인\n기여도", "활동\n완결성", "지속성\n발전", "전공\n적합성"],
-        "진로": ["탐색\n구체성", "목표\n일관성", "활동\n완결성", "자기\n주도성", "전공\n적합성"],
-    }
-
-    # 창체 테이블 colWidths (학년, 5항목, 평점, 등급, 분량, 비율, 활용)
-    _c2_fixed = 42 + 50 + 34 + 50 + 40 + 48  # = 264
-    _c2_each = (page_w - _c2_fixed) / 5
-    cw_ch = [42] + [_c2_each]*5 + [50, 34, 50, 40, 48]
-
-    for area_kr, sub_num in [("자율활동", "3-1"), ("동아리활동", "3-2"), ("진로활동", "3-3")]:
-        area_short = area_kr.replace("활동", "")
-        elements.append(section_title(f"{sub_num}. {area_kr}"))
-        items = ch_items_map[area_short]
-        hdr = [PH("학년")] + [PH(x) for x in items] + [PH("평점"), PH("등급"), PH("분량"), PH("비율"), PH("활용")]
-        tdata = [hdr]
-        for d in changche_data:
-            if d[1] == area_short:
-                yr = d[0]
-                scores = d[3]
-                scaled = d[5]
-                avg_score = scaled / 10  # 환산점수를 10으로 나눠 평점으로 변환
-                vol, pct, usage = d[6], d[7], d[8]
-                grade = score_to_grade(avg_score)
-                row = [PC(f"{yr}학년")]
-                row += [PC(str(s)) for s in scores]
-                row += [PC(f"{avg_score:.2f}"), grade_paragraph(grade), PC(vol), PC(pct), PC(usage)]
-                tdata.append(row)
-        t = make_table(tdata, col_widths=cw_ch)
-        for r in range(1, len(tdata)):
-            area_rows = [d for d in changche_data if d[1] == area_short]
-            scaled = area_rows[r-1][5]
-            g = score_to_grade(scaled / 10)
-            t.setStyle(TableStyle([
-                ("BACKGROUND", (7, r), (7, r), colors.white),
-                ("TEXTCOLOR", (7, r), (7, r), grade_font_color(g)),
-            ]))
-        elements.append(t)
+    # ── 3. 창의적 체험활동 (mode_config 로 스킵 가능) ──
+    if inc_changche:
+        elements.append(section_title(f"{_sec_changche}. 창의적 체험활동"))
+        elements.append(Paragraph("※ 각 항목은 1~10점 척도로 평가됩니다. 상세 평가 기준은 '평가 기준 안내' 페이지를 참고하세요.", style_ref_note))
         elements.append(Spacer(1, 2*mm))
 
-        # 창체 코멘트 테이블 (학년별 강점/보완점/역량)
-        style_badge_academic = ParagraphStyle("BA", fontName="MalgunBd", fontSize=7, leading=9, textColor=colors.HexColor("#006666"), alignment=1)
-        style_badge_career = ParagraphStyle("BC", fontName="MalgunBd", fontSize=7, leading=9, textColor=colors.HexColor("#CC9600"), alignment=1)
-        style_badge_community = ParagraphStyle("BCC", fontName="MalgunBd", fontSize=7, leading=9, textColor=colors.HexColor("#7B2D8E"), alignment=1)
+        # 창체 영역별 항목명
+        ch_items_map = {
+            "자율": ["참여\n주도성", "활동\n구체성", "활동\n완결성", "성장변화", "전공\n적합성"],
+            "동아리": ["전문성", "개인\n기여도", "활동\n완결성", "지속성\n발전", "전공\n적합성"],
+            "진로": ["탐색\n구체성", "목표\n일관성", "활동\n완결성", "자기\n주도성", "전공\n적합성"],
+        }
 
-        hdr_c = [PH("학년"), PH("강점"), PH("보완점"), PH("핵심역량")]
-        tdata_c = [hdr_c]
-        comp_col_w = page_w * 0.28  # 핵심역량 칼럼 (코멘트 포함)
-        remain = page_w - 42 - comp_col_w
-        cw_c = [42, remain/2, remain/2, comp_col_w]
+        # 창체 테이블 colWidths (학년, 5항목, 평점, 등급, 분량, 비율, 활용)
+        _c2_fixed = 42 + 50 + 34 + 50 + 40 + 48  # = 264
+        _c2_each = (page_w - _c2_fixed) / 5
+        cw_ch = [42] + [_c2_each]*5 + [50, 34, 50, 40, 48]
 
-        for d in changche_data:
-            if d[1] == area_short:
-                yr = d[0]
-                key = (area_short, yr)
-                if key in changche_comments:
-                    vals = changche_comments[key]
-                    strength = vals[0]
-                    weakness = vals[1]
-                    comp_comment = vals[3] if len(vals) > 3 else ""
-
-                    # 핵심역량 칼럼: 세특과 동일한 PComp 함수로 컬러 적용
-                    comp_p = PComp(comp_comment) if comp_comment else PL("-")
-
-                    tdata_c.append([PC(f"{yr}학년"), PL(strength), PL(weakness), comp_p])
-
-        if len(tdata_c) > 1:
-            t_c = make_table(tdata_c, col_widths=cw_c)
-            elements.append(t_c)
-
-        elements.append(Spacer(1, 6*mm))
-
-    # ── 창체 역량 매핑 정리표 ──
-    elements.append(P("■ 창의적 체험활동 역량 매핑", style_subtitle))
-    hdr_ch_comp = [PH("영역"), PH("학년"), PH("학업역량"), PH("진로역량"), PH("공동체역량")]
-    tdata_ch_comp = [hdr_ch_comp]
-    cw_ch_comp = [70, 42, (page_w - 112) / 3, (page_w - 112) / 3, (page_w - 112) / 3]
-    ch_comp_areas = []
-    for key, vals in changche_comments.items():
-        area_short, yr = key
-        competencies = vals[2] if len(vals) > 2 else []
-        has_a = "학업" in competencies
-        has_c = "진로" in competencies
-        has_co = "공동체" in competencies
-        area_kr = {"자율": "자율활동", "동아리": "동아리활동", "진로": "진로활동"}.get(area_short, area_short)
-        dot_a = Paragraph("\u25cf", style_dot_academic) if has_a else PC("")
-        dot_c = Paragraph("\u25cf", style_dot_career) if has_c else PC("")
-        dot_co = Paragraph("\u25cf", style_dot_community) if has_co else PC("")
-        tdata_ch_comp.append([PL(area_kr), PC(f"{yr}학년"), dot_a, dot_c, dot_co])
-        ch_comp_areas.append(area_kr)
-
-    t_ch_comp = make_table(tdata_ch_comp, col_widths=cw_ch_comp)
-
-    # 같은 영역 셀병합
-    prev_area = None
-    span_start = None
-    for r, area in enumerate(ch_comp_areas):
-        row = r + 1
-        if area == prev_area:
-            pass
-        else:
-            if prev_area is not None and span_start is not None and row - 1 > span_start:
-                t_ch_comp.setStyle(TableStyle([
-                    ("SPAN", (0, span_start), (0, row - 1)),
-                    ("VALIGN", (0, span_start), (0, row - 1), "MIDDLE"),
+        for area_kr, sub_num in [("자율활동", f"{_sec_changche}-1"), ("동아리활동", f"{_sec_changche}-2"), ("진로활동", f"{_sec_changche}-3")]:
+            area_short = area_kr.replace("활동", "")
+            elements.append(section_title(f"{sub_num}. {area_kr}"))
+            items = ch_items_map[area_short]
+            hdr = [PH("학년")] + [PH(x) for x in items] + [PH("평점"), PH("등급"), PH("분량"), PH("비율"), PH("활용")]
+            tdata = [hdr]
+            for d in changche_data:
+                if d[1] == area_short:
+                    yr = d[0]
+                    scores = d[3]
+                    scaled = d[5]
+                    avg_score = scaled / 10  # 환산점수를 10으로 나눠 평점으로 변환
+                    vol, pct, usage = d[6], d[7], d[8]
+                    grade = score_to_grade(avg_score)
+                    row = [PC(f"{yr}학년")]
+                    row += [PC(str(s)) for s in scores]
+                    row += [PC(f"{avg_score:.2f}"), grade_paragraph(grade), PC(vol), PC(pct), PC(usage)]
+                    tdata.append(row)
+            t = make_table(tdata, col_widths=cw_ch)
+            for r in range(1, len(tdata)):
+                area_rows = [d for d in changche_data if d[1] == area_short]
+                scaled = area_rows[r-1][5]
+                g = score_to_grade(scaled / 10)
+                t.setStyle(TableStyle([
+                    ("BACKGROUND", (7, r), (7, r), colors.white),
+                    ("TEXTCOLOR", (7, r), (7, r), grade_font_color(g)),
                 ]))
-            span_start = row
-            prev_area = area
-    if prev_area is not None and span_start is not None and len(ch_comp_areas) > span_start:
-        t_ch_comp.setStyle(TableStyle([
-            ("SPAN", (0, span_start), (0, len(ch_comp_areas))),
-            ("VALIGN", (0, span_start), (0, len(ch_comp_areas)), "MIDDLE"),
-        ]))
+            elements.append(t)
+            elements.append(Spacer(1, 2*mm))
 
-    elements.append(t_ch_comp)
-    elements.append(PageBreak())
+            # 창체 코멘트 테이블 (학년별 강점/보완점/역량)
+            style_badge_academic = ParagraphStyle("BA", fontName="MalgunBd", fontSize=7, leading=9, textColor=colors.HexColor("#006666"), alignment=1)
+            style_badge_career = ParagraphStyle("BC", fontName="MalgunBd", fontSize=7, leading=9, textColor=colors.HexColor("#CC9600"), alignment=1)
+            style_badge_community = ParagraphStyle("BCC", fontName="MalgunBd", fontSize=7, leading=9, textColor=colors.HexColor("#7B2D8E"), alignment=1)
 
-    # ── 4. 행동특성 및 종합의견 ──
-    elements.append(section_title(f"{_sec_haengtuk}. 행동특성 및 종합의견"))
-    elements.append(Paragraph("※ 각 항목은 1~10점 척도로 평가됩니다. 상세 평가 기준은 '평가 기준 안내' 페이지를 참고하세요.", style_ref_note))
-    hdr = [PH("학년"), PH("강점"), PH("보완점"), PH("핵심역량")]
-    tdata = [hdr]
-    h_comp_col_w = page_w * 0.28
-    h_remain = page_w - 42 - h_comp_col_w
-    cw = [42, h_remain/2, h_remain/2, h_comp_col_w]
-    for yr in sorted(haengtuk_comments.keys()):
-        vals = haengtuk_comments[yr]
-        strength = vals[0]
-        weakness = vals[1]
-        comp_comment = vals[3] if len(vals) > 3 else ""
-        comp_p = PComp(comp_comment) if comp_comment else PL("-")
-        tdata.append([PC(f"{yr}학년"), PL(strength), PL(weakness), comp_p])
-    t = make_table(tdata, col_widths=cw)
-    elements.append(t)
-    elements.append(PageBreak())
+            hdr_c = [PH("학년"), PH("강점"), PH("보완점"), PH("핵심역량")]
+            tdata_c = [hdr_c]
+            comp_col_w = page_w * 0.28  # 핵심역량 칼럼 (코멘트 포함)
+            remain = page_w - 42 - comp_col_w
+            cw_c = [42, remain/2, remain/2, comp_col_w]
+
+            for d in changche_data:
+                if d[1] == area_short:
+                    yr = d[0]
+                    key = (area_short, yr)
+                    if key in changche_comments:
+                        vals = changche_comments[key]
+                        strength = vals[0]
+                        weakness = vals[1]
+                        comp_comment = vals[3] if len(vals) > 3 else ""
+
+                        # 핵심역량 칼럼: 세특과 동일한 PComp 함수로 컬러 적용
+                        comp_p = PComp(comp_comment) if comp_comment else PL("-")
+
+                        tdata_c.append([PC(f"{yr}학년"), PL(strength), PL(weakness), comp_p])
+
+            if len(tdata_c) > 1:
+                t_c = make_table(tdata_c, col_widths=cw_c)
+                elements.append(t_c)
+
+            elements.append(Spacer(1, 6*mm))
+
+        # ── 창체 역량 매핑 정리표 ──
+        elements.append(P("■ 창의적 체험활동 역량 매핑", style_subtitle))
+        hdr_ch_comp = [PH("영역"), PH("학년"), PH("학업역량"), PH("진로역량"), PH("공동체역량")]
+        tdata_ch_comp = [hdr_ch_comp]
+        cw_ch_comp = [70, 42, (page_w - 112) / 3, (page_w - 112) / 3, (page_w - 112) / 3]
+        ch_comp_areas = []
+        for key, vals in changche_comments.items():
+            area_short, yr = key
+            competencies = vals[2] if len(vals) > 2 else []
+            has_a = "학업" in competencies
+            has_c = "진로" in competencies
+            has_co = "공동체" in competencies
+            area_kr = {"자율": "자율활동", "동아리": "동아리활동", "진로": "진로활동"}.get(area_short, area_short)
+            dot_a = Paragraph("\u25cf", style_dot_academic) if has_a else PC("")
+            dot_c = Paragraph("\u25cf", style_dot_career) if has_c else PC("")
+            dot_co = Paragraph("\u25cf", style_dot_community) if has_co else PC("")
+            tdata_ch_comp.append([PL(area_kr), PC(f"{yr}학년"), dot_a, dot_c, dot_co])
+            ch_comp_areas.append(area_kr)
+
+        t_ch_comp = make_table(tdata_ch_comp, col_widths=cw_ch_comp)
+
+        # 같은 영역 셀병합
+        prev_area = None
+        span_start = None
+        for r, area in enumerate(ch_comp_areas):
+            row = r + 1
+            if area == prev_area:
+                pass
+            else:
+                if prev_area is not None and span_start is not None and row - 1 > span_start:
+                    t_ch_comp.setStyle(TableStyle([
+                        ("SPAN", (0, span_start), (0, row - 1)),
+                        ("VALIGN", (0, span_start), (0, row - 1), "MIDDLE"),
+                    ]))
+                span_start = row
+                prev_area = area
+        if prev_area is not None and span_start is not None and len(ch_comp_areas) > span_start:
+            t_ch_comp.setStyle(TableStyle([
+                ("SPAN", (0, span_start), (0, len(ch_comp_areas))),
+                ("VALIGN", (0, span_start), (0, len(ch_comp_areas)), "MIDDLE"),
+            ]))
+
+        elements.append(t_ch_comp)
+        elements.append(PageBreak())
+
+    # ── 4. 행동특성 및 종합의견 (mode_config 로 스킵 가능) ──
+    if inc_haengtuk:
+        elements.append(section_title(f"{_sec_haengtuk}. 행동특성 및 종합의견"))
+        elements.append(Paragraph("※ 각 항목은 1~10점 척도로 평가됩니다. 상세 평가 기준은 '평가 기준 안내' 페이지를 참고하세요.", style_ref_note))
+        hdr = [PH("학년"), PH("강점"), PH("보완점"), PH("핵심역량")]
+        tdata = [hdr]
+        h_comp_col_w = page_w * 0.28
+        h_remain = page_w - 42 - h_comp_col_w
+        cw = [42, h_remain/2, h_remain/2, h_comp_col_w]
+        for yr in sorted(haengtuk_comments.keys()):
+            vals = haengtuk_comments[yr]
+            strength = vals[0]
+            weakness = vals[1]
+            comp_comment = vals[3] if len(vals) > 3 else ""
+            comp_p = PComp(comp_comment) if comp_comment else PL("-")
+            tdata.append([PC(f"{yr}학년"), PL(strength), PL(weakness), comp_p])
+        t = make_table(tdata, col_widths=cw)
+        elements.append(t)
+        elements.append(PageBreak())
 
     # ── 5. 연계성분석 ──
     elements.append(section_title(f"{_sec_linkage}. 연계성분석"))

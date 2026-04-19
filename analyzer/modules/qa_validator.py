@@ -85,71 +85,104 @@ class QAReport:
 # ══════════════════════════════════════════════
 
 def check_structural_completeness(setuek_data, setuek_comments, good_sentences,
-                                   changche_data, haengtuk_comments, linkage_data, fix_data):
-    """P1-A: 구조 완전성 검증"""
+                                   changche_data, haengtuk_comments, linkage_data, fix_data,
+                                   mode_config=None):
+    """P1-A: 구조 완전성 검증
+
+    mode_config (mode_config.ModeConfig, optional):
+      - partial 모드에서 미포함 영역의 '존재 검증' 을 INFO 로 스킵.
+      - None 또는 full/no-grade 모드에서는 모든 영역을 검증.
+    """
+    # 2026-04-19: mode_config 로 영역별 스킵 지원
+    inc_setuek   = True if mode_config is None else mode_config.include_setuek
+    inc_changche = True if mode_config is None else mode_config.include_changche
+    inc_haengtuk = True if mode_config is None else mode_config.include_haengtuk
+
     results = []
 
     # 세특 데이터 존재
-    n_subj = len(setuek_data)
-    if n_subj < 1:
-        results.append(QAResult("P1-A-001", "세특 데이터 존재", "P1", "FAIL",
-                                f"세특 데이터가 비어 있음", str(n_subj), "1개 이상"))
-    else:
-        results.append(QAResult("P1-A-001", f"세특 과목 수 ({n_subj}개)", "P1", "PASS"))
+    if inc_setuek:
+        n_subj = len(setuek_data)
+        if n_subj < 1:
+            results.append(QAResult("P1-A-001", "세특 데이터 존재", "P1", "FAIL",
+                                    f"세특 데이터가 비어 있음", str(n_subj), "1개 이상"))
+        else:
+            results.append(QAResult("P1-A-001", f"세특 과목 수 ({n_subj}개)", "P1", "PASS"))
 
-    # 세특 코멘트 - 모든 과목 존재
-    n_comments = len(setuek_comments)
-    if n_comments < n_subj:
-        missing = n_subj - n_comments
-        results.append(QAResult("P1-A-002", "세특 코멘트 완전성", "P1", "FAIL",
-                                f"코멘트 누락 {missing}개", str(n_comments), str(n_subj)))
+        # 세특 코멘트 - 모든 과목 존재
+        n_comments = len(setuek_comments)
+        if n_comments < n_subj:
+            missing = n_subj - n_comments
+            results.append(QAResult("P1-A-002", "세특 코멘트 완전성", "P1", "FAIL",
+                                    f"코멘트 누락 {missing}개", str(n_comments), str(n_subj)))
+        else:
+            results.append(QAResult("P1-A-002", f"세특 코멘트 완전성 ({n_comments}개)", "P1", "PASS"))
     else:
-        results.append(QAResult("P1-A-002", f"세특 코멘트 완전성 ({n_comments}개)", "P1", "PASS"))
+        results.append(QAResult("P1-A-001", "세특 구조 검증 (모드 제외)", "P1", "INFO",
+                                "partial 모드에서 setuek 미선택 → 세특 존재/코멘트 검증 스킵"))
 
     # 창체 데이터: 최소 1행 이상 존재 (자율/동아리/진로 중 일부만 있어도 허용)
     # 1학년 1학기 같은 초기 상태에서는 자율활동만 있고 동아리·진로가 비어 있을 수 있음
-    n_changche = len(changche_data)
-    changche_years = sorted(set(d[0] for d in changche_data)) if changche_data else []
-    changche_areas = sorted(set(d[1] for d in changche_data)) if changche_data else []
-    if n_changche < 1:
-        results.append(QAResult("P1-A-003", "창체 데이터 완전성", "P1", "FAIL",
-                                f"창체 데이터 없음 (최소 1행 필요)", str(n_changche), "최소 1"))
+    if inc_changche:
+        n_changche = len(changche_data)
+        changche_years = sorted(set(d[0] for d in changche_data)) if changche_data else []
+        changche_areas = sorted(set(d[1] for d in changche_data)) if changche_data else []
+        if n_changche < 1:
+            results.append(QAResult("P1-A-003", "창체 데이터 완전성", "P1", "FAIL",
+                                    f"창체 데이터 없음 (최소 1행 필요)", str(n_changche), "최소 1"))
+        else:
+            msg = f"창체 {n_changche}행 (학년 {len(changche_years)}개, 영역 {len(changche_areas)}종)"
+            results.append(QAResult("P1-A-003", msg, "P1", "PASS"))
     else:
-        msg = f"창체 {n_changche}행 (학년 {len(changche_years)}개, 영역 {len(changche_areas)}종)"
-        results.append(QAResult("P1-A-003", msg, "P1", "PASS"))
+        results.append(QAResult("P1-A-003", "창체 구조 검증 (모드 제외)", "P1", "INFO",
+                                "partial 모드에서 changche 미선택 → 창체 존재 검증 스킵"))
 
     # 행특 코멘트: 최소 1학년 이상 존재
-    n_haengtuk = len(haengtuk_comments)
-    if n_haengtuk < 1:
-        results.append(QAResult("P1-A-004", "행특 코멘트 완전성", "P1", "FAIL",
-                                f"행특 코멘트 {n_haengtuk}개 (최소 1개 필요)", str(n_haengtuk), "최소 1"))
+    if inc_haengtuk:
+        n_haengtuk = len(haengtuk_comments)
+        if n_haengtuk < 1:
+            results.append(QAResult("P1-A-004", "행특 코멘트 완전성", "P1", "FAIL",
+                                    f"행특 코멘트 {n_haengtuk}개 (최소 1개 필요)", str(n_haengtuk), "최소 1"))
+        else:
+            results.append(QAResult("P1-A-004", f"행특 코멘트 완전성 ({n_haengtuk}개 학년)", "P1", "PASS"))
     else:
-        results.append(QAResult("P1-A-004", f"행특 코멘트 완전성 ({n_haengtuk}개 학년)", "P1", "PASS"))
+        results.append(QAResult("P1-A-004", "행특 구조 검증 (모드 제외)", "P1", "INFO",
+                                "partial 모드에서 haengtuk 미선택 → 행특 존재 검증 스킵"))
 
     # 연계성 데이터: 최소 1항목 이상 (학년 수에 따라 권장 항목 수 다름)
-    n_linkage = len(linkage_data)
-    setuek_years = sorted(set(d[0] for d in setuek_data)) if setuek_data else []
-    # 학년이 1개뿐이면 "학년별 성장 흐름"이 불가능하므로 2항목으로 충분
-    expected_linkage_min = 1 if len(setuek_years) <= 1 else 2
-    if n_linkage < 1:
-        results.append(QAResult("P1-A-005", "연계성 데이터 완전성", "P1", "FAIL",
-                                f"연계성 데이터 없음 (최소 1항목 필요)", str(n_linkage), "최소 1"))
-    elif n_linkage < expected_linkage_min:
-        results.append(QAResult("P1-A-005", "연계성 데이터 권장 수 미달", "P1", "WARN",
-                                f"연계성 {n_linkage}항목 (권장: {expected_linkage_min}항목 이상, 학년 {len(setuek_years)}개 기준)",
-                                str(n_linkage), f"{expected_linkage_min}+"))
+    # partial 모드에서 1개 영역만 선택된 경우 연계성은 성립 불가 → 검증 스킵
+    included_count = int(inc_setuek) + int(inc_changche) + int(inc_haengtuk)
+    if included_count >= 2:
+        n_linkage = len(linkage_data)
+        setuek_years = sorted(set(d[0] for d in setuek_data)) if setuek_data else []
+        # 학년이 1개뿐이면 "학년별 성장 흐름"이 불가능하므로 2항목으로 충분
+        expected_linkage_min = 1 if len(setuek_years) <= 1 else 2
+        if n_linkage < 1:
+            results.append(QAResult("P1-A-005", "연계성 데이터 완전성", "P1", "FAIL",
+                                    f"연계성 데이터 없음 (최소 1항목 필요)", str(n_linkage), "최소 1"))
+        elif n_linkage < expected_linkage_min:
+            results.append(QAResult("P1-A-005", "연계성 데이터 권장 수 미달", "P1", "WARN",
+                                    f"연계성 {n_linkage}항목 (권장: {expected_linkage_min}항목 이상, 학년 {len(setuek_years)}개 기준)",
+                                    str(n_linkage), f"{expected_linkage_min}+"))
+        else:
+            results.append(QAResult("P1-A-005", f"연계성 데이터 완전성 ({n_linkage}항목, 학년 {len(setuek_years)}개)", "P1", "PASS"))
     else:
-        results.append(QAResult("P1-A-005", f"연계성 데이터 완전성 ({n_linkage}항목, 학년 {len(setuek_years)}개)", "P1", "PASS"))
+        results.append(QAResult("P1-A-005", "연계성 검증 (단일 영역 모드)", "P1", "INFO",
+                                "partial 모드에서 선택 영역 1개 → 연계성 성립 불가, 검증 스킵"))
 
-    # 핵심문장 존재
-    n_sentences = len(good_sentences)
-    if n_sentences < 1:
-        results.append(QAResult("P1-A-006", "핵심평가문장 존재", "P1", "FAIL",
-                                "핵심문장 데이터 없음", str(n_sentences), "1개 이상"))
+    # 핵심문장 존재 (세특 전용)
+    if inc_setuek:
+        n_sentences = len(good_sentences)
+        if n_sentences < 1:
+            results.append(QAResult("P1-A-006", "핵심평가문장 존재", "P1", "FAIL",
+                                    "핵심문장 데이터 없음", str(n_sentences), "1개 이상"))
+        else:
+            results.append(QAResult("P1-A-006", f"핵심평가문장 ({n_sentences}개)", "P1", "PASS"))
     else:
-        results.append(QAResult("P1-A-006", f"핵심평가문장 ({n_sentences}개)", "P1", "PASS"))
+        results.append(QAResult("P1-A-006", "핵심평가문장 (모드 제외)", "P1", "INFO",
+                                "partial 모드에서 setuek 미선택 → 핵심평가문장 검증 스킵"))
 
-    # 보완법 데이터
+    # 보완법 데이터 (교차영역 - 항상 검증)
     n_fix = len(fix_data)
     if n_fix < 1:
         results.append(QAResult("P1-A-007", "역량별 보완법 존재", "P1", "FAIL",
@@ -713,12 +746,15 @@ def run_full_qa(setuek_data, setuek_comments, good_sentences,
                 attendance_data=None, volunteer_data=None,
                 compare_data=None,
                 expected_strengths_count: int = 0,
-                expected_issues_count: int = 0):
+                expected_issues_count: int = 0,
+                mode_config=None):
     """전체 QA 검증 실행.
     target_major: 지원 학과명 (빈 문자열이면 미지정 모드, 값 있으면 지정 모드).
     attendance_data / volunteer_data: G7 출결·봉사 (선택, None/빈 dict 허용).
     compare_data: G3/G4 이전 대비 변화 (선택).
     expected_*_count: compare_generator 가 이전 리포트에서 추출한 개수 (P1-G-001/002 검증용).
+    mode_config: 2026-04-19 실행 모드 설정 (modules.mode_config.ModeConfig).
+                 partial 모드에서 미선택 영역의 구조 검증을 INFO 로 스킵.
     """
     report = QAReport(
         student_name=student_name,
@@ -732,7 +768,8 @@ def run_full_qa(setuek_data, setuek_comments, good_sentences,
     # P1 - 필수
     report.results.extend(
         check_structural_completeness(setuek_data, setuek_comments, good_sentences,
-                                       changche_data, haengtuk_comments, linkage_data, fix_data))
+                                       changche_data, haengtuk_comments, linkage_data, fix_data,
+                                       mode_config=mode_config))
 
     # 모드-데이터 일관성 먼저 확인. FAIL 이면 튜플 구조가 깨져 있어
     # 세특 계산 체크(weighted_averages, grade_matching 등) 가 크래시할 수 있으므로 스킵.
