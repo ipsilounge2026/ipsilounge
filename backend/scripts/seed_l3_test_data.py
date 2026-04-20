@@ -48,10 +48,38 @@ from sqlalchemy import select  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.database import Base, async_session, engine  # noqa: E402
 
-# 모든 모델 import (create_all 대상)
-from app.models import (  # noqa: E402, F401
-    admin as _admin_mod,
-)
+# ── 모든 모델을 반드시 전체 import ──
+# SQLAlchemy 가 create_all / 관계 mapper 초기화 시점에 모든 Base 서브클래스를 참조할 수 있어야 함.
+# 특히 `Admin.consultation_notes` 가 `foreign_keys="ConsultationNote.admin_id"` 문자열 참조를
+# 지연 해석(lazy resolution) 하므로 ConsultationNote 등이 사전에 import 되어 있어야 함.
+# (Ruff F401 이 "unused import" 로 오인해 제거하지 않도록 각 줄에 # noqa 지정, 또한
+#  ruff.toml 의 per-file-ignores 에도 이 파일 지정됨 — 이중 방어)
+from app.models import admin as _admin_mod  # noqa: E402, F401
+from app.models import admission_case as _admission_case_mod  # noqa: E402, F401
+from app.models import admission_data as _admission_data_mod  # noqa: E402, F401
+from app.models import analysis_order as _analysis_order_mod  # noqa: E402, F401
+from app.models import analysis_share as _analysis_share_mod  # noqa: E402, F401
+from app.models import consultation_booking as _cb_mod  # noqa: E402, F401
+from app.models import consultation_note as _cn_mod  # noqa: E402, F401
+from app.models import consultation_slot as _cs_mod  # noqa: E402, F401
+from app.models import consultation_survey as _csurvey_mod  # noqa: E402, F401
+from app.models import counselor_change_request as _ccr_mod  # noqa: E402, F401
+from app.models import family_invite as _fi_mod  # noqa: E402, F401
+from app.models import family_link as _fl_mod  # noqa: E402, F401
+from app.models import guidebook as _gb_mod  # noqa: E402, F401
+from app.models import interview_question as _iq_mod  # noqa: E402, F401
+from app.models import notice as _notice_mod  # noqa: E402, F401
+from app.models import notification as _notif_mod  # noqa: E402, F401
+from app.models import password_reset_token as _prt_mod  # noqa: E402, F401
+from app.models import payment as _payment_mod  # noqa: E402, F401
+from app.models import satisfaction_survey as _ss_mod  # noqa: E402, F401
+from app.models import seminar_mail_log as _sml_mod  # noqa: E402, F401
+from app.models import seminar_reservation as _sr_mod  # noqa: E402, F401
+from app.models import seminar_schedule as _ss2_mod  # noqa: E402, F401
+from app.models import senior_change_request as _scr_mod  # noqa: E402, F401
+from app.models import senior_consultation_note as _scn_mod  # noqa: E402, F401
+from app.models import senior_pre_survey as _sps_mod  # noqa: E402, F401
+from app.models import user as _user_mod  # noqa: E402, F401
 from app.models.admin import Admin  # noqa: E402
 from app.models.consultation_slot import ConsultationSlot  # noqa: E402
 from app.models.consultation_survey import ConsultationSurvey  # noqa: E402

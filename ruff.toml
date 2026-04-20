@@ -50,6 +50,11 @@ ignore = [
 # 분석기 (analyzer) 는 CLI 도구이고 한글 변수명·구조가 특수하므로 일부 완화
 "analyzer/modules/**" = ["F401"]  # unused import (구버전 모듈 보존)
 
+# seed 스크립트: 사이드이펙트용 모델 imports 다수 — SQLAlchemy Base 에 서브클래스
+# 등록을 강제하기 위함. 구체적으로 Admin.consultation_notes 의 foreign_keys 문자열
+# 지연 참조가 mapper 초기화 시 ConsultationNote 를 요구.
+"backend/scripts/seed_l3_test_data.py" = ["F401"]
+
 [lint.isort]
 # 프로젝트 로컬 패키지 (first-party) 명시
 known-first-party = ["app", "modules"]
