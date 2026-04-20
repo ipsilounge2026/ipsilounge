@@ -208,6 +208,20 @@ export default function SurveyDetailPage() {
   // Override state
   const [overrideSaving, setOverrideSaving] = useState(false);
 
+  // 예비고1 로드맵 아이템 편집 state (기획서 V2_2 §3-7 — 상담사 편집 대상)
+  type Ph1RoadmapItem = {
+    area?: string;
+    area_key?: string;
+    priority?: string;     // "상" / "중" / "하"
+    title?: string;
+    description?: string;
+    period?: string;
+    current_score?: number;
+    current_grade?: string;
+  };
+  const [ph1RoadmapItems, setPh1RoadmapItems] = useState<Ph1RoadmapItem[] | null>(null);
+  const [ph1RoadmapSaving, setPh1RoadmapSaving] = useState(false);
+
   // Convert state
   const [converting, setConverting] = useState(false);
 
@@ -234,6 +248,14 @@ export default function SurveyDetailPage() {
       setMemoText(data.admin_memo || "");
       if (data.counselor_checklist?.items) {
         setChecklistItems(data.counselor_checklist.items);
+      }
+      // 예비고1 로드맵 편집 초기값: override 우선, 없으면 자동 초안 사용 (§3-7)
+      if (data.survey_type === "preheigh1") {
+        const overrideItems = (data.counselor_overrides as any)?.roadmap?.items;
+        const autoItems = (data.computed as any)?.roadmap?.items;
+        setPh1RoadmapItems(
+          (Array.isArray(overrideItems) ? overrideItems : Array.isArray(autoItems) ? autoItems : []) as Ph1RoadmapItem[]
+        );
       }
       const withAnswers = new Set<string>();
       if (data.answers) {
@@ -1398,6 +1420,147 @@ export default function SurveyDetailPage() {
                           </div>
                         );
                       })()}
+                    </div>
+                  )}
+
+                  {/* 예비고1 로드맵 아이템 편집 (V2_2 §3-6, §3-7) */}
+                  {survey.survey_type === "preheigh1" && ph1RoadmapItems !== null && (
+                    <div id="section-ph1-roadmap" style={{ marginTop: 24, borderTop: "2px solid #E5E7EB", paddingTop: 20 }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🗺️ 맞춤 로드맵 (예비고1)</h4>
+                      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>
+                        5영역별 우선순위 아이템 초안입니다. 제목·설명·시기·우선순위를 자유롭게 편집 · 추가 · 삭제할 수 있습니다.
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {ph1RoadmapItems.map((item, idx) => {
+                          const priorityColor = item.priority === "상" ? "#DC2626" : item.priority === "중" ? "#D97706" : "#16A34A";
+                          const priorityBg = item.priority === "상" ? "#FEF2F2" : item.priority === "중" ? "#FEF3C7" : "#F0FDF4";
+                          const priorityBorder = item.priority === "상" ? "#FECACA" : item.priority === "중" ? "#FDE68A" : "#BBF7D0";
+                          return (
+                            <div key={idx} style={{
+                              background: priorityBg,
+                              border: `1px solid ${priorityBorder}`,
+                              borderRadius: 8,
+                              padding: 12,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 8,
+                            }}>
+                              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 11, color: "#6B7280", minWidth: 32 }}>#{idx + 1}</span>
+                                <select
+                                  value={item.priority || "중"}
+                                  onChange={(e) => setPh1RoadmapItems(prev => prev?.map((it, i) => i === idx ? { ...it, priority: e.target.value } : it) ?? null)}
+                                  style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid #D1D5DB", fontSize: 12, color: priorityColor, fontWeight: 600 }}
+                                >
+                                  <option value="상">상</option>
+                                  <option value="중">중</option>
+                                  <option value="하">하</option>
+                                </select>
+                                <select
+                                  value={item.area_key || ""}
+                                  onChange={(e) => {
+                                    const keyToLabel: Record<string, string> = {
+                                      academic: "학업기초력",
+                                      study: "학습습관·자기주도력",
+                                      prep: "교과선행도",
+                                      career: "진로방향성",
+                                      extracurricular: "비교과역량",
+                                    };
+                                    const newKey = e.target.value;
+                                    setPh1RoadmapItems(prev => prev?.map((it, i) => i === idx ? { ...it, area_key: newKey, area: keyToLabel[newKey] || it.area } : it) ?? null);
+                                  }}
+                                  style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid #D1D5DB", fontSize: 12, minWidth: 140 }}
+                                >
+                                  <option value="">영역 선택</option>
+                                  <option value="academic">학업기초력</option>
+                                  <option value="study">학습습관·자기주도력</option>
+                                  <option value="prep">교과선행도</option>
+                                  <option value="career">진로방향성</option>
+                                  <option value="extracurricular">비교과역량</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => setPh1RoadmapItems(prev => prev?.filter((_, i) => i !== idx) ?? null)}
+                                  style={{ marginLeft: "auto", padding: "4px 10px", background: "white", color: "#DC2626", border: "1px solid #FCA5A5", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                value={item.title || ""}
+                                onChange={(e) => setPh1RoadmapItems(prev => prev?.map((it, i) => i === idx ? { ...it, title: e.target.value } : it) ?? null)}
+                                placeholder="제목 (예: 수학 선행 보강)"
+                                style={{ padding: "6px 10px", border: "1px solid #D1D5DB", borderRadius: 4, fontSize: 13, fontWeight: 600 }}
+                              />
+                              <textarea
+                                value={item.description || ""}
+                                onChange={(e) => setPh1RoadmapItems(prev => prev?.map((it, i) => i === idx ? { ...it, description: e.target.value } : it) ?? null)}
+                                placeholder="구체적 실행 가이드"
+                                rows={2}
+                                style={{ padding: "6px 10px", border: "1px solid #D1D5DB", borderRadius: 4, fontSize: 12, resize: "vertical" }}
+                              />
+                              <input
+                                type="text"
+                                value={item.period || ""}
+                                onChange={(e) => setPh1RoadmapItems(prev => prev?.map((it, i) => i === idx ? { ...it, period: e.target.value } : it) ?? null)}
+                                placeholder="시기 (예: 즉시 ~ 입학 전)"
+                                style={{ padding: "6px 10px", border: "1px solid #D1D5DB", borderRadius: 4, fontSize: 12 }}
+                              />
+                              {typeof item.current_score === "number" && (
+                                <div style={{ fontSize: 11, color: "#6B7280" }}>
+                                  현재 점수: {item.current_score}점 ({item.current_grade || "-"}등급) — 자동 산출값
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
+                        <button
+                          type="button"
+                          onClick={() => setPh1RoadmapItems(prev => [...(prev ?? []), { priority: "중", area_key: "", title: "", description: "", period: "" }])}
+                          style={{ padding: "6px 14px", background: "white", color: "#4472C4", border: "1px solid #93C5FD", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+                        >
+                          + 아이템 추가
+                        </button>
+                        <button
+                          type="button"
+                          disabled={ph1RoadmapSaving}
+                          onClick={async () => {
+                            setPh1RoadmapSaving(true);
+                            try {
+                              const result = await updateSurveyOverrides(id, {
+                                roadmap: { items: ph1RoadmapItems ?? [] },
+                              });
+                              setSurvey((prev) => prev ? { ...prev, counselor_overrides: result.counselor_overrides } : prev);
+                            } catch (e) {
+                              alert(`저장 실패: ${e instanceof Error ? e.message : "오류"}`);
+                            } finally {
+                              setPh1RoadmapSaving(false);
+                            }
+                          }}
+                          style={{ padding: "6px 14px", background: ph1RoadmapSaving ? "#9CA3AF" : "#4472C4", color: "white", border: "none", borderRadius: 4, fontSize: 12, cursor: ph1RoadmapSaving ? "wait" : "pointer" }}
+                        >
+                          {ph1RoadmapSaving ? "저장 중..." : "로드맵 저장"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // 자동 초안으로 복원 (counselor_overrides 제거가 아니라 편집 상태만 원본 items 로 리셋)
+                            const autoItems = (survey.computed as any)?.roadmap?.items || [];
+                            setPh1RoadmapItems(autoItems);
+                          }}
+                          style={{ padding: "6px 14px", background: "white", color: "#6B7280", border: "1px solid #D1D5DB", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+                        >
+                          자동 초안으로 복원
+                        </button>
+                        {(survey.counselor_overrides as any)?.roadmap?.items && (
+                          <span style={{ fontSize: 11, color: "#D97706" }}>상담사 편집본 저장됨</span>
+                        )}
+                      </div>
                     </div>
                   )}
 
