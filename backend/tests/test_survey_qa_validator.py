@@ -148,6 +148,69 @@ def test_repair_comments_skips_for_preheigh1():
     )
 
 
+def test_end_to_end_preheigh1_scoring_through_validator():
+    """통합 테스트: 실제 compute_preheigh1_radar_scores 출력이 validator 를
+    통과할 때 pass 상태가 되는지 확인.
+
+    이 테스트는 유닛 테스트의 hand-crafted dict 와 달리 실제 스코어링
+    함수 → 검증기 파이프라인을 연결하기 때문에, 스코어링 함수가 radar
+    키 이름을 바꾸거나 필드를 추가할 때도 회귀를 잡는다.
+    """
+    from app.routers.admin_consultation_survey import _compute_preheigh1
+    from app.services.survey_scoring_service import compute_preheigh1_radar_scores
+
+    # 최소한의 유효 answers 샘플 — 실제 예비고1 설문 주요 카테고리
+    answers = {
+        "A": {"A4": ["일반고"]},  # 희망 고교 유형
+        "B": {
+            "B1": ["공학계열"],
+            "B2": 5,
+            "B3": "학생부종합",
+            "B4": ["성적", "진로탐색", "교과선택", "비교과활동", "학습습관"],
+        },
+        "C": {
+            "C3": {
+                "ko": {"raw_score": 85, "subject_avg": 75, "stdev": 10},
+                "en": {"raw_score": 90, "subject_avg": 80, "stdev": 8},
+                "ma": {"raw_score": 80, "subject_avg": 70, "stdev": 12},
+                "so": {"raw_score": 88, "subject_avg": 78, "stdev": 9},
+                "sc": {"raw_score": 82, "subject_avg": 72, "stdev": 11},
+            },
+        },
+        "D": {
+            "D1": [
+                {"subject": "수학", "category": "self_study", "hours": 5},
+                {"subject": "영어", "category": "self_study", "hours": 4},
+                {"subject": "국어", "category": "academy", "hours": 3},
+            ],
+            "D2": {"plan_execution": 7, "test_prep_start": "2주 전", "subject_plan_detail": "과목별 세부 계획"},
+            "D3": {"method": ["오답 노트"], "review_frequency": "주 1회", "review_method": ["다시 풀기"]},
+            "D4": ["선생님 질문", "친구와 토론"],
+        },
+        "E": {},
+        "F": {},
+    }
+
+    # _compute_preheigh1 + compute_preheigh1_radar_scores 의 조합
+    computed = _compute_preheigh1(answers)
+    computed["radar_scores"] = compute_preheigh1_radar_scores(answers)
+
+    # validate_with_repair 실행
+    qa = validate_with_repair(
+        computed, survey_type="preheigh1", answers=answers, timing=None,
+    )
+
+    # 핵심 검증: preheigh1 이 repaired/warn/blocked 로 강등되지 않아야 함
+    assert qa["status"] == "pass", (
+        f"실제 스코어링 출력 기반 preheigh1 설문이 {qa['status']} 로 분류됨. "
+        f"P1={qa['p1_issues']}, P2={qa['p2_issues']}, repair_log={qa['repair_log']}"
+    )
+    # auto_comments 관련 이슈가 하나도 없어야 함
+    all_codes = {i["code"] for i in qa["p1_issues"] + qa["p2_issues"]}
+    for code in ("COMMENT_EMPTY", "COMMENT_TOO_SHORT", "COMMENT_REGEN_FAILED"):
+        assert code not in all_codes, f"{code} 가 preheigh1 에서 발생함: {qa}"
+
+
 def test_high_short_comment_triggers_too_short():
     """50자 미만 코멘트는 COMMENT_TOO_SHORT 로 분류되어야 한다."""
     # 50자 이상 한글 샘플 (공백 포함하여 50자 이상 확실히 만족)
