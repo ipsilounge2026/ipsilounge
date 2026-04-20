@@ -21,7 +21,15 @@ interface BookingDetail {
   type: string;
   memo: string | null;
   status: string;
-  surveys: { id: string; survey_type: string; timing: string | null; status: string; submitted_at: string | null }[];
+  surveys: {
+    id: string;
+    survey_type: string;
+    timing: string | null;
+    status: string;
+    submitted_at: string | null;
+    // V3 §4-8-1: 자동 분석 검증 상태 (pass/repaired/warn/blocked/null)
+    analysis_status?: string | null;
+  }[];
 }
 
 interface CheckItem {
@@ -271,6 +279,7 @@ export default function ConsultationSessionPage() {
   const [counselorSummary, setCounselorSummary] = useState<Record<string, unknown> | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const isSenior = getAdminInfo()?.role === "senior";
+  const isSuperAdmin = getAdminInfo()?.role === "super_admin";
 
   // 상담사용 선배 기록
   const [seniorNotes, setSeniorNotes] = useState<SeniorNoteForCounselor[]>([]);
@@ -397,13 +406,22 @@ export default function ConsultationSessionPage() {
     }
   };
 
+  // V3 §4-8-1: 연결된 설문 중 하나라도 analysis_status === "blocked" 이면
+  // 상담 시작 차단 (super_admin 은 디버깅 목적으로 우회 가능)
+  const blockedSurvey = booking?.surveys?.find((s) => s.analysis_status === "blocked");
+  const sessionBlocked = !!blockedSurvey && !isSuperAdmin;
+
   const startTimer = useCallback(() => {
     if (timerRunning) return;
+    if (sessionBlocked) {
+      alert("자동 분석 결과 검증에 실패하여 상담 시작이 잠겨 있습니다. 슈퍼관리자 점검 완료 후 가능합니다.");
+      return;
+    }
     setTimerRunning(true);
     intervalRef.current = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
-  }, [timerRunning]);
+  }, [timerRunning, sessionBlocked]);
 
   const pauseTimer = useCallback(() => {
     setTimerRunning(false);
@@ -589,6 +607,44 @@ export default function ConsultationSessionPage() {
           </div>
         </div>
 
+        {/* V3 §4-8-1: 자동 분석 검증 차단 배너 */}
+        {sessionBlocked && blockedSurvey && (
+          <div style={{
+            marginBottom: 20,
+            padding: "14px 18px",
+            background: "#FEF2F2",
+            border: "1px solid #FCA5A5",
+            borderRadius: 8,
+            color: "#991B1B",
+            fontSize: 14,
+            lineHeight: 1.6,
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+              🔒 상담 시작이 잠겨 있습니다 (자동 분석 검증 실패)
+            </div>
+            <div>
+              사전 설문({blockedSurvey.timing || blockedSurvey.survey_type}) 자동 분석 결과에
+              P1(필수) 오류가 잔존하여 상담 진행이 차단되었습니다.
+              슈퍼관리자의 시스템 점검 완료 후 자동 해제됩니다.
+            </div>
+          </div>
+        )}
+        {/* super_admin 이 분석 차단 상태 설문에 들어왔을 때 알림 */}
+        {!sessionBlocked && blockedSurvey && isSuperAdmin && (
+          <div style={{
+            marginBottom: 20,
+            padding: "10px 14px",
+            background: "#FFFBEB",
+            border: "1px solid #FDE68A",
+            borderRadius: 8,
+            color: "#92400E",
+            fontSize: 13,
+          }}>
+            ⚠️ 슈퍼관리자 모드: 이 상담에 연결된 설문의 자동 분석이 차단(blocked) 상태입니다.
+            디버깅 목적으로 시작 버튼은 활성화되어 있으나, 해결 후 상담을 진행해 주세요.
+          </div>
+        )}
+
         {/* 학생 정보 + 타이머 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
           {/* 학생 정보 카드 */}
@@ -680,9 +736,14 @@ export default function ConsultationSessionPage() {
                 {!timerRunning ? (
                   <button
                     onClick={startTimer}
+                    disabled={sessionBlocked}
+                    title={sessionBlocked ? "자동 분석 검증 실패로 상담 시작이 잠겨 있습니다" : ""}
                     style={{
                       padding: "10px 32px", borderRadius: 8, border: "none",
-                      background: "#3B82F6", color: "white", fontSize: 15, fontWeight: 600, cursor: "pointer",
+                      background: sessionBlocked ? "#9CA3AF" : "#3B82F6",
+                      color: "white", fontSize: 15, fontWeight: 600,
+                      cursor: sessionBlocked ? "not-allowed" : "pointer",
+                      opacity: sessionBlocked ? 0.7 : 1,
                     }}
                   >
                     {elapsedSeconds > 0 ? "계속" : "시작"}

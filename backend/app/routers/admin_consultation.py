@@ -410,6 +410,8 @@ async def get_booking_detail(
                 "timing": s.timing,
                 "status": s.status,
                 "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+                # V3 §4-8-1: 자동 분석 검증 상태 (blocked → 상담 시작 버튼 비활성)
+                "analysis_status": s.analysis_status,
             }
             for s in surveys
         ],
