@@ -24,11 +24,6 @@ export default function LandingPage() {
         <div className="hero">
           <h1>학생부 분석, 이제 쉽게</h1>
           <p>전문가가 직접 분석한 학생부 경쟁력 리포트를 받아보세요</p>
-          {loggedIn ? (
-            <Link href="/analysis" className="btn">내 분석 보기</Link>
-          ) : (
-            <Link href="/register" className="btn">무료로 시작하기</Link>
-          )}
         </div>
 
         <div className="features-grid">

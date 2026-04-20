@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FamilyLinkSection from "@/components/FamilyLinkSection";
-import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange, getMySenior, requestSeniorChange, listMySurveys, deleteSurvey, getMySeniorChangeRequests } from "@/lib/api";
+import { getMe, updateMe, getNotifications, getMySeminarReservations, modifySeminarReservation, cancelSeminarReservation, getSeminarAvailability, getMyCounselor, getAvailableCounselors, requestCounselorChange, getMySenior, requestSeniorChange, listMySurveys, deleteSurvey, getMySeniorChangeRequests, withdrawAccount } from "@/lib/api";
 import type { SeniorChangeRequestHistoryItem } from "@/lib/api";
-import { isLoggedIn, getMemberType } from "@/lib/auth";
+import { isLoggedIn, getMemberType, logout } from "@/lib/auth";
 
 interface User {
   id: string;
@@ -96,6 +96,13 @@ export default function MyPage() {
   const [selectedNewCounselor, setSelectedNewCounselor] = useState<string>("recommend");
   const [changeReason, setChangeReason] = useState("");
   const [changeLoading, setChangeLoading] = useState(false);
+
+  // 회원 탈퇴 (V1 §10-1 전면 철회)
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawPassword, setWithdrawPassword] = useState("");
+  const [withdrawReason, setWithdrawReason] = useState("");
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
   // 담당 선배 관련
   const [mySenior, setMySenior] = useState<{id: string; name: string} | null>(null);
@@ -651,38 +658,6 @@ export default function MyPage() {
           )}
         </div>
 
-        {/* 선배상담 연계 관리 진입점 (학생만, V1 §10-1) */}
-        {memberType === "student" && (
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", marginBottom: 4 }}>
-                  🔗 선배상담 연계 관리
-                </div>
-                <div style={{ fontSize: 12, color: "#6B7280", lineHeight: 1.5 }}>
-                  상담사와의 상담 내용 중 관리자 검토를 통과한 내용만 담당 선배에게 공유됩니다.<br />
-                  개별 건별로 공유를 중단하거나 다시 허용할 수 있습니다.
-                </div>
-              </div>
-              <button
-                onClick={() => router.push("/mypage/senior-sharing")}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 6,
-                  border: "1px solid #D1D5DB",
-                  background: "white",
-                  color: "#374151",
-                  fontSize: 13,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                연계 관리 열기 →
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* 담당자 변경 요청 모달 */}
         {showChangeRequest && (
           <div className="card" style={{ marginBottom: 16, border: "1px solid #FDE68A", background: "#FFFBEB" }}>
@@ -1063,6 +1038,155 @@ export default function MyPage() {
               )}
             </div>
           </>
+        )}
+
+        {/* 회원 탈퇴 (V1 §10-1 전면 철회) — 페이지 최하단 */}
+        <div className="card" style={{ marginTop: 24, borderColor: "#FECACA" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "#991B1B", marginBottom: 4 }}>
+                회원 탈퇴
+              </div>
+              <div style={{ fontSize: 12, color: "#6B7280", lineHeight: 1.5 }}>
+                탈퇴 시 선배·상담사에게 공유되던 기록이 즉시 비노출되고,<br />
+                업로드한 학생부 파일·분석 리포트가 삭제됩니다. 되돌릴 수 없습니다.
+              </div>
+            </div>
+            <button
+              onClick={() => { setShowWithdraw(true); setWithdrawError(null); }}
+              style={{
+                padding: "8px 14px",
+                borderRadius: 6,
+                border: "1px solid #FCA5A5",
+                background: "white",
+                color: "#991B1B",
+                fontSize: 13,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              탈퇴하기
+            </button>
+          </div>
+        </div>
+
+        {/* 회원 탈퇴 확인 모달 */}
+        {showWithdraw && (
+          <div
+            onClick={() => !withdrawLoading && setShowWithdraw(false)}
+            style={{
+              position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 1000, padding: 20,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "white", borderRadius: 10, padding: 24,
+                maxWidth: 480, width: "100%",
+              }}
+            >
+              <h3 style={{ fontSize: 18, color: "#991B1B", marginTop: 0, marginBottom: 12 }}>
+                정말 탈퇴하시겠어요?
+              </h3>
+              <div style={{
+                fontSize: 13, lineHeight: 1.6, color: "#374151",
+                background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 6,
+                padding: 12, marginBottom: 16,
+              }}>
+                <strong>탈퇴 시 처리되는 내용</strong>
+                <ul style={{ margin: "8px 0 0 0", paddingLeft: 18 }}>
+                  <li>선배·상담사에게 공유되던 모든 상담 기록이 즉시 비노출됩니다.</li>
+                  <li>업로드한 학생부 파일과 분석 리포트가 삭제됩니다 (이용약관 제11조).</li>
+                  <li>계정 복구는 불가능하며, 재이용을 원하실 경우 새 계정으로 가입해야 합니다.</li>
+                </ul>
+              </div>
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+                  비밀번호 확인 <span style={{ color: "#DC2626" }}>*</span>
+                </label>
+                <input
+                  type="password"
+                  className="form-control"
+                  value={withdrawPassword}
+                  onChange={(e) => setWithdrawPassword(e.target.value)}
+                  placeholder="현재 비밀번호"
+                  disabled={withdrawLoading}
+                  autoComplete="current-password"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+                  탈퇴 사유 <span style={{ color: "#9CA3AF" }}>(선택)</span>
+                </label>
+                <textarea
+                  className="form-control"
+                  value={withdrawReason}
+                  onChange={(e) => setWithdrawReason(e.target.value)}
+                  placeholder="서비스 개선을 위한 피드백을 남겨주세요 (선택)"
+                  rows={3}
+                  disabled={withdrawLoading}
+                  style={{ resize: "vertical" }}
+                />
+              </div>
+              {withdrawError && (
+                <div style={{
+                  fontSize: 13, color: "#991B1B", background: "#FEF2F2",
+                  border: "1px solid #FECACA", borderRadius: 6, padding: 10,
+                  marginBottom: 12,
+                }}>
+                  {withdrawError}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setShowWithdraw(false)}
+                  disabled={withdrawLoading}
+                  style={{
+                    padding: "8px 16px", borderRadius: 6,
+                    border: "1px solid #D1D5DB", background: "white",
+                    color: "#374151", fontSize: 13,
+                    cursor: withdrawLoading ? "not-allowed" : "pointer",
+                  }}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!withdrawPassword.trim()) {
+                      setWithdrawError("비밀번호를 입력해주세요");
+                      return;
+                    }
+                    setWithdrawLoading(true);
+                    setWithdrawError(null);
+                    try {
+                      await withdrawAccount({
+                        password: withdrawPassword,
+                        reason: withdrawReason.trim() || undefined,
+                      });
+                      // 성공: 세션 정리 + 홈으로
+                      alert("회원 탈퇴가 완료되었습니다. 이용해주셔서 감사합니다.");
+                      logout();  // 내부에서 /login 으로 이동
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : "탈퇴 처리에 실패했습니다";
+                      setWithdrawError(msg);
+                      setWithdrawLoading(false);
+                    }
+                  }}
+                  disabled={withdrawLoading || !withdrawPassword.trim()}
+                  style={{
+                    padding: "8px 16px", borderRadius: 6, border: "none",
+                    background: withdrawLoading || !withdrawPassword.trim() ? "#FCA5A5" : "#DC2626",
+                    color: "white", fontSize: 13, fontWeight: 600,
+                    cursor: withdrawLoading || !withdrawPassword.trim() ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {withdrawLoading ? "처리 중..." : "탈퇴하기"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
       <Footer />

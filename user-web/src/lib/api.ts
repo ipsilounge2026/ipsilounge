@@ -566,46 +566,14 @@ export async function getMySeniorChangeRequests(): Promise<{ items: SeniorChange
   }
 }
 
-// --- 선배상담 연계 관리 (V1 §10-1 학생 사후 철회) ---
-export interface SeniorSharingStatusItem {
-  source_type: "survey" | "note";
-  id: string;
-  timing: string | null;
-  consultation_date?: string | null;
-  submitted_at?: string | null;
-  survey_type?: string;
-  category?: string;
-  senior_review_status: "pending" | "reviewed" | "revision_requested";
-  revoked_at: string | null;
-  revoke_reason?: string | null;
-  effectively_shared: boolean;
-  created_at?: string | null;
-}
-
-export async function getSeniorSharingStatus(): Promise<{
-  items: SeniorSharingStatusItem[];
-}> {
-  return request("/api/user/consultation-sharing/status");
-}
-
-export async function revokeSeniorSharing(body: {
-  scope: "all" | "by_id";
-  source_type?: "survey" | "note";
-  source_id?: string;
+// --- 회원 탈퇴 (V1 §10-1 전면 철회) ---
+// 개별 선배 공유 관리는 사용자 UI 에서 제외(2026-04-20) — 관리자 담당 영역.
+// 전면 철회는 회원 탈퇴를 통해서만 가능.
+export async function withdrawAccount(body: {
+  password: string;
   reason?: string;
-}): Promise<{ revoked_count: number; items: SeniorSharingStatusItem[] }> {
-  return request("/api/user/consultation-sharing/revoke", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
-
-export async function restoreSeniorSharing(body: {
-  scope: "all" | "by_id";
-  source_type?: "survey" | "note";
-  source_id?: string;
-}): Promise<{ restored_count: number }> {
-  return request("/api/user/consultation-sharing/restore", {
+}): Promise<{ ok: boolean; message: string }> {
+  return request("/api/users/me/withdraw", {
     method: "POST",
     body: JSON.stringify(body),
   });

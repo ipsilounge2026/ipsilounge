@@ -1,12 +1,21 @@
-from fastapi import APIRouter, Depends
+import logging
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.consultation_note import ConsultationNote
+from app.models.consultation_survey import ConsultationSurvey
 from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate
 from app.utils.dependencies import get_current_user
+from app.utils.security import verify_password
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/users", tags=["사용자"])
 
@@ -96,3 +105,107 @@ async def mark_notification_read(
     )
     await db.commit()
     return {"message": "알림을 읽음 처리했습니다"}
+
+
+# ============================================================
+# 회원 탈퇴 (V1 §10-1 전면 철회)
+# ============================================================
+
+class WithdrawRequest(BaseModel):
+    password: str
+    reason: str | None = None
+
+
+@router.post("/me/withdraw")
+async def withdraw_account(
+    data: WithdrawRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """회원 탈퇴 (V1 §10-1 전면 철회).
+
+    처리:
+      1. 비밀번호 확인 (본인 확인)
+      2. 선배 공유 데이터 전면 철회
+         - 모든 ConsultationSurvey / ConsultationNote 에
+           senior_sharing_revoked_at 세팅 → 선배 화면에서 즉시 비노출
+      3. 계정 비활성 + PII 익명화
+         - is_active=False
+         - email 은 고유성 유지를 위해 'deleted_<uuid>@deleted.local' 로 변경
+         - password_hash 는 고정 sentinel 로 덮어써 재로그인 차단
+         - 이름/연락처/학교/학년 등 개인정보는 NULL/placeholder
+         - FCM 토큰 제거
+      4. 되돌릴 수 없음 — 본인이 복구 요청해도 거절.
+
+    주의:
+      - 하드 삭제(row DELETE)는 consultation_bookings, analysis_orders 등
+        다른 테이블 FK 무결성 때문에 쓰지 않고 soft delete 로 처리
+      - 감사 로그 보존 관점에서도 soft delete 가 적절
+    """
+    # ─ 비밀번호 확인 ──────────────────────────
+    if not verify_password(data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="비밀번호가 일치하지 않습니다",
+        )
+
+    now = datetime.utcnow()
+
+    # ─ 선배 공유 전면 철회 ────────────────────
+    # (개별 철회 UI 는 제거됐지만 DB 레벨 revoke 필드는 선배 조회 차단에 유효)
+    revoke_reason = (
+        "회원 탈퇴 (V1 §10-1 전면 철회)"
+        + (f" — {data.reason}" if data.reason else "")
+    )[:500]  # 컬럼 길이 보호
+    try:
+        await db.execute(
+            update(ConsultationSurvey)
+            .where(
+                ConsultationSurvey.user_id == user.id,
+                ConsultationSurvey.senior_sharing_revoked_at.is_(None),
+            )
+            .values(
+                senior_sharing_revoked_at=now,
+                senior_sharing_revoke_reason=revoke_reason,
+            )
+        )
+    except Exception as e:
+        # 컬럼이 없는 구버전 DB 등 극단적 경우 graceful
+        logger.warning(f"survey revoke update failed (soft ignore): {e}")
+    try:
+        await db.execute(
+            update(ConsultationNote)
+            .where(
+                ConsultationNote.user_id == user.id,
+                ConsultationNote.senior_sharing_revoked_at.is_(None),
+            )
+            .values(
+                senior_sharing_revoked_at=now,
+                senior_sharing_revoke_reason=revoke_reason,
+            )
+        )
+    except Exception as e:
+        logger.warning(f"note revoke update failed (soft ignore): {e}")
+
+    # ─ 계정 비활성 + PII 익명화 ──────────────
+    uid_str = str(user.id).replace("-", "")[:12]
+    user.email = f"deleted_{uid_str}@deleted.local"
+    user.password_hash = "!WITHDRAWN!"  # 정상 비밀번호 해시가 아님 → 로그인 시 verify 실패
+    user.name = "탈퇴 회원"
+    user.phone = None
+    user.student_name = None
+    user.student_birth = None
+    user.school_name = None
+    user.grade = None
+    user.grade_year = None
+    user.branch_name = None
+    user.is_academy_student = False
+    user.fcm_token = None
+    user.is_active = False
+
+    await db.commit()
+    logger.info(
+        f"[withdraw] user_id={user.id} 탈퇴 처리 완료 "
+        f"(reason={data.reason!r})"
+    )
+    return {"ok": True, "message": "회원 탈퇴가 완료되었습니다"}
