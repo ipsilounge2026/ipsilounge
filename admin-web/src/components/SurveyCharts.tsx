@@ -70,6 +70,18 @@ interface ComputedStats {
     self_study_ratio: number;
     subject_balance: number;
   };
+  // V3 §5-⑤ E4 수능 최저 자가 평가 (T2~T4 고등 설문)
+  e4_summary?: {
+    awareness: string | null;
+    feasibility: string | null;
+    focus_areas: string[];
+    score: number;
+    max: number;
+    awareness_points: number;
+    feasibility_points: number;
+    focus_points: number;
+    is_answered: boolean;
+  };
   radar_scores?: RadarScores;
 }
 
@@ -951,9 +963,137 @@ function evaluateRule(
   };
 }
 
+// V3 §5-⑤ E4 자가 평가 vs 객관 시뮬레이션 비교 카드
+function E4SelfAssessmentCard({
+  e4,
+  bestRanks,
+}: {
+  e4: NonNullable<ComputedStats["e4_summary"]>;
+  bestRanks: AreaBest[];
+}) {
+  const awarenessLabel: Record<string, { label: string; color: string }> = {
+    "구체적파악": { label: "구체적으로 파악", color: "#059669" },
+    "일부확인": { label: "일부 확인", color: "#D97706" },
+    "모름": { label: "모름", color: "#DC2626" },
+  };
+  const feasibilityLabel: Record<string, { label: string; color: string; implies_ok: boolean }> = {
+    "여유있음": { label: "여유 있음", color: "#059669", implies_ok: true },
+    "충족가능": { label: "충족 가능", color: "#10B981", implies_ok: true },
+    "1_2영역부족": { label: "1~2개 영역 부족", color: "#D97706", implies_ok: false },
+    "불가": { label: "불가", color: "#DC2626", implies_ok: false },
+  };
+  const aw = e4.awareness ? awarenessLabel[e4.awareness] : null;
+  const fe = e4.feasibility ? feasibilityLabel[e4.feasibility] : null;
+
+  // 자가 판단 vs 객관 괴리 감지
+  // 학생이 "충족 가능/여유 있음" 이라고 자평했는데 객관 시뮬레이션에서
+  // 상위권 조건조차 통과 못 하면 '자가 과신' 경고
+  let selfVsObjectiveGap: { kind: "과신" | "과소"; message: string } | null = null;
+  if (fe && bestRanks.length > 0) {
+    // 상위권 라인의 가장 쉬운 조건으로 객관 평가 (2개 영역 합 ≤ 4)
+    const sorted = [...bestRanks].sort((a, b) => a.best_rank - b.best_rank);
+    const top2Sum = sorted.slice(0, 2).reduce((s, r) => s + r.best_rank, 0);
+    const objectivelyTopTier = sorted.length >= 2 && top2Sum <= 4;
+    const objectivelyMidTier = sorted.length >= 2 && top2Sum <= 7;
+    if (fe.implies_ok && !objectivelyMidTier) {
+      selfVsObjectiveGap = {
+        kind: "과신",
+        message: `학생은 '${fe.label}' 으로 자평했으나, 객관 모의고사 기준으로는 중위권 조건(2개 합 ≤ 7)도 아직 충족하지 못합니다. 현실 점검 필요.`,
+      };
+    } else if (!fe.implies_ok && objectivelyTopTier) {
+      selfVsObjectiveGap = {
+        kind: "과소",
+        message: `학생은 '${fe.label}' 으로 자평했으나, 객관 모의고사 기준으로는 이미 상위권 조건(2개 합 ≤ 4)도 충족합니다. 자신감 부여 필요.`,
+      };
+    }
+  }
+
+  // focus_areas(학생이 꼽은 집중 영역) vs 실제 취약 영역 비교
+  // 실제 취약 = rank 가 높은 (숫자가 큰) 영역
+  const sortedWeak = [...bestRanks].sort((a, b) => b.best_rank - a.best_rank);
+  const objectiveWeakTop2 = sortedWeak.slice(0, 2).map((r) => r.area);
+  const focusMismatch = e4.focus_areas.length > 0
+    ? objectiveWeakTop2.filter((a) => !e4.focus_areas.includes(a))
+    : [];
+
+  return (
+    <div style={{
+      marginBottom: 16,
+      padding: 14,
+      background: "#FFFBEB",
+      border: "1px solid #FDE68A",
+      borderRadius: 8,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#92400E" }}>
+          📝 학생 자가 평가 (E4, {e4.score}/{e4.max}점)
+        </span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+        {/* 인지 수준 */}
+        <div style={{ background: "white", padding: 10, borderRadius: 6, border: "1px solid #FDE68A" }}>
+          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 4 }}>최저 인지</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: aw?.color || "#9CA3AF" }}>
+            {aw?.label || "미응답"}
+          </div>
+          <div style={{ fontSize: 10, color: "#9CA3AF" }}>{e4.awareness_points}/5점</div>
+        </div>
+        {/* 충족 가능성 자가 판단 */}
+        <div style={{ background: "white", padding: 10, borderRadius: 6, border: "1px solid #FDE68A" }}>
+          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 4 }}>충족 가능성 자가 판단</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: fe?.color || "#9CA3AF" }}>
+            {fe?.label || "미응답"}
+          </div>
+          <div style={{ fontSize: 10, color: "#9CA3AF" }}>{e4.feasibility_points}/5점</div>
+        </div>
+        {/* 집중 영역 */}
+        <div style={{ background: "white", padding: 10, borderRadius: 6, border: "1px solid #FDE68A" }}>
+          <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 4 }}>집중 영역</div>
+          <div style={{ fontSize: 12, color: "#374151", fontWeight: 600, minHeight: 18 }}>
+            {e4.focus_areas.length > 0 ? e4.focus_areas.join(", ") : "미선택"}
+          </div>
+          <div style={{ fontSize: 10, color: "#9CA3AF" }}>{e4.focus_points}/5점</div>
+        </div>
+      </div>
+      {/* 괴리 경고 (자가 vs 객관) */}
+      {selfVsObjectiveGap && (
+        <div style={{
+          padding: "8px 12px",
+          background: selfVsObjectiveGap.kind === "과신" ? "#FEE2E2" : "#DBEAFE",
+          border: `1px solid ${selfVsObjectiveGap.kind === "과신" ? "#FCA5A5" : "#93C5FD"}`,
+          borderRadius: 6,
+          fontSize: 12,
+          color: selfVsObjectiveGap.kind === "과신" ? "#991B1B" : "#1E3A8A",
+          marginBottom: focusMismatch.length > 0 ? 8 : 0,
+        }}>
+          ⚠️ <strong>자가 {selfVsObjectiveGap.kind} 가능성</strong>: {selfVsObjectiveGap.message}
+        </div>
+      )}
+      {/* 집중영역 미스매치: 학생이 꼽지 않은 영역이 실제 취약인 경우 */}
+      {focusMismatch.length > 0 && (
+        <div style={{
+          padding: "8px 12px",
+          background: "#FEF2F2",
+          border: "1px solid #FECACA",
+          borderRadius: 6,
+          fontSize: 12,
+          color: "#991B1B",
+        }}>
+          🎯 <strong>놓친 취약 영역</strong>: 학생이 집중 영역으로 꼽지 않았으나 실제 모의 최저 등급이 낮은 영역 —{" "}
+          <strong>{focusMismatch.join(", ")}</strong>. 이 영역도 학습 계획에 포함해야 합니다.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SuneungMinimumSimulation({ computed }: { computed: ComputedStats }) {
   const mock = computed.mock_trend;
-  if (!mock || !mock.area_trends || Object.keys(mock.area_trends).length === 0) {
+  const e4 = computed.e4_summary;
+  const hasMock = !!(mock && mock.area_trends && Object.keys(mock.area_trends).length > 0);
+  const hasE4 = !!(e4 && e4.is_answered);
+  // 둘 다 없으면 렌더하지 않음 (T1 등 최저 기준이 해당되지 않는 시점)
+  if (!hasMock && !hasE4) {
     return null;
   }
 
@@ -962,19 +1102,23 @@ export function SuneungMinimumSimulation({ computed }: { computed: ComputedStats
   // Number.isFinite 에서 걸러지지만, rank 가 undefined/NaN/null 인
   // 잘못된 레코드도 Infinity 를 유발하므로 명시적으로 필터링
   const bestRanks: AreaBest[] = [];
-  for (const [area, points] of Object.entries(mock.area_trends)) {
-    if (!Array.isArray(points) || points.length === 0) continue;
-    const validRanks = points
-      .map((p) => (typeof p?.rank === "number" ? p.rank : Number.NaN))
-      .filter((r) => Number.isFinite(r));
-    if (validRanks.length === 0) continue;
-    const minRank = Math.min(...validRanks);
-    if (Number.isFinite(minRank)) {
-      bestRanks.push({ area, best_rank: minRank });
+  if (hasMock && mock) {
+    for (const [area, points] of Object.entries(mock.area_trends)) {
+      if (!Array.isArray(points) || points.length === 0) continue;
+      const validRanks = points
+        .map((p) => (typeof p?.rank === "number" ? p.rank : Number.NaN))
+        .filter((r) => Number.isFinite(r));
+      if (validRanks.length === 0) continue;
+      const minRank = Math.min(...validRanks);
+      if (Number.isFinite(minRank)) {
+        bestRanks.push({ area, best_rank: minRank });
+      }
     }
   }
 
-  if (bestRanks.length === 0) return null;
+  // 모의도 E4 도 모두 없으면 렌더 안 함 (이미 위에서 처리)
+  // 모의는 없고 E4 만 있는 경우 — E4 카드만 노출, 라인 시뮬레이션 섹션은 안내 메시지
+  const hasRanks = bestRanks.length > 0;
 
   return (
     <div style={{ marginBottom: 24 }} id="section-suneung-minimum">
@@ -985,26 +1129,67 @@ export function SuneungMinimumSimulation({ computed }: { computed: ComputedStats
         실제 학교별 최저는 상담사가 모의고사 성적표와 함께 최종 확인하세요.
       </div>
 
-      {/* 현재 최고 등급 요약 */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {bestRanks.sort((a, b) => a.best_rank - b.best_rank).map((ar) => (
-          <div
-            key={ar.area}
-            style={{
-              padding: "6px 12px",
-              background: "#EFF6FF",
-              border: "1px solid #BFDBFE",
-              borderRadius: 6,
-              fontSize: 13,
-            }}
-          >
-            <span style={{ color: "#1E40AF", fontWeight: 600 }}>{ar.area}</span>{" "}
-            <span style={{ color: "#1D4ED8", fontWeight: 700 }}>{ar.best_rank}등급</span>
-          </div>
-        ))}
+      {/* V3 §4-8 "수시 방향이어도 수능 최저를 위한 수능 학습 필요성 강조" */}
+      <div style={{
+        marginBottom: 16,
+        padding: "10px 14px",
+        background: "#EFF6FF",
+        border: "1px solid #BFDBFE",
+        borderRadius: 6,
+        fontSize: 12,
+        color: "#1E3A8A",
+      }}>
+        💡 <strong>수시 방향이어도 수능 최저는 중요</strong>: 학생부교과·학생부종합 상당수가
+        수능 최저를 요구하므로, 수시 주력이어도 목표 라인에 맞는 수능 학습을 병행해야 합니다.
       </div>
 
-      {/* 라인별 시뮬레이션 결과 */}
+      {/* V3 §5-⑤ E4 자가 평가 vs 객관 시뮬레이션 */}
+      {computed.e4_summary && computed.e4_summary.is_answered && (
+        <E4SelfAssessmentCard e4={computed.e4_summary} bestRanks={bestRanks} />
+      )}
+
+      {/* 모의고사 미응시 안내 (E4 만 있는 경우) */}
+      {!hasRanks && (
+        <div style={{
+          padding: "10px 14px",
+          background: "#F9FAFB",
+          border: "1px dashed #E5E7EB",
+          borderRadius: 6,
+          fontSize: 12,
+          color: "#6B7280",
+          marginBottom: 8,
+        }}>
+          📌 모의고사 성적 데이터가 없어 객관 시뮬레이션은 표시하지 않습니다.
+          학생 자가 평가(위 E4 카드) 만으로 상담 진행하시고, 다음 모의 응시 후 재검토 권장.
+        </div>
+      )}
+
+      {/* 현재 최고 등급 요약 */}
+      {hasRanks && (
+        <>
+          <div style={{ fontSize: 12, color: "#374151", marginBottom: 6, fontWeight: 600 }}>객관 (모의고사) 영역별 최고 등급</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+            {bestRanks.sort((a, b) => a.best_rank - b.best_rank).map((ar) => (
+              <div
+                key={ar.area}
+                style={{
+                  padding: "6px 12px",
+                  background: "#EFF6FF",
+                  border: "1px solid #BFDBFE",
+                  borderRadius: 6,
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ color: "#1E40AF", fontWeight: 600 }}>{ar.area}</span>{" "}
+                <span style={{ color: "#1D4ED8", fontWeight: 700 }}>{ar.best_rank}등급</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* 라인별 시뮬레이션 결과 (모의 데이터 있을 때만) */}
+      {hasRanks && (
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {MINIMUM_LINES.map((line) => {
           const results = line.rules.map((r) => ({ rule: r, eval: evaluateRule(bestRanks, r) }));
@@ -1070,6 +1255,7 @@ export function SuneungMinimumSimulation({ computed }: { computed: ComputedStats
           );
         })}
       </div>
+      )}
     </div>
   );
 }

@@ -1396,6 +1396,37 @@ def _compute_high(answers: dict) -> dict:
             "weak_areas": weak_areas,
         }
 
+    # --- E4 수능 최저 자가 평가 (V3 §5-⑤, T2~T4) ---
+    # 학생이 스스로 판단한 {인지/가능성/집중영역} 을 객관 시뮬레이션(mock 기반)과
+    # 나란히 보여주기 위해 요약 추출. 상담사는 자가 판단 vs 실제 모의 성적
+    # 괴리를 한눈에 파악 가능.
+    cat_e = answers.get("E", {})
+    e4 = cat_e.get("E4") if isinstance(cat_e, dict) else None
+    if isinstance(e4, dict):
+        awareness = e4.get("awareness") or None
+        feasibility = e4.get("feasibility") or None
+        focus_areas = e4.get("focus_areas") or []
+        if not isinstance(focus_areas, list):
+            focus_areas = []
+        # §5-⑤ 15점 산출 (수능 최저 대비도)
+        awareness_pts = {"구체적파악": 5, "일부확인": 3, "모름": 1}.get(awareness or "", 0)
+        feasibility_pts = {
+            "여유있음": 5, "충족가능": 4, "1_2영역부족": 2, "불가": 1,
+        }.get(feasibility or "", 0)
+        focus_pts = 5 if len(focus_areas) >= 1 else 1
+        e4_score = awareness_pts + feasibility_pts + focus_pts
+        result["e4_summary"] = {
+            "awareness": awareness,
+            "feasibility": feasibility,
+            "focus_areas": focus_areas,
+            "score": e4_score,
+            "max": 15,
+            "awareness_points": awareness_pts,
+            "feasibility_points": feasibility_pts,
+            "focus_points": focus_pts,
+            "is_answered": bool(awareness or feasibility or focus_areas),
+        }
+
     # --- 학습 시간 분석 (카테고리 D: D1) ---
     result["study_analysis"] = _compute_study_analysis(answers.get("D", {}))
 
