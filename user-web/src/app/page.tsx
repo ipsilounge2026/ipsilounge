@@ -49,8 +49,8 @@ export default function LandingPage() {
             <h2 style={{ fontSize: 20, marginBottom: 12 }}>지금 바로 시작해보세요</h2>
             <p style={{ color: "var(--gray-600)", marginBottom: 20 }}>회원가입 후 학생부를 업로드하면 분석이 시작됩니다</p>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <Link href="/register" className="btn btn-primary btn-lg">회원가입</Link>
               <Link href="/login" className="btn btn-lg" style={{ border: "1px solid var(--gray-300)", backgroundColor: "white", color: "var(--gray-700)" }}>로그인</Link>
+              <Link href="/register" className="btn btn-primary btn-lg">회원가입</Link>
             </div>
           </div>
         )}
