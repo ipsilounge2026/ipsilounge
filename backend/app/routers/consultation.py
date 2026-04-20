@@ -3,10 +3,9 @@ from datetime import date, datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from pydantic import BaseModel
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.admin import Admin, AdminStudentAssignment, SeniorStudentAssignment
@@ -23,7 +22,6 @@ from app.schemas.consultation import (
     AvailableSlotResponse,
     BookingRequest,
     BookingResponse,
-    CounselorResponse,
     MyBookingListResponse,
 )
 from app.services.consultation_service import check_slot_available

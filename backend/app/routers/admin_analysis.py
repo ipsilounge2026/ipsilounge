@@ -5,14 +5,13 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.database import get_db
 from app.models.admin import Admin, AdminStudentAssignment
 from app.models.analysis_order import AnalysisOrder
+from app.models.interview_question import InterviewQuestion, QuestionCategory
 from app.models.user import User
 from app.schemas.analysis import AdminAnalysisResponse, AnalysisStatusUpdate
-from app.models.interview_question import InterviewQuestion, QuestionCategory
 from app.services.email_service import send_analysis_complete_email
 from app.services.file_service import generate_download_url, is_text_pdf, upload_file
 from app.services.notification_service import send_analysis_complete_notification
@@ -366,8 +365,9 @@ async def delete_interview_question(
 #  - 관리자 admin-web 에서 "확인 완료" / "재분석 요청" 버튼으로 검수 흐름 제어
 # ═══════════════════════════════════════════════════════════════
 
-from fastapi.responses import StreamingResponse
 from io import BytesIO
+
+from fastapi.responses import StreamingResponse
 
 
 class PendingAnalysisItem(BaseModel):

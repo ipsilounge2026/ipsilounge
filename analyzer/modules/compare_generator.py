@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 compare_generator.py
 - G3+G4 (2026-04-17): 2회차 이상 분석 시 이전 리포트와 비교
@@ -23,11 +22,11 @@ CLI 사용:
 """
 
 from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-
 
 # ═══════════════════════════════════════════════════════
 # 데이터 클래스
@@ -41,12 +40,12 @@ class PreviousReport:
     date_str: str                          # 리포트 날짜 (YYYYMMDD)
 
     # 종합요약 시트에서 추출
-    core_strengths: List[str] = field(default_factory=list)   # 핵심강점 1~3
-    core_issues: List[str] = field(default_factory=list)      # 보완영역 1~3
+    core_strengths: list[str] = field(default_factory=list)   # 핵심강점 1~3
+    core_issues: list[str] = field(default_factory=list)      # 보완영역 1~3
     growth_story: str = ""
 
     # 역량별보완법 시트에서 추출 (역량, 항목, 보완활동)
-    fix_items: List[Dict[str, str]] = field(default_factory=list)
+    fix_items: list[dict[str, str]] = field(default_factory=list)
 
     # 각 영역 평균 등급 (계산)
     setuek_grade: str = "-"
@@ -60,8 +59,8 @@ class PreviousReport:
 @dataclass
 class TrackingTargets:
     """Claude 가 compare_data 작성 시 반드시 판정해야 할 대상들."""
-    strengths_to_track: List[Dict[str, str]]  # [{"이전강점": "...", "출처": "종합요약-핵심강점1"}]
-    issues_to_track: List[Dict[str, str]]     # [{"이전보완점": "...", "출처": "종합요약-보완영역1"}]
+    strengths_to_track: list[dict[str, str]]  # [{"이전강점": "...", "출처": "종합요약-핵심강점1"}]
+    issues_to_track: list[dict[str, str]]     # [{"이전보완점": "...", "출처": "종합요약-보완영역1"}]
 
 
 # ═══════════════════════════════════════════════════════
@@ -71,7 +70,7 @@ class TrackingTargets:
 _REPORT_PATTERN = re.compile(r"^(?P<name>.+?)_학생부분석_(?P<date>\d{8})(?:_v(?P<version>\d+))?\.xlsx$")
 
 
-def find_previous_reports(student_name: str, output_dir: Optional[Path] = None) -> List[Tuple[Path, int, str, int]]:
+def find_previous_reports(student_name: str, output_dir: Path | None = None) -> list[tuple[Path, int, str, int]]:
     """학생명에 해당하는 기존 리포트 파일 탐색.
     반환: [(Path, version_num, date_str, round_num), ...] - 날짜·버전 오름차순 정렬.
       - version_num: _v{N} 의 N (없으면 1)
@@ -99,7 +98,7 @@ def find_previous_reports(student_name: str, output_dir: Optional[Path] = None) 
 
 
 def get_next_version_number(student_name: str, today: str,
-                             output_dir: Optional[Path] = None) -> Optional[int]:
+                             output_dir: Path | None = None) -> int | None:
     """다음 리포트 파일명에 부여할 버전 번호.
     - 기존 리포트 없음 → None (접미사 없이 기본 파일명 사용)
     - 기존 1개 이상 → 최댓값 + 1
@@ -121,7 +120,7 @@ def get_next_version_number(student_name: str, today: str,
 # 이전 Excel 파싱
 # ═══════════════════════════════════════════════════════
 
-def _grade_from_scores(grades: List[str]) -> str:
+def _grade_from_scores(grades: list[str]) -> str:
     """과목별 등급 리스트 → 대표 등급 (최빈값, 동점이면 상위 우선)."""
     if not grades:
         return "-"
@@ -184,7 +183,7 @@ def extract_previous_info(xlsx_path: Path, round_num: int = 1) -> PreviousReport
             })
 
     # ── 3. 각 영역 대표 등급 ──
-    def _collect_grades(sheet_name: str, grade_col: int) -> List[str]:
+    def _collect_grades(sheet_name: str, grade_col: int) -> list[str]:
         if sheet_name not in wb.sheetnames:
             return []
         ws = wb[sheet_name]
@@ -253,7 +252,7 @@ def _current_area_grade(sd, area: str) -> str:
     return "-"
 
 
-def compute_grade_changes(prev: PreviousReport, sd) -> List[Dict[str, str]]:
+def compute_grade_changes(prev: PreviousReport, sd) -> list[dict[str, str]]:
     """이전 vs 현재 영역별 등급 비교 → grade_changes 리스트 자동 생성."""
     result = []
     _ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1, "-": 0}
@@ -359,7 +358,7 @@ def _print_analysis(student_name: str):
     print()
 
     targets = build_tracking_targets(prev)
-    print(f"[TARGETS] Claude 가 compare_data 에서 반드시 판정해야 할 대상:")
+    print("[TARGETS] Claude 가 compare_data 에서 반드시 판정해야 할 대상:")
     print(f"  - strengths_tracking 최소 {len(targets.strengths_to_track)}개")
     print(f"  - issues_tracking 최소 {len(targets.issues_to_track)}개")
 

@@ -1,11 +1,11 @@
-from sqlalchemy import Column, String, Text, Boolean, DateTime, Date, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
-from datetime import datetime
 import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
 
 from app.database import Base
-
 
 # 상담 카테고리 (5개)
 # academic: 학업 상담 (고등학교 기획서 T1~T4 기반)

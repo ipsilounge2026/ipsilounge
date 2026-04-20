@@ -3,7 +3,6 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel
 
-
 # --- 사용자용 ---
 
 class AvailableSlotResponse(BaseModel):

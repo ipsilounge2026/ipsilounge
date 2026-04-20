@@ -17,12 +17,11 @@ from pathlib import Path
 
 import openpyxl
 from sqlalchemy import delete, text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # backend 디렉터리를 PYTHONPATH에 추가 (app 모듈 찾기)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.database import async_session, engine, Base  # noqa: E402
+from app.database import Base, async_session, engine  # noqa: E402
 from app.models.admission_data import AdmissionData  # noqa: E402
 from app.models.jeongsi_admission_data import JeongsiAdmissionData  # noqa: E402
 

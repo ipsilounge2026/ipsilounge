@@ -1,0 +1,70 @@
+# ===================================================================
+# pre-commit — 커밋 전 자동 린트·포매터·기본 검증
+# ===================================================================
+# 설치:
+#   pip install pre-commit
+#   pre-commit install
+# 수동 실행:
+#   pre-commit run --all-files           # 전체 파일 검사
+#   pre-commit run <hook_id>             # 특정 hook 만 실행
+#   SKIP=hook_id git commit ...          # 특정 hook 스킵 (권장 X)
+#
+# 도입 정책 (Phase B, 2026-04-19):
+# - 1차는 **최소 세트**: 공백/EOF/JSON/YAML/conflict-marker + Python ruff check
+# - 대량 포매팅(ruff format, prettier) 은 일괄 변경으로 diff 폭발하므로 별도 PR
+# - TypeScript 는 Next.js ESLint 가 build 단계에서 이미 실행되므로 여기선 제외
+# ===================================================================
+
+default_language_version:
+  python: python3
+
+fail_fast: false  # 일부 hook 실패해도 나머지 계속 실행
+
+repos:
+  # ── 1. 기본 위생 (공백·EOF·파일·yaml/json 검증) ─────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+        # 학생 데이터·리포트·바이너리 등 자동 수정 대상 아님
+        exclude: |
+          (?x)^(
+            analyzer/data/students/.*|
+            analyzer/output/.*|
+            analyzer/input/.*|
+            e2e/playwright-report/.*|
+            e2e/test-results/.*|
+            .*\.ipynb|
+            .*\.svg|
+            .*\.pdf|
+            .*\.xlsx
+          )$
+      - id: check-yaml
+        # multi-document yaml (예: GitHub Actions) 도 허용
+        args: [--allow-multiple-documents]
+      - id: check-json
+        exclude: |
+          (?x)^(
+            analyzer/output/.*|
+            e2e/playwright-report/.*
+          )$
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=2048]  # 2MB 이상 파일은 차단 (학생부 PDF 등 실수로 포함 방지)
+
+  # ── 2. Python lint (ruff — 빠르고 modern) ────────────────────────
+  # 포매팅(`ruff format`) 은 일괄 변경으로 diff 가 커지므로 별도 PR 로 분리.
+  # 여기서는 `ruff check` (린트) 만 활성화.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.3
+    hooks:
+      - id: ruff
+        name: ruff check (Python lint)
+        # 신규 경고 쌓이지 않도록 에러만 block, 기존 warning 은 출시 이후 정리.
+        args: [--fix, --exit-non-zero-on-fix]
+        # backend + analyzer Python 파일만 대상
+        files: ^(backend|analyzer)/.*\.py$
+        # requirements.txt 스크립트·migration 등은 제외
+        exclude: ^analyzer/(output|input|tools|data/students)/

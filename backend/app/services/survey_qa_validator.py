@@ -11,9 +11,8 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 # ============================================================
 # 심각도 및 이슈 구조
@@ -643,7 +642,7 @@ def validate_computed_analysis(
         "p1_issues": p1,
         "p2_issues": p2,
         "p3_issues": p3,
-        "validated_at": datetime.now(timezone.utc).isoformat(),
+        "validated_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -720,5 +719,5 @@ def validate_with_repair(
         "p1_issues": p1,
         "p2_issues": p2,
         "p3_issues": p3,
-        "validated_at": datetime.now(timezone.utc).isoformat(),
+        "validated_at": datetime.now(UTC).isoformat(),
     }

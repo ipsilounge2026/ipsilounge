@@ -3,7 +3,6 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
-
 # --- 설명회 일정 ---
 
 class SeminarScheduleCreate(BaseModel):

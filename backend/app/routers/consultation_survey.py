@@ -43,7 +43,6 @@ from app.services.survey_resume_service import (
     build_resume_url,
     find_survey_by_token,
     issue_resume_token,
-    revoke_resume_token,
 )
 from app.services.survey_timing_service import (
     auto_determine_survey_params,
@@ -1740,7 +1739,7 @@ async def patch_survey(
             if blocked:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"학부모는 학부모 관점 카테고리 상태만 변경할 수 있습니다.",
+                    detail="학부모는 학부모 관점 카테고리 상태만 변경할 수 있습니다.",
                 )
 
     if data.answers is not None:

@@ -6,9 +6,8 @@
 - 좋은 평가 문장 추출
 """
 import os
-import json
-from modules.grade_analyzer import load_config
 
+from modules.grade_analyzer import load_config
 
 HAENGTUK_ITEMS = ['활동의구체성', '동기과정결과', '성장변화', '인성공동체역량', '분량밀도']
 
@@ -17,7 +16,7 @@ def build_haengtuk_prompt(haengtuk_data: dict) -> str:
     """행특 분석용 Claude 프롬프트 생성"""
     prompt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                'prompts', 'analyze_haengtuk.md')
-    with open(prompt_path, 'r', encoding='utf-8') as f:
+    with open(prompt_path, encoding='utf-8') as f:
         template = f.read()
 
     data_text = _format_haengtuk_data(haengtuk_data)

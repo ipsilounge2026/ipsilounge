@@ -66,6 +66,7 @@ async def verify_google_purchase(purchase_token: str, product_id: str) -> bool:
 async def _get_google_access_token() -> str:
     """서비스 계정 JWT로 Google OAuth 액세스 토큰 발급"""
     import time
+
     from jose import jwt as jose_jwt
 
     # 서비스 계정 JSON 파싱

@@ -29,7 +29,8 @@ async def register_user(data: UserRegister, db: AsyncSession) -> User:
     # 지점 담당자는 관리자 승인 전까지 비활성 상태
     is_active = data.member_type != "branch_manager"
 
-    from datetime import date as date_type, datetime as datetime_type
+    from datetime import date as date_type
+    from datetime import datetime as datetime_type
 
     user = User(
         email=data.email,

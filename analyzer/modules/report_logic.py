@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 report_logic.py
 - 학생부 리포트 생성 본체 (create_excel, create_pdf)
@@ -8,30 +7,33 @@ report_logic.py
 
 import os
 from datetime import date
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
 
-from reportlab.lib.pagesizes import A4
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
+from reportlab.graphics.shapes import Drawing, Rect, String
 from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak,
-    KeepTogether, Flowable, Image as RLImage
+    Flowable,
+    KeepTogether,
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
 )
-from reportlab.graphics.shapes import Drawing, Circle, Rect, String, Line, Group
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Image as RLImage
 
 from .report_constants import (
-    SETUEK_ITEMS_NO_MAJOR, SETUEK_WEIGHTS_NO_MAJOR,
-    SETUEK_ITEMS_WITH_MAJOR, SETUEK_WEIGHTS_WITH_MAJOR,
-    CHANGCHE_ITEMS, HAENGTUK_ITEMS,
-    FONT_NAME, FONT_NAME_BD,
+    CHANGCHE_ITEMS,
+    HAENGTUK_ITEMS,
+    is_major_mode,
     register_fonts,
-    is_major_mode, resolve_setuek_items, resolve_setuek_weights,
+    resolve_setuek_items,
     setuek_score_slice_end,
 )
 
@@ -202,7 +204,7 @@ def create_excel(sd, xlsx_path, mode_config=None):
             style_cell(ws, r, 3, strength, left_align)
             style_cell(ws, r, 4, weakness, left_align)
         set_col_widths(ws, [6, 18, 70, 70])
-        ws.auto_filter.ref = f"A1:D1"
+        ws.auto_filter.ref = "A1:D1"
         ws.freeze_panes = "A2"
 
         # ── Sheet 4: 핵심평가문장 ──
@@ -215,7 +217,7 @@ def create_excel(sd, xlsx_path, mode_config=None):
             style_cell(ws, r, 3, reason, left_align)
             style_cell(ws, r, 4, comp, left_align)
         set_col_widths(ws, [16, 60, 55, 40])
-        ws.auto_filter.ref = f"A1:D1"
+        ws.auto_filter.ref = "A1:D1"
         ws.freeze_panes = "A2"
 
     # ── Sheet 5: 창체분석 (mode_config 로 스킵 가능) ──
@@ -299,7 +301,7 @@ def create_excel(sd, xlsx_path, mode_config=None):
         style_cell(ws, r, 5, action, left_align)
         style_cell(ws, r, 6, pri)
     set_col_widths(ws, [10, 14, 10, 30, 80, 8])
-    ws.auto_filter.ref = f"A1:F1"
+    ws.auto_filter.ref = "A1:F1"
     ws.freeze_panes = "A2"
 
     # ── Sheet 10: 키워드분석 (G5 / CLAUDE.md § Step 8-4) ──
@@ -460,8 +462,9 @@ def _write_compare_sheet(wb, sd, style_header, style_cell, set_col_widths,
 def _write_attendance_sheet(wb, sd, style_header, style_cell, set_col_widths,
                              center, left_align, get_column_letter_fn):
     """Excel 출결·봉사 시트 작성. G7 (2026-04-17)."""
-    from .attendance_calculator import calculate_attendance_score, summarize_volunteer
     from openpyxl.styles import Font, PatternFill
+
+    from .attendance_calculator import calculate_attendance_score, summarize_volunteer
 
     att_data = getattr(sd, "attendance_data", {}) or {}
     vol_data = getattr(sd, "volunteer_data", {}) or {}
@@ -1844,8 +1847,9 @@ def _append_pdf_keyword_section(elements, sd, pdf_path, section_title,
     """PDF 키워드분석 섹션 추가. 워드클라우드 이미지 + 카테고리 요약 + 학년별 변화.
     section_number: 동적 섹션 번호 (기본 8, 출결 섹션 있을 때 9 등).
     """
-    from .keyword_extractor import extract_keywords, generate_wordcloud_image
     from pathlib import Path
+
+    from .keyword_extractor import extract_keywords, generate_wordcloud_image
 
     report = extract_keywords(sd.raw_texts, top_n=50, min_frequency=2)
     if not report.keywords:
@@ -1938,9 +1942,9 @@ def _append_pdf_compare_section(elements, sd, section_title,
         arrow = gc.get("변화", "-")
         arrow_str = arrow
         if arrow == "↑":
-            arrow_str = f'<font color="#2E75B6"><b>↑</b></font>'
+            arrow_str = '<font color="#2E75B6"><b>↑</b></font>'
         elif arrow == "↓":
-            arrow_str = f'<font color="#C00000"><b>↓</b></font>'
+            arrow_str = '<font color="#C00000"><b>↓</b></font>'
         tdata.append([PC(gc.get("영역", "-")), PC(gc.get("이전", "-")),
                        PC(gc.get("현재", "-")), P(arrow_str, style_subtitle)])
     if len(tdata) > 1:
@@ -2017,9 +2021,11 @@ def _append_pdf_attendance_section(elements, sd, section_title,
     """PDF "출결 및 봉사활동" 섹션 추가 (G7 / CLAUDE.md § 4).
     attendance_data / volunteer_data 있을 때만 호출됨.
     """
-    from .attendance_calculator import calculate_attendance_score, summarize_volunteer
     from reportlab.lib import colors as _rl_colors
-    from reportlab.platypus import Spacer as _RLSpacer, TableStyle as _RLTableStyle
+    from reportlab.platypus import Spacer as _RLSpacer
+    from reportlab.platypus import TableStyle as _RLTableStyle
+
+    from .attendance_calculator import calculate_attendance_score, summarize_volunteer
 
     att_report = calculate_attendance_score(getattr(sd, "attendance_data", {}) or {})
     vol_summary = summarize_volunteer(getattr(sd, "volunteer_data", {}) or {})

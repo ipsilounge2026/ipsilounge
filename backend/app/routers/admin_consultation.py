@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime, timedelta
-from dateutil.relativedelta import relativedelta
 
+from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -521,6 +521,7 @@ async def _trigger_satisfaction_survey(
     - 메일 발송 실패는 무시하고 레코드 생성은 유지.
     """
     from datetime import datetime, timedelta
+
     from app.config import settings
     from app.models.satisfaction_survey import SatisfactionSurvey
     from app.services.email_service import send_satisfaction_survey_invite_email
@@ -589,6 +590,7 @@ async def _trigger_satisfaction_survey(
 
 
 from pydantic import BaseModel as _BaseModel
+
 
 class BookingModeUpdate(_BaseModel):
     mode: str | None = None  # in_person / remote

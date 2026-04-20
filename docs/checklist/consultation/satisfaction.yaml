@@ -124,7 +124,7 @@ items:
     user_web:
       status: pass
       verified_at: "2026-04-16"
-      evidence: "미입력 상태에서 '설문 제출' 클릭 → '"오늘 상담에 대한 전반적인 만족도는?" 항목에 점수를 선택해주세요.' 빨간색 에러 표시"
+      evidence: "미입력 상태에서 '설문 제출' 클릭 → '\"오늘 상담에 대한 전반적인 만족도는?\" 항목에 점수를 선택해주세요.' 빨간색 에러 표시"
 
   - id: SAT-D2-submit_flow
     requirement: |

@@ -137,7 +137,6 @@ async def upload_file(file: UploadFile, folder: str) -> tuple[str, str]:
 
     if USE_S3:
         try:
-            from botocore.exceptions import ClientError
             s3 = get_s3_client()
             s3.put_object(
                 Bucket=settings.S3_BUCKET_NAME,
@@ -173,7 +172,6 @@ def generate_download_url(storage_key: str, expires_in: int = 3600) -> str:
 
     if USE_S3:
         try:
-            from botocore.exceptions import ClientError
             s3 = get_s3_client()
             url = s3.generate_presigned_url(
                 "get_object",

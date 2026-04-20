@@ -8,8 +8,7 @@
 - 역량별 보완법 상세 제시
 """
 import os
-import json
-from typing import Optional
+
 from modules.grade_analyzer import load_config
 
 
@@ -18,7 +17,7 @@ def build_comprehensive_prompt(setuek_analysis: dict, changche_analysis: dict,
     """종합 분석용 Claude 프롬프트 생성"""
     prompt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                'prompts', 'analyze_comprehensive.md')
-    with open(prompt_path, 'r', encoding='utf-8') as f:
+    with open(prompt_path, encoding='utf-8') as f:
         template = f.read()
 
     setuek_summary = _summarize_setuek(setuek_analysis)
@@ -185,7 +184,7 @@ def build_university_eval_mapping(grade_analysis: dict, setuek_analysis: dict,
             '협업소통': f"행특 인성·공동체 역량 평가 ({haengtuk_grade}등급)",
             '나눔배려': f"행특 인성 관련 에피소드 기반 평가 ({haengtuk_grade}등급)",
             '성실성규칙준수': f"출결 {attendance_score}점/100점, 행특 성실성 평가",
-            '리더십': f"행특+창체 자율활동 리더십 종합 평가",
+            '리더십': "행특+창체 자율활동 리더십 종합 평가",
         }
     }
 
@@ -364,9 +363,9 @@ def generate_wordcloud(keywords: list, output_path: str,
         return ''
 
     try:
-        from wordcloud import WordCloud
-        import matplotlib.pyplot as plt
         import matplotlib
+        import matplotlib.pyplot as plt
+        from wordcloud import WordCloud
         matplotlib.use('Agg')  # GUI 없이 저장
 
         # 한글 폰트 경로 찾기

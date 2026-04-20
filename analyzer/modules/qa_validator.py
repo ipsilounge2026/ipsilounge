@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 QA Validator (검수 에이전트)
 - Step 8.5: 분석 완료 후, 리포트 생성 전에 데이터 정확성/일관성을 자동 검증
@@ -8,9 +7,8 @@ QA Validator (검수 에이전트)
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional
 from datetime import date
-
+from typing import List
 
 # ── 설정 ──
 # 세특 가중치 (두 모드)
@@ -62,7 +60,7 @@ class QAResult:
 class QAReport:
     student_name: str = ""
     date_str: str = ""
-    results: List[QAResult] = field(default_factory=list)
+    results: list[QAResult] = field(default_factory=list)
 
     def add(self, result: QAResult):
         self.results.append(result)
@@ -105,7 +103,7 @@ def check_structural_completeness(setuek_data, setuek_comments, good_sentences,
         n_subj = len(setuek_data)
         if n_subj < 1:
             results.append(QAResult("P1-A-001", "세특 데이터 존재", "P1", "FAIL",
-                                    f"세특 데이터가 비어 있음", str(n_subj), "1개 이상"))
+                                    "세특 데이터가 비어 있음", str(n_subj), "1개 이상"))
         else:
             results.append(QAResult("P1-A-001", f"세특 과목 수 ({n_subj}개)", "P1", "PASS"))
 
@@ -129,7 +127,7 @@ def check_structural_completeness(setuek_data, setuek_comments, good_sentences,
         changche_areas = sorted(set(d[1] for d in changche_data)) if changche_data else []
         if n_changche < 1:
             results.append(QAResult("P1-A-003", "창체 데이터 완전성", "P1", "FAIL",
-                                    f"창체 데이터 없음 (최소 1행 필요)", str(n_changche), "최소 1"))
+                                    "창체 데이터 없음 (최소 1행 필요)", str(n_changche), "최소 1"))
         else:
             msg = f"창체 {n_changche}행 (학년 {len(changche_years)}개, 영역 {len(changche_areas)}종)"
             results.append(QAResult("P1-A-003", msg, "P1", "PASS"))
@@ -159,7 +157,7 @@ def check_structural_completeness(setuek_data, setuek_comments, good_sentences,
         expected_linkage_min = 1 if len(setuek_years) <= 1 else 2
         if n_linkage < 1:
             results.append(QAResult("P1-A-005", "연계성 데이터 완전성", "P1", "FAIL",
-                                    f"연계성 데이터 없음 (최소 1항목 필요)", str(n_linkage), "최소 1"))
+                                    "연계성 데이터 없음 (최소 1항목 필요)", str(n_linkage), "최소 1"))
         elif n_linkage < expected_linkage_min:
             results.append(QAResult("P1-A-005", "연계성 데이터 권장 수 미달", "P1", "WARN",
                                     f"연계성 {n_linkage}항목 (권장: {expected_linkage_min}항목 이상, 학년 {len(setuek_years)}개 기준)",
@@ -250,7 +248,7 @@ def check_weighted_averages(setuek_data, weights=None, is_major: bool = False):
         scores = d[2:score_end]
         recorded_avg = d[score_end]
 
-        calculated = sum(s * w for s, w in zip(scores, weights))
+        calculated = sum(s * w for s, w in zip(scores, weights, strict=False))
         diff = abs(calculated - recorded_avg)
 
         if diff > TOLERANCE:
@@ -368,7 +366,7 @@ def check_good_sentences_completeness(good_sentences, setuek_data):
     # 누락 과목 확인
     missing = subj_set - sentence_subjs
     if missing:
-        results.append(QAResult("P2-B-001", f"핵심문장 과목 커버리지", "P2", "WARN",
+        results.append(QAResult("P2-B-001", "핵심문장 과목 커버리지", "P2", "WARN",
                                 f"핵심문장 누락 과목: {', '.join(sorted(missing))}",
                                 str(len(sentence_subjs)), str(len(subj_set))))
     else:
@@ -487,7 +485,7 @@ def check_comment_repetition(setuek_comments):
 
     if repeated:
         results.append(QAResult("P3-A-001", f"코멘트 반복 구절 ({len(repeated)}건)", "P3", "WARN",
-                                f"50자 이상 동일 구절이 3개 이상 과목에서 반복됨"))
+                                "50자 이상 동일 구절이 3개 이상 과목에서 반복됨"))
     else:
         results.append(QAResult("P3-A-000", "코멘트 반복 검출", "P3", "PASS"))
 
@@ -815,7 +813,7 @@ def print_qa_report(report: QAReport):
     """QA 검증 결과 콘솔 출력"""
     print()
     print("=" * 60)
-    print(f"  QA 검증 리포트")
+    print("  QA 검증 리포트")
     print(f"  학생: {report.student_name} | 검증일: {report.date_str}")
     print("=" * 60)
     print()

@@ -6,10 +6,8 @@
 - 좋은 평가 문장 추출
 """
 import os
-import json
-from typing import Optional
-from modules.grade_analyzer import load_config
 
+from modules.grade_analyzer import load_config
 
 SETUEK_ITEMS = ['교과연계성', '탐구동기', '탐구과정', '결과성찰', '전공적합성', '차별성', '학업태도']
 SETUEK_ITEMS_NO_MAJOR = ['교과연계성', '탐구동기', '탐구과정', '결과성찰', '차별성', '학업태도']
@@ -19,7 +17,7 @@ def build_setuek_prompt(setuek_data: dict, major: str = None) -> str:
     """세특 분석용 Claude 프롬프트 생성"""
     prompt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                'prompts', 'analyze_setuek.md')
-    with open(prompt_path, 'r', encoding='utf-8') as f:
+    with open(prompt_path, encoding='utf-8') as f:
         template = f.read()
 
     # 전공적합성 지시문

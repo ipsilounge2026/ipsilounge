@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 keyword_extractor.py
 - 학생 세특/창체/행특 원본 텍스트 → 핵심 키워드 추출
@@ -35,13 +34,11 @@ CLAUDE.md § Step 8-4 구현체.
 """
 
 from __future__ import annotations
-import os
-import re
+
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-
 
 # ═══════════════════════════════════════════════════════
 # 데이터 클래스
@@ -53,28 +50,28 @@ class KeywordEntry:
     word: str
     frequency: int
     category: str              # 학업역량 / 진로역량 / 공동체역량 / 일반
-    areas: List[str]           # ["세특", "창체", "행특"] 중 등장한 영역
-    year_frequencies: Dict[int, int] = field(default_factory=dict)  # 학년별 빈도
+    areas: list[str]           # ["세특", "창체", "행특"] 중 등장한 영역
+    year_frequencies: dict[int, int] = field(default_factory=dict)  # 학년별 빈도
 
 
 @dataclass
 class KeywordReport:
     """키워드 분석 결과 종합."""
-    keywords: List[KeywordEntry]                                # 전체 상위 키워드 (빈도순)
-    by_year: Dict[int, List[Tuple[str, int]]]                   # 학년별 상위 N개 [(word, freq), ...]
-    yearly_changes: Dict[int, Dict[str, List[str]]]             # {year: {"new": [..], "disappeared": [..]}}
+    keywords: list[KeywordEntry]                                # 전체 상위 키워드 (빈도순)
+    by_year: dict[int, list[tuple[str, int]]]                   # 학년별 상위 N개 [(word, freq), ...]
+    yearly_changes: dict[int, dict[str, list[str]]]             # {year: {"new": [..], "disappeared": [..]}}
     total_tokens: int                                           # 총 형태소 수 (참고)
-    categories_summary: Dict[str, int]                          # 카테고리별 키워드 수
+    categories_summary: dict[str, int]                          # 카테고리별 키워드 수
 
 
 # ═══════════════════════════════════════════════════════
 # 설정 로딩
 # ═══════════════════════════════════════════════════════
 
-_CATEGORIES_CACHE: Optional[dict] = None
+_CATEGORIES_CACHE: dict | None = None
 
 
-def _load_categories(config_path: Optional[Path] = None) -> dict:
+def _load_categories(config_path: Path | None = None) -> dict:
     """keyword_categories.yaml 로드. 모듈 로드 후 1회만 읽음."""
     global _CATEGORIES_CACHE
     if _CATEGORIES_CACHE is not None:
@@ -89,7 +86,7 @@ def _load_categories(config_path: Optional[Path] = None) -> dict:
     return data
 
 
-def _load_wordcloud_settings(config_path: Optional[Path] = None) -> dict:
+def _load_wordcloud_settings(config_path: Path | None = None) -> dict:
     """config.yaml 의 wordcloud 섹션 로드."""
     import yaml
     if config_path is None:
@@ -121,7 +118,7 @@ _NOUN_TAGS = {"NNG", "NNP"}
 _MIN_WORD_LEN = 2  # 2글자 미만 단어 제외
 
 
-def _extract_nouns(text: str) -> List[str]:
+def _extract_nouns(text: str) -> list[str]:
     """주어진 텍스트에서 명사만 추출. 2글자 이상, 일반·고유명사만."""
     if not text or not text.strip():
         return []
@@ -173,7 +170,7 @@ def extract_keywords(
     raw_texts: dict,
     top_n: int = 50,
     min_frequency: int = 2,
-    config_path: Optional[Path] = None,
+    config_path: Path | None = None,
 ) -> KeywordReport:
     """raw_texts 딕셔너리에서 키워드 추출 + 카테고리 분류 + 학년별 추이.
 
@@ -187,11 +184,11 @@ def extract_keywords(
     categories = _load_categories(config_path)
 
     # 영역·학년별 명사 추출
-    by_area_year: Dict[str, Dict[int, List[str]]] = {"세특": {}, "창체": {}, "행특": {}}
+    by_area_year: dict[str, dict[int, list[str]]] = {"세특": {}, "창체": {}, "행특": {}}
 
     # 세특
     for yr, texts in (raw_texts.get("setuek") or {}).items():
-        bag: List[str] = []
+        bag: list[str] = []
         for t in (texts or []):
             bag.extend(_extract_nouns(t))
         by_area_year["세특"][int(yr)] = bag
@@ -213,9 +210,9 @@ def extract_keywords(
     # 전체 빈도
     total_counter: Counter = Counter()
     # 영역별 빈도 (어느 영역에 등장했는지)
-    area_counter: Dict[str, Counter] = {"세특": Counter(), "창체": Counter(), "행특": Counter()}
+    area_counter: dict[str, Counter] = {"세특": Counter(), "창체": Counter(), "행특": Counter()}
     # 학년별 빈도
-    year_counter: Dict[int, Counter] = defaultdict(Counter)
+    year_counter: dict[int, Counter] = defaultdict(Counter)
 
     for area, year_map in by_area_year.items():
         for yr, bag in year_map.items():
@@ -230,7 +227,7 @@ def extract_keywords(
     top_keywords = filtered[:top_n]
 
     # KeywordEntry 생성
-    entries: List[KeywordEntry] = []
+    entries: list[KeywordEntry] = []
     for word, freq in top_keywords:
         cat = _classify_keyword(word, categories)
         if cat == "__skip__":
@@ -246,14 +243,14 @@ def extract_keywords(
         ))
 
     # 학년별 상위 키워드 (상위 15개씩)
-    by_year_top: Dict[int, List[Tuple[str, int]]] = {}
+    by_year_top: dict[int, list[tuple[str, int]]] = {}
     for yr in sorted(year_counter.keys()):
         yr_filtered = [(w, f) for w, f in year_counter[yr].items() if f >= min_frequency]
         yr_filtered.sort(key=lambda x: (-x[1], x[0]))
         by_year_top[yr] = yr_filtered[:15]
 
     # 학년별 변화 (신규 등장 / 사라진 키워드)
-    yearly_changes: Dict[int, Dict[str, List[str]]] = {}
+    yearly_changes: dict[int, dict[str, list[str]]] = {}
     sorted_years = sorted(year_counter.keys())
     for i, yr in enumerate(sorted_years):
         if i == 0:
@@ -268,7 +265,7 @@ def extract_keywords(
         }
 
     # 카테고리별 키워드 수
-    cat_summary: Dict[str, int] = Counter(e.category for e in entries)
+    cat_summary: dict[str, int] = Counter(e.category for e in entries)
 
     return KeywordReport(
         keywords=entries,
@@ -286,8 +283,8 @@ def extract_keywords(
 def generate_wordcloud_image(
     report: KeywordReport,
     output_path: Path,
-    config_path: Optional[Path] = None,
-) -> Optional[Path]:
+    config_path: Path | None = None,
+) -> Path | None:
     """KeywordReport → 워드클라우드 PNG 이미지 생성.
 
     성공 시 output_path 반환. 키워드 0개면 None 반환 (이미지 생성 스킵).

@@ -1,6 +1,5 @@
-from datetime import date, datetime
-
 import uuid
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -9,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.admin import Admin
-from app.models.consultation_note import ConsultationNote, CONSULTATION_CATEGORIES, STUDENT_GRADES
+from app.models.consultation_note import CONSULTATION_CATEGORIES, ConsultationNote
 from app.models.user import User
 from app.utils.dependencies import get_current_admin
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 generate_report.py - 학생부 분석 리포트 생성기 진입점
 
@@ -25,9 +24,8 @@ generate_report.py - 학생부 분석 리포트 생성기 진입점
 새 학생을 추가하려면 data/students/_template.py를 복사하여 작성.
 """
 
-import sys
-import os
 import importlib.util
+import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -75,8 +73,8 @@ def print_usage_with_students():
         print()
         print(f"사용 예: python generate_report.py {students[0]}")
     else:
-        print(f"data/students/ 폴더에 학생 파일이 없습니다.")
-        print(f"data/students/_template.py를 복사하여 새 학생 파일을 작성하세요.")
+        print("data/students/ 폴더에 학생 파일이 없습니다.")
+        print("data/students/_template.py를 복사하여 새 학생 파일을 작성하세요.")
 
 
 def load_student_data(student_name: str):
@@ -172,7 +170,7 @@ def main():
     print(f"실행 모드: {mode_cfg.label()}")
 
     # ── Step 8.5: QA 검증 ──
-    from modules.qa_validator import run_full_qa, print_qa_report
+    from modules.qa_validator import print_qa_report, run_full_qa
 
     print("=" * 60)
     print(f"  Step 8.5: QA 검증 실행 - {sd.STUDENT}")
@@ -184,7 +182,7 @@ def main():
     _expected_st = 0
     _expected_is = 0
     try:
-        from modules.compare_generator import find_previous_reports, extract_previous_info, build_tracking_targets
+        from modules.compare_generator import build_tracking_targets, extract_previous_info, find_previous_reports
         _prev_list = find_previous_reports(sd.STUDENT, OUTPUT_DIR)
         if _prev_list and (getattr(sd, "compare_data", {}) or {}):
             _prev_path, _prev_ver, _prev_date, _prev_round = _prev_list[-1]
@@ -243,7 +241,7 @@ def main():
         _suffix = f"_v{_next_ver}"
         if not (getattr(sd, "compare_data", {}) or {}):
             print(f"[WARN] 기존 리포트가 있지만 compare_data 가 비어있습니다. _v{_next_ver} 로 저장하되,")
-            print(f"       CLAUDE.md § Step 0-4 에 따라 이전 대비 변화 분석을 compare_data 에 기록하는 것을 권장합니다.")
+            print("       CLAUDE.md § Step 0-4 에 따라 이전 대비 변화 분석을 compare_data 에 기록하는 것을 권장합니다.")
 
     xlsx_path = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}{_suffix}.xlsx"
     pdf_path  = OUTPUT_DIR / f"{sd.STUDENT}_학생부분석_{sd.TODAY}{_suffix}.pdf"

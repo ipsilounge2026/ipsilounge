@@ -7,44 +7,44 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
 from app.config import settings
-from app.database import Base, engine, async_session
+from app.database import Base, async_session, engine
 from app.models.admin import Admin
-from app.utils.rate_limiter import limiter
 from app.routers import (
+    admin_admins,
+    admin_admission_cases,
     admin_analysis,
     admin_audit_log,
     admin_consultation,
-    admin_counselor_sharing_review,
-    admin_dashboard,
-    admin_payments,
-    admin_users,
-    admin_admins,
     admin_consultation_notes,
     admin_consultation_survey,
-    admin_admission_cases,
+    admin_counselor_sharing_review,
+    admin_dashboard,
+    admin_guidebook,
+    admin_notice,
+    admin_payments,
+    admin_seminar,
+    admin_senior_consultation,
+    admin_users,
+    admission_cases,
     analysis,
     auth,
     consultation,
     consultation_notes,
-    senior_notes,
     consultation_survey,
     family,
+    notice,
     payment,
-    users,
-    admission_cases,
+    satisfaction_survey,
     schools,
     seminar,
-    admin_seminar,
-    admin_notice,
-    admin_senior_consultation,
-    admin_guidebook,
-    notice,
-    satisfaction_survey,
+    senior_notes,
     senior_pre_survey,
     universities,
     user_consultation_sharing,
+    users,
 )
 from app.services.scheduler_service import start_scheduler, stop_scheduler
+from app.utils.rate_limiter import limiter
 from app.utils.security import hash_password
 
 logging.basicConfig(level=logging.INFO)
@@ -127,39 +127,36 @@ async def startup():
     """서버 시작 시 DB 테이블 생성 + 관리자 초기 계정 생성"""
     # 모든 모델 import (테이블 생성을 위해)
     from app.models import (  # noqa: F401
-        analysis_order,
-        consultation_booking,
-        consultation_data_access_log,
-        consultation_slot,
-        consultation_survey,
-        notification,
-        payment as payment_model,
-        user,
-        password_reset_token,
-        consultation_note,
         admission_case,
         admission_data,
-        interview_question,
+        analysis_order,
         analysis_share,
-        seminar_schedule,
-        seminar_reservation,
-        seminar_mail_log,
-        notice as notice_model,
+        consultation_booking,
+        consultation_data_access_log,
+        consultation_note,
+        consultation_slot,
+        consultation_survey,
         counselor_change_request,
-        family_link,
         family_invite,
+        family_link,
+        guidebook,
+        interview_question,
+        notification,
+        password_reset_token,
+        seminar_mail_log,
+        seminar_reservation,
+        seminar_schedule,
         senior_change_request,
         senior_consultation_note,
-        satisfaction_survey as satisfaction_survey_model,
-        senior_pre_survey as senior_pre_survey_model,
-        guidebook,
+        user,
     )
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
         # 마이그레이션: admins 테이블에 user_id 컬럼 추가 (없는 경우)
-        from sqlalchemy import text, inspect as sa_inspect
+        from sqlalchemy import inspect as sa_inspect
+        from sqlalchemy import text
 
         def _check_and_migrate(connection):
             inspector = sa_inspect(connection)
@@ -371,7 +368,8 @@ async def shutdown():
 async def serve_local_file(folder: str, filename: str):
     """로컬 저장 파일 다운로드 (S3 미사용 시)"""
     from fastapi.responses import FileResponse
-    from app.services.file_service import get_local_file_path, USE_S3
+
+    from app.services.file_service import USE_S3, get_local_file_path
     if USE_S3:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="S3 모드에서는 이 엔드포인트를 사용하지 않습니다")

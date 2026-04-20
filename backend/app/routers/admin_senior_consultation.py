@@ -913,7 +913,7 @@ def _load_senior_survey_schema() -> dict:
     global _SCHEMA_CACHE
     if _SCHEMA_CACHE is None:
         path = Path(__file__).resolve().parent.parent / "surveys" / "schemas" / "senior_pre_survey.json"
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             _SCHEMA_CACHE = json.load(f)
     return _SCHEMA_CACHE
 

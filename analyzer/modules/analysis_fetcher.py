@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 analysis_fetcher.py
 - Phase C (2026-04-17): analyzer ↔ backend 배치 반자동 연동
@@ -27,12 +26,12 @@ CLI 사용:
 """
 
 from __future__ import annotations
+
 import json
 import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 
 # ═══════════════════════════════════════════════════════
 # 환경 설정
@@ -62,7 +61,7 @@ def _admin_token() -> str:
     return token
 
 
-def _auth_headers() -> Dict[str, str]:
+def _auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {_admin_token()}"}
 
 
@@ -72,8 +71,8 @@ def _auth_headers() -> Dict[str, str]:
 
 def _http_get_json(path: str) -> Any:
     """관리자 JWT 인증으로 backend GET → JSON 반환."""
-    from urllib.request import Request, urlopen
     from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
 
     url = f"{_api_base()}{path}"
     req = Request(url, headers=_auth_headers(), method="GET")
@@ -87,8 +86,8 @@ def _http_get_json(path: str) -> Any:
 
 def _http_get_bytes(path: str, dest: Path) -> Path:
     """관리자 JWT 로 binary 다운로드 → dest 경로에 저장."""
-    from urllib.request import Request, urlopen
     from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
 
     url = f"{_api_base()}{path}"
     req = Request(url, headers=_auth_headers(), method="GET")
@@ -107,12 +106,12 @@ def _http_get_bytes(path: str, dest: Path) -> Path:
     return dest
 
 
-def _http_post_multipart(path: str, files: Dict[str, Path]) -> Dict[str, Any]:
+def _http_post_multipart(path: str, files: dict[str, Path]) -> dict[str, Any]:
     """multipart/form-data 로 여러 파일 POST. 표준 라이브러리로 수동 구성."""
-    from urllib.request import Request, urlopen
-    from urllib.error import HTTPError
     import mimetypes
     import uuid as _uuid
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
 
     boundary = f"----analyzerBoundary{_uuid.uuid4().hex}"
     body = bytearray()
@@ -142,7 +141,7 @@ def _http_post_multipart(path: str, files: Dict[str, Path]) -> Dict[str, Any]:
 # 1. 대기 목록 조회 (list_pending)
 # ═══════════════════════════════════════════════════════
 
-def list_pending() -> List[Dict[str, Any]]:
+def list_pending() -> list[dict[str, Any]]:
     """status=processing 건 목록 반환.
     Returns: [{"analysis_id", "user_name", "service_type", "status",
                "school_record_filename", "target_university", "target_major",
@@ -181,7 +180,7 @@ def print_pending():
 # 2. 학생부 다운로드 + 템플릿 스캐폴딩 (fetch)
 # ═══════════════════════════════════════════════════════
 
-def fetch(analysis_id: str, student_name: str) -> Dict[str, Path]:
+def fetch(analysis_id: str, student_name: str) -> dict[str, Path]:
     """학생부 PDF 다운로드 + 학생 데이터 파일 템플릿 생성.
     반환: {"pdf_path": Path, "student_file": Path, "metadata": dict}
     """
@@ -255,7 +254,7 @@ def _today_yyyymmdd() -> str:
 # 3. 리포트 업로드 (upload)
 # ═══════════════════════════════════════════════════════
 
-def upload(student_name: str, analysis_id: str) -> Dict[str, Any]:
+def upload(student_name: str, analysis_id: str) -> dict[str, Any]:
     """output/ 에서 Excel + PDF 를 찾아서 backend 에 업로드.
     성공 시 backend 는 status 를 review 로 전환.
     """
@@ -272,7 +271,7 @@ def upload(student_name: str, analysis_id: str) -> Dict[str, Any]:
 
     xlsx = xlsx_files[0]
     pdf = pdf_files[0]
-    print(f"[INFO] 업로드 대상:")
+    print("[INFO] 업로드 대상:")
     print(f"  Excel: {xlsx.name}")
     print(f"  PDF:   {pdf.name}")
 
@@ -299,7 +298,7 @@ def _usage():
     print("  IPSILOUNGE_ADMIN_TOKEN (관리자 JWT)")
 
 
-def _parse_kv(argv: List[str], key: str) -> Optional[str]:
+def _parse_kv(argv: list[str], key: str) -> str | None:
     """argv 에서 '--key value' 추출."""
     try:
         idx = argv.index(key)

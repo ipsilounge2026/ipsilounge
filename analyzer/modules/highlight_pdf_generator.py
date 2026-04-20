@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 highlight_pdf_generator.py
 - G6 v1 (2026-04-19): 노란색 하이라이트 (핵심평가문장)
@@ -47,13 +46,11 @@ highlight_pdf_generator.py
     - 일부 문장 미탐지 → 해당 문장만 스킵, 나머지 계속 진행
 """
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import fitz  # PyMuPDF
-
 
 # ── 색상 상수 (RGB 0~1 스케일, PyMuPDF 관례) ──
 HIGHLIGHT_YELLOW = (1.0, 0.97, 0.35)   # 핵심평가문장
@@ -119,8 +116,8 @@ class HighlightEntry:
 @dataclass
 class HighlightReport:
     output_path: Path
-    entries: List[HighlightEntry] = field(default_factory=list)
-    source_pdf: Optional[Path] = None
+    entries: list[HighlightEntry] = field(default_factory=list)
+    source_pdf: Path | None = None
     total_pages: int = 0
     skipped_reason: str = ""   # 생성 스킵 시 사유
 
@@ -137,7 +134,7 @@ class HighlightReport:
         return sum(1 for e in self.entries if not e.matched)
 
 
-def _resolve_source_pdf(sd, project_root: Path) -> Optional[Path]:
+def _resolve_source_pdf(sd, project_root: Path) -> Path | None:
     """sd.source_pdf_path 를 실제 경로로 해석.
 
     - 빈 문자열/미정의 → None
@@ -158,7 +155,7 @@ def _resolve_source_pdf(sd, project_root: Path) -> Optional[Path]:
     return p
 
 
-def _collect_entries(good_sentences, highlight_quotes=None) -> List[HighlightEntry]:
+def _collect_entries(good_sentences, highlight_quotes=None) -> list[HighlightEntry]:
     """good_sentences + highlight_quotes → HighlightEntry 통합 리스트.
 
     번호 부여 순서: 노랑(good_sentences) → 초록(강점 인용) → 주황(보완점 인용).
@@ -169,7 +166,7 @@ def _collect_entries(good_sentences, highlight_quotes=None) -> List[HighlightEnt
         highlight_quotes: v2 구조 - {"setuek": {"과목라벨": {"green":[...], "orange":[...]}}}.
                           None / 빈 dict 허용.
     """
-    entries: List[HighlightEntry] = []
+    entries: list[HighlightEntry] = []
     number = 0
 
     # ── 노란색: good_sentences ──
@@ -220,7 +217,7 @@ def _collect_entries(good_sentences, highlight_quotes=None) -> List[HighlightEnt
     return entries
 
 
-def _search_rects(page: fitz.Page, sentence: str) -> List[fitz.Rect]:
+def _search_rects(page: fitz.Page, sentence: str) -> list[fitz.Rect]:
     """페이지에서 문장 위치 탐색. 여러 단계의 매칭 폴백 적용.
 
     단계:
@@ -262,7 +259,7 @@ def _search_rects(page: fitz.Page, sentence: str) -> List[fitz.Rect]:
 
     # 긴 세그먼트부터 매치 시도 — 가장 특이한 문구일수록 오탐 적음
     segments.sort(key=len, reverse=True)
-    segment_rects: List[fitz.Rect] = []
+    segment_rects: list[fitz.Rect] = []
     for seg in segments[:3]:  # 상위 3개 세그먼트까지만
         seg_rects = page.search_for(seg, quads=False) or []
         segment_rects.extend(seg_rects)
@@ -270,7 +267,7 @@ def _search_rects(page: fitz.Page, sentence: str) -> List[fitz.Rect]:
     return segment_rects
 
 
-def _annotate_entry(page: fitz.Page, rects: List[fitz.Rect], entry: HighlightEntry):
+def _annotate_entry(page: fitz.Page, rects: list[fitz.Rect], entry: HighlightEntry):
     """매치된 rect 에 색상별 하이라이트 주석 + 툴팁 정보 삽입."""
     if not rects:
         return
@@ -287,7 +284,7 @@ def _annotate_entry(page: fitz.Page, rects: List[fitz.Rect], entry: HighlightEnt
     annot.update()
 
 
-def _append_legend_page(doc: fitz.Document, entries: List[HighlightEntry],
+def _append_legend_page(doc: fitz.Document, entries: list[HighlightEntry],
                         student: str, today: str):
     """마지막에 범례 페이지 추가. 번호·원문·활용처·역량 정리표."""
     # A4 사이즈 (PyMuPDF 단위: 1 point = 1/72 inch)
@@ -515,7 +512,7 @@ def print_highlight_summary(report: HighlightReport):
     print(f"  전체 {len(report.entries)}개 (매치 {report.matched_count} / 미매치 {report.unmatched_count})  -  " + " · ".join(color_stats))
 
     if report.unmatched_count > 0:
-        print(f"  [WARN] 미매치 항목 (OCR·줄바꿈·원본 차이):")
+        print("  [WARN] 미매치 항목 (OCR·줄바꿈·원본 차이):")
         for e in report.entries:
             if not e.matched:
                 short = e.sentence[:40] + ("..." if len(e.sentence) > 40 else "")

@@ -4,9 +4,9 @@
 - 파일 관리
 - JSON I/O
 """
+import glob
 import json
 import os
-import glob
 from pathlib import Path
 
 
@@ -109,7 +109,7 @@ def save_json(data: dict, output_path: str) -> None:
 
 def load_json(path: str) -> dict:
     """JSON 파일 로드"""
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         return json.load(f)
 
 

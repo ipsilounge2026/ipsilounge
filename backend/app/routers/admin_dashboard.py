@@ -1,9 +1,8 @@
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import and_, func, extract, select, not_, exists
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.admin import Admin, AdminStudentAssignment, SeniorStudentAssignment

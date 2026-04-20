@@ -19,7 +19,6 @@ xlsx 스키마 (단일 시트: 권장과목):
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Any
 
 import openpyxl

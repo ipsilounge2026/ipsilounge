@@ -1,10 +1,9 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.consultation_booking import ConsultationBooking
 from app.models.consultation_slot import ConsultationSlot
 from app.schemas.consultation import SlotBulkCreateRequest
 

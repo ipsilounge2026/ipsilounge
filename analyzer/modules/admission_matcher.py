@@ -6,8 +6,8 @@
 - 종합 판단 코멘트 생성 (Claude용 데이터 준비)
 """
 import os
+
 import openpyxl
-from typing import Optional
 
 
 def load_admission_db(xlsx_path: str = None) -> list:

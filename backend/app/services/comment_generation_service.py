@@ -95,7 +95,7 @@ def _gen_grade_trend_comment(naesin: dict, grade_trend: dict) -> str:
             )
         else:
             parts.append(
-                f"학기별 등급 변동이 크지 않아 안정적인 성적을 유지하고 있습니다."
+                "학기별 등급 변동이 크지 않아 안정적인 성적을 유지하고 있습니다."
             )
 
     # 과목 균형도

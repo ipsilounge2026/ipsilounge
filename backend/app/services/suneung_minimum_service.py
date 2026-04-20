@@ -5,10 +5,8 @@
 - 학생 모의고사 등급 기반 최저 충족 여부 시뮬레이션
 """
 
-import os
 import re
 from itertools import combinations
-from pathlib import Path
 from typing import Any
 
 import openpyxl

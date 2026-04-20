@@ -29,7 +29,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 
 # backend 디렉터리를 PYTHONPATH에 추가 (app 모듈 찾기)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -48,20 +48,17 @@ from app.models import (  # noqa: E402, F401
     consultation_booking,
     consultation_note,
     consultation_slot,
-    consultation_survey as _consultation_survey_module,
     counselor_change_request,
     interview_question,
-    notice as notice_model,
     notification,
     password_reset_token,
-    payment as payment_model,
     seminar_mail_log,
     seminar_reservation,
     seminar_schedule,
     user,
 )
-from app.models.user import User  # noqa: E402
 from app.models.consultation_survey import ConsultationSurvey  # noqa: E402
+from app.models.user import User  # noqa: E402
 
 
 def _is_empty_answers(answers) -> bool:

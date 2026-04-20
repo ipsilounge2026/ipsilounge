@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +43,7 @@ class SurveyPatchRequest(BaseModel):
 async def get_schema(session_timing: str | None = None):
     """사전 설문 스키마 조회 (인증 불필요)"""
     path = Path(__file__).resolve().parent.parent / "surveys" / "schemas" / "senior_pre_survey.json"
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         schema = json.load(f)
     if session_timing and session_timing in schema.get("session_questions", {}):
         session = schema["session_questions"][session_timing]

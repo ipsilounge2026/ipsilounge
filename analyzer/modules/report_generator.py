@@ -5,8 +5,9 @@
 규칙: merge_cells 금지, wrap_text 금지, Arial 폰트, 파란 헤더(4472C4)
 """
 import os
+
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 # ─── 스타일 상수 ───
@@ -639,13 +640,13 @@ def generate_excel_report(all_results: dict, output_path: str) -> str:
 
 def generate_pdf_report(all_results: dict, output_path: str) -> str:
     """PDF 리포트 생성"""
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import mm
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.colors import HexColor
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     # 한글 폰트 등록
     font_registered = False

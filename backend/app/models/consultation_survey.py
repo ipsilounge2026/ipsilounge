@@ -20,7 +20,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
-
 # 선배 공유 기본 검토 상태 (V1 §6 상담사 설문 기록 게이트)
 SENIOR_REVIEW_STATUS_PENDING = "pending"
 SENIOR_REVIEW_STATUS_REVIEWED = "reviewed"

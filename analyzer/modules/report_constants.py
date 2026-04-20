@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 report_constants.py
 - 학생별로 달라지지 않는 공통 상수/설정
@@ -6,9 +5,9 @@ report_constants.py
 """
 
 import os
+
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-
 
 # ═══════════════════════════════════════════════════════
 # 세특 평가 상수

@@ -1,9 +1,11 @@
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum as SAEnum
+import enum
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, ForeignKey, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime
-import uuid
-import enum
 
 from app.database import Base
 

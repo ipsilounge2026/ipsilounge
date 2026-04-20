@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 mode_config.py
 - CLAUDE.md § 13 "실행 모드별 처리" 구현 (2026-04-19)
@@ -22,7 +21,6 @@ Areas (partial 모드):
 from dataclasses import dataclass
 from typing import Optional, Set
 
-
 VALID_MODES = {"full", "no-grade", "partial"}
 VALID_AREAS = {"setuek", "changche", "haengtuk"}
 
@@ -44,7 +42,7 @@ class ModeConfig:
         }.get(area, True)
 
     @property
-    def excluded_areas(self) -> Set[str]:
+    def excluded_areas(self) -> set[str]:
         ex = set()
         if not self.include_setuek:   ex.add("setuek")
         if not self.include_changche: ex.add("changche")
@@ -62,7 +60,7 @@ class ModeConfig:
         return self.mode
 
 
-def build_mode_config(mode: str = "full", areas: Optional[str] = None) -> ModeConfig:
+def build_mode_config(mode: str = "full", areas: str | None = None) -> ModeConfig:
     """CLI 인자 → ModeConfig 변환.
 
     Args:

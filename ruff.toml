@@ -1,0 +1,55 @@
+# ===================================================================
+# ruff 설정 (2026-04-19 Phase B 도입)
+# ===================================================================
+# pre-commit 을 통한 점진적 린트 도입 정책:
+# - 1차: **심각한 버그 패턴** 만 차단 (import 오류, undefined name, typo 등)
+# - 기존 코드의 스타일 이슈(E7xx, F841 unused var) 는 당장 차단하지 않음
+# - 새 파일/변경 라인부터 점진적으로 개선
+# ===================================================================
+
+line-length = 120
+target-version = "py312"
+
+[lint]
+# 기본 enabled 룰셋
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes (undefined name, unused import 등)
+    "W",   # pycodestyle warnings
+    "I",   # isort (import 정렬)
+    "B",   # flake8-bugbear (흔한 버그)
+    "UP",  # pyupgrade (deprecated 문법)
+]
+
+# 기존 코드에서 너무 많이 걸려 점진적으로 정리할 항목
+# 각 ignore 옆에 [정리 대상] 태그 — 향후 한 번에 정리 가능
+ignore = [
+    # 스타일 관련 — 기능과 무관, 에디터 자동 포매팅 결과로 남는 경우 많음
+    "E402",  # module-level-import-not-at-top [추후 정리]
+    "E701",  # multiple-statements-on-one-line-colon [추후 정리]
+    "E702",  # multiple-statements-on-one-line-semicolon [추후 정리]
+    "E712",  # true-false-comparison [추후 정리] (== True → is True)
+    "E731",  # lambda-assignment — 기존 코드 많이 사용
+    "E501",  # line-too-long — 한글 주석 많음, 120 초과 자주
+    # 사용 안 함 변수 — 디버깅 흔적, 향후 의도 확인 후 제거
+    "F841",  # unused-local-variable [추후 정리]
+    # bugbear
+    "B007",  # unused-loop-control-variable [추후 정리] — `for k, v in …` 중 k 만 안 쓰는 케이스 다수
+    "B008",  # function-call-in-default-argument — Depends(get_db) 등 FastAPI 패턴
+    "B904",  # raise-without-from-inside-except — 기존 코드 많이 사용
+    # pyupgrade — Python 3.10+ 문법 권장이지만 기존 코드가 `Optional[X]` / `Union[X, Y]` / `isinstance(x, (A, B))` 다수
+    "UP035", # deprecated-import [추후 정리] `typing.X` → `collections.abc.X` 마이그레이션
+    "UP038", # isinstance tuple → `X | Y` 문법 [추후 정리]
+]
+
+# 특정 파일/경로만 예외 처리 (예: 테스트에서는 star import 허용)
+[lint.per-file-ignores]
+"backend/tests/**" = ["F401"]  # 테스트에서 설정 import 만 하는 경우
+"**/__init__.py" = ["F401", "F403"]  # re-export 성 import 허용
+
+# 분석기 (analyzer) 는 CLI 도구이고 한글 변수명·구조가 특수하므로 일부 완화
+"analyzer/modules/**" = ["F401"]  # unused import (구버전 모듈 보존)
+
+[lint.isort]
+# 프로젝트 로컬 패키지 (first-party) 명시
+known-first-party = ["app", "modules"]

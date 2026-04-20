@@ -24,19 +24,14 @@ import sys
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
-from modules.extractor import (
-    prepare_all_images, save_json, load_json, get_temp_dir
-)
-from modules.grade_analyzer import load_config, run_grade_analysis
 from modules.admission_matcher import run_admission_matching
-from modules.setuek_analyzer import build_setuek_prompt, run_setuek_analysis
 from modules.changche_analyzer import build_changche_prompt, run_changche_analysis
+from modules.comprehensive_analyzer import build_comprehensive_prompt, run_comprehensive_analysis
+from modules.extractor import get_temp_dir, load_json, prepare_all_images, save_json
+from modules.grade_analyzer import load_config, run_grade_analysis
 from modules.haengtuk_analyzer import build_haengtuk_prompt, run_haengtuk_analysis
-from modules.comprehensive_analyzer import (
-    build_comprehensive_prompt, run_comprehensive_analysis
-)
 from modules.report_generator import generate_excel_report, generate_pdf_report
-
+from modules.setuek_analyzer import build_setuek_prompt, run_setuek_analysis
 
 INPUT_DIR = os.path.join(PROJECT_ROOT, 'input')
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'output')
@@ -71,14 +66,14 @@ def step2_extraction(temp_dir: str) -> None:
     ]
 
     print(f'\n이미지 {len(image_paths)}개가 준비되었습니다.')
-    print(f'\n다음 작업을 Claude Code에서 수행해주세요:')
-    print(f'1. temp/images/ 폴더의 이미지를 읽어주세요')
-    print(f'2. 아래 프롬프트의 형식에 맞춰 데이터를 추출해주세요:')
+    print('\n다음 작업을 Claude Code에서 수행해주세요:')
+    print('1. temp/images/ 폴더의 이미지를 읽어주세요')
+    print('2. 아래 프롬프트의 형식에 맞춰 데이터를 추출해주세요:')
     for pf in prompt_files:
         print(f'   - prompts/{pf}')
-    print(f'3. 추출 결과를 아래 JSON 형식으로 저장해주세요:')
-    print(f'   temp/01_extracted_data.json')
-    print(f'\n필수 JSON 구조:')
+    print('3. 추출 결과를 아래 JSON 형식으로 저장해주세요:')
+    print('   temp/01_extracted_data.json')
+    print('\n필수 JSON 구조:')
     print(json.dumps({
         'student_info': {'name': '학생이름', 'school': '학교명'},
         'attendance': {'1': {}, '2': {}, '3': {}},
@@ -95,7 +90,7 @@ def step2_extraction(temp_dir: str) -> None:
         print('기존 추출 데이터를 사용합니다. 재추출하려면 파일을 삭제 후 재실행하세요.')
     else:
         print(f'\n[대기] {output_path} 파일이 생성되면 Step 3부터 계속 실행하세요:')
-        print(f'  python analyze.py --resume 3')
+        print('  python analyze.py --resume 3')
 
 
 def step3_grade_analysis(temp_dir: str, university: str = None,
@@ -174,9 +169,9 @@ def step5_setuek_analysis(temp_dir: str, department: str = None) -> None:
         print(f'[기존 파일 발견] {output_path}')
     else:
         print(f'프롬프트 저장: {prompt_path}')
-        print(f'Claude Code에서 위 프롬프트로 세특을 분석하고,')
+        print('Claude Code에서 위 프롬프트로 세특을 분석하고,')
         print(f'결과를 {output_path}에 저장해주세요.')
-        print(f'완료 후: python analyze.py --resume 6')
+        print('완료 후: python analyze.py --resume 6')
 
 
 def step6_changche_analysis(temp_dir: str, department: str = None) -> None:
@@ -197,9 +192,9 @@ def step6_changche_analysis(temp_dir: str, department: str = None) -> None:
         print(f'[기존 파일 발견] {output_path}')
     else:
         print(f'프롬프트 저장: {prompt_path}')
-        print(f'Claude Code에서 위 프롬프트로 창체를 분석하고,')
+        print('Claude Code에서 위 프롬프트로 창체를 분석하고,')
         print(f'결과를 {output_path}에 저장해주세요.')
-        print(f'완료 후: python analyze.py --resume 7')
+        print('완료 후: python analyze.py --resume 7')
 
 
 def step7_haengtuk_analysis(temp_dir: str) -> None:
@@ -220,9 +215,9 @@ def step7_haengtuk_analysis(temp_dir: str) -> None:
         print(f'[기존 파일 발견] {output_path}')
     else:
         print(f'프롬프트 저장: {prompt_path}')
-        print(f'Claude Code에서 위 프롬프트로 행특을 분석하고,')
+        print('Claude Code에서 위 프롬프트로 행특을 분석하고,')
         print(f'결과를 {output_path}에 저장해주세요.')
-        print(f'완료 후: python analyze.py --resume 8')
+        print('완료 후: python analyze.py --resume 8')
 
 
 def step8_comprehensive(temp_dir: str) -> None:
@@ -275,9 +270,9 @@ def step8_comprehensive(temp_dir: str) -> None:
         print(f'  종합등급: {comp_result["overall_grade"]} ({comp_result["overall_score"]}점)')
     else:
         print(f'프롬프트 저장: {prompt_path}')
-        print(f'Claude Code에서 위 프롬프트로 종합 분석하고,')
+        print('Claude Code에서 위 프롬프트로 종합 분석하고,')
         print(f'결과를 {output_path}에 저장해주세요.')
-        print(f'완료 후: python analyze.py --resume 9')
+        print('완료 후: python analyze.py --resume 9')
 
 
 def step9_generate_reports(temp_dir: str) -> None:
@@ -352,7 +347,7 @@ def main():
                 steps[step_num]()
             except FileNotFoundError as e:
                 print(f'\n[오류] 필요한 파일이 없습니다: {e}')
-                print(f'이전 단계를 먼저 완료해주세요.')
+                print('이전 단계를 먼저 완료해주세요.')
                 break
             except Exception as e:
                 print(f'\n[오류] Step {step_num} 실행 중 오류: {e}')

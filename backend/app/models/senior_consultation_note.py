@@ -14,15 +14,14 @@
 10. 학원 운영자에게 공유할 내용
 """
 
-from datetime import datetime
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Column, String, Text, Boolean, DateTime, Date, Integer, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from app.database import Base
-
 
 # 선배 상담 세션 타이밍
 SENIOR_SESSION_TIMINGS = {

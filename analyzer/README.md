@@ -22,8 +22,8 @@ CLAUDE.md 에 명시된 `pdf2image`·`kiwipiepy`·`wordcloud`·`matplotlib`·`pa
 ## 개발 모드 사용법 (CLI 직접 실행)
 
 ### 1. 학생부 파일 Claude 에게 전달 → 학생 데이터 파일 생성
-Claude Code 세션에 학생부 PDF/이미지를 드래그하고 "분석해줘" 요청하면, Claude 가 
-`data/students/<학생이름>.py` 에 15개 필수 변수(세특·창체·행특·연계성·종합 등) 를 
+Claude Code 세션에 학생부 PDF/이미지를 드래그하고 "분석해줘" 요청하면, Claude 가
+`data/students/<학생이름>.py` 에 15개 필수 변수(세특·창체·행특·연계성·종합 등) 를
 채워 넣는다. 템플릿은 `data/students/_template.py`.
 
 ### 2. 리포트 생성 CLI
@@ -97,7 +97,7 @@ analyzer/
 
 ## 운영 모드 (향후)
 
-이식 후 상담사 검수 UI 가 준비되면 `backend/app/services/analyzer_service.py` 
+이식 후 상담사 검수 UI 가 준비되면 `backend/app/services/analyzer_service.py`
 wrapper 를 통해 자동 분석 파이프라인이 연결된다.
 
 ```

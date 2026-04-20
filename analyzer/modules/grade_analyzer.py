@@ -9,9 +9,10 @@
 - 출결 점수 산출
 """
 import os
-import yaml
-import openpyxl
 from typing import Optional
+
+import openpyxl
+import yaml
 
 
 def load_config(config_path: str = None) -> dict:
@@ -19,7 +20,7 @@ def load_config(config_path: str = None) -> dict:
     if config_path is None:
         config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                    'config', 'config.yaml')
-    with open(config_path, 'r', encoding='utf-8') as f:
+    with open(config_path, encoding='utf-8') as f:
         return yaml.safe_load(f)
 
 
@@ -300,7 +301,7 @@ def _parse_ratio(ratio_str: str) -> dict:
 
 def load_course_requirements(xlsx_path: str = None,
                               university: str = None,
-                              department: str = None) -> Optional[dict]:
+                              department: str = None) -> dict | None:
     """교과 이수 기준표 로드. 대학+학과에 맞는 핵심/권장 과목 반환.
 
     ※ 2026-04 스키마 정규화:
@@ -401,7 +402,7 @@ def _normalize_key(name: str) -> str:
     return ''.join(name.split()).lower()
 
 
-def _lookup_row(rows: list, university: str, department: str) -> Optional[dict]:
+def _lookup_row(rows: list, university: str, department: str) -> dict | None:
     """대학+모집단위로 행 조회. 정확 매칭 → 부분 매칭 순."""
     univ_n = _normalize_key(university)
     major_n = _normalize_key(department)
@@ -460,7 +461,7 @@ def _merge_requirements(requirements_list: list) -> dict:
 
 
 def evaluate_course_fulfillment(student_subjects: list,
-                                 requirements: Optional[dict]) -> dict:
+                                 requirements: dict | None) -> dict:
     """교과 이수 충실도 평가 (1~5점)"""
     if not requirements:
         return {
@@ -496,7 +497,7 @@ def evaluate_course_fulfillment(student_subjects: list,
             detail = f'핵심과목 전부 이수 + 권장과목 {len(rec_taken)}개 이수'
         elif len(rec_taken) == 1:
             score = 4
-            detail = f'핵심과목 전부 이수 + 권장과목 1개 이수'
+            detail = '핵심과목 전부 이수 + 권장과목 1개 이수'
         else:
             score = 3
             detail = '핵심과목 전부 이수, 권장과목 미이수'

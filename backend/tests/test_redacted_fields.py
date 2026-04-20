@@ -8,7 +8,6 @@ P3-① 테스트: 공유 OFF 로 가려진 필드에 대한 _redacted_fields 메
 
 from __future__ import annotations
 
-
 # ─────────────────────────────────────────────────────────────
 # 1. _apply_sharing_filter (admin_senior_consultation 내부 헬퍼)
 # ─────────────────────────────────────────────────────────────

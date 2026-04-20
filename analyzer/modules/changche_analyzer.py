@@ -7,10 +7,8 @@
 - 분량 비율 분석 (글자수 제한 대비 실제 작성 비율)
 """
 import os
-import json
-from typing import Optional
-from modules.grade_analyzer import load_config
 
+from modules.grade_analyzer import load_config
 
 # 영역별 평가 항목명
 CHANGCHE_ITEMS = {
@@ -24,7 +22,7 @@ def build_changche_prompt(changche_data: dict, major: str = None) -> str:
     """창체 분석용 Claude 프롬프트 생성"""
     prompt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                                'prompts', 'analyze_changche.md')
-    with open(prompt_path, 'r', encoding='utf-8') as f:
+    with open(prompt_path, encoding='utf-8') as f:
         template = f.read()
 
     if major:

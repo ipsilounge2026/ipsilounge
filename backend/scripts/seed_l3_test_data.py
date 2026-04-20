@@ -51,31 +51,6 @@ from app.database import Base, async_session, engine  # noqa: E402
 # 모든 모델 import (create_all 대상)
 from app.models import (  # noqa: E402, F401
     admin as _admin_mod,
-    admission_case,
-    admission_data,
-    analysis_order,
-    analysis_share,
-    consultation_booking,
-    consultation_note,
-    consultation_slot,
-    consultation_survey,
-    counselor_change_request,
-    family_invite,
-    family_link as _family_link_mod,
-    guidebook,
-    interview_question,
-    notice as _notice_mod,
-    notification,
-    password_reset_token,
-    payment as payment_model,
-    satisfaction_survey as ss_model,
-    seminar_mail_log,
-    seminar_reservation,
-    seminar_schedule,
-    senior_change_request,
-    senior_consultation_note,
-    senior_pre_survey as sp_model,
-    user as _user_mod,
 )
 from app.models.admin import Admin  # noqa: E402
 from app.models.consultation_slot import ConsultationSlot  # noqa: E402
@@ -83,7 +58,6 @@ from app.models.consultation_survey import ConsultationSurvey  # noqa: E402
 from app.models.family_link import FamilyLink  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.utils.security import hash_password  # noqa: E402
-
 
 # ─── 시드 정의 ─────────────────────────────────────────────────────────
 DEFAULT_PASSWORD = "devpass1!"
@@ -333,7 +307,9 @@ async def _seed() -> dict:
         # 상담 예약 E2E 테스트(Sprint 3)용. 리드타임(학습상담 설문제출+7일 경과) 고려해
         # 오늘로부터 8~21일 범위에 하루 3개(오전 10시, 오후 2시, 오후 4시) 총 14일 × 3 = 42 슬롯.
         # 멱등: 동일 (admin_id, date, start_time) 존재 시 재사용.
-        from datetime import date as _date_type, time as _time_type, timedelta as _tdelta
+        from datetime import date as _date_type
+        from datetime import time as _time_type
+        from datetime import timedelta as _tdelta
         counselor = admin_objs.get("counselor_a")
         if counselor is not None:
             today = _date_type.today()

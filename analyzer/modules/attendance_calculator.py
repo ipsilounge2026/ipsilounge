@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 attendance_calculator.py
 - G7 (2026-04-17): 출결 데이터 집계 + 감점 계산 + 봉사 시수 집계
@@ -30,10 +29,10 @@ CLAUDE.md § 4 (봉사활동은 점수화하지 않음, 시수만 표기) + § 1
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
-
 
 # ═══════════════════════════════════════════════════════
 # 데이터 클래스
@@ -44,9 +43,9 @@ class AttendanceReport:
     """출결 점수 계산 결과."""
     score: float                               # 최종 점수 (0~100)
     base: float                                # 기본 점수 (100)
-    deductions: Dict[str, float]               # 감점 내역 {"미인정결석 2일": -10, ...}
-    total_counts: Dict[str, int]               # 4종×3사유 합계 카운트
-    by_year: Dict[int, Dict]                   # 학년별 원본 데이터 유지
+    deductions: dict[str, float]               # 감점 내역 {"미인정결석 2일": -10, ...}
+    total_counts: dict[str, int]               # 4종×3사유 합계 카운트
+    by_year: dict[int, dict]                   # 학년별 원본 데이터 유지
     has_data: bool                             # 유효 데이터 존재 여부
 
 
@@ -54,8 +53,8 @@ class AttendanceReport:
 class VolunteerSummary:
     """봉사 활동 요약."""
     total_hours: int                           # 학년별 총합 시간
-    by_year: Dict[int, Dict[str, object]]      # {학년: {"hours": N, "activities": [...]}}
-    all_activities: List[str]                  # 모든 활동 평탄화 리스트
+    by_year: dict[int, dict[str, object]]      # {학년: {"hours": N, "activities": [...]}}
+    all_activities: list[str]                  # 모든 활동 평탄화 리스트
     has_data: bool
 
 
@@ -63,7 +62,7 @@ class VolunteerSummary:
 # 설정 로딩
 # ═══════════════════════════════════════════════════════
 
-def _load_attendance_config(config_path: Optional[Path] = None) -> dict:
+def _load_attendance_config(config_path: Path | None = None) -> dict:
     """config.yaml 의 attendance_scoring 섹션 로드."""
     import yaml
     if config_path is None:
@@ -107,7 +106,7 @@ def _has_attendance_content(data: dict) -> bool:
 
 def calculate_attendance_score(
     attendance_data: dict,
-    config_path: Optional[Path] = None,
+    config_path: Path | None = None,
 ) -> AttendanceReport:
     """학년별 출결 데이터 → 감점 공식 적용 → 최종 점수.
     attendance_data 가 비어있으면 has_data=False, score=base (감점 없음).
@@ -128,7 +127,7 @@ def calculate_attendance_score(
 
     # 학년별 정규화 + 총계 집계
     total = {f"{t}_{r}": 0 for t in _ATTENDANCE_TYPES for r in _REASONS}
-    by_year: Dict[int, Dict] = {}
+    by_year: dict[int, dict] = {}
     for yr, entry in sorted(attendance_data.items()):
         norm = _normalize_year_entry(entry)
         by_year[int(yr)] = norm
@@ -137,7 +136,7 @@ def calculate_attendance_score(
                 total[f"{t}_{r}"] += norm[t][r]
 
     # 감점 공식 (미인정만 감점)
-    deductions: Dict[str, float] = {}
+    deductions: dict[str, float] = {}
     score = base
 
     # 미인정결석
@@ -193,9 +192,9 @@ def summarize_volunteer(volunteer_data: dict) -> VolunteerSummary:
     if not isinstance(volunteer_data, dict) or not volunteer_data:
         return VolunteerSummary(total_hours=0, by_year={}, all_activities=[], has_data=False)
 
-    by_year: Dict[int, Dict[str, object]] = {}
+    by_year: dict[int, dict[str, object]] = {}
     total = 0
-    all_acts: List[str] = []
+    all_acts: list[str] = []
     for yr, entry in sorted(volunteer_data.items()):
         if not isinstance(entry, dict):
             continue

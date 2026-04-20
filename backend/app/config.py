@@ -2,7 +2,6 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
-
 # 공용 데이터 루트 (xlsx DB 파일 위치)
 # - 기본값: ipsilounge/analyzer/data/ (통합 이식 후 단일 소스)
 # - 운영(EC2) 등에서는 SHARED_DATA_ROOT 환경변수로 재지정

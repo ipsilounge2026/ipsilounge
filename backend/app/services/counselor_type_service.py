@@ -11,9 +11,9 @@ C4 상담사 유형 판정 자동 생성 서비스
 """
 from __future__ import annotations
 
-import os
 import functools
 import logging
+import os
 from typing import Any
 
 from ..config import settings
@@ -88,6 +88,7 @@ def _load_susi_db() -> list[dict]:
 def _load_susi_from_db() -> list[dict]:
     """PostgreSQL에서 수시 입결 로드 (동기)."""
     from sqlalchemy import create_engine, text
+
     from app.config import settings
     sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg", "postgresql+psycopg2").replace("postgresql://", "postgresql+psycopg2://") if "asyncpg" in settings.DATABASE_URL else settings.DATABASE_URL
     engine = create_engine(sync_url)
@@ -153,6 +154,7 @@ def _load_jeongsi_db() -> list[dict]:
 def _load_jeongsi_from_db() -> list[dict]:
     """PostgreSQL에서 정시 입결 로드 (동기)."""
     from sqlalchemy import create_engine, text
+
     from app.config import settings
     sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg", "postgresql+psycopg2").replace("postgresql://", "postgresql+psycopg2://") if "asyncpg" in settings.DATABASE_URL else settings.DATABASE_URL
     engine = create_engine(sync_url)
