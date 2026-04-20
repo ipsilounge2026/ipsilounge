@@ -9,6 +9,7 @@
  * - 학습 시간 파이/레이더 차트
  */
 
+import { useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar,
@@ -558,6 +559,210 @@ export function RadarDetailTable({ computed }: { computed: ComputedStats }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// 과목별 고등 준비율 (예비고1 V2_2 §3-3)
+// ═══════════════════════════════════════
+
+/**
+ * 수학·영어·국어·과학 각각의 고등 준비율을 바 차트로 표시하고,
+ * 과목 클릭 시 하위 항목(진도/레벨/어휘/독해/문법 등) 세부 비율 펼치기.
+ */
+
+const SUBJECT_PREP_KEYS: { detailKey: string; label: string; emoji: string }[] = [
+  { detailKey: "수학_선행", label: "수학", emoji: "➗" },
+  { detailKey: "영어_역량", label: "영어", emoji: "🇬🇧" },
+  { detailKey: "국어_역량", label: "국어", emoji: "📖" },
+  { detailKey: "과학_선행", label: "과학", emoji: "🧪" },
+];
+
+export function SubjectPrepBreakdown({ computed }: { computed: ComputedStats }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const rs = (computed.radar_scores as Record<string, unknown> | undefined);
+  const prep = rs?.prep as
+    | { total?: number; details?: Record<string, { score: number; max: number; sub?: Record<string, number> }> }
+    | undefined;
+  if (!prep || !prep.details) return null;
+
+  return (
+    <div style={{ marginBottom: 24 }} id="section-subject-prep">
+      <SectionTitle>📚 과목별 고등 준비율 (V2_2 §3-3)</SectionTitle>
+      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>
+        수학·영어·국어·과학 각각의 고등 학습 준비율. 과목을 클릭하면 하위 항목 세부 비율이 펼쳐집니다.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {SUBJECT_PREP_KEYS.map(({ detailKey, label, emoji }) => {
+          const d = prep.details?.[detailKey];
+          if (!d) return null;
+          const pct = d.max > 0 ? Math.round((d.score / d.max) * 100) : 0;
+          const color = pct >= 75 ? "#10B981" : pct >= 50 ? "#F59E0B" : "#EF4444";
+          const hasSub = d.sub && Object.keys(d.sub).length > 0;
+          const isOpen = expanded === detailKey;
+          return (
+            <div
+              key={detailKey}
+              style={{
+                background: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: 10,
+                overflow: "hidden",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => hasSub && setExpanded(isOpen ? null : detailKey)}
+                disabled={!hasSub}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  border: "none",
+                  background: "transparent",
+                  cursor: hasSub ? "pointer" : "default",
+                  textAlign: "left",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 18 }}>{emoji}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{label}</span>
+                  <span style={{ fontSize: 12, color: "#6B7280" }}>
+                    {d.score}/{d.max}
+                  </span>
+                  <span style={{ marginLeft: "auto", fontSize: 15, fontWeight: 700, color }}>{pct}%</span>
+                  {hasSub && (
+                    <span style={{ fontSize: 12, color: "#9CA3AF", minWidth: 20 }}>
+                      {isOpen ? "▲" : "▼"}
+                    </span>
+                  )}
+                </div>
+                <div style={{ height: 8, borderRadius: 4, background: "#F3F4F6", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${pct}%`,
+                      background: color,
+                      transition: "width 0.4s",
+                    }}
+                  />
+                </div>
+              </button>
+              {hasSub && isOpen && (
+                <div style={{ padding: "10px 16px 14px 16px", background: "#F9FAFB", borderTop: "1px solid #E5E7EB" }}>
+                  <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>하위 항목별 점수</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
+                    {Object.entries(d.sub || {}).map(([subKey, subScore]) => (
+                      <div key={subKey} style={{ padding: "6px 10px", background: "white", borderRadius: 6, border: "1px solid #E5E7EB" }}>
+                        <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 2 }}>{subKey}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>{subScore}점</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// 학습 습관 매트릭스 (예비고1 V2_2 §3-4)
+// ═══════════════════════════════════════
+
+/**
+ * 4축 학습 습관 레이더:
+ *   - 자기주도 비율 (D1 분석)
+ *   - 계획 실행력 (D2)
+ *   - 오답 관리 (D3)
+ *   - 문제 해결 적극성 (D4)
+ * 각 축을 0~100 으로 정규화하여 한눈에 파악.
+ */
+
+const HABIT_AXES: { detailKey: string; label: string }[] = [
+  { detailKey: "자기주도_비율", label: "자기주도 비율" },
+  { detailKey: "학습계획_실행력", label: "계획 실행력" },
+  { detailKey: "오답관리_품질", label: "오답 관리" },
+  { detailKey: "문제해결_적극성", label: "문제해결 적극성" },
+];
+
+export function StudyHabitMatrix({ computed }: { computed: ComputedStats }) {
+  const rs = (computed.radar_scores as Record<string, unknown> | undefined);
+  const study = rs?.study as
+    | { total?: number; grade?: string; details?: Record<string, { score: number; max: number; value?: string }> }
+    | undefined;
+  if (!study || !study.details) return null;
+
+  const data = HABIT_AXES.map((ax) => {
+    const d = study.details?.[ax.detailKey];
+    if (!d) return { axis: ax.label, pct: 0, raw: "-" };
+    const pct = d.max > 0 ? Math.round((d.score / d.max) * 100) : 0;
+    return {
+      axis: ax.label,
+      pct,
+      raw: `${d.score}/${d.max}${d.value ? ` (${d.value})` : ""}`,
+    };
+  });
+
+  return (
+    <div style={{ marginBottom: 24 }} id="section-habit-matrix">
+      <SectionTitle>🧭 학습 습관 매트릭스 (V2_2 §3-4)</SectionTitle>
+      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>
+        4개 축(자기주도/계획 실행/오답 관리/문제해결) 각각 0~100% 로 정규화한 습관 프로필.
+        낮은 축이 우선 개선 영역입니다.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "center" }}>
+        {/* 4축 레이더 */}
+        <div style={{ background: "white", border: "1px solid #E5E7EB", borderRadius: 10, padding: 12 }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <RadarChart data={data}>
+              <PolarGrid stroke="#E5E7EB" />
+              <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: "#374151" }} />
+              <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10, fill: "#9CA3AF" }} />
+              <Radar
+                name="현재 습관"
+                dataKey="pct"
+                stroke="#8B5CF6"
+                fill="#8B5CF6"
+                fillOpacity={0.35}
+              />
+              <Tooltip
+                contentStyle={{ fontSize: 12 }}
+                formatter={(v: number) => [`${v}%`, "정규화 점수"]}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+        {/* 항목별 상세 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {data.map((d) => {
+            const color = d.pct >= 75 ? "#10B981" : d.pct >= 50 ? "#F59E0B" : "#EF4444";
+            return (
+              <div
+                key={d.axis}
+                style={{
+                  background: "white",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#374151", flex: 1 }}>{d.axis}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color }}>{d.pct}%</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 3, background: "#F3F4F6", overflow: "hidden", marginBottom: 4 }}>
+                  <div style={{ height: "100%", width: `${d.pct}%`, background: color, transition: "width 0.4s" }} />
+                </div>
+                <div style={{ fontSize: 11, color: "#9CA3AF" }}>{d.raw}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

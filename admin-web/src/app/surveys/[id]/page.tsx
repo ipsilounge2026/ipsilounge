@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan, updateSurveyOverrides, deleteSurveyOverrides, updateSurveyChecklist, deleteSurveyChecklist, convertPreheigh1ToHigh, getSuneungMinimumSimulation, getCourseRequirementMatch, updateSurveyScoreOverrides, clearSurveyScoreOverrides } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
-import { GradeTrendChart, MockTrendChart, StudyAnalysisChart, RadarScoreChart, RadarDetailTable, SchoolTypeCompatibilityChart, SuneungMinimumSimulation } from "@/components/SurveyCharts";
+import { GradeTrendChart, MockTrendChart, StudyAnalysisChart, RadarScoreChart, RadarDetailTable, SchoolTypeCompatibilityChart, SuneungMinimumSimulation, StudyHabitMatrix, SubjectPrepBreakdown } from "@/components/SurveyCharts";
 
 interface SurveyDetail {
   id: string;
@@ -1089,6 +1089,10 @@ export default function SurveyDetailPage() {
             {survey.survey_type === "preheigh1" && survey.computed?.radar_scores && (
               <div id="section-radar-scores-preheigh1">
                 <RadarScoreChart computed={survey.computed} />
+                {/* 과목별 고등 준비율 드릴다운 (V2_2 §3-3) */}
+                <SubjectPrepBreakdown computed={survey.computed} />
+                {/* 학습 습관 매트릭스 (V2_2 §3-4) */}
+                <StudyHabitMatrix computed={survey.computed} />
                 {/* 고교유형 적합도 바 차트 (V2_2 §3-5) */}
                 <SchoolTypeCompatibilityChart computed={survey.computed} />
               </div>
