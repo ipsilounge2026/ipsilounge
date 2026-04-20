@@ -18,7 +18,11 @@ import pytest
 
 from app.services.review_notification_service import (
     _TARGET_CONSULTATION_TYPES,
+    _compose_blocked_super_admin_email,
     _compose_email,
+    _compose_unblock_email,
+    notify_analysis_blocked_to_super_admin,
+    notify_analysis_unblocked,
     notify_counselor_record_reviewed,
     notify_senior_record_reviewed,
 )
@@ -146,3 +150,123 @@ async def test_notify_swallows_exceptions():
 
     result2 = await notify_senior_record_reviewed(db, user_id)
     assert result2 is False
+
+
+# ============================================================
+# V3 §4-8-1: 자동 분석 검증 상태 전환 알림
+# ============================================================
+
+def test_compose_unblock_email_contains_context():
+    """잠금 해제 이메일 본문에 학생·담당자·일정·V3 §4-8-1 출처 포함."""
+    subject, body = _compose_unblock_email(
+        admin_name="김상담사",
+        student_name="이학생",
+        booking_date="2026-05-20",
+    )
+    assert "이학생" in subject
+    assert "잠금 해제" in subject
+    assert "김상담사" in body
+    assert "2026-05-20" in body
+    assert "pass" in body or "통과" in body
+    assert "§4-8-1" in body
+
+
+def test_compose_blocked_super_admin_email_contains_details():
+    """P1 잔존 이메일에 학생·설문 유형·영향 예약 개수·P1 개수 포함."""
+    subject, body = _compose_blocked_super_admin_email(
+        super_admin_name="운영자",
+        student_name="박학생",
+        survey_type="high",
+        timing="T2",
+        affected_count=3,
+        p1_issue_count=2,
+    )
+    assert "박학생" in subject
+    assert "BLOCKED" in subject
+    assert "고등" in subject
+    assert "T2" in subject
+    assert "운영자" in body
+    assert "고등" in body
+    assert "T2" in body
+    assert "3" in body  # affected count
+    assert "2" in body  # p1 count
+    assert "/super-admin/issues" in body  # 점프 링크
+    assert "§4-8-1" in body
+
+
+def test_compose_blocked_super_admin_email_preheigh1_label():
+    """preheigh1 설문은 '예비고1' 로 라벨링 되어야."""
+    subject, _ = _compose_blocked_super_admin_email(
+        super_admin_name=None,
+        student_name="김예비",
+        survey_type="preheigh1",
+        timing=None,
+        affected_count=0,
+        p1_issue_count=1,
+    )
+    assert "예비고1" in subject
+
+
+@pytest.mark.asyncio
+async def test_notify_analysis_unblocked_no_booking_returns_false():
+    """학습/심리상담 예약이 없으면 False + 이메일 호출 없음."""
+    db = AsyncMock()
+    exec_result = MagicMock()
+    exec_result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=exec_result)
+
+    import uuid
+    user_id = uuid.uuid4()
+
+    with patch(
+        "app.services.review_notification_service._send_email",
+        new=AsyncMock(return_value=True),
+    ) as mock_send:
+        result = await notify_analysis_unblocked(db, user_id)
+
+    assert result is False
+    mock_send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_notify_analysis_unblocked_swallows_exceptions():
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=RuntimeError("DB down"))
+    import uuid
+    result = await notify_analysis_unblocked(db, uuid.uuid4())
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_notify_blocked_to_super_admin_no_super_admin_returns_zero():
+    """super_admin 이 한 명도 없으면 0 반환 + 이메일 호출 없음."""
+    db = AsyncMock()
+    # Admin.role == 'super_admin' 쿼리 결과 빈 리스트
+    exec_result = MagicMock()
+    exec_result.all.return_value = []
+    db.execute = AsyncMock(return_value=exec_result)
+
+    import uuid
+    user_id = uuid.uuid4()
+
+    with patch(
+        "app.services.review_notification_service._send_email",
+        new=AsyncMock(return_value=True),
+    ) as mock_send:
+        count = await notify_analysis_blocked_to_super_admin(
+            db, user_id, survey_type="high", timing="T1", p1_issue_count=1,
+        )
+
+    assert count == 0
+    mock_send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_notify_blocked_to_super_admin_swallows_exceptions():
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=RuntimeError("DB down"))
+    import uuid
+    count = await notify_analysis_blocked_to_super_admin(
+        db, uuid.uuid4(), survey_type="preheigh1", timing=None, p1_issue_count=2,
+    )
+    assert count == 0

@@ -267,6 +267,18 @@ async def revalidate_survey(
         except Exception:
             pass
 
+    # V3 §4-8-1: blocked → pass/repaired 자동 해제 시 담당 상담사에게도 이메일
+    if (
+        prev_status == "blocked"
+        and qa["status"] in ("pass", "repaired")
+        and survey.user_id is not None
+    ):
+        try:
+            from app.services.review_notification_service import notify_analysis_unblocked
+            await notify_analysis_unblocked(db, survey.user_id)
+        except Exception:
+            pass
+
     return {
         "survey_id": str(survey.id),
         "prev_status": prev_status,
@@ -393,6 +405,39 @@ async def get_computed_stats(
         except Exception:
             # 푸시 실패는 분석 결과 반환에 영향 없도록 graceful degrade
             pass
+
+    # V3 §4-8-1 blocked → pass/repaired 자동 해제: 담당 상담사에게도 이메일
+    if (
+        prev_status == "blocked"
+        and qa["status"] in ("pass", "repaired")
+        and survey.user_id is not None
+    ):
+        try:
+            from app.services.review_notification_service import notify_analysis_unblocked
+            await notify_analysis_unblocked(db, survey.user_id)
+        except Exception:
+            pass  # graceful — 분석 결과 반환에 영향 없음
+
+    # V3 §4-8-1 "P1 잔존 시 즉시 슈퍼관리자 알림 큐에 등록":
+    # blocked 최초 전환 시점에 모든 super_admin 에게 이메일
+    if (
+        prev_status != "blocked"
+        and qa["status"] == "blocked"
+        and survey.user_id is not None
+    ):
+        try:
+            from app.services.review_notification_service import (
+                notify_analysis_blocked_to_super_admin,
+            )
+            await notify_analysis_blocked_to_super_admin(
+                db,
+                user_id=survey.user_id,
+                survey_type=survey.survey_type,
+                timing=survey.timing,
+                p1_issue_count=len(qa.get("p1_issues", [])),
+            )
+        except Exception:
+            pass  # graceful
 
     return merged
 
