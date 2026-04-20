@@ -561,3 +561,100 @@ export function RadarDetailTable({ computed }: { computed: ComputedStats }) {
     </div>
   );
 }
+
+// ═══════════════════════════════════════
+// 고교유형 적합도 바 차트 (예비고1 V2_2 §3-5)
+// ═══════════════════════════════════════
+
+interface SchoolTypeRecommendation {
+  school_type: string;
+  score: number;
+  grade: string;
+  is_desired: boolean;
+}
+
+interface SchoolTypeDetail {
+  score: number;
+  grade: string;
+  base_score: number;
+  bonus: number;
+  bonus_reason: string;
+  penalty: number;
+  penalty_reason: string;
+  is_desired: boolean;
+}
+
+export function SchoolTypeCompatibilityChart({ computed }: { computed: ComputedStats }) {
+  const compat = (computed.radar_scores as Record<string, unknown> | undefined)?.school_type_compatibility as
+    | { recommendations: SchoolTypeRecommendation[]; details: Record<string, SchoolTypeDetail> }
+    | undefined;
+
+  if (!compat || !compat.recommendations?.length) return null;
+
+  // 희망 유형 우선, 그 다음 점수 순
+  const sorted = [...compat.recommendations].sort((a, b) => {
+    if (a.is_desired && !b.is_desired) return -1;
+    if (!a.is_desired && b.is_desired) return 1;
+    return b.score - a.score;
+  });
+
+  return (
+    <div style={{ marginBottom: 24 }} id="section-school-type-compatibility">
+      <SectionTitle>🎓 고교유형 적합도 (V2_2 §3-5)</SectionTitle>
+      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>
+        4축(학업기초력·교과선행도·학습습관·진로방향성)의 가중합산으로 산출한 유형별 적합도. ⭐ 는 학생이 희망한 고교 유형.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {sorted.map((rec) => {
+          const detail = compat.details[rec.school_type];
+          const c = GRADE_COLORS[rec.grade] || GRADE_COLORS.D;
+          const pct = Math.max(0, Math.min(100, rec.score));
+          return (
+            <div
+              key={rec.school_type}
+              style={{
+                background: rec.is_desired ? "#FFFBEB" : "white",
+                border: rec.is_desired ? "2px solid #F59E0B" : "1px solid #E5E7EB",
+                borderRadius: 10,
+                padding: 14,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                {rec.is_desired && <span style={{ fontSize: 16 }}>⭐</span>}
+                <span style={{ fontWeight: 700, fontSize: 14, minWidth: 80 }}>{rec.school_type}</span>
+                <GradeBadge grade={rec.grade} />
+                <span style={{ marginLeft: "auto", fontSize: 16, fontWeight: 700, color: c.text }}>
+                  {rec.score}점
+                </span>
+              </div>
+              {/* 점수 바 */}
+              <div style={{ height: 10, borderRadius: 5, background: "#F3F4F6", overflow: "hidden", marginBottom: 6 }}>
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${pct}%`,
+                    background: c.text,
+                    borderRadius: 5,
+                    transition: "width 0.5s ease",
+                  }}
+                />
+              </div>
+              {/* 보정 내역 */}
+              {detail && (detail.bonus !== 0 || detail.penalty !== 0) && (
+                <div style={{ fontSize: 11, color: "#6B7280", display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <span>기본 {detail.base_score}점</span>
+                  {detail.bonus !== 0 && (
+                    <span style={{ color: "#059669" }}>+{detail.bonus} ({detail.bonus_reason})</span>
+                  )}
+                  {detail.penalty !== 0 && (
+                    <span style={{ color: "#DC2626" }}>{detail.penalty} ({detail.penalty_reason})</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
