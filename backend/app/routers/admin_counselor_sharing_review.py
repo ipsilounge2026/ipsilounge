@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -37,6 +37,34 @@ from app.services.senior_sharing_service import (
 )
 from app.services.survey_scoring_service import compute_radar_scores
 from app.utils.dependencies import get_current_admin
+
+# V1 §7-2 관리자 SLA: 검토 완료까지 48시간 이내 권장
+SLA_REVIEW_HOURS = 48
+
+
+def _compute_sla_meta(reference_time: datetime | None) -> dict:
+    """SLA 경과 메타데이터 계산 (V1 §7-2).
+
+    reference_time 은 설문의 submitted_at 또는 상담 기록의 consultation_date 등
+    "제출/작성 시점". 아직 검토되지 않은 건의 경과 시간을 계산.
+
+    반환:
+      - hours_since_submission: float | None (시간 단위)
+      - is_overdue: bool (48시간 초과 여부)
+      - sla_hours: int (정책값, 참고용)
+    """
+    if reference_time is None:
+        return {"hours_since_submission": None, "is_overdue": False, "sla_hours": SLA_REVIEW_HOURS}
+    # naive datetime 이면 UTC 로 간주 (DB 는 utcnow 저장)
+    ref = reference_time if reference_time.tzinfo else reference_time.replace(tzinfo=UTC)
+    now = datetime.now(UTC)
+    elapsed = (now - ref).total_seconds() / 3600.0
+    return {
+        "hours_since_submission": round(elapsed, 1),
+        "is_overdue": elapsed > SLA_REVIEW_HOURS,
+        "sla_hours": SLA_REVIEW_HOURS,
+    }
+
 
 router = APIRouter(
     prefix="/api/admin/counselor-sharing",
@@ -163,6 +191,7 @@ async def list_pending_sharing_reviews(
         .order_by(ConsultationSurvey.submitted_at.desc())
     )
     for survey, user_name in (await db.execute(survey_q)).all():
+        sla = _compute_sla_meta(survey.submitted_at)
         items.append({
             "source_type": "survey",
             "id": str(survey.id),
@@ -175,6 +204,10 @@ async def list_pending_sharing_reviews(
                 survey.submitted_at.isoformat() if survey.submitted_at else None
             ),
             "senior_review_status": survey.senior_review_status,
+            # V1 §7-2 SLA 메타
+            "hours_since_submission": sla["hours_since_submission"],
+            "is_overdue": sla["is_overdue"],
+            "sla_hours": sla["sla_hours"],
         })
 
     # notes
@@ -185,6 +218,9 @@ async def list_pending_sharing_reviews(
         .order_by(ConsultationNote.consultation_date.desc())
     )
     for note, user_name in (await db.execute(note_q)).all():
+        # note 는 submitted_at 필드가 없으므로 created_at (기록 작성 시점) 기준
+        ref_time = note.created_at
+        sla = _compute_sla_meta(ref_time)
         items.append({
             "source_type": "note",
             "id": str(note.id),
@@ -197,15 +233,28 @@ async def list_pending_sharing_reviews(
                 note.consultation_date.isoformat() if note.consultation_date else None
             ),
             "senior_review_status": note.senior_review_status,
+            # V1 §7-2 SLA 메타 (created_at 기준)
+            "hours_since_submission": sla["hours_since_submission"],
+            "is_overdue": sla["is_overdue"],
+            "sla_hours": sla["sla_hours"],
         })
 
-    # 제출 시각 기준 최신순으로 일괄 정렬 (둘 모두 존재 시)
+    # 정렬 정책 (V1 §7-3 "관리자 업무 중 우선순위 항목"):
+    # 1) 오버듀(SLA 초과) 항목 먼저, 2) 경과 시간 긴 순
     items.sort(
-        key=lambda it: it.get("submitted_at") or it.get("consultation_date") or "",
-        reverse=True,
+        key=lambda it: (
+            not it.get("is_overdue", False),  # overdue=False → True 정렬 뒤로
+            -(it.get("hours_since_submission") or 0),
+        )
     )
 
-    return {"items": items}
+    overdue_count = sum(1 for it in items if it.get("is_overdue"))
+    return {
+        "items": items,
+        "total_count": len(items),
+        "overdue_count": overdue_count,
+        "sla_hours": SLA_REVIEW_HOURS,
+    }
 
 
 # ============================================================
