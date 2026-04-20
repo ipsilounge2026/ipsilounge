@@ -1,5 +1,7 @@
 from datetime import date, datetime
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -87,14 +89,20 @@ async def get_user_notes(
     current_admin: Admin = Depends(get_current_admin),
 ):
     """특정 학생의 전체 상담 이력 + 요약"""
-    user_result = await db.execute(select(User).where(User.id == user_id))
+    # str → UUID 변환 (DEV_MODE SQLite 바인딩 호환)
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"잘못된 user_id 형식: {user_id}")
+
+    user_result = await db.execute(select(User).where(User.id == user_uuid))
     user = user_result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
 
     notes_result = await db.execute(
         select(ConsultationNote)
-        .where(ConsultationNote.user_id == user_id)
+        .where(ConsultationNote.user_id == user_uuid)
         .order_by(ConsultationNote.consultation_date.desc())
     )
     notes = notes_result.scalars().all()
@@ -125,9 +133,21 @@ async def create_note(
     if data.category not in CONSULTATION_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"유효하지 않은 카테고리: {data.category}")
 
+    # str → UUID 변환 (DEV_MODE SQLite 에서 UUID 컬럼에 str 바인딩 시 AttributeError 방지)
+    try:
+        user_uuid = uuid.UUID(data.user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"잘못된 user_id 형식: {data.user_id}")
+    booking_uuid = None
+    if data.booking_id:
+        try:
+            booking_uuid = uuid.UUID(data.booking_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"잘못된 booking_id 형식: {data.booking_id}")
+
     note = ConsultationNote(
-        user_id=data.user_id,
-        booking_id=data.booking_id,
+        user_id=user_uuid,
+        booking_id=booking_uuid,
         admin_id=current_admin.id,
         category=data.category,
         consultation_date=data.consultation_date,
