@@ -275,6 +275,13 @@ export default function ConsultationSessionPage() {
   // 상담사용 선배 기록
   const [seniorNotes, setSeniorNotes] = useState<SeniorNoteForCounselor[]>([]);
   const [seniorNotesLoading, setSeniorNotesLoading] = useState(false);
+  // V1 §7 "차기 상담 시작 시 자동 노출" — 상담 준비 패널용
+  const [seniorPrepOpen, setSeniorPrepOpen] = useState(true);
+  const [seniorPrepMeta, setSeniorPrepMeta] = useState<{
+    pending_count: number;
+    last_next_context: string | null;
+    last_next_context_session: string | null;
+  }>({ pending_count: 0, last_next_context: null, last_next_context_session: null });
 
   // 가이드북 (topic_id → content 맵)
   const [guidebookMap, setGuidebookMap] = useState<Record<string, string>>({});
@@ -371,6 +378,12 @@ export default function ConsultationSessionPage() {
         try {
           const snData = await getSeniorNotesForCounselor(data.user_id);
           setSeniorNotes(snData.notes || []);
+          // V1 §7 prep 메타 (context_for_next + 검토 대기 건수)
+          setSeniorPrepMeta({
+            pending_count: snData.pending_count || 0,
+            last_next_context: snData.last_next_context || null,
+            last_next_context_session: snData.last_next_context_session || null,
+          });
         } catch {
           // 선배 기록 없으면 무시
         } finally {
@@ -720,6 +733,41 @@ export default function ConsultationSessionPage() {
             </button>
             {summaryOpen && (
               <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* V1 §7-3 pending 경고: 상담사 측 검토 대기 건수 */}
+                {(() => {
+                  const pending = (counselorSummary as Record<string, unknown>).pending_count;
+                  const pendingNum = typeof pending === "number" ? pending : 0;
+                  if (pendingNum <= 0) return null;
+                  return (
+                    <div style={{
+                      padding: "10px 14px",
+                      background: "#FEF3C7",
+                      border: "1px solid #FDE68A",
+                      borderRadius: 6,
+                      fontSize: 13,
+                      color: "#92400E",
+                    }}>
+                      ⚠️ 관리자 검토 대기 중인 상담사 기록 {pendingNum}건 — 검토 완료 전까지 이 상담에 노출되지 않습니다 (V1 §7-3)
+                    </div>
+                  );
+                })()}
+                {/* 상담사가 남긴 "다음 선배에게 전달할 맥락" (V1 §5) */}
+                {(() => {
+                  const ctx = (counselorSummary as Record<string, unknown>).counselor_next_senior_context;
+                  const date = (counselorSummary as Record<string, unknown>).counselor_note_date;
+                  const category = (counselorSummary as Record<string, unknown>).counselor_note_category;
+                  if (!ctx) return null;
+                  return (
+                    <div style={{ padding: 12, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 6 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#1E40AF", marginBottom: 4 }}>
+                        상담사 전달 사항{category ? ` [${category}]` : ""}{date ? ` (${String(date).slice(0, 10)})` : ""}
+                      </div>
+                      <div style={{ fontSize: 13, color: "#1E3A8A", whiteSpace: "pre-wrap" }}>
+                        {String(ctx)}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* 이전 선배 맥락 */}
                 {(counselorSummary as Record<string, unknown>).prev_senior_context && (
                   <div style={{ padding: 12, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 6 }}>
@@ -787,6 +835,60 @@ export default function ConsultationSessionPage() {
                 })()}
                 <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "right" }}>
                   * 개인정보 보호를 위해 추상화된 요약입니다. 구체적 성적·대학명은 포함되지 않습니다.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 상담사용: 상담 준비 — 선배 노트 요약 (V1 §7) */}
+        {!isSenior && (seniorPrepMeta.last_next_context || seniorPrepMeta.pending_count > 0 || seniorNotes.length > 0) && (
+          <div style={{ marginBottom: 20, background: "white", border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+            <button
+              onClick={() => setSeniorPrepOpen(!seniorPrepOpen)}
+              style={{
+                width: "100%", padding: "14px 20px", border: "none", cursor: "pointer",
+                background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "space-between",
+                fontSize: 14, fontWeight: 600, color: "#1E40AF",
+              }}
+            >
+              <span>상담 준비 — 선배 기록 요약 {seniorNotes.length > 0 ? `(${seniorNotes.length}건 검토 완료)` : ""}</span>
+              <span style={{ fontSize: 12 }}>{seniorPrepOpen ? "▲ 접기" : "▼ 펼치기"}</span>
+            </button>
+            {seniorPrepOpen && (
+              <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* pending 경고 배너 (V1 §7-3) */}
+                {seniorPrepMeta.pending_count > 0 && (
+                  <div style={{
+                    padding: "10px 14px",
+                    background: "#FEF3C7",
+                    border: "1px solid #FDE68A",
+                    borderRadius: 6,
+                    fontSize: 13,
+                    color: "#92400E",
+                  }}>
+                    ⚠️ 관리자 검토 대기 중인 선배 기록 {seniorPrepMeta.pending_count}건 — 검토 완료 전까지 이 상담에 노출되지 않습니다 (V1 §7-3)
+                  </div>
+                )}
+                {/* 최신 선배의 "다음 상담자에게 전달할 맥락" (V1 §5) */}
+                {seniorPrepMeta.last_next_context ? (
+                  <div style={{ padding: 12, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#92400E", marginBottom: 4 }}>
+                      이전 선배 전달 사항 {seniorPrepMeta.last_next_context_session ? `(${seniorPrepMeta.last_next_context_session})` : ""}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#78350F", whiteSpace: "pre-wrap" }}>
+                      {seniorPrepMeta.last_next_context}
+                    </div>
+                  </div>
+                ) : (
+                  seniorNotes.length > 0 && (
+                    <div style={{ fontSize: 13, color: "#9CA3AF" }}>
+                      이전 선배가 "다음 상담자에게 전달할 맥락"을 작성하지 않았습니다.
+                    </div>
+                  )
+                )}
+                <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "right" }}>
+                  * 상세 선배 기록은 아래 "선배 기록" 탭에서 확인할 수 있습니다.
                 </div>
               </div>
             )}

@@ -20,7 +20,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -364,6 +364,27 @@ async def get_reviewed_senior_notes_for_student(
         sharing = note.sharing_settings or DEFAULT_SHARING_SETTINGS
         filtered_notes.append(_apply_sharing_filter(note_dict, sharing))
 
+    # V1 §7 "차기 상담 시작 시 자동 노출" — 관리자 검토 대기 중 건수도 함께 반환
+    # (상담사가 "아직 N건은 검토 대기 중이라 내게 노출되지 않는다" 를 인지할 수 있도록)
+    pending_count_q = (
+        select(func.count(SeniorConsultationNote.id))
+        .where(
+            SeniorConsultationNote.user_id == uid,
+            SeniorConsultationNote.review_status == "pending",
+        )
+    )
+    pending_count = (await db.execute(pending_count_q)).scalar_one() or 0
+
+    # 최신 reviewed 기록의 context_for_next 를 최상단에 강조 노출
+    # (V1 §5 "다음 상담자에게 전달할 맥락" 필드)
+    last_next_context: str | None = None
+    last_next_context_session: str | None = None
+    if notes:
+        latest = notes[0]  # order_by(consultation_date desc) 첫 건
+        if latest.context_for_next:
+            last_next_context = latest.context_for_next
+            last_next_context_session = latest.session_timing
+
     # V1 §10-2: 상담사(또는 관리자)가 선배 노트 요약을 열람한 이력 감사 로그
     await log_consultation_data_access(
         db,
@@ -373,10 +394,16 @@ async def get_reviewed_senior_notes_for_student(
         access_type="counselor_views_senior_notes",
         source_type="senior_note",
         source_id=None,
-        meta={"note_count": len(filtered_notes)},
+        meta={"note_count": len(filtered_notes), "pending_count": pending_count},
     )
 
-    return {"notes": filtered_notes}
+    return {
+        "notes": filtered_notes,
+        # V1 §7 prep 필드
+        "pending_count": pending_count,
+        "last_next_context": last_next_context,
+        "last_next_context_session": last_next_context_session,
+    }
 
 
 @router.post("/notes/{note_id}/addendum")
@@ -722,6 +749,27 @@ async def get_counselor_summary_for_senior(
         )
         counselor_note_category = counselor_note.category
 
+    # V1 §7 "차기 상담 시작 시 자동 노출" — 관리자 검토 대기 중 건수
+    # (선배가 "아직 N건은 관리자 검토 대기 중이라 노출되지 않는다" 를 인지할 수 있도록)
+    pending_survey_q = (
+        select(func.count(ConsultationSurvey.id))
+        .where(
+            ConsultationSurvey.user_id == uid,
+            ConsultationSurvey.status == "submitted",
+            ConsultationSurvey.senior_review_status == "pending",
+        )
+    )
+    pending_note_q = (
+        select(func.count(ConsultationNote.id))
+        .where(
+            ConsultationNote.user_id == uid,
+            ConsultationNote.senior_review_status == "pending",
+        )
+    )
+    pending_survey_count = (await db.execute(pending_survey_q)).scalar_one() or 0
+    pending_note_count = (await db.execute(pending_note_q)).scalar_one() or 0
+    pending_count = pending_survey_count + pending_note_count
+
     # 감사 로그: 선배(또는 관리자)가 상담사 요약을 열람했음을 기록
     await log_consultation_data_access(
         db,
@@ -747,6 +795,10 @@ async def get_counselor_summary_for_senior(
         "counselor_next_senior_context": counselor_next_senior_context,
         "counselor_note_date": counselor_note_date,
         "counselor_note_category": counselor_note_category,
+        # V1 §7 prep 필드
+        "pending_count": pending_count,
+        "pending_survey_count": pending_survey_count,
+        "pending_note_count": pending_note_count,
     }
 
 
