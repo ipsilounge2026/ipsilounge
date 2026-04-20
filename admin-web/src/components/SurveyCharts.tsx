@@ -599,7 +599,9 @@ export function SubjectPrepBreakdown({ computed }: { computed: ComputedStats }) 
           if (!d) return null;
           const pct = d.max > 0 ? Math.round((d.score / d.max) * 100) : 0;
           const color = pct >= 75 ? "#10B981" : pct >= 50 ? "#F59E0B" : "#EF4444";
-          const hasSub = d.sub && Object.keys(d.sub).length > 0;
+          // 방어: d.sub 가 null/undefined/비객체(직렬화 오류) 여도 Object.keys 가 throw 하지 않도록
+          const subIsObject = d.sub && typeof d.sub === "object" && !Array.isArray(d.sub);
+          const hasSub = subIsObject && Object.keys(d.sub as Record<string, unknown>).length > 0;
           const isOpen = expanded === detailKey;
           return (
             <div
@@ -867,10 +869,17 @@ export function SuneungMinimumSimulation({ computed }: { computed: ComputedStats
   }
 
   // 영역별 최고 등급 (가장 작은 rank 숫자) 추출
+  // 방어적 가드: points 가 빈 배열이면 Math.min(...[]) = Infinity 라
+  // Number.isFinite 에서 걸러지지만, rank 가 undefined/NaN/null 인
+  // 잘못된 레코드도 Infinity 를 유발하므로 명시적으로 필터링
   const bestRanks: AreaBest[] = [];
   for (const [area, points] of Object.entries(mock.area_trends)) {
     if (!Array.isArray(points) || points.length === 0) continue;
-    const minRank = Math.min(...points.map((p) => p.rank));
+    const validRanks = points
+      .map((p) => (typeof p?.rank === "number" ? p.rank : Number.NaN))
+      .filter((r) => Number.isFinite(r));
+    if (validRanks.length === 0) continue;
+    const minRank = Math.min(...validRanks);
     if (Number.isFinite(minRank)) {
       bestRanks.push({ area, best_rank: minRank });
     }
@@ -1000,10 +1009,19 @@ interface SchoolTypeDetail {
 
 export function SchoolTypeCompatibilityChart({ computed }: { computed: ComputedStats }) {
   const compat = (computed.radar_scores as Record<string, unknown> | undefined)?.school_type_compatibility as
-    | { recommendations: SchoolTypeRecommendation[]; details: Record<string, SchoolTypeDetail> }
+    | { recommendations?: SchoolTypeRecommendation[]; details?: Record<string, SchoolTypeDetail> }
     | undefined;
 
-  if (!compat || !compat.recommendations?.length) return null;
+  // 방어적 가드: 구버전 설문(backend 스코어링이 school_type_compatibility 미생성) 또는
+  // 직렬화 오류(recommendations 가 배열이 아님) 에서도 안전하게 null 반환
+  if (
+    !compat ||
+    !Array.isArray(compat.recommendations) ||
+    compat.recommendations.length === 0
+  ) {
+    return null;
+  }
+  const details: Record<string, SchoolTypeDetail> = compat.details || {};
 
   // 희망 유형 우선, 그 다음 점수 순
   const sorted = [...compat.recommendations].sort((a, b) => {
@@ -1020,7 +1038,7 @@ export function SchoolTypeCompatibilityChart({ computed }: { computed: ComputedS
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {sorted.map((rec) => {
-          const detail = compat.details[rec.school_type];
+          const detail = details[rec.school_type];
           const c = GRADE_COLORS[rec.grade] || GRADE_COLORS.D;
           const pct = Math.max(0, Math.min(100, rec.score));
           return (
