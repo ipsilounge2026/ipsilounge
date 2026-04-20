@@ -1061,6 +1061,15 @@ export default function SurveyDetailPage() {
               </div>
             )}
 
+            {/* 예비고1 5각형 레이더 — 종합 진단 (V2_2 §3-1) */}
+            {/* RadarDetailTable 은 고등용 4영역 하드코딩이라 예비고1 에서는 제외 */}
+            {/* (#9 에서 예비고1 영역별 상세 테이블 확장 예정) */}
+            {survey.survey_type === "preheigh1" && survey.computed?.radar_scores && (
+              <div id="section-radar-scores-preheigh1">
+                <RadarScoreChart computed={survey.computed} />
+              </div>
+            )}
+
             {/* 4각형 레이더 — 종합 진단 (고등학생만) */}
             {survey.survey_type === "high" && survey.computed?.radar_scores && (
               <div id="section-radar-scores">

@@ -390,10 +390,17 @@ const GRADE_COLORS: Record<string, { bg: string; text: string; border: string }>
 };
 
 const RADAR_LABELS: Record<string, string> = {
+  // 고등 설문 (4각형)
   "내신_경쟁력": "내신 경쟁력",
   "모의고사_역량": "모의고사 역량",
   "학습습관_전략": "학습 습관·전략",
   "진로전형_전략": "진로·전형 전략",
+  // 예비고1 설문 (5각형) — 기획서 V2_2 §3-1
+  "학업기초력": "학업 기초력",
+  "학습습관_자기주도력": "학습 습관·자기주도력",
+  "교과선행도": "교과 선행도",
+  "진로방향성": "진로 방향성",
+  "비교과역량": "비교과 역량",
 };
 
 function GradeBadge({ grade, size = "normal" }: { grade: string; size?: "normal" | "large" }) {
