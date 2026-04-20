@@ -218,8 +218,17 @@ def _validate_trend_consistency(computed: dict, issues: list[dict]) -> None:
                 pass
 
 
-def _validate_comment_length(computed: dict, issues: list[dict]) -> None:
-    """6개 영역 코멘트 최소 글자수(50자) 확인."""
+def _validate_comment_length(computed: dict, survey_type: str, issues: list[dict]) -> None:
+    """6개 영역 코멘트 최소 글자수(50자) 확인.
+
+    auto_comments 자동 생성은 현재 고등학교(high) 설문 전용 이므로
+    preheigh1 등에서는 auto_comments 자체가 생성되지 않는다.
+    해당 설문에 대해서는 본 검증을 건너뛰어 잘못된 P2 이슈가
+    _repair_comments → generate_all_comments(잘못된 radar 키 접근)로
+    번지지 않도록 한다.
+    """
+    if survey_type != "high":
+        return
     auto_comments = computed.get("auto_comments") or {}
     comment_keys = [
         ("grade_trend_comment", "내신 추이"),
@@ -608,7 +617,7 @@ def _run_all_checks(computed: dict, survey_type: str) -> tuple[list[dict], list[
     _validate_roadmap_structure(computed, survey_type, p1)
 
     _validate_trend_consistency(computed, p2)
-    _validate_comment_length(computed, p2)
+    _validate_comment_length(computed, survey_type, p2)
     _validate_roadmap_content(computed, survey_type, p2)
     _validate_c4_type(computed, survey_type, p2)
 
