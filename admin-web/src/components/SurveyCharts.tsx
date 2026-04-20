@@ -563,6 +563,215 @@ export function RadarDetailTable({ computed }: { computed: ComputedStats }) {
 }
 
 // ═══════════════════════════════════════
+// 수능 최저 시뮬레이션 (V3 §4-8 T2~T4, §5-⑤)
+// ═══════════════════════════════════════
+
+/**
+ * 대학 라인별 수능 최저 충족 가능성 시뮬레이션.
+ *
+ * 입력: 모의고사 영역별 최고 등급 (area_trends 에서 min rank 추출)
+ * 계산: 각 라인의 전형적 "N개 영역 합 ≤ K" 조건 대입
+ * 출력: 충족 / 근접 (1등급 차이) / 불충족 + 어느 조합이 가장 현실적인지
+ */
+
+// 대학 라인별 전형적 수능 최저 (공통적으로 통용되는 평균치 — 정확한 학교별 최저는 모의고사 성적표와 함께 상담사가 최종 확인)
+const MINIMUM_LINES: {
+  name: string;
+  examples: string;
+  rules: { label: string; count: number; sum_lte: number }[];
+  color: string;
+  bg: string;
+}[] = [
+  {
+    name: "최상위",
+    examples: "서울대 · 의대 · 치대 · 한의대",
+    rules: [
+      { label: "4개 영역 합 ≤ 6", count: 4, sum_lte: 6 },
+      { label: "3개 영역 합 ≤ 4", count: 3, sum_lte: 4 },
+    ],
+    color: "#991B1B",
+    bg: "#FEF2F2",
+  },
+  {
+    name: "상위권",
+    examples: "연세 · 고려 · 성균관 · 서강 · 한양 인기학과",
+    rules: [
+      { label: "3개 영역 합 ≤ 7", count: 3, sum_lte: 7 },
+      { label: "2개 영역 합 ≤ 4", count: 2, sum_lte: 4 },
+    ],
+    color: "#9A3412",
+    bg: "#FFF7ED",
+  },
+  {
+    name: "중상위권",
+    examples: "중앙 · 경희 · 이화 · 한국외대 · 건국 · 동국",
+    rules: [
+      { label: "2개 영역 합 ≤ 5", count: 2, sum_lte: 5 },
+      { label: "3개 영역 합 ≤ 9", count: 3, sum_lte: 9 },
+    ],
+    color: "#92400E",
+    bg: "#FFFBEB",
+  },
+  {
+    name: "중위권",
+    examples: "수도권 일반 대학",
+    rules: [
+      { label: "2개 영역 합 ≤ 7", count: 2, sum_lte: 7 },
+      { label: "1개 영역 ≤ 3", count: 1, sum_lte: 3 },
+    ],
+    color: "#166534",
+    bg: "#F0FDF4",
+  },
+];
+
+interface MinimumRule {
+  label: string;
+  count: number;
+  sum_lte: number;
+}
+
+interface AreaBest {
+  area: string;
+  best_rank: number;
+}
+
+/** 조건: N개 영역 중 최상위 N개의 합이 sum_lte 이하 */
+function evaluateRule(
+  bestRanks: AreaBest[],
+  rule: MinimumRule,
+): { met: boolean; gap: number; picked: AreaBest[]; picked_sum: number } {
+  if (bestRanks.length < rule.count) {
+    return { met: false, gap: 999, picked: [], picked_sum: 0 };
+  }
+  // 최상위 N개 영역 (가장 낮은 rank 번호)
+  const sorted = [...bestRanks].sort((a, b) => a.best_rank - b.best_rank);
+  const picked = sorted.slice(0, rule.count);
+  const sum = picked.reduce((acc, p) => acc + p.best_rank, 0);
+  return {
+    met: sum <= rule.sum_lte,
+    gap: Math.max(0, sum - rule.sum_lte),
+    picked,
+    picked_sum: sum,
+  };
+}
+
+export function SuneungMinimumSimulation({ computed }: { computed: ComputedStats }) {
+  const mock = computed.mock_trend;
+  if (!mock || !mock.area_trends || Object.keys(mock.area_trends).length === 0) {
+    return null;
+  }
+
+  // 영역별 최고 등급 (가장 작은 rank 숫자) 추출
+  const bestRanks: AreaBest[] = [];
+  for (const [area, points] of Object.entries(mock.area_trends)) {
+    if (!Array.isArray(points) || points.length === 0) continue;
+    const minRank = Math.min(...points.map((p) => p.rank));
+    if (Number.isFinite(minRank)) {
+      bestRanks.push({ area, best_rank: minRank });
+    }
+  }
+
+  if (bestRanks.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 24 }} id="section-suneung-minimum">
+      <SectionTitle>🎯 수능 최저 충족 시뮬레이션 (V3 §5-⑤)</SectionTitle>
+      <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>
+        학생이 현재까지 응시한 모의고사 중 <strong>영역별 최고 등급</strong> 기준으로,
+        대학 라인별 전형적 수능 최저 조건에 대한 충족 가능성을 시뮬레이션한 결과입니다.
+        실제 학교별 최저는 상담사가 모의고사 성적표와 함께 최종 확인하세요.
+      </div>
+
+      {/* 현재 최고 등급 요약 */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {bestRanks.sort((a, b) => a.best_rank - b.best_rank).map((ar) => (
+          <div
+            key={ar.area}
+            style={{
+              padding: "6px 12px",
+              background: "#EFF6FF",
+              border: "1px solid #BFDBFE",
+              borderRadius: 6,
+              fontSize: 13,
+            }}
+          >
+            <span style={{ color: "#1E40AF", fontWeight: 600 }}>{ar.area}</span>{" "}
+            <span style={{ color: "#1D4ED8", fontWeight: 700 }}>{ar.best_rank}등급</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 라인별 시뮬레이션 결과 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {MINIMUM_LINES.map((line) => {
+          const results = line.rules.map((r) => ({ rule: r, eval: evaluateRule(bestRanks, r) }));
+          const anyMet = results.some((r) => r.eval.met);
+          const closest = results.reduce(
+            (best, cur) => (cur.eval.gap < best.eval.gap ? cur : best),
+            results[0],
+          );
+          const statusLabel = anyMet
+            ? "충족 가능"
+            : closest.eval.gap <= 1
+            ? "근접 (1등급 차이)"
+            : `불충족 (${closest.eval.gap}등급 부족)`;
+          const statusColor = anyMet ? "#059669" : closest.eval.gap <= 1 ? "#D97706" : "#DC2626";
+          return (
+            <div
+              key={line.name}
+              style={{
+                background: line.bg,
+                border: `1px solid ${line.color}33`,
+                borderRadius: 10,
+                padding: 14,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 14, color: line.color }}>{line.name}</span>
+                <span style={{ fontSize: 12, color: "#6B7280" }}>{line.examples}</span>
+                <span style={{
+                  marginLeft: "auto",
+                  fontSize: 13, fontWeight: 700, color: statusColor,
+                  padding: "3px 10px",
+                  borderRadius: 12,
+                  background: "white",
+                  border: `1px solid ${statusColor}55`,
+                }}>
+                  {anyMet ? "✓ " : closest.eval.gap <= 1 ? "⚠ " : "✗ "}{statusLabel}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                {results.map((r, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, color: "#374151" }}>
+                    <span style={{ minWidth: 110 }}>{r.rule.label}</span>
+                    {r.eval.picked.length > 0 ? (
+                      <>
+                        <span style={{ color: "#6B7280" }}>
+                          = {r.eval.picked.map((p) => `${p.area}(${p.best_rank})`).join(" + ")} = {r.eval.picked_sum}
+                        </span>
+                        <span style={{
+                          marginLeft: "auto",
+                          color: r.eval.met ? "#059669" : "#DC2626",
+                          fontWeight: 600,
+                        }}>
+                          {r.eval.met ? "충족" : `부족 ${r.eval.gap}`}
+                        </span>
+                      </>
+                    ) : (
+                      <span style={{ color: "#9CA3AF" }}>응시 영역 수 부족</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
 // 고교유형 적합도 바 차트 (예비고1 V2_2 §3-5)
 // ═══════════════════════════════════════
 

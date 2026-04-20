@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { getSurveyDetail, getSurveyDelta, updateSurveyMemo, deleteSurveyMemo, downloadSurveyReport, getSurveyActionPlan, updateSurveyActionPlan, updateSurveyOverrides, deleteSurveyOverrides, updateSurveyChecklist, deleteSurveyChecklist, convertPreheigh1ToHigh, getSuneungMinimumSimulation, getCourseRequirementMatch, updateSurveyScoreOverrides, clearSurveyScoreOverrides } from "@/lib/api";
 import { isLoggedIn } from "@/lib/auth";
-import { GradeTrendChart, MockTrendChart, StudyAnalysisChart, RadarScoreChart, RadarDetailTable, SchoolTypeCompatibilityChart } from "@/components/SurveyCharts";
+import { GradeTrendChart, MockTrendChart, StudyAnalysisChart, RadarScoreChart, RadarDetailTable, SchoolTypeCompatibilityChart, SuneungMinimumSimulation } from "@/components/SurveyCharts";
 
 interface SurveyDetail {
   id: string;
@@ -1200,6 +1200,10 @@ export default function SurveyDetailPage() {
                 <>
                   <GradeTrendChart computed={survey.computed} surveyType={survey.survey_type} />
                   <MockTrendChart computed={survey.computed} />
+                  {/* 수능 최저 시뮬레이션 (V3 §5-⑤) — mock 데이터 있는 경우만 */}
+                  {survey.survey_type === "high" && (
+                    <SuneungMinimumSimulation computed={survey.computed} />
+                  )}
                   <StudyAnalysisChart computed={survey.computed} />
 
                   {/* C4 유형 판정 (입결 기반) */}
