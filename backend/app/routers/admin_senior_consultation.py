@@ -256,6 +256,7 @@ async def review_senior_note(
     if not note:
         raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다")
 
+    prev_status = note.review_status
     note.review_status = data.review_status
     note.review_notes = data.review_notes
     if data.sharing_settings is not None:
@@ -266,6 +267,14 @@ async def review_senior_note(
         note.is_visible_to_user = data.is_visible_to_user
     await db.commit()
     await db.refresh(note)
+
+    # V1 §7-1: reviewed 최초 전환 시 차기 학습/심리상담 예약자에게 자동 알림
+    if prev_status != "reviewed" and data.review_status == "reviewed":
+        from app.services.review_notification_service import (
+            notify_senior_record_reviewed,
+        )
+        await notify_senior_record_reviewed(db, note.user_id)
+
     return _note_to_dict(note)
 
 

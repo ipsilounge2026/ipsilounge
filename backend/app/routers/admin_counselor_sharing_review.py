@@ -346,6 +346,7 @@ async def submit_counselor_sharing_review(
         if not survey:
             raise HTTPException(status_code=404, detail="상담사 설문을 찾을 수 없습니다")
 
+        prev_status = survey.senior_review_status
         survey.senior_review_status = data.review_status
         survey.senior_review_notes = data.review_notes
         if data.sharing_settings is not None:
@@ -354,6 +355,14 @@ async def submit_counselor_sharing_review(
         survey.senior_reviewer_admin_id = admin.id
         await db.commit()
         await db.refresh(survey)
+
+        # V1 §7-1: reviewed 최초 전환 시 차기 선배상담 예약자에게 자동 알림
+        if prev_status != "reviewed" and data.review_status == "reviewed":
+            from app.services.review_notification_service import (
+                notify_counselor_record_reviewed,
+            )
+            await notify_counselor_record_reviewed(db, survey.user_id)
+
         return _survey_to_dict(survey)
 
     # note
@@ -364,6 +373,7 @@ async def submit_counselor_sharing_review(
     if not note:
         raise HTTPException(status_code=404, detail="상담사 상담 기록을 찾을 수 없습니다")
 
+    prev_status = note.senior_review_status
     note.senior_review_status = data.review_status
     note.senior_review_notes = data.review_notes
     if data.sharing_settings is not None:
@@ -372,6 +382,14 @@ async def submit_counselor_sharing_review(
     note.senior_reviewer_admin_id = admin.id
     await db.commit()
     await db.refresh(note)
+
+    # V1 §7-1: reviewed 최초 전환 시 차기 선배상담 예약자에게 자동 알림
+    if prev_status != "reviewed" and data.review_status == "reviewed":
+        from app.services.review_notification_service import (
+            notify_counselor_record_reviewed,
+        )
+        await notify_counselor_record_reviewed(db, note.user_id)
+
     return _note_to_dict(note)
 
 
