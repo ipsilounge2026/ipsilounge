@@ -113,6 +113,41 @@ def test_high_empty_auto_comments_triggers_p2():
 # high: 정상 comments → COMMENT_TOO_SHORT 트리거 경계
 # ============================================================
 
+def test_repair_comments_skips_for_preheigh1():
+    """_repair_comments 가 survey_type='preheigh1' 일 때 skip 되어야 한다.
+
+    방어심층(Defense-in-depth): _validate_comment_length 가 이미 preheigh1 을
+    스킵하므로 이 함수가 호출될 일은 없지만, 계약을 명시화하기 위해 추가
+    가드를 둔다. 만약 누군가 예비고1 관련 새 P2 코드를 추가해 실수로
+    need_comment_repair 를 true 로 만들어도 generate_all_comments 가
+    잘못된 radar 키로 호출되어 garbage 코멘트가 생성되는 일이 없어야 한다.
+    """
+    from app.services.survey_qa_validator import try_auto_repair
+
+    computed = _ph1_clean_computed()
+    computed["auto_comments"] = {}  # 비어 있어도
+    # COMMENT_EMPTY 이슈를 인위적으로 주입하여 need_comment_repair=True 상황 재현
+    fake_issues = [
+        {"code": "COMMENT_EMPTY", "field": "auto_comments.grade_trend_comment", "message": "x"}
+    ]
+    _, repair_log, _ = try_auto_repair(
+        computed,
+        fake_issues,
+        answers={"A": {}, "B": {}, "C": {}, "D": {}},
+        timing=None,
+        survey_type="preheigh1",
+    )
+    # 코멘트 재생성 로그가 없어야 함 (skip 된 증거)
+    regen_entries = [e for e in repair_log if e.get("code") == "COMMENT_REGENERATED"]
+    assert regen_entries == [], (
+        f"preheigh1 에서 _repair_comments 가 실행됨: {regen_entries}"
+    )
+    # auto_comments 가 예비고1 용 값으로 오염되지 않았어야 함
+    assert computed["auto_comments"] == {}, (
+        f"auto_comments 가 수정됨: {computed['auto_comments']}"
+    )
+
+
 def test_high_short_comment_triggers_too_short():
     """50자 미만 코멘트는 COMMENT_TOO_SHORT 로 분류되어야 한다."""
     # 50자 이상 한글 샘플 (공백 포함하여 50자 이상 확실히 만족)

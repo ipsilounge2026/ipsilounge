@@ -519,9 +519,20 @@ def _repair_comments(
     answers: dict | None,
     timing: str | None,
     log: list[dict],
+    survey_type: str = "high",
 ) -> bool:
-    """P2: 코멘트 재생성 — comment_generation_service 재호출."""
+    """P2: 코멘트 재생성 — comment_generation_service 재호출.
+
+    주의: generate_all_comments 는 고등학교(high) 설문의
+    radar_scores 구조 (naesin/mock/study/career) 를 전제로 한다.
+    preheigh1 등 다른 survey_type 은 키 구조가 달라 빈 dict 로
+    fallback 되어 garbage 코멘트를 생성한다. 호출부에서도 가드하지만
+    방어를 한 겹 더 두어 계약을 명시화한다.
+    """
     if answers is None:
+        return False
+    if survey_type != "high":
+        # preheigh1 등은 auto_comments 자체가 설계에 없음 → 재생성 불필요
         return False
     try:
         from app.services.comment_generation_service import generate_all_comments
@@ -563,8 +574,16 @@ def try_auto_repair(
     issues: list[dict],
     answers: dict | None = None,
     timing: str | None = None,
+    survey_type: str = "high",
 ) -> tuple[dict, list[dict], list[dict]]:
     """자동 보정 시도.
+
+    Args:
+        computed: 자동 분석 결과 (in-place 수정 가능)
+        issues: 1차 검증에서 나온 이슈 목록
+        answers: 설문 응답 (코멘트 재생성용)
+        timing: 상담 시점 (high 전용)
+        survey_type: "high" | "preheigh1" — 코멘트 재생성 가드에 사용
 
     Returns:
         (repaired_computed, repair_log, unrepaired_issues)
@@ -596,7 +615,7 @@ def try_auto_repair(
     if need_overall_repair or need_range_repair:
         _repair_overall_score(repaired, log)
     if need_comment_repair and answers is not None:
-        _repair_comments(repaired, answers, timing, log)
+        _repair_comments(repaired, answers, timing, log, survey_type=survey_type)
 
     return repaired, log, unrepaired
 
@@ -700,6 +719,7 @@ def validate_with_repair(
         all_issues = p1_first + p2_first
         _, repair_log, _ = try_auto_repair(
             computed, all_issues, answers=answers, timing=timing,
+            survey_type=survey_type,
         )
         if repair_log:
             auto_repaired = True
