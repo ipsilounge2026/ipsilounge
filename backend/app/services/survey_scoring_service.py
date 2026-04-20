@@ -694,6 +694,51 @@ _PH1_BALANCE_TABLE = [
 _PH1_TREND_MAP = {"상승": 20, "유지": 12, "등락": 8, "하락": 4}
 
 
+# 예비고1 C1~C6 학기 데이터 구조 매핑
+# user-web SemesterGradeMatrix 가 실제로 submit 하는 구조:
+#   {"C1": {"exempt": false, "subjects": {"국어": {raw_score, subject_avg, stdev}, ...}}}
+# 한편 스코어링/차트 로직은 내부적으로 english 코드(ko/en/ma/so/sc)를 사용하므로
+# Korean → english 변환 helper 가 필요. (2026-04-20 #9 작업 중 파싱 버그 발견)
+PH1_SUBJECT_KO_TO_EN: dict[str, str] = {
+    "국어": "ko",
+    "영어": "en",
+    "수학": "ma",
+    "사회": "so",
+    "과학": "sc",
+}
+
+
+def _extract_ph1_subjects(sem_data: dict) -> dict[str, dict]:
+    """예비고1 학기 데이터에서 english-keyed 과목 dict 추출.
+
+    신/구 포맷 모두 지원 (backward-compat):
+      - 신(정식): sem_data["subjects"]["국어"] = {...} — 한글 키 nested
+      - 구(레거시): sem_data["ko"] = {...} — 직접 english 키
+
+    exempt=True 학기는 빈 dict 반환 (스코어링 제외).
+    """
+    if not isinstance(sem_data, dict):
+        return {}
+    if sem_data.get("exempt"):
+        return {}
+    # 신 포맷: subjects sub-dict 한글 키
+    subjects_nested = sem_data.get("subjects")
+    if isinstance(subjects_nested, dict) and subjects_nested:
+        result: dict[str, dict] = {}
+        for ko, v in subjects_nested.items():
+            if ko in PH1_SUBJECT_KO_TO_EN and isinstance(v, dict):
+                result[PH1_SUBJECT_KO_TO_EN[ko]] = v
+        if result:
+            return result
+    # 구 포맷 fallback: 직접 english 키
+    result = {}
+    for en in PH1_SUBJECT_KO_TO_EN.values():
+        v = sem_data.get(en)
+        if isinstance(v, dict):
+            result[en] = v
+    return result
+
+
 def _calc_ph1_academic_score(answers: dict) -> dict:
     """4-1. 학업기초력 100점."""
     cat_c = answers.get("C", {})
@@ -709,9 +754,10 @@ def _calc_ph1_academic_score(answers: dict) -> dict:
         sem_data = cat_c.get(sem_key)
         if not sem_data or not isinstance(sem_data, dict):
             continue
+        subj_dict = _extract_ph1_subjects(sem_data)
         scores = []
         for subj in subjects:
-            subj_data = sem_data.get(subj, {})
+            subj_data = subj_dict.get(subj, {})
             if isinstance(subj_data, dict):
                 raw = _sf(subj_data.get("raw_score"))
                 if raw is not None:
@@ -1727,9 +1773,10 @@ def _get_latest_subject_scores(answers: dict) -> dict[str, float]:
         sem_data = cat_c.get(sem_key)
         if not sem_data or not isinstance(sem_data, dict):
             continue
+        subj_dict = _extract_ph1_subjects(sem_data)
         found = {}
         for subj in subjects:
-            subj_data = sem_data.get(subj, {})
+            subj_data = subj_dict.get(subj, {})
             if isinstance(subj_data, dict):
                 raw = _sf(subj_data.get("raw_score"))
                 if raw is not None:

@@ -15,6 +15,7 @@ import {
   BarChart, Bar,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   PieChart, Pie, Cell,
+  ReferenceArea,
 } from "recharts";
 
 // ── 색상 팔레트 ──
@@ -47,6 +48,14 @@ interface ComputedStats {
     trend_badge: string;
     subject_trends: Record<string, any[]>;
     grade_distribution?: any[];
+    // V2_2 §3-2 자유학기제 구간 점선 표시용 메타 (예비고1 전용)
+    semester_meta?: {
+      key: string;
+      semester: string;
+      exempt: boolean;
+      exempt_reason: string | null;
+      exempt_label: string | null;
+    }[];
   };
   mock_trend?: {
     avg_trend: { session: string; avg_rank: number }[];
@@ -96,11 +105,29 @@ export function GradeTrendChart({ computed, surveyType }: { computed: ComputedSt
   const valueKey = isHigh ? "avg_grade" : "avg_score";
   const label = isHigh ? "평균 등급" : "평균 점수";
 
-  // 과목별 추이를 라인차트 데이터로 변환
-  const subjectNames = Object.keys(gt.subject_trends);
-  const semesters = gt.data.map((d) => d.semester);
+  // V2_2 §3-2 "자유학기제 구간 점선 표시": 예비고1 은 semester_meta 로 6학기
+  // 전부 x축에 표기하고, exempt 학기는 별도 영역 표시 + 점수는 null.
+  const meta = gt.semester_meta;
+  const useFullTimeline = !isHigh && Array.isArray(meta) && meta.length > 0;
 
-  // 과목별 데이터를 학기 기준으로 피벗
+  // 평균 추이 데이터: 예비고1 full timeline 이면 meta 기반, 아니면 기존 data
+  const avgChartData = useFullTimeline
+    ? meta!.map((m) => {
+        const scored = gt.data.find((d) => d.semester === m.semester);
+        return {
+          semester: m.semester,
+          avg_score: scored?.avg_score ?? null,
+          exempt: m.exempt,
+          exempt_label: m.exempt_label,
+        };
+      })
+    : gt.data;
+
+  // 과목별 추이: 동일하게 full timeline 기반 pivot
+  const subjectNames = Object.keys(gt.subject_trends);
+  const semesters = useFullTimeline
+    ? meta!.map((m) => m.semester)
+    : gt.data.map((d) => d.semester);
   const subjectChartData = semesters.map((sem) => {
     const row: Record<string, any> = { semester: sem };
     for (const [subj, arr] of Object.entries(gt.subject_trends)) {
@@ -110,6 +137,49 @@ export function GradeTrendChart({ computed, surveyType }: { computed: ComputedSt
     return row;
   });
 
+  // 연속된 exempt 학기들을 하나의 ReferenceArea 로 묶기
+  // (예: C1+C2 자유학기제 구간, C5+C6 미진행 구간)
+  const exemptRanges: { start: string; end: string; label: string; reason: string }[] = [];
+  if (useFullTimeline) {
+    let cur: { start: string; end: string; label: string; reason: string } | null = null;
+    for (const m of meta!) {
+      if (m.exempt) {
+        const label = m.exempt_label || "해당 없음";
+        const reason = m.exempt_reason || "exempt";
+        if (cur && cur.reason === reason) {
+          cur.end = m.semester;
+        } else {
+          if (cur) exemptRanges.push(cur);
+          cur = { start: m.semester, end: m.semester, label, reason };
+        }
+      } else {
+        if (cur) {
+          exemptRanges.push(cur);
+          cur = null;
+        }
+      }
+    }
+    if (cur) exemptRanges.push(cur);
+  }
+
+  const renderExemptAreas = () =>
+    exemptRanges.map((r, idx) => (
+      <ReferenceArea
+        key={`${r.reason}-${idx}`}
+        x1={r.start}
+        x2={r.end}
+        strokeOpacity={0}
+        fill={r.reason === "free_semester" ? "#FEF3C7" : "#F3F4F6"}
+        fillOpacity={0.7}
+        label={{
+          value: r.label,
+          position: "insideTop",
+          fill: r.reason === "free_semester" ? "#92400E" : "#6B7280",
+          fontSize: 10,
+        }}
+      />
+    ));
+
   return (
     <div>
       <SectionTitle badge={gt.trend_badge}>{isHigh ? "내신 등급 추이" : "성적 추이"}</SectionTitle>
@@ -118,7 +188,7 @@ export function GradeTrendChart({ computed, surveyType }: { computed: ComputedSt
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>학기별 {label}</div>
         <ResponsiveContainer width="100%" height={250}>
-          <LineChart data={gt.data}>
+          <LineChart data={avgChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
             <XAxis dataKey="semester" tick={{ fontSize: 12 }} />
             <YAxis
@@ -130,9 +200,10 @@ export function GradeTrendChart({ computed, surveyType }: { computed: ComputedSt
               formatter={(value: number) => [isHigh ? `${value}등급` : `${value}점`, label]}
               contentStyle={{ fontSize: 12 }}
             />
+            {renderExemptAreas()}
             <Line
               type="monotone" dataKey={valueKey} stroke="#4472C4" strokeWidth={2.5}
-              dot={{ r: 5, fill: "#4472C4" }} name={label}
+              dot={{ r: 5, fill: "#4472C4" }} name={label} connectNulls
             />
           </LineChart>
         </ResponsiveContainer>
@@ -153,6 +224,7 @@ export function GradeTrendChart({ computed, surveyType }: { computed: ComputedSt
               />
               <Tooltip contentStyle={{ fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
+              {renderExemptAreas()}
               {subjectNames.map((subj, i) => (
                 <Line
                   key={subj} type="monotone" dataKey={subj}
@@ -162,6 +234,23 @@ export function GradeTrendChart({ computed, surveyType }: { computed: ComputedSt
               ))}
             </LineChart>
           </ResponsiveContainer>
+          {/* 자유학기제/미진행 범례 (예비고1 full timeline 일 때만) */}
+          {useFullTimeline && exemptRanges.length > 0 && (
+            <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 11, color: "#6B7280" }}>
+              {exemptRanges.some((r) => r.reason === "free_semester") && (
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ width: 12, height: 12, background: "#FEF3C7", border: "1px solid #FDE68A" }} />
+                  <span>자유학기제 (성적 미산출)</span>
+                </div>
+              )}
+              {exemptRanges.some((r) => r.reason === "not_graded") && (
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ width: 12, height: 12, background: "#F3F4F6", border: "1px solid #E5E7EB" }} />
+                  <span>미진행</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -1404,26 +1404,53 @@ def _compute_high(answers: dict) -> dict:
 
 def _compute_preheigh1(answers: dict) -> dict:
     """예비고1 설문 자동 계산."""
+    from app.services.survey_scoring_service import _extract_ph1_subjects
+
     result: dict[str, Any] = {}
 
     # --- 중학교 성적 추이 (카테고리 C: C1~C6) ---
     cat_c = answers.get("C", {})
     semesters = ["C1", "C2", "C3", "C4", "C5", "C6"]
     semester_labels = ["중1-1", "중1-2", "중2-1", "중2-2", "중3-1", "중3-2"]
+    # 스키마: 중1 전체(C1/C2) = 자유학기제, 중3(C5/C6) = 미진행 가능
+    _exempt_label_by_reason = {
+        "free_semester": "자유학기제",
+        "not_graded": "미진행 (성적 미산출)",
+    }
     subjects = ["ko", "en", "ma", "so", "sc"]
     subject_names = {"ko": "국어", "en": "영어", "ma": "수학", "so": "사회", "sc": "과학"}
 
     score_trend: list[dict] = []
     subject_trends: dict[str, list] = {s: [] for s in subjects}
+    # V2_2 §3-2 "자유학기제 구간 점선 표시" — 차트가 exempt 범위를 그릴 수 있도록
+    # 6개 학기 전부 메타 반환. data 는 raw_score 가 있는 학기만 포함 (기존 로직 유지).
+    semester_meta: list[dict] = []
 
     for i, sem_key in enumerate(semesters):
         sem_data = cat_c.get(sem_key)
-        if not sem_data or not isinstance(sem_data, dict):
+        is_exempt = bool(isinstance(sem_data, dict) and sem_data.get("exempt"))
+        exempt_reason = (
+            sem_data.get("exempt_reason") if isinstance(sem_data, dict) else None
+        )
+        semester_meta.append({
+            "key": sem_key,
+            "semester": semester_labels[i],
+            "exempt": is_exempt,
+            "exempt_reason": exempt_reason if is_exempt else None,
+            "exempt_label": (
+                _exempt_label_by_reason.get(exempt_reason or "", "해당 없음")
+                if is_exempt else None
+            ),
+        })
+
+        if not sem_data or not isinstance(sem_data, dict) or is_exempt:
             continue
 
+        # 실제 과목 점수는 SemesterGradeMatrix 구조의 subjects 하위에 있음
+        subj_dict = _extract_ph1_subjects(sem_data)
         sem_scores = []
         for subj in subjects:
-            subj_data = sem_data.get(subj, {})
+            subj_data = subj_dict.get(subj, {})
             if not isinstance(subj_data, dict):
                 continue
             raw = _safe_float(subj_data.get("raw_score"))
@@ -1450,6 +1477,8 @@ def _compute_preheigh1(answers: dict) -> dict:
         "data": score_trend,
         "trend_badge": trend_badge,
         "subject_trends": {subject_names.get(k, k): v for k, v in subject_trends.items() if v},
+        # V2_2 §3-2 자유학기제 구간 점선 표시용 메타
+        "semester_meta": semester_meta,
     }
 
     # --- 학습 시간 분석 (카테고리 D: D1) ---
