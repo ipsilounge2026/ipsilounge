@@ -3,6 +3,11 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        // Maven Central CDN 이 간헐적으로 legacy 아티팩트(javawriter:2.5.0, asm:9.1 등)에
+        // 403 Forbidden 을 반환하는 문제 우회용 미러. Flutter 3.24.x 번들 AGP 7.3.0 이
+        // 끌어오는 구형 transitive deps 가 이슈의 주 원인.
+        // Google 이 호스팅하는 Maven Central 미러 — GitHub Actions 러너에서 안정적.
+        maven { url "https://maven-central.storage-download.googleapis.com/maven2/" }
     }
     dependencies {
         classpath "com.google.gms:google-services:4.4.1"  // Firebase
@@ -13,6 +18,8 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // 위와 동일한 이유 — app 및 transitive deps 해석 시도 실패 회피.
+        maven { url "https://maven-central.storage-download.googleapis.com/maven2/" }
     }
 }
 
