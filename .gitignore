@@ -90,3 +90,6 @@ analyzer/data/students/*.py
 
 # 웹 업로드 파일 (민감 정보) — 통합 이식 전부터 누락되어 있던 이슈 보강
 uploads/
+
+# 로컬 Firebase 키 보관 폴더 (운영자 PC, google-services.json + 서비스 계정 키)
+firebase/

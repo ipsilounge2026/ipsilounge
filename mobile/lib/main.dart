@@ -35,13 +35,9 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 
 /// Firebase 사용 가능 여부.
 ///
-/// 활성화 순서:
-///   1. Firebase 콘솔에서 Android 앱 등록 (package name: com.ipsilounge.app)
-///   2. google-services.json → android/app/ 배치
-///   3. android/build.gradle: `classpath 'com.google.gms:google-services:4.4.2'`
-///   4. android/app/build.gradle: `apply plugin: 'com.google.gms.google-services'`
-///   5. 본 플래그를 true 로 변경
-const bool kEnableFirebase = false;
+/// 2026-05-04: 활성화됨 (Firebase 콘솔 'ipsilounge' 프로젝트, package com.ipsilounge.app).
+/// 비활성화하려면 false 로 되돌리면 됨 — google-services.json 이 있어도 코드 경로는 차단.
+const bool kEnableFirebase = true;
 
 /// 백그라운드 메시지 핸들러 (top-level 함수여야 함).
 /// onBackgroundMessage 는 별도 isolate 에서 실행되므로 UI 접근 불가.

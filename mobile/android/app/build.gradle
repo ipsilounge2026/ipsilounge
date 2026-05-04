@@ -70,8 +70,8 @@ flutter {
 dependencies {
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    // Firebase 의존성 — google-services.json 설정 후 활성화
-    // implementation platform("com.google.firebase:firebase-bom:33.0.0")
-    // implementation "com.google.firebase:firebase-analytics"
-    // implementation "com.google.firebase:firebase-messaging"
+    // Firebase 의존성 (BoM 으로 버전 일괄 관리)
+    // analytics 는 사용 안 함 — Sentry 로 모니터링
+    implementation platform("com.google.firebase:firebase-bom:33.7.0")
+    implementation "com.google.firebase:firebase-messaging"
 }
