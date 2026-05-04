@@ -4,7 +4,10 @@
 .env.production
 *.env
 firebase-credentials.json
+firebase-adminsdk-*.json
 google-service-account.json
+google-services.json
+GoogleService-Info.plist
 *.keystore
 *.jks
 key.properties

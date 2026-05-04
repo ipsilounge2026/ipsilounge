@@ -44,11 +44,16 @@ from app.routers import (
     users,
 )
 from app.services.scheduler_service import start_scheduler, stop_scheduler
+from app.services.sentry_service import init_sentry
 from app.utils.rate_limiter import limiter
 from app.utils.security import hash_password
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Sentry 초기화 — FastAPI 앱 생성 전에 호출해야 미들웨어가 정상 등록됨
+# (SENTRY_DSN 미설정 시 graceful 비활성)
+init_sentry()
 
 app = FastAPI(
     title="입시라운지 API",
@@ -354,6 +359,10 @@ async def startup():
             db.add(admin)
             await db.commit()
             logger.info(f"관리자 초기 계정 생성: {settings.ADMIN_EMAIL}")
+
+    # Firebase Admin SDK 초기화 (FCM 푸시 알림용; 환경변수 미설정 시 graceful 비활성)
+    from app.services.firebase_admin_service import init_firebase_admin
+    init_firebase_admin()
 
     # 스케줄러 시작 (매일 9시 상담 리마인더)
     start_scheduler()

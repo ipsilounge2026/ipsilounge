@@ -14,7 +14,8 @@
     "react-icons": "^5.4.0",
     "react-datepicker": "^7.6.0",
     "date-fns": "^4.1.0",
-    "recharts": "^2.15.0"
+    "recharts": "^2.15.0",
+    "@sentry/nextjs": "^8.50.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

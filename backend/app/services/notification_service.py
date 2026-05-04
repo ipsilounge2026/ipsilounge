@@ -22,20 +22,25 @@ async def send_push_notification(user: User, title: str, body: str, notification
 
     # FCM 푸시 발송 (FCM 토큰이 있는 경우)
     if user.fcm_token:
-        try:
-            # firebase_admin 초기화 후 사용
-            # 실제 배포 시 firebase_admin.messaging.send() 호출
-            from firebase_admin import messaging
-
-            message = messaging.Message(
-                notification=messaging.Notification(title=title, body=body),
-                data={"type": notification_type},
-                token=user.fcm_token,
+        # Firebase Admin SDK 초기화 여부 먼저 확인 (graceful 비활성)
+        from app.services.firebase_admin_service import is_initialized
+        if not is_initialized():
+            logger.debug(
+                f"[fcm] Firebase Admin 미초기화 → 발송 스킵 (user={user.id})"
             )
-            messaging.send(message)
-            logger.info(f"FCM 알림 발송 완료: user={user.id}, type={notification_type}")
-        except Exception as e:
-            logger.warning(f"FCM 알림 발송 실패: user={user.id}, error={e}")
+        else:
+            try:
+                from firebase_admin import messaging
+
+                message = messaging.Message(
+                    notification=messaging.Notification(title=title, body=body),
+                    data={"type": notification_type},
+                    token=user.fcm_token,
+                )
+                messaging.send(message)
+                logger.info(f"FCM 알림 발송 완료: user={user.id}, type={notification_type}")
+            except Exception as e:
+                logger.warning(f"FCM 알림 발송 실패: user={user.id}, error={e}")
     else:
         logger.info(f"FCM 토큰 없음, DB 알림만 저장: user={user.id}")
 
@@ -94,6 +99,10 @@ async def send_report_ready_notification(user: User, db: AsyncSession):
 
 async def send_push_notification_by_token(token: str, title: str, body: str, data: dict = None):
     """FCM 토큰으로 직접 푸시 알림 발송 (DB 기록 없이, 스케줄러용)"""
+    from app.services.firebase_admin_service import is_initialized
+    if not is_initialized():
+        logger.debug("[fcm] Firebase Admin 미초기화 → token 직접 발송 스킵")
+        return
     try:
         from firebase_admin import messaging
 

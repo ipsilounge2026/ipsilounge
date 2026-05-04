@@ -32,3 +32,7 @@ reportlab==4.1.0
 # - 업로드된 학생부가 스캔 PDF 인지 자동 판별 → admin-web 경고 배지 노출
 # - analyzer 의 G6 하이라이트 PDF 생성 가능 여부 사전 확인
 PyMuPDF==1.25.0
+
+# Sentry 에러 모니터링 (2026-04-21 추가)
+# SENTRY_DSN 환경변수 미설정 시 graceful 비활성. FastAPI integration 자동 적용.
+sentry-sdk[fastapi]==2.20.0

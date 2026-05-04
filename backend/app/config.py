@@ -37,8 +37,17 @@ class Settings(BaseSettings):
     AWS_REGION: str = "ap-northeast-2"
     S3_BUCKET_NAME: str = "ipsilounge-files"
 
-    # Firebase
+    # Firebase Admin SDK (FCM 푸시 알림용)
+    # 우선순위: FIREBASE_CREDENTIALS_JSON (JSON 문자열) > FIREBASE_CREDENTIALS_PATH (파일 경로)
+    # 둘 다 비어있으면 FCM 발송은 graceful 비활성 (로그만)
     FIREBASE_CREDENTIALS_PATH: str = "firebase-credentials.json"
+    FIREBASE_CREDENTIALS_JSON: str = ""
+
+    # Sentry (에러 모니터링)
+    # SENTRY_DSN 비어있으면 Sentry 비활성. ENVIRONMENT 는 배포 환경 구분(production/staging/dev).
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str = "development"
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1  # 트랜잭션 샘플링 (0.0~1.0)
 
     # 토스페이먼츠
     TOSS_SECRET_KEY: str = ""
