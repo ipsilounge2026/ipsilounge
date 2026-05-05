@@ -334,8 +334,144 @@ def create_excel(sd, xlsx_path, mode_config=None):
     except Exception as e:
         print(f"[WARN] 이전분석대비변화 시트 생성 실패 (스킵): {type(e).__name__}: {e}")
 
+    # ── Sheet 13: 대학별내신 (2026-05-05 신규, average_school_grade_db.xlsx) ──
+    # grade_data 비어있으면 스킵.
+    try:
+        if _has_grade_data(sd):
+            _write_grading_sheet(wb, sd, style_header, style_cell, set_col_widths,
+                                  center, left_align)
+    except Exception as e:
+        print(f"[WARN] 대학별내신 시트 생성 실패 (스킵): {type(e).__name__}: {e}")
+
     wb.save(str(xlsx_path))
     print(f"Excel saved: {xlsx_path}")
+
+
+def _has_grade_data(sd) -> bool:
+    """학생 데이터 파일에 grade_data 가 입력되어 있는지 확인."""
+    grade_data = getattr(sd, "grade_data", None) or {}
+    if not grade_data:
+        return False
+    # 한 학기라도 과목이 있으면 True
+    return any(subjects for subjects in grade_data.values() if subjects)
+
+
+def _write_grading_sheet(wb, sd, style_header, style_cell, set_col_widths,
+                          center, left_align):
+    """대학별 내신 산출 결과 시트 작성.
+
+    baseline 3개(자연/인문/종합) + 지망 대학 룰(있으면) 의 평균등급/환산점수를
+    표로 표시. 학년별·교과별 breakdown 도 함께.
+    """
+    from .grade_analyzer import calc_all_grading
+
+    grade_data = getattr(sd, "grade_data", {}) or {}
+    target_univ      = (getattr(sd, "TARGET_UNIV", "") or "").strip()
+    target_admission = (getattr(sd, "TARGET_ADMISSION_TYPE", "") or "").strip()
+    target_category  = (getattr(sd, "TARGET_ADMISSION_CATEGORY", "") or "").strip()
+
+    out = calc_all_grading(
+        grade_data,
+        university=target_univ or None,
+        admission_type=target_admission or None,
+        admission_category=target_category or None,
+    )
+
+    ws = wb.create_sheet("대학별내신")
+    row = 1
+
+    # ── 표 1: 산출 룰별 요약 ──
+    ws.cell(row=row, column=1, value="■ 산출 룰별 평균등급 / 환산점수").font = \
+        __import__('openpyxl').styles.Font(name="Arial", bold=True, size=11)
+    row += 1
+
+    headers = ["구분", "라벨", "평균등급", "환산점수", "적용 과목수", "제외 과목수"]
+    style_header(ws, headers, row=row)
+    row += 1
+
+    for b in out.get('baseline') or []:
+        r = b.get('result') or {}
+        style_cell(ws, row, 1, f"baseline ({b.get('track', '')})")
+        style_cell(ws, row, 2, b.get('label', ''), left_align)
+        style_cell(ws, row, 3, r.get('평균등급', 0))
+        style_cell(ws, row, 4, r.get('환산점수', 0))
+        style_cell(ws, row, 5, r.get('적용_과목수', 0))
+        style_cell(ws, row, 6, r.get('제외_과목수', 0))
+        row += 1
+
+    u = out.get('university')
+    if u:
+        if u.get('matched'):
+            r = u.get('result') or {}
+            style_cell(ws, row, 1, "지망 대학")
+            style_cell(ws, row, 2, u.get('label', ''), left_align)
+            style_cell(ws, row, 3, r.get('평균등급', 0))
+            style_cell(ws, row, 4, r.get('환산점수', 0))
+            style_cell(ws, row, 5, r.get('적용_과목수', 0))
+            style_cell(ws, row, 6, r.get('제외_과목수', 0))
+            row += 1
+        else:
+            style_cell(ws, row, 1, "지망 대학")
+            style_cell(ws, row, 2, u.get('message', '미매칭'), left_align)
+            row += 1
+
+    # ── 표 2: 학년별 breakdown (지망 대학 우선, 없으면 baseline 종합) ──
+    row += 1
+    ws.cell(row=row, column=1, value="■ 학년별 평균등급 (대표 룰 기준)").font = \
+        __import__('openpyxl').styles.Font(name="Arial", bold=True, size=11)
+    row += 1
+
+    repr_block = u if (u and u.get('matched')) else (
+        next((b for b in (out.get('baseline') or []) if b.get('track') == '종합'), None)
+    )
+    repr_label = repr_block.get('label', '-') if repr_block else '-'
+    repr_result = (repr_block or {}).get('result') or {}
+    by_year = repr_result.get('breakdown', {}).get('by_year', {})
+
+    style_header(ws, ["룰", "1학년", "2학년", "3학년"], row=row)
+    row += 1
+    style_cell(ws, row, 1, repr_label, left_align)
+    style_cell(ws, row, 2, by_year.get(1, 0))
+    style_cell(ws, row, 3, by_year.get(2, 0))
+    style_cell(ws, row, 4, by_year.get(3, 0))
+    row += 1
+
+    # ── 표 3: 교과별 breakdown ──
+    row += 1
+    ws.cell(row=row, column=1, value="■ 교과별 평균등급 (대표 룰 기준)").font = \
+        __import__('openpyxl').styles.Font(name="Arial", bold=True, size=11)
+    row += 1
+
+    by_cat = repr_result.get('breakdown', {}).get('by_category', {})
+    if by_cat:
+        cats = list(by_cat.keys())
+        style_header(ws, ["룰"] + cats, row=row)
+        row += 1
+        style_cell(ws, row, 1, repr_label, left_align)
+        for i, c in enumerate(cats, 2):
+            style_cell(ws, row, i, by_cat[c])
+        row += 1
+
+    # ── 표 4: 적용된 룰 메모 (notes) ──
+    notes_collected = []
+    for b in out.get('baseline') or []:
+        for n in (b.get('result') or {}).get('notes') or []:
+            notes_collected.append(f"[{b.get('track', '')}] {n}")
+    if u and u.get('matched'):
+        for n in (u.get('result') or {}).get('notes') or []:
+            notes_collected.append(f"[지망] {n}")
+
+    if notes_collected:
+        row += 1
+        ws.cell(row=row, column=1, value="■ 산출 메모").font = \
+            __import__('openpyxl').styles.Font(name="Arial", bold=True, size=11)
+        row += 1
+        for note in notes_collected:
+            style_cell(ws, row, 1, note, left_align)
+            row += 1
+
+    set_col_widths(ws, [22, 40, 12, 12, 12, 12])
+    ws.freeze_panes = "A3"
 
 
 def _write_compare_sheet(wb, sd, style_header, style_cell, set_col_widths,

@@ -46,6 +46,9 @@ OPTIONAL_VARS = [
     "attendance_data", # G7 출결
     "volunteer_data",  # G7 봉사
     "compare_data",    # G3+G4 이전 대비 변화
+    "grade_data",      # 대학별 내신 산출 raw 성적 (2026-05-05)
+    "TARGET_ADMISSION_TYPE",      # 지망 전형명 (대학별 내신 산출용)
+    "TARGET_ADMISSION_CATEGORY",  # 지망 전형유형
 ]
 
 

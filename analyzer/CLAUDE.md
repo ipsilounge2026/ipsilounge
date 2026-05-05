@@ -458,6 +458,10 @@ raw_texts = {
   - 창체: `changche_data`, `changche_comments`
   - 행특: `haengtuk_data`, `haengtuk_comments`
   - 종합: `linkage_data`, `eval_data`, `fix_data`, `summary_data`
+- 선택 필드 (있으면 해당 시트 자동 생성):
+  - `TARGET_ADMISSION_TYPE`, `TARGET_ADMISSION_CATEGORY` — 지망 전형명/유형 (대학별 내신 산출용)
+  - `grade_data` — 학기별 raw 성적 (대학별내신 시트용, 비어있으면 시트 스킵)
+  - `raw_texts`, `attendance_data`, `volunteer_data`, `compare_data`, `highlight_quotes` 등
 
 **세특 루브릭 모드는 `TARGET_MAJOR` 값으로 자동 결정**:
 - `TARGET_MAJOR = ""` → 미지정 모드, `setuek_data` 튜플 길이 10 (6항목)
@@ -475,6 +479,16 @@ raw_texts = {
 - 빈 dict 이면 Excel `출결·봉사` 시트 + PDF 출결·봉사 섹션 스킵 (출결 만점 100 가정)
 - 내용 있으면 미인정 카운트 기반 감점 자동 계산 + 시트/섹션 생성
 - QA P1-F-001: 음수/이상치 자동 검증
+
+**대학별 내신 산출 (`grade_data` + `TARGET_ADMISSION_*`, 선택 필드, 2026-05-05)**:
+- `grade_data`: `{학기코드: [과목 dict, ...]}` — 학기별 raw 성적 (학점, 석차등급, 성취도 등)
+- `TARGET_ADMISSION_TYPE` / `TARGET_ADMISSION_CATEGORY`: 지망 전형명/유형 (선택)
+- 빈 dict 이면 Excel `대학별내신` 시트 스킵 (역호환)
+- 내용 있으면 자동으로:
+  - baseline 3개(자연/인문/종합) 평균등급/환산점수 산출
+  - 지망 대학·전형 지정 + DB 매칭 시 그 대학 룰 결과 추가
+  - 학년별·교과별 breakdown + 적용 룰 메모(notes) 함께 표시
+- 산출 로직: `grade_analyzer.calc_all_grading()` 활용 (CLAUDE.md §3-1 참조)
 
 **G3+G4 이전 대비 변화 (`compare_data`, 선택 필드)**:
 - 2회차 이상 분석 시만 작성 (최초 분석은 빈 dict `{}`)
