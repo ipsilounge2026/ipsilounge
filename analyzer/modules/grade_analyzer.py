@@ -664,11 +664,27 @@ _ALL_SEMESTERS = ['1-1', '1-2', '2-1', '2-2', '3-1', '3-2']
 # "1-1~3-1" 형태가 아닌, 전체 학기 적용을 의미하는 값들
 _FULL_RANGE_TOKENS = {'미명시', '전학기', '전체', '전체학기', '정성평가', ''}
 
+# 반영교과군 키워드 → 학생 데이터의 교과군 풀네임 매핑
+# xlsx 의 '반영교과군' 셀은 "국·영·수·과" 같이 한글자 약어로 표기됨
+_REFLECT_GROUP_MAP = {
+    '국': '국어', '영': '영어', '수': '수학',
+    '사': '사회', '과': '과학', '한': '한국사',
+}
+
+# track(계열) → 매칭할 '기본' 룰의 반영교과군 패턴
+_DEFAULT_TRACK_TO_REFLECT = {
+    '인문': '국·영·수·사',
+    '자연': '국·영·수·과',
+    '종합': '국·영·수·사·과',
+    '공통': '국·영·수·사·과',  # estimate_track 기본값
+}
+
 
 def load_university_grading(
     university: str | None = None,
     admission_type: str | None = None,
     admission_category: str | None = None,
+    default_track: str = '종합',
     xlsx_path: str | None = None,
 ) -> dict | None:
     """대학별 내신 산출 룰 로드.
@@ -678,12 +694,21 @@ def load_university_grading(
       2. 대학명 + 전형명 매칭 (전형유형 무시)
       3. 대학명 + 전형유형 매칭 (전형명 무시)
       4. 대학명만 매칭 → 첫 번째 행 (대표 룰로 사용)
-      5. 매칭 실패 → '기본' 룰 fallback (None 반환 안 함)
+      5. 매칭 실패 또는 university 미지정 → '기본' 룰 fallback
+         · default_track 에 따라 적절한 기본 행 선택
+         · '인문' → "기본 (국·영·수·사)"
+         · '자연' → "기본 (국·영·수·과)"
+         · '종합'(기본값) → "기본 (국·영·수·사·과)"
+
+    학생이 지망 대학·전형을 지정하지 않은 경우엔 university=None 으로 호출하면
+    자동으로 '기본' 룰이 적용된다. estimate_track() 으로 계열을 추정한 뒤
+    그 결과를 default_track 으로 넘기면 학생 계열에 맞는 기본 룰이 픽된다.
 
     Args:
-        university: 대학명 (예: "서울대학교"). 미지정 시 '기본' 룰 반환.
+        university: 대학명 (예: "서울대학교"). None 이면 '기본' 룰 fallback.
         admission_type: 전형명 (예: "지역균형", "학교장추천").
         admission_category: 전형유형 (예: "학생부교과", "학생부종합", "논술").
+        default_track: '기본' 룰 fallback 시 사용할 계열. '인문'/'자연'/'종합'/'공통'.
         xlsx_path: 파일 경로. 기본은 data/average_school_grade_db.xlsx.
 
     Returns:
@@ -703,11 +728,35 @@ def load_university_grading(
 
     matched = _match_grading_row(rows, university, admission_type, admission_category)
     if matched is None:
-        # 매칭 실패 → '기본' 룰 fallback
-        matched = next((r for r in rows if str(r.get('대학명', '')).strip() == '기본'), None)
+        # 매칭 실패 또는 university 미지정 → '기본' 룰 fallback
+        matched = _select_default_rule(rows, default_track)
     if matched is None:
         return None
     return _row_to_rule(matched)
+
+
+def _select_default_rule(rows: list, track: str = '종합') -> dict | None:
+    """학생 계열에 맞는 '기본' 행을 선택.
+
+    xlsx 에 '기본' 행이 3개 있으며 반영교과군이 다름:
+      - "기본 (국·영·수·사)"   ← 인문계용
+      - "기본 (국·영·수·과)"   ← 자연계용
+      - "기본 (국·영·수·사·과)" ← 종합 (전 교과)
+
+    Args:
+        track: 학생 계열. '인문'/'자연'/'종합'/'공통'.
+    """
+    target_pattern = _DEFAULT_TRACK_TO_REFLECT.get(track, '국·영·수·사·과')
+    base_rows = [r for r in rows if str(r.get('대학명', '')).strip() == '기본']
+
+    # 정확 매칭: 전형명에 target_pattern 포함
+    for r in base_rows:
+        type_str = str(r.get('전형명', '')).strip()
+        if target_pattern in type_str:
+            return r
+
+    # fallback — 첫 번째 '기본' 행
+    return base_rows[0] if base_rows else None
 
 
 def _load_grading_rows(xlsx_path: str) -> list:
@@ -813,6 +862,8 @@ def _row_to_rule(row: dict) -> dict:
         '지표_진로선택': str(row.get('지표_진로선택') or '석차등급').strip(),
         '지표_융합_국수영': str(row.get('지표_융합_국수영') or '석차등급').strip(),
         '지표_융합_사과': str(row.get('지표_융합_사과') or '석차등급').strip(),
+        '반영교과군': _parse_reflect_groups(row.get('반영교과군')),
+        '반영교과군_원문': row.get('반영교과군'),
         '1등급환산점': _safe_float(row.get('1등급환산점'), 1.0),
         '최하등급환산점': _safe_float(row.get('최하등급환산점'), 5.0),
         '매트릭스환산_여부': str(row.get('매트릭스환산_여부') or 'N').strip().upper() == 'Y',
@@ -820,6 +871,58 @@ def _row_to_rule(row: dict) -> dict:
         '가산형_여부': str(row.get('가산형_여부') or 'N').strip().upper() == 'Y',
         '_raw': row,  # 디버깅/향후 확장용
     }
+
+
+# 반영교과군 셀에서 "전 과목 반영(필터 없음)" 으로 해석할 키워드
+_NO_FILTER_KEYWORDS = (
+    '미반영', '미명시', '해당없음', '없음',
+    '전교과', '전 교과', '전과목', '전 과목', '전체',
+    '정성', '종합평가', '학생부', '교과미반영', '비교과', '서류평가',
+    '석차등급 산출 전 교과목',
+)
+
+
+def _parse_reflect_groups(reflect_str) -> set:
+    """반영교과군 문자열을 학생 데이터 교과군 set 으로 파싱.
+
+    예) "국·영·수·과"     → {'국어', '영어', '수학', '과학'}
+        "국·영·수·사·과"  → {'국어', '영어', '수학', '사회', '과학'}
+        "전교과(체·예·교양 제외)" → set()  (= 필터 없음, 전 과목 반영)
+        "전교과(정성)"    → set()  (= 필터 없음, 정성평가는 notes 로 별도 안내)
+        "미명시"/"-"/None → set()  (= 필터 없음)
+
+    복잡한 표현 (예: "국·수·영·사(인문)/국·수·영·과(자연)") 은 괄호 제거 후
+    구분자 split 으로 합집합 처리. 정확한 계열별 분기는 MVP 미지원.
+    """
+    if reflect_str is None:
+        return set()
+    s = str(reflect_str).strip()
+    if not s or s == '-':
+        return set()
+
+    # "전 과목 반영" 패턴 키워드 탐지 (괄호 제거 전에 체크 — "전교과(정성)" 같은 케이스 잡기 위해)
+    for kw in _NO_FILTER_KEYWORDS:
+        if kw in s:
+            return set()
+
+    # 괄호 안 부가 설명 제거 ("국·영(인문)/국·과(자연)" → "국·영/국·과")
+    import re
+    s_main = re.sub(r'\([^)]*\)', '', s).strip()
+
+    # 다양한 구분자 정규화 (·, ・, /, ,, 가운뎃점 변형들)
+    for sep in ('・', ',', '，', '/'):
+        s_main = s_main.replace(sep, '·')
+    parts = [p.strip() for p in s_main.split('·') if p.strip()]
+    result = set()
+    for p in parts:
+        if p in _REFLECT_GROUP_MAP:
+            result.add(_REFLECT_GROUP_MAP[p])
+        elif p in {'한국사'}:
+            result.add('한국사')
+        else:
+            # 이미 풀네임("국어"/"영어" 등)이거나 인식 못 하는 토큰
+            result.add(p)
+    return result
 
 
 def _parse_semester_range(spec: str) -> list:
@@ -913,6 +1016,7 @@ def calc_university_specific_average(grades: dict, grading_rule: dict) -> dict:
     target_semesters = _parse_semester_range(semesters_spec)
     year_w = grading_rule.get('학년_가중치', {})
     subj_w = grading_rule.get('교과_가중치', {})
+    reflect_groups = grading_rule.get('반영교과군') or set()
     notes: list = []
 
     # 미명시/정성평가 안내
@@ -922,6 +1026,8 @@ def calc_university_specific_average(grades: dict, grading_rule: dict) -> dict:
         notes.append('지표_공통 정성평가 — 수치 산출 결과는 참고용')
     if '정성평가' in str(grading_rule.get('지표_진로선택', '')):
         notes.append('지표_진로선택 정성평가 — 진로선택과목은 산출 제외')
+    if reflect_groups:
+        notes.append(f'반영교과군 필터: {grading_rule.get("반영교과군_원문")} (이외 교과군은 제외)')
 
     # MVP 미지원 룰 안내
     if grading_rule.get('매트릭스환산_여부'):
@@ -953,6 +1059,12 @@ def calc_university_specific_average(grades: dict, grading_rule: dict) -> dict:
         for subj in subjects or []:
             credit = _safe_float(subj.get('학점'))
             if credit <= 0:
+                continue
+
+            # 반영교과군 필터: rule 에 명시돼 있으면 해당 교과군만 반영
+            cat = (subj.get('교과군') or '').strip()
+            if reflect_groups and cat not in reflect_groups:
+                skipped_count += 1
                 continue
 
             # 과목 유형에 따른 지표 결정
