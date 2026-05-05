@@ -553,9 +553,33 @@ def calc_grade_score_100(overall_avg: float) -> float:
     return round(score, 1)
 
 
-def run_grade_analysis(extracted_data: dict, config: dict = None,
-                        university: str = None, department: str = None) -> dict:
-    """성적 분석 메인 함수. Step 3 전체 실행."""
+def run_grade_analysis(
+    extracted_data: dict,
+    config: dict = None,
+    university: str = None,
+    department: str = None,
+    admission_type: str = None,
+    admission_category: str = None,
+) -> dict:
+    """성적 분석 메인 함수. Step 3 전체 실행.
+
+    Args:
+        extracted_data: 추출된 학생부 데이터 (grades, attendance 등 포함).
+        config: 분석 설정 (None 이면 config.yaml 자동 로드).
+        university: 지망 대학명 (선택). 교과 이수 충실도 + 대학별 내신 산출에 활용.
+        department: 지망 모집단위명 (선택). 교과 이수 충실도용.
+        admission_type: 지망 전형명 (선택). 대학별 내신 산출용 (예: "지역균형").
+        admission_category: 지망 전형유형 (선택). 대학별 내신 산출용 (예: "학생부교과").
+
+    Returns:
+        분석 결과 dict. 주요 키:
+          - track, semester/yearly/overall_average, grade_converted_9
+          - trend_pattern, small_class_subjects, jinro_subjects, context_analysis
+          - course_fulfillment, grade_score_100, attendance_score_100
+          - all_grading: 대학별 내신 산출 결과 (baseline 3개 + 대학 룰)
+                         calc_all_grading() 반환값과 동일 구조.
+                         university 미지정 시에도 baseline 3개는 항상 산출됨.
+    """
     if config is None:
         config = load_config()
 
@@ -606,6 +630,14 @@ def run_grade_analysis(extracted_data: dict, config: dict = None,
     grade_score_100 = calc_grade_score_100(overall_average['전교과'])
     attendance_score_100 = calc_attendance_score(attendance, config)
 
+    # 대학별 내신 산출 — baseline 3개(자연/인문/종합) + 지망 대학 지정 시 추가
+    all_grading = calc_all_grading(
+        grades,
+        university=university,
+        admission_type=admission_type,
+        admission_category=admission_category,
+    )
+
     return {
         'track': track,
         'semester_averages': semester_averages,
@@ -620,6 +652,7 @@ def run_grade_analysis(extracted_data: dict, config: dict = None,
         'course_fulfillment': course_fulfillment,
         'grade_score_100': grade_score_100,
         'attendance_score_100': attendance_score_100,
+        'all_grading': all_grading,
     }
 
 

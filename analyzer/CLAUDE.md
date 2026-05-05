@@ -630,25 +630,35 @@ python generate_report.py <학생명>
   - 4단계 매칭 우선순위 + '기본' 룰 fallback
   - 반영교과군 필터 (체·예·기가 등 비반영 교과 자동 제외)
 
-**산출 방식 (calc_all_grading wrapper 권장)**:
-- 학생 지망 대학·전형 지정 여부와 **무관하게 항상** 기본 3개 결과 산출:
-  - `[자연]` 기본 (국·영·수·과)
-  - `[인문]` 기본 (국·영·수·사)
-  - `[종합]` 기본 (국·영·수·사·과)
-- 대학·전형이 지정되고 DB 매칭되면 **추가로** 그 대학별 결과도 산출
-- 사용자가 요청한 대학이 DB 에 없으면 `matched=False` + 안내 메시지 반환
+**산출 방식 (run_grade_analysis 통합)**:
+
+`run_grade_analysis` 메인 진입점이 `calc_all_grading` 을 자동 호출하여 결과 dict 의 `'all_grading'` 키에 포함시킨다. 학생 지망 대학·전형 지정 여부와 **무관하게 항상** 기본 3개 결과가 산출되며, 지정 시 그 대학 결과가 추가됨.
 
 ```python
-out = calc_all_grading(grades, university='경기대학교', admission_type='학교장추천')
-# out['baseline'] = [3개 결과]
-# out['university'] = {'matched': True, 'label': '경기대학교 / 학교장추천', 'result': {...}}
+# 기본 호출 — baseline 3개 자동 산출
+result = run_grade_analysis(extracted_data)
+# result['all_grading']['baseline']    → 3개 결과 (자연/인문/종합)
+# result['all_grading']['university']  → None
 
-out = calc_all_grading(grades)  # 미지정
-# out['baseline'] = [3개 결과]
-# out['university'] = None
+# 지망 대학 + 전형 지정
+result = run_grade_analysis(
+    extracted_data,
+    university='경기대학교',
+    admission_type='학교장추천',
+)
+# result['all_grading']['baseline']    → 3개 결과 (그대로)
+# result['all_grading']['university']  → {'matched': True, 'label': '경기대학교 / 학교장추천', 'result': {...}}
 ```
 
-**저수준 함수 (단일 룰만 산출하는 경우)**:
+**3개 baseline 룰**:
+- `[자연]` 기본 (국·영·수·과)
+- `[인문]` 기본 (국·영·수·사)
+- `[종합]` 기본 (국·영·수·사·과)
+
+**대학·전형 미매칭 시**: `university['matched']=False` + 안내 message. baseline 3개는 정상 산출되므로 분석 진행 가능.
+
+**저수준 API (단일 룰만 필요한 경우)**:
+- `calc_all_grading(grades, university, admission_type, admission_category)` — wrapper (run_grade_analysis 가 내부 호출)
 - `load_university_grading(university, admission_type, admission_category, default_track)` — 룰 1개 로드
 - `calc_university_specific_average(grades, rule)` — 단일 룰 산출
 - `default_track` 매개변수: 미매칭/미지정 시 fallback 할 '기본' 행 선택 (`'인문'` / `'자연'` / `'종합'`(기본값))
