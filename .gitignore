@@ -93,3 +93,6 @@ uploads/
 
 # 로컬 Firebase 키 보관 폴더 (운영자 PC, google-services.json + 서비스 계정 키)
 firebase/
+
+# 로컬 Sentry DSN 메모 보관 폴더 (운영자 PC, write-only key 지만 정리 차원에서 ignore)
+Sentry/
