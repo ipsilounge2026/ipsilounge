@@ -77,7 +77,10 @@ async def _check_sla_overdue_reviews():
       - admin 이메일 SMTP 발송
       - Slack incoming webhook 통지
     """
-    now = datetime.now(UTC)
+    # ConsultationSurvey.submitted_at / ConsultationNote.created_at 컬럼이 TIMESTAMP
+    # WITHOUT TIME ZONE (naive UTC) 로 정의돼 있어 비교값도 naive UTC 여야 한다.
+    # aware UTC 를 그대로 넘기면 asyncpg 의 timestamp_encode 가 실패함.
+    now = datetime.now(UTC).replace(tzinfo=None)
     threshold = now - timedelta(hours=SLA_REVIEW_HOURS)
 
     async with async_session() as db:
