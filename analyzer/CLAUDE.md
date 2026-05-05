@@ -630,13 +630,28 @@ python generate_report.py <학생명>
   - 4단계 매칭 우선순위 + '기본' 룰 fallback
   - 반영교과군 필터 (체·예·기가 등 비반영 교과 자동 제외)
 
-**학생 지망 대학·전형 미지정 시**:
-- `load_university_grading()` (인자 없이 호출) → '기본' 룰 자동 적용
-- `default_track` 매개변수로 계열별 '기본' 룰 선택 가능:
-  - `'인문'` → "기본 (국·영·수·사)"
-  - `'자연'` → "기본 (국·영·수·과)"
-  - `'종합'`(기본값) → "기본 (국·영·수·사·과)"
-- 또는 `estimate_track(grades)` 결과를 `default_track` 으로 넘겨 학생 계열에 맞는 기본 룰 자동 선택
+**산출 방식 (calc_all_grading wrapper 권장)**:
+- 학생 지망 대학·전형 지정 여부와 **무관하게 항상** 기본 3개 결과 산출:
+  - `[자연]` 기본 (국·영·수·과)
+  - `[인문]` 기본 (국·영·수·사)
+  - `[종합]` 기본 (국·영·수·사·과)
+- 대학·전형이 지정되고 DB 매칭되면 **추가로** 그 대학별 결과도 산출
+- 사용자가 요청한 대학이 DB 에 없으면 `matched=False` + 안내 메시지 반환
+
+```python
+out = calc_all_grading(grades, university='경기대학교', admission_type='학교장추천')
+# out['baseline'] = [3개 결과]
+# out['university'] = {'matched': True, 'label': '경기대학교 / 학교장추천', 'result': {...}}
+
+out = calc_all_grading(grades)  # 미지정
+# out['baseline'] = [3개 결과]
+# out['university'] = None
+```
+
+**저수준 함수 (단일 룰만 산출하는 경우)**:
+- `load_university_grading(university, admission_type, admission_category, default_track)` — 룰 1개 로드
+- `calc_university_specific_average(grades, rule)` — 단일 룰 산출
+- `default_track` 매개변수: 미매칭/미지정 시 fallback 할 '기본' 행 선택 (`'인문'` / `'자연'` / `'종합'`(기본값))
 
 **반영교과군 처리**:
 - 명시적 약어 ("국·영·수·과") → 해당 교과군만 산출에 반영

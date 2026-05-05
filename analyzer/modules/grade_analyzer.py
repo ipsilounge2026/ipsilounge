@@ -1152,3 +1152,108 @@ def calc_university_specific_average(grades: dict, grading_rule: dict) -> dict:
         },
         'notes': notes,
     }
+
+
+# 기본 룰 3개의 표준 라벨/계열 매핑
+_BASELINE_TRACKS = [
+    ('자연', '국·영·수·과'),
+    ('인문', '국·영·수·사'),
+    ('종합', '국·영·수·사·과'),
+]
+
+
+def calc_all_grading(
+    grades: dict,
+    university: str | None = None,
+    admission_type: str | None = None,
+    admission_category: str | None = None,
+    xlsx_path: str | None = None,
+) -> dict:
+    """기본 룰 3개 + (지정 시) 대학별 룰을 모두 산출.
+
+    학생 지망 대학·전형 지정 여부와 무관하게 항상 3개 기본 룰
+    (자연/인문/종합) 결과가 산출된다. 대학·전형이 지정되고 DB 에서
+    매칭되면 그 대학 룰 결과도 추가된다.
+
+    리포트에서 학생을 다각도로 보여주거나, 지망 대학 미정 학생도
+    내신 산출이 가능하도록 하는 용도.
+
+    Args:
+        grades: extracted_data['grades'] — {학기코드: [과목 dict, ...]}
+        university: 지망 대학명 (선택). 미지정이면 기본 3개만 산출.
+        admission_type: 지망 전형명 (선택).
+        admission_category: 지망 전형유형 (선택).
+        xlsx_path: DB 파일 경로 (선택).
+
+    Returns:
+        {
+            'baseline': [
+                {'track': '자연', 'label': '기본 (국·영·수·과)', 'rule': {...}, 'result': {...}},
+                {'track': '인문', 'label': '기본 (국·영·수·사)', 'rule': {...}, 'result': {...}},
+                {'track': '종합', 'label': '기본 (국·영·수·사·과)', 'rule': {...}, 'result': {...}},
+            ],
+            'university': {
+                'requested': '서울대학교',           # 사용자 입력 그대로
+                'admission_type': '...',
+                'admission_category': '...',
+                'matched': True/False,              # DB 매칭 성공 여부
+                'label': '서울대학교 / 지역균형',     # matched=True 시
+                'rule': {...},                      # matched=True 시
+                'result': {...},                    # matched=True 시
+                'message': '...',                   # matched=False 시 안내
+            } or None,  # university 미지정 시 None
+        }
+    """
+    baseline: list = []
+    for track_name, pattern in _BASELINE_TRACKS:
+        rule = load_university_grading(default_track=track_name, xlsx_path=xlsx_path)
+        if rule is None:
+            continue
+        result = calc_university_specific_average(grades, rule)
+        baseline.append({
+            'track': track_name,
+            'label': rule.get('전형명') or f'기본 ({pattern})',
+            'rule': rule,
+            'result': result,
+        })
+
+    university_block = None
+    if university:
+        rule = load_university_grading(
+            university=university,
+            admission_type=admission_type,
+            admission_category=admission_category,
+            xlsx_path=xlsx_path,
+        )
+        matched = rule is not None and str(rule.get('대학명') or '').strip() != '기본'
+        if matched:
+            result = calc_university_specific_average(grades, rule)
+            label_parts = [str(rule.get('대학명') or university)]
+            if rule.get('전형명'):
+                label_parts.append(str(rule['전형명']))
+            university_block = {
+                'requested': university,
+                'admission_type': admission_type,
+                'admission_category': admission_category,
+                'matched': True,
+                'label': ' / '.join(label_parts),
+                'rule': rule,
+                'result': result,
+            }
+        else:
+            # 사용자가 요청한 대학·전형이 DB 에 없음 — 기본 룰은 이미 baseline 에 포함됨
+            req_str = university
+            if admission_type:
+                req_str += f' / {admission_type}'
+            university_block = {
+                'requested': university,
+                'admission_type': admission_type,
+                'admission_category': admission_category,
+                'matched': False,
+                'message': f'요청 "{req_str}" 이(가) DB 에 없어 기본 룰만 산출됨 (baseline 참조)',
+            }
+
+    return {
+        'baseline': baseline,
+        'university': university_block,
+    }
