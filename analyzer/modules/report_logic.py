@@ -1408,6 +1408,7 @@ def create_pdf(sd, pdf_path, mode_config=None):
     # 이후 세특/창체/행특/연계성/대학평가요소/역량별보완법/키워드분석 섹션 번호 동적 rename
     _has_compare_section = False
     _has_attendance_section = False
+    _has_grading_section = False
     try:
         from .compare_generator import has_compare_data
         _has_compare_section = has_compare_data(sd)
@@ -1418,14 +1419,20 @@ def create_pdf(sd, pdf_path, mode_config=None):
         _has_attendance_section = has_attendance_or_volunteer(sd)
     except Exception as e:
         print(f"[WARN] attendance 판정 예외: {type(e).__name__}: {e}")
+    try:
+        _has_grading_section = _has_grade_data(sd)
+    except Exception as e:
+        print(f"[WARN] grading 판정 예외: {type(e).__name__}: {e}")
 
     _n = 1  # 1. 종합의견
-    _sec_compare = _sec_attendance = None
+    _sec_compare = _sec_attendance = _sec_grading = None
     _sec_setuek = _sec_changche = _sec_haengtuk = None
     if _has_compare_section:
         _n += 1; _sec_compare = _n
     if _has_attendance_section:
         _n += 1; _sec_attendance = _n
+    if _has_grading_section:
+        _n += 1; _sec_grading = _n
     # 2026-04-19: mode_config 에 따라 세특/창체/행특 섹션 스킵
     if inc_setuek:
         _n += 1; _sec_setuek   = _n
@@ -1459,6 +1466,17 @@ def create_pdf(sd, pdf_path, mode_config=None):
             elements.append(PageBreak())
         except Exception as e:
             print(f"[WARN] PDF 출결·봉사 섹션 생성 실패 (스킵): {type(e).__name__}: {e}")
+
+    # ── 대학별 내신 섹션 (grade_data 있을 때, 2026-05-05) ──
+    if _has_grading_section:
+        try:
+            _append_pdf_grading_section(elements, sd, section_title,
+                                         P, PC, PL, PH, make_table,
+                                         style_subtitle, page_w,
+                                         section_number=_sec_grading)
+            elements.append(PageBreak())
+        except Exception as e:
+            print(f"[WARN] PDF 대학별내신 섹션 생성 실패 (스킵): {type(e).__name__}: {e}")
 
     # ── 2. 세부능력 및 특기사항 (mode_config 로 스킵 가능, 2026-04-19) ──
     # setuek 미포함 시 elements 임시 리다이렉트 (코드 재들여쓰기 회피).
@@ -2244,3 +2262,117 @@ def _append_pdf_attendance_section(elements, sd, section_title,
         elements.append(make_table(tdata, col_widths=cw))
     else:
         elements.append(P("봉사활동 시수 데이터 미입력", style_subtitle))
+
+
+def _append_pdf_grading_section(elements, sd, section_title,
+                                 P, PC, PL, PH, make_table,
+                                 style_subtitle, page_w,
+                                 section_number: int = 4):
+    """PDF "대학별 내신" 섹션 추가 (2026-05-05).
+
+    grade_data 있을 때만 호출됨. baseline 3개(자연/인문/종합) +
+    지망 대학 룰(있으면) 의 환산 결과를 표로 표시.
+    """
+    from reportlab.platypus import Spacer as _RLSpacer
+
+    from .grade_analyzer import calc_all_grading
+
+    grade_data = getattr(sd, "grade_data", {}) or {}
+    target_univ      = (getattr(sd, "TARGET_UNIV", "") or "").strip()
+    target_admission = (getattr(sd, "TARGET_ADMISSION_TYPE", "") or "").strip()
+    target_category  = (getattr(sd, "TARGET_ADMISSION_CATEGORY", "") or "").strip()
+
+    out = calc_all_grading(
+        grade_data,
+        university=target_univ or None,
+        admission_type=target_admission or None,
+        admission_category=target_category or None,
+    )
+
+    elements.append(section_title(f"{section_number}. 대학별 내신 산출"))
+    elements.append(_RLSpacer(1, 2*mm))
+
+    # ── 표 1: 산출 룰별 평균등급 / 환산점수 ──
+    elements.append(P("■ 산출 룰별 평균등급 / 환산점수", style_subtitle))
+    hdr = [PH("구분"), PH("라벨"), PH("평균등급"), PH("환산점수"),
+           PH("적용\n과목수"), PH("제외\n과목수")]
+    tdata = [hdr]
+
+    for b in out.get('baseline') or []:
+        r = b.get('result') or {}
+        tdata.append([
+            PC(f"baseline\n({b.get('track', '')})"),
+            PL(b.get('label', '')),
+            PC(f"{r.get('평균등급', 0):.3f}"),
+            PC(f"{r.get('환산점수', 0):.2f}"),
+            PC(str(r.get('적용_과목수', 0))),
+            PC(str(r.get('제외_과목수', 0))),
+        ])
+
+    u = out.get('university')
+    if u:
+        if u.get('matched'):
+            r = u.get('result') or {}
+            tdata.append([
+                PC("지망 대학"),
+                PL(u.get('label', '')),
+                PC(f"{r.get('평균등급', 0):.3f}"),
+                PC(f"{r.get('환산점수', 0):.2f}"),
+                PC(str(r.get('적용_과목수', 0))),
+                PC(str(r.get('제외_과목수', 0))),
+            ])
+        else:
+            tdata.append([
+                PC("지망 대학"),
+                PL(u.get('message', '미매칭')),
+                PC("-"), PC("-"), PC("-"), PC("-"),
+            ])
+
+    cw = [70, page_w - 70 - 60 - 60 - 50 - 50, 60, 60, 50, 50]
+    elements.append(make_table(tdata, col_widths=cw))
+    elements.append(_RLSpacer(1, 5*mm))
+
+    # 대표 룰 결정 (지망 대학 매칭 우선, 없으면 baseline 종합)
+    repr_block = u if (u and u.get('matched')) else (
+        next((b for b in (out.get('baseline') or []) if b.get('track') == '종합'), None)
+    )
+    repr_label = repr_block.get('label', '-') if repr_block else '-'
+    repr_result = (repr_block or {}).get('result') or {}
+
+    # ── 표 2: 학년별 평균 ──
+    by_year = repr_result.get('breakdown', {}).get('by_year', {})
+    if any(by_year.values()):
+        elements.append(P(f"■ 학년별 평균등급 (대표 룰: {repr_label})", style_subtitle))
+        yr_hdr = [PH("1학년"), PH("2학년"), PH("3학년")]
+        yr_row = [
+            PC(f"{by_year.get(1, 0):.3f}"),
+            PC(f"{by_year.get(2, 0):.3f}"),
+            PC(f"{by_year.get(3, 0):.3f}"),
+        ]
+        elements.append(make_table([yr_hdr, yr_row], col_widths=[page_w/3]*3))
+        elements.append(_RLSpacer(1, 5*mm))
+
+    # ── 표 3: 교과별 평균 ──
+    by_cat = repr_result.get('breakdown', {}).get('by_category', {})
+    if by_cat:
+        elements.append(P(f"■ 교과별 평균등급 (대표 룰: {repr_label})", style_subtitle))
+        cats = list(by_cat.keys())
+        cat_hdr = [PH(c) for c in cats]
+        cat_row = [PC(f"{by_cat[c]:.3f}") for c in cats]
+        col_w = page_w / len(cats) if cats else page_w
+        elements.append(make_table([cat_hdr, cat_row], col_widths=[col_w]*len(cats)))
+        elements.append(_RLSpacer(1, 5*mm))
+
+    # ── 표 4: 산출 메모 (notes) ──
+    notes_collected = []
+    for b in out.get('baseline') or []:
+        for n in (b.get('result') or {}).get('notes') or []:
+            notes_collected.append(f"[{b.get('track', '')}] {n}")
+    if u and u.get('matched'):
+        for n in (u.get('result') or {}).get('notes') or []:
+            notes_collected.append(f"[지망] {n}")
+
+    if notes_collected:
+        elements.append(P("■ 산출 메모", style_subtitle))
+        for note in notes_collected:
+            elements.append(P(f"• {note}", style_subtitle))

@@ -483,11 +483,12 @@ raw_texts = {
 **대학별 내신 산출 (`grade_data` + `TARGET_ADMISSION_*`, 선택 필드, 2026-05-05)**:
 - `grade_data`: `{학기코드: [과목 dict, ...]}` — 학기별 raw 성적 (학점, 석차등급, 성취도 등)
 - `TARGET_ADMISSION_TYPE` / `TARGET_ADMISSION_CATEGORY`: 지망 전형명/유형 (선택)
-- 빈 dict 이면 Excel `대학별내신` 시트 스킵 (역호환)
+- 빈 dict 이면 Excel `대학별내신` 시트 + PDF 대학별 내신 산출 섹션 스킵 (역호환)
 - 내용 있으면 자동으로:
   - baseline 3개(자연/인문/종합) 평균등급/환산점수 산출
   - 지망 대학·전형 지정 + DB 매칭 시 그 대학 룰 결과 추가
   - 학년별·교과별 breakdown + 적용 룰 메모(notes) 함께 표시
+- 출력: Excel `대학별내신` 시트(4개 표) + PDF `N. 대학별 내신 산출` 섹션(동일 4개 표)
 - 산출 로직: `grade_analyzer.calc_all_grading()` 활용 (CLAUDE.md §3-1 참조)
 
 **G3+G4 이전 대비 변화 (`compare_data`, 선택 필드)**:
