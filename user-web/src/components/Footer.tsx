@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SentryTestButton from "./SentryTestButton";
 
 export default function Footer() {
   return (
@@ -12,6 +13,7 @@ export default function Footer() {
         </Link>
       </div>
       <p>&copy; 2026 입시라운지. All rights reserved.</p>
+      <SentryTestButton />
     </footer>
   );
 }
