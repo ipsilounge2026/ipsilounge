@@ -66,7 +66,7 @@ analyzer/
 ├── data/
 │   ├── admission_db.xlsx           ← 수시 입결 DB
 │   ├── course_requirements.xlsx    ← 권장 이수 과목 DB
-│   ├── university_grading.xlsx     ← 대학별 내신 산출 DB
+│   ├── average_school_grade_db.xlsx ← 대학별 내신 산출 DB (학년·교과 가중치, 환산식)
 │   ├── 수능최저_db.xlsx              ← 수능 최저 기준 DB
 │   └── students/
 │       ├── _template.py      ← 학생 데이터 작성용 템플릿

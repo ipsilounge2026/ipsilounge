@@ -7,6 +7,7 @@
 - 교과 이수 충실도 평가
 - 소인수 과목 표기
 - 출결 점수 산출
+- 대학별 내신 산출 (average_school_grade_db.xlsx 활용)
 """
 import os
 from typing import Optional
@@ -619,4 +620,423 @@ def run_grade_analysis(extracted_data: dict, config: dict = None,
         'course_fulfillment': course_fulfillment,
         'grade_score_100': grade_score_100,
         'attendance_score_100': attendance_score_100,
+    }
+
+
+# ============================================================================
+# 대학별 내신 산출 (average_school_grade_db.xlsx 활용)
+# ============================================================================
+#
+# CLAUDE.md §3-1 "전형별 반영 내신 산출" 구현. 대학·전형·전형유형별로
+# 정의된 학년 가중치 / 교과 가중치 / 반영학기 / 진로선택 처리 방식 등을
+# 적용해 학생의 환산 내신을 산출.
+#
+# MVP 범위 (1차):
+#   - 반영학기 필터링 (예: "1-1~3-1")
+#   - 학년 가중치 (모두 0이면 동일 비중)
+#   - 교과 가중치 (모두 0이면 학점 가중만)
+#   - 진로선택 기본 분기: 석차등급 / 성취도 / 등급or성취도(상위) / 미반영 / 정성평가
+#   - 1등급환산점 ↔ 최하등급환산점 사이 선형 환산
+#
+# Out of scope (향후 작업):
+#   - 매트릭스환산 (시트 04 환산점수표 참조 필요)
+#   - 변환형 / 가산형 (시트 05 진로융합처리 참조 필요)
+#   - 정시 별도식 / 졸업자 별도식
+# ============================================================================
+
+# 진로선택 성취도 → 등급 환산 (지표_진로선택='성취도' 케이스용)
+_ACHIEVEMENT_TO_GRADE = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5}
+
+# 가중치 컬럼 키 → 학생 데이터의 교과군 키 매핑
+_SUBJECT_WEIGHT_MAP = {
+    '교과_국어가중치': '국어',
+    '교과_수학가중치': '수학',
+    '교과_영어가중치': '영어',
+    '교과_사회가중치': '사회',
+    '교과_과학가중치': '과학',
+}
+
+_GRADING_DB_SHEET = '01_플랫통합'
+_GRADING_DB_FILENAME = 'average_school_grade_db.xlsx'
+
+_ALL_SEMESTERS = ['1-1', '1-2', '2-1', '2-2', '3-1', '3-2']
+
+# "1-1~3-1" 형태가 아닌, 전체 학기 적용을 의미하는 값들
+_FULL_RANGE_TOKENS = {'미명시', '전학기', '전체', '전체학기', '정성평가', ''}
+
+
+def load_university_grading(
+    university: str | None = None,
+    admission_type: str | None = None,
+    admission_category: str | None = None,
+    xlsx_path: str | None = None,
+) -> dict | None:
+    """대학별 내신 산출 룰 로드.
+
+    매칭 우선순위:
+      1. 대학명 + 전형명 + 전형유형 정확 매칭
+      2. 대학명 + 전형명 매칭 (전형유형 무시)
+      3. 대학명 + 전형유형 매칭 (전형명 무시)
+      4. 대학명만 매칭 → 첫 번째 행 (대표 룰로 사용)
+      5. 매칭 실패 → '기본' 룰 fallback (None 반환 안 함)
+
+    Args:
+        university: 대학명 (예: "서울대학교"). 미지정 시 '기본' 룰 반환.
+        admission_type: 전형명 (예: "지역균형", "학교장추천").
+        admission_category: 전형유형 (예: "학생부교과", "학생부종합", "논술").
+        xlsx_path: 파일 경로. 기본은 data/average_school_grade_db.xlsx.
+
+    Returns:
+        dict: 룰 데이터 (구조는 _row_to_rule 참조). 파일 없으면 None.
+    """
+    if xlsx_path is None:
+        xlsx_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'data', _GRADING_DB_FILENAME,
+        )
+    if not os.path.exists(xlsx_path):
+        return None
+
+    rows = _load_grading_rows(xlsx_path)
+    if not rows:
+        return None
+
+    matched = _match_grading_row(rows, university, admission_type, admission_category)
+    if matched is None:
+        # 매칭 실패 → '기본' 룰 fallback
+        matched = next((r for r in rows if str(r.get('대학명', '')).strip() == '기본'), None)
+    if matched is None:
+        return None
+    return _row_to_rule(matched)
+
+
+def _load_grading_rows(xlsx_path: str) -> list:
+    """xlsx 의 01_플랫통합 시트를 dict 리스트로 로드."""
+    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
+    sheet_name = _GRADING_DB_SHEET if _GRADING_DB_SHEET in wb.sheetnames else wb.sheetnames[0]
+    ws = wb[sheet_name]
+
+    header = [c.value for c in ws[1]]
+    rows = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or all(v is None or v == '' for v in row):
+            continue
+        d = {h: v for h, v in zip(header, row, strict=False) if h is not None}
+        rows.append(d)
+    wb.close()
+    return rows
+
+
+def _normalize_for_match(s) -> str:
+    """매칭용 정규화 — 공백 제거 + 소문자."""
+    if s is None:
+        return ''
+    return ''.join(str(s).split()).lower()
+
+
+def _match_grading_row(
+    rows: list,
+    university: str | None,
+    admission_type: str | None,
+    admission_category: str | None,
+) -> dict | None:
+    """우선순위에 따라 최적 매칭 행을 찾아 반환."""
+    if not university:
+        return None
+    u = _normalize_for_match(university)
+    a = _normalize_for_match(admission_type) if admission_type else None
+    c = _normalize_for_match(admission_category) if admission_category else None
+
+    # 우선순위 1: 대학+전형+전형유형
+    if a and c:
+        for r in rows:
+            if (_normalize_for_match(r.get('대학명')) == u
+                    and _normalize_for_match(r.get('전형명')) == a
+                    and _normalize_for_match(r.get('전형유형')) == c):
+                return r
+    # 우선순위 2: 대학+전형
+    if a:
+        for r in rows:
+            if (_normalize_for_match(r.get('대학명')) == u
+                    and _normalize_for_match(r.get('전형명')) == a):
+                return r
+    # 우선순위 3: 대학+전형유형
+    if c:
+        for r in rows:
+            if (_normalize_for_match(r.get('대학명')) == u
+                    and _normalize_for_match(r.get('전형유형')) == c):
+                return r
+    # 우선순위 4: 대학만
+    for r in rows:
+        if _normalize_for_match(r.get('대학명')) == u:
+            return r
+    return None
+
+
+def _safe_float(v, default: float = 0.0) -> float:
+    """문자열/None/숫자 혼재 셀을 안전하게 float 로 변환."""
+    if v is None:
+        return default
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        return default
+
+
+def _row_to_rule(row: dict) -> dict:
+    """xlsx 행 dict 를 산출 룰 구조로 변환."""
+    year_w = {
+        1: _safe_float(row.get('학년_1가중치')),
+        2: _safe_float(row.get('학년_2가중치')),
+        3: _safe_float(row.get('학년_3가중치')),
+    }
+    subject_w = {
+        kor_key: _safe_float(row.get(col_key))
+        for col_key, kor_key in _SUBJECT_WEIGHT_MAP.items()
+    }
+    type_w = {
+        '공통': _safe_float(row.get('유형_공통가중치')),
+        '일반선택': _safe_float(row.get('유형_일반선택가중치')),
+        '진로선택': _safe_float(row.get('유형_진로선택가중치')),
+        '융합선택': _safe_float(row.get('유형_융합선택가중치')),
+    }
+    return {
+        '대학명': row.get('대학명'),
+        '전형명': row.get('전형명'),
+        '전형유형': row.get('전형유형'),
+        '반영학기': str(row.get('반영학기') or '1-1~3-1').strip(),
+        '학년_가중치': year_w,
+        '교과_가중치': subject_w,
+        '유형_가중치': type_w,
+        '지표_공통': str(row.get('지표_공통') or '석차등급').strip(),
+        '지표_일반선택': str(row.get('지표_일반선택') or '석차등급').strip(),
+        '지표_진로선택': str(row.get('지표_진로선택') or '석차등급').strip(),
+        '지표_융합_국수영': str(row.get('지표_융합_국수영') or '석차등급').strip(),
+        '지표_융합_사과': str(row.get('지표_융합_사과') or '석차등급').strip(),
+        '1등급환산점': _safe_float(row.get('1등급환산점'), 1.0),
+        '최하등급환산점': _safe_float(row.get('최하등급환산점'), 5.0),
+        '매트릭스환산_여부': str(row.get('매트릭스환산_여부') or 'N').strip().upper() == 'Y',
+        '변환형_여부': str(row.get('변환형_여부') or 'N').strip().upper() == 'Y',
+        '가산형_여부': str(row.get('가산형_여부') or 'N').strip().upper() == 'Y',
+        '_raw': row,  # 디버깅/향후 확장용
+    }
+
+
+def _parse_semester_range(spec: str) -> list:
+    """반영학기 문자열을 학기 코드 리스트로 변환.
+
+    예) "1-1~3-1" → ['1-1', '1-2', '2-1', '2-2', '3-1']
+        "1-1~2-2" → ['1-1', '1-2', '2-1', '2-2']
+        "1-1"     → ['1-1']
+        "미명시"/"전학기"/"" → 전체 6학기 (정성평가 등 학기 무관 케이스)
+    """
+    spec = (spec or '').strip()
+    if spec in _FULL_RANGE_TOKENS:
+        return list(_ALL_SEMESTERS)
+    if '~' not in spec:
+        # "1-1" 같은 단일 학기 패턴만 인정. 그 외 알 수 없는 값은 전체 학기 fallback.
+        if '-' in spec and len(spec.split('-')) == 2:
+            return [spec]
+        return list(_ALL_SEMESTERS)
+    start, end = [s.strip() for s in spec.split('~', 1)]
+    try:
+        sy, ss = (int(x) for x in start.split('-'))
+        ey, es = (int(x) for x in end.split('-'))
+    except ValueError:
+        return list(_ALL_SEMESTERS)
+    result = []
+    for y in range(sy, ey + 1):
+        for s in (1, 2):
+            if y == sy and s < ss:
+                continue
+            if y == ey and s > es:
+                continue
+            result.append(f'{y}-{s}')
+    return result
+
+
+def _resolve_grade_by_indicator(subject: dict, indicator: str) -> float | None:
+    """지표 종류에 따라 과목 등급 값을 산출.
+
+    indicator 예: "석차등급", "성취도", "등급or성취도(상위)", "미반영", "정성평가"
+    반환: float 등급 값 또는 None (미반영 / 정성평가 / 산출 불가)
+    """
+    ind = (indicator or '').strip()
+    if '미반영' in ind or '정성평가' in ind:
+        # 정성평가는 수치 산출이 의미 없으므로 산출 대상에서 제외
+        return None
+
+    seokcha = subject.get('석차등급')
+    achieve = subject.get('성취도')
+    seokcha_val = float(seokcha) if seokcha is not None else None
+    achieve_val = _ACHIEVEMENT_TO_GRADE.get(achieve) if achieve else None
+
+    if ind == '석차등급':
+        return seokcha_val if seokcha_val is not None else achieve_val
+    if ind == '성취도':
+        return achieve_val if achieve_val is not None else seokcha_val
+    if '상위' in ind or 'or' in ind.lower():
+        # 등급or성취도(상위) — 둘 중 더 좋은 것 (작은 값)
+        candidates = [v for v in (seokcha_val, achieve_val) if v is not None]
+        return min(candidates) if candidates else None
+    # 기타 (변환형/매트릭스 등 향후 처리) — 일단 석차등급 fallback
+    return seokcha_val if seokcha_val is not None else achieve_val
+
+
+def calc_university_specific_average(grades: dict, grading_rule: dict) -> dict:
+    """대학별 룰을 적용해 환산 내신 평균 산출.
+
+    Args:
+        grades: extracted_data['grades'] — {학기코드: [과목 dict, ...]} 형태.
+            과목 dict 키: 과목명, 학점, 석차등급, 성취도, 교과군, 과목유형 등.
+        grading_rule: load_university_grading() 결과.
+
+    Returns:
+        dict: {
+            'university', 'admission_type', 'admission_category',
+            '반영학기_적용': [...],     # 실제로 적용된 학기 코드 리스트
+            '평균등급': float,           # 가중치 적용된 평균 등급
+            '환산점수': float,           # 1등급환산점 ↔ 최하등급환산점 사이 선형 환산
+            '적용_과목수': int,
+            '제외_과목수': int,           # 미반영/지표 산출 불가
+            'breakdown': {
+                'by_year': {1: avg, 2: avg, 3: avg},
+                'by_category': {국어: avg, 수학: avg, ...},
+            },
+            'notes': [...],              # 적용된 룰 설명 / 경고
+        }
+    """
+    if grading_rule is None:
+        return {'error': 'grading_rule is None — load_university_grading() 결과 확인 필요'}
+
+    semesters_spec = grading_rule.get('반영학기', '1-1~3-1')
+    target_semesters = _parse_semester_range(semesters_spec)
+    year_w = grading_rule.get('학년_가중치', {})
+    subj_w = grading_rule.get('교과_가중치', {})
+    notes: list = []
+
+    # 미명시/정성평가 안내
+    if str(semesters_spec).strip() in _FULL_RANGE_TOKENS:
+        notes.append(f'반영학기 "{semesters_spec}" → 전체 학기 fallback 으로 산출 (정성평가 위주 전형)')
+    if '정성평가' in str(grading_rule.get('지표_공통', '')):
+        notes.append('지표_공통 정성평가 — 수치 산출 결과는 참고용')
+    if '정성평가' in str(grading_rule.get('지표_진로선택', '')):
+        notes.append('지표_진로선택 정성평가 — 진로선택과목은 산출 제외')
+
+    # MVP 미지원 룰 안내
+    if grading_rule.get('매트릭스환산_여부'):
+        notes.append('매트릭스환산 룰은 MVP 미구현 — 기본 산출 적용')
+    if grading_rule.get('변환형_여부'):
+        notes.append('변환형 룰은 MVP 미구현 — 기본 산출 적용')
+    if grading_rule.get('가산형_여부'):
+        notes.append('가산형 룰은 MVP 미구현 — 기본 산출 적용')
+
+    # 가중치 정규화 정책: 합계 0 이면 가중치 없음(전부 1)
+    has_year_weight = sum(year_w.values()) > 0
+    has_subj_weight = sum(subj_w.values()) > 0
+
+    weighted_sum = 0.0
+    weight_sum = 0.0
+    applied_count = 0
+    skipped_count = 0
+    by_year_acc: dict = {1: [0.0, 0.0], 2: [0.0, 0.0], 3: [0.0, 0.0]}  # [w_sum, w]
+    by_cat_acc: dict = {}
+
+    for sem, subjects in grades.items():
+        if sem not in target_semesters:
+            continue
+        try:
+            year = int(str(sem).split('-')[0])
+        except ValueError:
+            year = None
+
+        for subj in subjects or []:
+            credit = _safe_float(subj.get('학점'))
+            if credit <= 0:
+                continue
+
+            # 과목 유형에 따른 지표 결정
+            sub_type = (subj.get('과목유형') or '').strip()
+            if '진로선택' in sub_type:
+                indicator = grading_rule.get('지표_진로선택', '석차등급')
+            elif '융합선택' in sub_type:
+                indicator = grading_rule.get('지표_융합_국수영', '석차등급')
+            elif '일반선택' in sub_type:
+                indicator = grading_rule.get('지표_일반선택', '석차등급')
+            else:
+                indicator = grading_rule.get('지표_공통', '석차등급')
+
+            grade_val = _resolve_grade_by_indicator(subj, indicator)
+            if grade_val is None:
+                skipped_count += 1
+                continue
+
+            # 가중치 산출: 학점 × 학년 가중치 × 교과 가중치
+            w = credit
+            if has_year_weight and year in year_w:
+                w *= max(year_w[year], 0.0)
+                if w == 0:
+                    skipped_count += 1
+                    continue
+            if has_subj_weight:
+                cat = (subj.get('교과군') or '').strip()
+                cat_weight = subj_w.get(cat, 0.0)
+                # 가중치 매트릭스에 없는 교과군은 0 처리 → 제외
+                if cat_weight == 0:
+                    skipped_count += 1
+                    continue
+                w *= cat_weight
+
+            weighted_sum += grade_val * w
+            weight_sum += w
+            applied_count += 1
+
+            if year in by_year_acc:
+                by_year_acc[year][0] += grade_val * w
+                by_year_acc[year][1] += w
+            cat = (subj.get('교과군') or '기타').strip()
+            by_cat_acc.setdefault(cat, [0.0, 0.0])
+            by_cat_acc[cat][0] += grade_val * w
+            by_cat_acc[cat][1] += w
+
+    avg_grade = round(weighted_sum / weight_sum, 3) if weight_sum > 0 else 0.0
+
+    # 1등급환산점 ↔ 최하등급환산점 사이 선형 환산
+    g1 = grading_rule.get('1등급환산점', 1.0)
+    g_low = grading_rule.get('최하등급환산점', 5.0)
+    # 등급제(1~5)는 등급 그대로, 점수제(100~0)는 (5-등급)/4*(g1-g_low)+g_low
+    if g1 == 1 and g_low == 5:
+        score = avg_grade
+    else:
+        # 등급 1.0 → g1 점, 등급 5.0 → g_low 점
+        if avg_grade <= 0:
+            score = 0.0
+        else:
+            ratio = (avg_grade - 1.0) / 4.0
+            ratio = max(0.0, min(1.0, ratio))
+            score = round(g1 + (g_low - g1) * ratio, 2)
+
+    by_year_avg = {
+        y: round(s / w, 3) if w > 0 else 0.0
+        for y, (s, w) in by_year_acc.items()
+    }
+    by_cat_avg = {
+        c: round(s / w, 3) if w > 0 else 0.0
+        for c, (s, w) in by_cat_acc.items()
+    }
+
+    return {
+        'university': grading_rule.get('대학명'),
+        'admission_type': grading_rule.get('전형명'),
+        'admission_category': grading_rule.get('전형유형'),
+        '반영학기_적용': target_semesters,
+        '평균등급': avg_grade,
+        '환산점수': score,
+        '적용_과목수': applied_count,
+        '제외_과목수': skipped_count,
+        'breakdown': {
+            'by_year': by_year_avg,
+            'by_category': by_cat_avg,
+        },
+        'notes': notes,
     }
