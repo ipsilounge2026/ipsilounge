@@ -151,6 +151,14 @@ def create_excel(sd, xlsx_path, mode_config=None):
         ("보완영역3", summary_data["보완영역3"]),
         ("성장스토리", summary_data["성장스토리"]),
     ]
+    # ── 대학별 내신 환산점수 한 줄 추가 (grade_data 있을 때, 2026-05-05) ──
+    if _has_grade_data(sd):
+        try:
+            grading_summary = _build_grading_summary_line(sd)
+            if grading_summary:
+                rows.append(("대학별 환산점수", grading_summary))
+        except Exception as e:
+            print(f"[WARN] 종합요약 환산점수 줄 생성 실패 (스킵): {type(e).__name__}: {e}")
     for r, (k, v) in enumerate(rows, 2):
         style_cell(ws, r, 1, k)
         style_cell(ws, r, 2, v, left_align)
@@ -354,6 +362,52 @@ def _has_grade_data(sd) -> bool:
         return False
     # 한 학기라도 과목이 있으면 True
     return any(subjects for subjects in grade_data.values() if subjects)
+
+
+def _build_grading_summary_line(sd) -> str | None:
+    """대학별 내신 산출 결과를 종합요약용 한 줄 문자열로 빌드.
+
+    형식: "자연 1.42(1.42) / 인문 1.90(1.90) / 종합 1.77(1.77) | 경기대학교 학교장추천 1.93(76.85)"
+    학생 grade_data 없거나 baseline 산출 결과 없으면 None.
+    """
+    from .grade_analyzer import calc_all_grading
+
+    grade_data = getattr(sd, "grade_data", {}) or {}
+    if not grade_data:
+        return None
+
+    target_univ      = (getattr(sd, "TARGET_UNIV", "") or "").strip()
+    target_admission = (getattr(sd, "TARGET_ADMISSION_TYPE", "") or "").strip()
+    target_category  = (getattr(sd, "TARGET_ADMISSION_CATEGORY", "") or "").strip()
+
+    out = calc_all_grading(
+        grade_data,
+        university=target_univ or None,
+        admission_type=target_admission or None,
+        admission_category=target_category or None,
+    )
+
+    parts = []
+    for b in out.get('baseline') or []:
+        r = b.get('result') or {}
+        avg = r.get('평균등급', 0)
+        score = r.get('환산점수', 0)
+        if avg > 0:
+            parts.append(f"{b.get('track', '')} {avg:.2f}({score:.2f})")
+    baseline_str = " / ".join(parts)
+
+    u = out.get('university')
+    univ_str = ""
+    if u and u.get('matched'):
+        r = u.get('result') or {}
+        avg = r.get('평균등급', 0)
+        score = r.get('환산점수', 0)
+        if avg > 0:
+            univ_str = f" | {u.get('label', '')} {avg:.2f}({score:.2f})"
+
+    if not baseline_str and not univ_str:
+        return None
+    return baseline_str + univ_str
 
 
 def _write_grading_sheet(wb, sd, style_header, style_cell, set_col_widths,
@@ -1271,8 +1325,7 @@ def create_pdf(sd, pdf_path, mode_config=None):
 
     # ── 1. 종합의견 ──
     elements.append(section_title("1. 종합의견"))
-    tdata = [[PH("항목"), PH("내용")]]
-    for k, v in [
+    summary_rows = [
         ("학생명", summary_data["학생"]),
         ("학교명", summary_data["학교명"]),
         ("비교과 종합", summary_data["비교과종합"]),
@@ -1284,7 +1337,17 @@ def create_pdf(sd, pdf_path, mode_config=None):
         ("보완영역2", summary_data["보완영역2"]),
         ("보완영역3", summary_data["보완영역3"]),
         ("성장스토리", summary_data["성장스토리"]),
-    ]:
+    ]
+    # ── 대학별 내신 환산점수 한 줄 추가 (grade_data 있을 때, 2026-05-05) ──
+    if _has_grade_data(sd):
+        try:
+            grading_summary = _build_grading_summary_line(sd)
+            if grading_summary:
+                summary_rows.append(("대학별 환산점수", grading_summary))
+        except Exception as e:
+            print(f"[WARN] PDF 종합의견 환산점수 줄 생성 실패 (스킵): {type(e).__name__}: {e}")
+    tdata = [[PH("항목"), PH("내용")]]
+    for k, v in summary_rows:
         tdata.append([PC(k), PL(v)])
     t = make_table(tdata, col_widths=[80, page_w - 80])
     # Change 6: Add minimum row padding for 2-line fitting
