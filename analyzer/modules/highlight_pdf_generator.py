@@ -420,6 +420,82 @@ def has_source_pdf(sd) -> bool:
     return bool(str(raw).strip())
 
 
+def _is_image_pdf(pdf_path: Path) -> bool:
+    """PDF 가 텍스트 레이어 없는 이미지 PDF 인지 판정.
+
+    page.get_text() 결과가 모든 페이지 합쳐 100자 미만이면 이미지 PDF 로 간주.
+    정부24 발급 학생부 PDF 등 스캔 이미지 기반 PDF 가 대표적.
+    """
+    try:
+        doc = fitz.open(str(pdf_path))
+        total = sum(len(p.get_text()) for p in doc)
+        doc.close()
+        return total < 100
+    except Exception:
+        return False
+
+
+def _apply_ocr_if_needed(pdf_path: Path, lang: str = "kor+eng") -> Path:
+    """이미지 PDF 면 OCR 로 텍스트 레이어 추가한 새 PDF 생성, 텍스트 PDF 면 원본 그대로.
+
+    Args:
+        pdf_path: 원본 PDF 경로
+        lang: Tesseract 언어 (기본 kor+eng)
+
+    Returns:
+        OCR 적용된 PDF 경로 (이미 텍스트 있으면 원본 경로 그대로 반환).
+        OCR 실패 시 원본 경로 반환 (graceful — search_for 가 0 매치로 끝남).
+    """
+    if not _is_image_pdf(pdf_path):
+        return pdf_path
+
+    # 동일 폴더에 _OCR.pdf 캐시 — 이미 있으면 재사용 (재실행 시 OCR 시간 절약)
+    ocr_path = pdf_path.with_name(pdf_path.stem + "_OCR.pdf")
+    if ocr_path.exists():
+        # 캐시가 원본보다 새로우면 재사용
+        if ocr_path.stat().st_mtime >= pdf_path.stat().st_mtime:
+            print(f"  [INFO] OCR 캐시 재사용: {ocr_path.name}")
+            return ocr_path
+
+    # ocrmypdf 가용성 확인
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["python", "-m", "ocrmypdf", "--version"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            print("  [WARN] ocrmypdf 사용 불가 — Tesseract+ocrmypdf 설치 권장. OCR 스킵.")
+            return pdf_path
+    except Exception as e:
+        print(f"  [WARN] ocrmypdf 점검 실패: {e}. OCR 스킵.")
+        return pdf_path
+
+    # OCR 실행 (force-ocr 로 모든 페이지 OCR 처리)
+    print(f"  [INFO] 이미지 PDF 감지 — OCR 적용 중 ({lang})... 시간 소요됨")
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["python", "-m", "ocrmypdf",
+             "-l", lang,
+             "--force-ocr",
+             "--output-type", "pdf",
+             "--jobs", "2",
+             str(pdf_path), str(ocr_path)],
+            capture_output=True, text=True, timeout=600,
+        )
+        if result.returncode == 0 and ocr_path.exists():
+            print(f"  [OK] OCR 완료: {ocr_path.name}")
+            return ocr_path
+        else:
+            err_tail = (result.stderr or "")[-300:]
+            print(f"  [WARN] OCR 실패 (returncode={result.returncode}): {err_tail}")
+            return pdf_path
+    except Exception as e:
+        print(f"  [WARN] OCR 실행 예외: {e}. OCR 스킵.")
+        return pdf_path
+
+
 def generate_highlight_pdf(sd, project_root: Path, output_dir: Path,
                             suffix: str = "") -> HighlightReport:
     """G6 v1 하이라이트 PDF 생성 진입점.
@@ -448,6 +524,10 @@ def generate_highlight_pdf(sd, project_root: Path, output_dir: Path,
         else:
             report.skipped_reason = f"source_pdf_path 파일 없음: {raw}"
         return report
+
+    # 1-2. 이미지 PDF (정부24 발급 학생부 등) 감지 시 OCR 자동 적용
+    # OCR 후 새 PDF 가 생성되면 그것을 사용. 실패 시 원본 그대로.
+    source_pdf = _apply_ocr_if_needed(source_pdf)
     report.source_pdf = source_pdf
 
     # 2. good_sentences + highlight_quotes 수집 (v1 노랑 + v2 초록·주황)
@@ -484,17 +564,31 @@ def generate_highlight_pdf(sd, project_root: Path, output_dir: Path,
     return report
 
 
+def _safe_print(s: str):
+    """콘솔 출력 시 인코딩 한계(Windows cp949) 로 깨지는 문자(em-dash 등) 안전 처리.
+
+    Python 3.7+ 의 sys.stdout 인코딩이 cp949 인 환경에서 em-dash(—) 같은 문자가
+    UnicodeEncodeError 를 일으키는 것을 방지. errors='replace' 로 대체 출력.
+    """
+    import sys
+    try:
+        print(s)
+    except UnicodeEncodeError:
+        enc = (sys.stdout.encoding or "utf-8")
+        sys.stdout.write(s.encode(enc, errors="replace").decode(enc, errors="replace") + "\n")
+
+
 def print_highlight_summary(report: HighlightReport):
     """하이라이트 PDF 생성 결과를 콘솔에 요약 출력 (색상별 통계 포함)."""
-    print()
-    print("=" * 60)
-    print("  G6 v2: 상담용 학생부 하이라이트 PDF (노랑/초록/주황)")
-    print("=" * 60)
+    _safe_print("")
+    _safe_print("=" * 60)
+    _safe_print("  G6 v2: 상담용 학생부 하이라이트 PDF (노랑/초록/주황)")
+    _safe_print("=" * 60)
     if report.skipped_reason:
-        print(f"  [SKIP] {report.skipped_reason}")
+        _safe_print(f"  [SKIP] {report.skipped_reason}")
         return
     if report.source_pdf:
-        print(f"  원본 PDF: {report.source_pdf.name} ({report.total_pages}페이지)")
+        _safe_print(f"  원본 PDF: {report.source_pdf.name} ({report.total_pages}페이지)")
 
     # 색상별 통계
     per_color = {"yellow": [0, 0], "green": [0, 0], "orange": [0, 0]}  # [total, matched]
@@ -509,13 +603,13 @@ def print_highlight_summary(report: HighlightReport):
         if total > 0:
             meta = COLOR_META[c]
             color_stats.append(f"{meta['name']}:{matched}/{total}")
-    print(f"  전체 {len(report.entries)}개 (매치 {report.matched_count} / 미매치 {report.unmatched_count})  -  " + " · ".join(color_stats))
+    _safe_print(f"  전체 {len(report.entries)}개 (매치 {report.matched_count} / 미매치 {report.unmatched_count})  -  " + " · ".join(color_stats))
 
     if report.unmatched_count > 0:
-        print("  [WARN] 미매치 항목 (OCR·줄바꿈·원본 차이):")
+        _safe_print("  [WARN] 미매치 항목 (OCR·줄바꿈·원본 차이):")
         for e in report.entries:
             if not e.matched:
                 short = e.sentence[:40] + ("..." if len(e.sentence) > 40 else "")
-                print(f"    - [{e.number}] [{e.color_name}] {e.subject_label}: {short}")
-    print(f"  저장: {report.output_path}")
-    print("=" * 60)
+                _safe_print(f"    - [{e.number}] [{e.color_name}] {e.subject_label}: {short}")
+    _safe_print(f"  저장: {report.output_path}")
+    _safe_print("=" * 60)

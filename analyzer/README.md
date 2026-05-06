@@ -10,12 +10,37 @@
 
 ## 설치
 
+### Python 패키지
+
 ```bash
 cd ipsilounge/analyzer
 pip install -r requirements.txt
 ```
 
 CLAUDE.md 에 명시된 `pdf2image`·`kiwipiepy`·`wordcloud`·`matplotlib`·`pandas` 는 **현재 코드에서 미사용** — 향후 §8-4 워드클라우드 키워드 추출 등 확장 기능 구현 시 추가 예정.
+
+### Tesseract OCR (학생부 PDF 이미지 → 텍스트 변환용, G6 하이라이트 PDF 매칭에 필수)
+
+정부24에서 발급된 학생부 PDF 는 **이미지 기반 (텍스트 레이어 없음)** 이라 OCR 이 필요합니다.
+G6 하이라이트 PDF 의 `good_sentences` 매치가 동작하려면 Tesseract 가 시스템에 설치돼 있어야 합니다.
+
+**Windows 설치:**
+1. https://github.com/UB-Mannheim/tesseract/wiki 에서 `tesseract-ocr-w64-setup-X.X.X.exe` 다운로드
+2. 설치 시 **Choose Components > Additional language data > Korean** 체크 (한국어 팩 — 필수)
+3. 설치 후 `tesseract.exe` 실제 위치 확인 (보통 `C:\Users\<사용자명>\AppData\Local\Programs\Tesseract-OCR`)
+4. 사용자 환경변수 PATH 에 위 경로 추가
+5. 새 cmd 에서 `tesseract --version` 으로 검증
+
+**Python 측 의존성:**
+```bash
+pip install ocrmypdf
+```
+(이미 requirements.txt 에 포함된 경우 스킵)
+
+**동작 원리:**
+- `highlight_pdf_generator` 가 source PDF 텍스트 레이어 자동 감지
+- 이미지 PDF 면 `<원본>_OCR.pdf` 캐시를 자동 생성하고 그것을 매칭에 사용 (재실행 시 캐시 재사용)
+- Tesseract 미설치 시 graceful 스킵 (G6 하이라이트만 매치 0, 다른 분석은 정상)
 
 ---
 

@@ -25,3 +25,9 @@ matplotlib==3.10.8
 # - pymupdf (import fitz): 원본 PDF 에 텍스트 검색 + 하이라이트 주석 삽입
 #   (CLAUDE.md §Step 9-4, 핵심평가문장만 노란색 하이라이트 - v1 MVP)
 pymupdf==1.27.2.2
+
+# G6 OCR 자동화 (2026-05-06 구현): 정부24 등 이미지 PDF 자동 OCR
+# - ocrmypdf: Tesseract 래퍼. 이미지 PDF 에 텍스트 레이어를 추가하여
+#   highlight_pdf_generator 의 search_for() 매치 가능하게 함
+# - Tesseract 바이너리는 시스템 별도 설치 필요 (README 참고)
+ocrmypdf==17.4.2
