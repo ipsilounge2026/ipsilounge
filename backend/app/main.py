@@ -262,6 +262,20 @@ async def startup():
                             f"consultation_bookings 테이블에 {col} 컬럼 추가 완료"
                         )
 
+            # Phase C: 학생부 분석 검수 흐름 (status: applied → uploaded → processing → review → completed)
+            # migrations/add_analysis_review_flow.sql 의 자동 적용판
+            if inspector.has_table("analysis_orders"):
+                analysis_columns = [c["name"] for c in inspector.get_columns("analysis_orders")]
+                for col, ddl in [
+                    ("review_feedback", "TEXT"),
+                    ("reviewed_at", "TIMESTAMP"),
+                ]:
+                    if col not in analysis_columns:
+                        connection.execute(text(
+                            f"ALTER TABLE analysis_orders ADD COLUMN {col} {ddl}"
+                        ))
+                        logger.info(f"analysis_orders 테이블에 {col} 컬럼 추가 완료")
+
             # HSGAP-P2-senior-counselor-context-share-ui: 상담사→선배 인수인계용 요약 필드
             if inspector.has_table("consultation_notes"):
                 note_columns = [c["name"] for c in inspector.get_columns("consultation_notes")]

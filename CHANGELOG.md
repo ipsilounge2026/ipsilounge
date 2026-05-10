@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-05-10
+
+### fix(backend): analysis_orders 자동 마이그레이션 누락 → Sentry ProgrammingError 해결
+운영 EC2 에서 `column analysis_orders.review_feedback does not exist` 에러가 다수 발생.
+`/api/analysis/list`, `/api/admin/analysis/list`, `/api/analysis/check-consultation-eligible`
+모두 SELECT 시점에 컬럼이 없어 500 에러.
+
+- 원인: `migrations/add_analysis_review_flow.sql` 은 존재했으나 `main.py` 의
+  `_check_and_migrate()` 자동 마이그레이션 블록에 포함되지 않아 운영 DB 에 미적용
+- 수정: `main.py` 에 `analysis_orders` 블록 신설 — `review_feedback TEXT`,
+  `reviewed_at TIMESTAMP` 두 컬럼을 `ADD COLUMN IF NOT EXISTS` 패턴으로 자동 추가
+- 배포 시 EC2 서비스 재시작만으로 컬럼이 자동 추가되어 ProgrammingError 해소
+
+---
+
 ## 2026-04-17
 
 ### analyzer 보완 6종 체크리스트 L1/L2 검증 완료 — ready 승격
