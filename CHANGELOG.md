@@ -18,6 +18,22 @@
   `reviewed_at TIMESTAMP` 두 컬럼을 `ADD COLUMN IF NOT EXISTS` 패턴으로 자동 추가
 - 배포 시 EC2 서비스 재시작만으로 컬럼이 자동 추가되어 ProgrammingError 해소
 
+### fix(infra): postgres-owned 테이블 3개 소유권 ipsilounge 로 이전 → InsufficientPrivilegeError 해결
+운영 EC2 에서 `permission denied for table senior_student_assignments` 에러 발생
+(`/api/consultation/my-senior` 등 500). 원인 추적 결과:
+
+- `senior_student_assignments`, `senior_change_requests`, `jeongsi_admission_data` 3개 테이블이
+  `postgres` 슈퍼유저 소유였음. 앱이 사용하는 `ipsilounge` 유저에게는 권한 0건.
+- 근본 원인: `migrations/*.sql` 일부 파일 헤더에 `-- 실행: sudo -u postgres psql -d ipsilounge -f X.sql`
+  지침이 있어 운영 첫 배포 시 그대로 실행됨 → CREATE TABLE 한 사용자가 소유자가 됨.
+- 즉시 조치:
+  1) `GRANT ALL ON TABLE jeongsi_admission_data, senior_change_requests, senior_student_assignments TO ipsilounge;`
+  2) `ALTER TABLE ... OWNER TO ipsilounge;` (다른 30개 테이블과 동일한 상태로 통일)
+- 재발 방지: 5개 migration .sql 파일(add_senior_and_remote, add_jeongsi_admission_data,
+  add_consultation_note_addenda, add_senior_context_for_next, update_consultation_notes_categories)
+  헤더의 `sudo -u postgres` 가이드 제거. `psql -U ipsilounge` 로 실행하도록 변경 + 경고 코멘트 추가.
+  CREATE TABLE 류는 사실상 불필요 (모델 정의 + `Base.metadata.create_all()` 가 startup 시 자동 생성).
+
 ---
 
 ## 2026-04-17
