@@ -83,12 +83,20 @@ export default function BlogNewsSection({ limit = 5, compact = true }: Props) {
                 className="blog-news-row"
               >
                 {it.thumbnail && (
-                  // 블로그 이미지는 외부 도메인이라 next/image 대신 native img
+                  // 네이버 이미지 도메인(blogthumb.pstatic.net 등)은 Referer 검사로 외부 hotlink 를 차단.
+                  // referrerPolicy="no-referrer" 로 Referer 헤더를 끄면 403 회피되어 정상 로드된다.
+                  // Next.js Image 는 외부 도메인 등록 + Referer 제어가 복잡해 native <img> 사용.
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={it.thumbnail}
                     alt=""
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
                     style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                    onError={(e) => {
+                      // 이미지 로딩 실패 시 노출 영역 숨김 (레이아웃 깨짐 방지)
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
+                    }}
                   />
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
