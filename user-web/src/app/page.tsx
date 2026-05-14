@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import BlogNewsSection from "@/components/BlogNewsSection";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 
 export default function LandingPage() {
@@ -43,6 +44,8 @@ export default function LandingPage() {
             <p>리포트를 기반으로 전문가와 1:1 상담을 통해 구체적인 입시 전략을 세울 수 있습니다</p>
           </Link>
         </div>
+
+        <BlogNewsSection limit={5} compact />
 
         {!loggedIn && (
           <div className="card" style={{ textAlign: "center", padding: 40 }}>

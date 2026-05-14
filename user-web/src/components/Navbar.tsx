@@ -26,6 +26,7 @@ function NavbarInner() {
                     <Link href="/analysis?type=학생부라운지" className={pathname.startsWith("/analysis") && currentType === "학생부라운지" ? "active" : ""}>학생부 라운지</Link>
                     <Link href="/analysis?type=학종라운지" className={pathname.startsWith("/analysis") && currentType === "학종라운지" ? "active" : ""}>학종 라운지</Link>
                     <Link href="/consultation" className={pathname.startsWith("/consultation") ? "active" : ""}>상담 라운지</Link>
+                    <Link href="/news" className={pathname.startsWith("/news") ? "active" : ""}>입시 뉴스</Link>
                   </>
                 )}
                 {memberType === "branch_manager" && (
@@ -36,6 +37,7 @@ function NavbarInner() {
               </>
             ) : (
               <>
+                <Link href="/news" className={pathname.startsWith("/news") ? "active" : ""}>입시 뉴스</Link>
                 <Link href="/login">로그인</Link>
                 <Link href="/register" className="btn btn-primary btn-sm">회원가입</Link>
               </>

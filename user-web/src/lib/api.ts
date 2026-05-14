@@ -578,3 +578,28 @@ export async function withdrawAccount(body: {
     body: JSON.stringify(body),
   });
 }
+
+// ─────────────────────────────────────────────────────────────
+// 입시 뉴스 (네이버 블로그 RSS 연동)
+// ─────────────────────────────────────────────────────────────
+export type BlogNewsItem = {
+  title: string;
+  link: string;
+  category: string;
+  description: string;
+  thumbnail: string | null;
+  published_at: string;
+};
+
+export type BlogNewsResponse = {
+  items: BlogNewsItem[];
+  total: number;
+  blog_url: string;
+  cached: boolean;
+  age_seconds: number;
+  error?: string | null;
+};
+
+export async function fetchBlogNews(limit = 20): Promise<BlogNewsResponse> {
+  return request(`/api/blog-news?limit=${limit}`);
+}

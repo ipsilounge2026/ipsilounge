@@ -111,6 +111,7 @@ ipsilounge/
 │   │   │   ├── family.py               # 가족(학부모-학생) 연결
 │   │   │   ├── schools.py              # 학교명 검색
 │   │   │   ├── universities.py         # 대학/학과 검색 (입결 DB 기반)
+│   │   │   ├── blog_news.py            # 입시 뉴스 (네이버 블로그 RSS 연동, 1시간 캐시)
 │   │   │   ├── dev_routes.py           # 개발용 유틸 엔드포인트
 │   │   │   ├── admin_dashboard.py      # 관리자 대시보드
 │   │   │   ├── admin_analysis.py       # 관리자 분석 관리 (매칭 필터링)
@@ -146,6 +147,7 @@ ipsilounge/
 │   │   │   ├── scheduler_service.py    # APScheduler (상담 리마인드)
 │   │   │   ├── calendar_service.py     # Google Calendar 다중 연동
 │   │   │   ├── school_service.py       # 학교 검색·정규화
+│   │   │   ├── naver_blog_service.py   # 입시 뉴스: 네이버 블로그 RSS 파싱 + 1시간 메모리 캐시
 │   │   │   ├── course_requirement_service.py  # 권장과목 DB (SHARED_DATA_ROOT)
 │   │   │   ├── counselor_type_service.py      # 수시/정시 입결 판정
 │   │   │   ├── suneung_minimum_service.py     # 수능 최저 기준 DB
@@ -223,6 +225,7 @@ ipsilounge/
 │   │   │   ├── admission-cases/         # 입시 사례 열람
 │   │   │   ├── payment/                 # 결제 (토스 + 성공/실패)
 │   │   │   ├── seminar/                 # 설명회 예약 (지점관리자)
+│   │   │   ├── news/                    # 입시 뉴스 전체 목록 (네이버 블로그 RSS 연동)
 │   │   │   # ── 기획서 영역 ──
 │   │   │   ├── consultation-survey/     # (고등학교 상담 V3) 상담 설문 작성
 │   │   │   ├── satisfaction-survey/     # (만족도 설문 기획서)
@@ -234,6 +237,7 @@ ipsilounge/
 │   │   │   ├── StatusBadge.tsx
 │   │   │   ├── NoticeBanner.tsx        # 공지 배너
 │   │   │   ├── SearchableSelect.tsx    # 대학/학과 검색 드롭다운 (입결 DB 연계)
+│   │   │   ├── BlogNewsSection.tsx     # 입시 뉴스 카드 섹션 (메인 페이지/news 페이지 공용)
 │   │   │   ├── ChildSelector.tsx       # 학부모용 자녀 선택 (가족 연결)
 │   │   │   └── FamilyLinkSection.tsx   # 가족 연결 섹션
 │   │   │
@@ -262,6 +266,8 @@ ipsilounge/
     │   │   ├── interview_questions_screen.dart
     │   │   ├── admission_cases_screen.dart
     │   │   ├── admission_info_screen.dart        # 대학/학과 검색 (입결 DB)
+    │   │   ├── blog_news_screen.dart              # 입시 뉴스 목록 (네이버 블로그 RSS)
+    │   │   ├── blog_news_webview_screen.dart     # 입시 뉴스 인앱 WebView + 돌아가기 버튼
     │   │   ├── consultation_screen.dart          # 상담자 선택 → 달력 → 시간
     │   │   ├── consultation_list_screen.dart
     │   │   ├── consultation_management_screen.dart # 내 상담 관리
@@ -464,7 +470,24 @@ applied(신청) → uploaded(학생부 업로드) → processing(분석중) → 
 - `ADMISSION_DB_PATH` 로 admission_db.xlsx 단독 오버라이드 지원
 - 관련 서비스: `course_requirement_service` / `suneung_minimum_service` / `counselor_type_service`
 
-### 11. 기획서 영역 기능 (상세는 각 기획서 참조)
+### 11. 입시 뉴스 (네이버 블로그 RSS 연동)
+
+- 입시라운지 네이버 블로그(https://blog.naver.com/consultinggogo) 의 RSS 를 1시간 캐시로 가져와 사용자 웹·모바일 앱에 노출
+- 백엔드: `app/services/naver_blog_service.py` (RSS 파싱 + 1시간 TTL 메모리 캐시) + `app/routers/blog_news.py` (`GET /api/blog-news`)
+- 의존성: httpx (이미 설치). 별도 패키지 추가 없음. xml.etree 로 파싱.
+- 응답 필드: `items[]` (title/link/category/description/thumbnail/published_at), `blog_url`, `cached`, `age_seconds`
+- 비로그인 접근 가능 (공개 콘텐츠). CORS 이슈 없음 — 프론트가 백엔드 경유로 호출.
+- 글 본문은 우리 사이트에 임베드 불가 (네이버가 iframe 차단). 따라서:
+  - **웹**: `target="_blank"` 새 탭에서 블로그 글 열기. 사용자는 우리 탭이 유지되어 자연스럽게 복귀.
+  - **앱**: `webview_flutter` 인앱 WebView 로 본문 열기 + 상단 AppBar 에 "← 입시라운지로 돌아가기" 버튼 + 하단 풋터 동일 버튼.
+- 위치:
+  - 사용자 웹 메인 페이지: 3개 라운지 카드 아래 가로 전체 폭 카드 (최근 5건 + 전체보기 링크)
+  - 사용자 웹 Navbar: 상담 라운지 ↔ **입시 뉴스** ↔ 마이페이지
+  - 사용자 웹 `/news`: 전체 목록 페이지 (20건)
+  - 모바일 홈 메뉴 그리드 5번 자리 (학생부 라운지·학종 라운지·상담 라운지·상담 관리·**입시 뉴스**·대입 정보 순)
+  - 모바일 `/news` 라우트 → `blog_news_screen.dart` 목록 → 항목 탭 시 `blog_news_webview_screen.dart`
+
+### 12. 기획서 영역 기능 (상세는 각 기획서 참조)
 
 - **고등학교 상담 시스템 V3** → `고등학교 상담시스템_기획서_V3.md`
 - **예비고1 상담 시스템 V2_2** → `예비고1 상담시스템_기획서_V2_2.md`
@@ -658,6 +681,11 @@ applied(신청) → uploaded(학생부 업로드) → processing(분석중) → 
 | 메서드 | 경로 | 기능 |
 |--------|------|------|
 | GET | /api/files/{folder}/{filename} | 로컬 파일 다운로드 (S3 미사용 시) |
+
+### 입시 뉴스 (네이버 블로그 RSS 연동)
+| 메서드 | 경로 | 기능 |
+|--------|------|------|
+| GET | /api/blog-news?limit=20 | 네이버 블로그(consultinggogo) 최근 글 목록. 백엔드 1시간 메모리 캐시. 비로그인 접근 가능 |
 
 ### 기획서 영역 API (상세는 각 기획서 참조)
 

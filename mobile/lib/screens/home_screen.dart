@@ -182,6 +182,33 @@ class _HomeTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
+              // 4번: 상담 관리 (이전 5번에서 이동)
+              Expanded(
+                child: _MenuCard(
+                  icon: Icons.note_alt_outlined,
+                  label: '상담 관리',
+                  color: const Color(0xFFF5F3FF),
+                  iconColor: const Color(0xFF7C3AED),
+                  onTap: () => Navigator.pushNamed(context, '/consultation/management'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              // 5번: 입시 뉴스 (신규 — 네이버 블로그 RSS 연동)
+              Expanded(
+                child: _MenuCard(
+                  icon: Icons.newspaper_outlined,
+                  label: '입시 뉴스',
+                  color: const Color(0xFFECFEFF),
+                  iconColor: const Color(0xFF0891B2),
+                  onTap: () => Navigator.pushNamed(context, '/news'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // 6번: 대입 정보 (이전 4번에서 이동)
               Expanded(
                 child: _MenuCard(
                   icon: Icons.info_outline,
@@ -212,29 +239,40 @@ class _HomeTab extends StatelessWidget {
               ],
             ),
           ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _MenuCard(
-                  icon: Icons.note_alt_outlined,
-                  label: '상담 관리',
-                  color: const Color(0xFFF5F3FF),
-                  iconColor: const Color(0xFF7C3AED),
-                  onTap: () => Navigator.pushNamed(context, '/consultation/management'),
+          // 알림: 메뉴 그리드에서 분리하여 별도 섹션으로 배치
+          const SizedBox(height: 24),
+          const Text(
+            '알림',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFEE2E2)),
+            ),
+            child: ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
                 ),
+                child: const Icon(Icons.notifications_outlined, color: Color(0xFFEF4444)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _MenuCard(
-                  icon: Icons.notifications_outlined,
-                  label: '알림',
-                  color: const Color(0xFFFEF2F2),
-                  iconColor: const Color(0xFFEF4444),
-                  onTap: () => Navigator.pushNamed(context, '/notifications'),
-                ),
+              title: const Text(
+                '알림 센터',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
               ),
-            ],
+              subtitle: const Text(
+                '분석 완료·상담 확정·리마인드 알림 확인',
+                style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              ),
+              trailing: const Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
+              onTap: () => Navigator.pushNamed(context, '/notifications'),
+            ),
           ),
           const SizedBox(height: 20),
           if (recent.isNotEmpty) ...[

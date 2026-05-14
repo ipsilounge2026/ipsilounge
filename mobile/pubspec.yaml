@@ -40,6 +40,9 @@ dependencies:
   # URL 실행 (외부 브라우저)
   url_launcher: ^6.2.5
 
+  # WebView (입시 뉴스 인앱 브라우저 — 상단 "← 입시라운지" 돌아가기 버튼 제공)
+  webview_flutter: ^4.7.0
+
   # Google Play 인앱결제
   in_app_purchase: ^3.2.0
 

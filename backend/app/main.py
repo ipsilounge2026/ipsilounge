@@ -28,6 +28,7 @@ from app.routers import (
     admission_cases,
     analysis,
     auth,
+    blog_news,
     consultation,
     consultation_notes,
     consultation_survey,
@@ -117,6 +118,7 @@ app.include_router(satisfaction_survey.router)
 app.include_router(senior_pre_survey.router)
 app.include_router(universities.router)
 app.include_router(user_consultation_sharing.router)
+app.include_router(blog_news.router)
 
 # DEV_MODE 전용 라우터 (운영에서는 마운트되지 않음)
 # spec: ipsilounge/docs/test-environment-spec.md §4

@@ -5,6 +5,36 @@
 
 ---
 
+## 2026-05-14
+
+### feat(blog-news): 입시 뉴스 (네이버 블로그 RSS) 연동 — 웹·앱·백엔드 신규 카테고리
+입시라운지 네이버 블로그(https://blog.naver.com/consultinggogo)를 사용자 웹·모바일 앱에서 "입시 뉴스" 메뉴로 노출.
+글 본문은 네이버 측에서 iframe 차단이므로, 우리 사이트엔 RSS 기반 글 목록만 노출하고 본문은:
+- 웹: `target="_blank"` 새 탭으로 열기 (우리 탭 유지로 자연 복귀)
+- 앱: 인앱 WebView 로 열고 상단 AppBar + 하단 풋터에 "← 입시라운지로 돌아가기" 버튼 활성화
+
+**백엔드**:
+- `app/services/naver_blog_service.py` (RSS 파싱 + 1시간 TTL 메모리 캐시 + graceful fallback)
+- `app/routers/blog_news.py` `GET /api/blog-news?limit=20&refresh=false`
+- main.py 라우터 등록. 비로그인 접근 허용 (CORS X — 백엔드 경유).
+
+**사용자 웹**:
+- `src/components/BlogNewsSection.tsx` 공용 카드 리스트 컴포넌트
+- `src/app/news/page.tsx` 전체 목록 페이지 (20건)
+- 메인 페이지 `page.tsx`: 3개 라운지 카드 아래에 입시 뉴스 카드 (최근 5건)
+- Navbar: 로그인 후 "상담 라운지 ↔ 입시 뉴스 ↔ 마이페이지" / 로그인 전 "입시 뉴스 ↔ 로그인 ↔ 회원가입"
+
+**모바일 앱**:
+- `pubspec.yaml`: `webview_flutter ^4.7.0` 추가
+- `lib/models/blog_news_item.dart` 모델
+- `lib/services/blog_news_service.dart` 서비스
+- `lib/screens/blog_news_screen.dart` 목록 화면 (Pull-to-refresh)
+- `lib/screens/blog_news_webview_screen.dart` 인앱 WebView + 돌아가기 버튼 2개
+- `main.dart` `/news` 라우트 등록
+- `home_screen.dart` 메뉴 그리드 재배치: 1.학생부 라운지 / 2.학종 라운지 / 3.상담 라운지 / 4.상담 관리 / **5.입시 뉴스** (신규) / 6.대입 정보. 알림은 메뉴 그리드에서 분리하여 그 아래 별도 "알림" 섹션으로.
+
+---
+
 ## 2026-05-10
 
 ### fix(backend): analysis_orders 자동 마이그레이션 누락 → Sentry ProgrammingError 해결
