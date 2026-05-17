@@ -46,15 +46,17 @@ function AnalysisListInner() {
     : {};
 
   return (
-    <>
+    <div className="lp lp-app">
       <Navbar />
-      <div className="container">
-        <div className="page-header">
-          <h1>{title}</h1>
-          <Link href={applyUrl} className={btnClass} style={btnStyle}>
-            {title} 신청
-          </Link>
-        </div>
+      <div className="lp-app-body">
+        <section className="lp-app-hero">
+          <p className="lp-auth-eyebrow">Analysis</p>
+          <h1 className="lp-auth-title">{title}<span style={{ color: "var(--lp-teal)" }}>.</span></h1>
+          <p className="lp-auth-sub">전문가가 직접 분석한 학생부 경쟁력 리포트를 받아보세요.</p>
+          <div style={{ marginTop: 24 }}>
+            <Link href={applyUrl} className={btnClass} style={btnStyle}>{title} 신청</Link>
+          </div>
+        </section>
 
         {items.length === 0 ? (
           <div className="card" style={{ textAlign: "center", padding: 60 }}>
@@ -97,13 +99,13 @@ function AnalysisListInner() {
         )}
       </div>
       <Footer />
-    </>
+    </div>
   );
 }
 
 export default function AnalysisListPage() {
   return (
-    <Suspense fallback={<><Navbar /><div className="container"><p>로딩 중...</p></div><Footer /></>}>
+    <Suspense fallback={<div className="lp lp-app"><Navbar /><div className="lp-app-body" style={{ padding: "80px 0", color: "var(--lp-muted)" }}><p>로딩 중...</p></div><Footer /></div>}>
       <AnalysisListInner />
     </Suspense>
   );

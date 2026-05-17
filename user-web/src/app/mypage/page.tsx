@@ -301,10 +301,10 @@ export default function MyPage() {
   const roleLabel = ROLE_LABELS[user.member_type] || user.member_type;
 
   return (
-    <div className="lp lp-mypage">
+    <div className="lp lp-app">
       <Navbar />
-      <div className="lp-wrap lp-mypage-body">
-        <section className="lp-mypage-hero">
+      <div className="lp-wrap lp-app-body">
+        <section className="lp-app-hero">
           <p className="lp-auth-eyebrow">My account</p>
           <h1 className="lp-auth-title">마이페이지<span style={{ color: "var(--lp-teal)" }}>.</span></h1>
           <p className="lp-auth-sub">계정 정보와 연결된 가족, 활동 내역을 한 곳에서 확인하세요.</p>

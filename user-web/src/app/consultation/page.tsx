@@ -306,13 +306,17 @@ export default function ConsultationPage() {
   const selectedTypeLabel = CONSULTATION_TYPES.find(t => t.value === selectedType)?.label || "";
 
   return (
-    <>
+    <div className="lp lp-app">
       <Navbar />
-      <div className="container" style={{ maxWidth: 640 }}>
-        <div className="page-header">
-          <h1>상담 라운지</h1>
-          <Link href="/consultation/my" className="btn btn-outline">내 예약 보기</Link>
-        </div>
+      <div className="lp-app-body">
+        <section className="lp-app-hero">
+          <p className="lp-auth-eyebrow">Consultation</p>
+          <h1 className="lp-auth-title">상담 라운지<span style={{ color: "var(--lp-teal)" }}>.</span></h1>
+          <p className="lp-auth-sub">리포트를 기반으로 전문가와 1:1 상담을 통해 입시 전략을 세워보세요.</p>
+          <div style={{ marginTop: 24 }}>
+            <Link href="/consultation/my" className="btn btn-outline">내 예약 보기</Link>
+          </div>
+        </section>
 
         {/* Step 1: 상담 유형 선택 */}
         {step === "type" && (
@@ -946,6 +950,6 @@ export default function ConsultationPage() {
         )}
       </div>
       <Footer />
-    </>
+    </div>
   );
 }

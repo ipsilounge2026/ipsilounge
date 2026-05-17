@@ -13,45 +13,28 @@ const BLOG_URL = "https://blog.naver.com/consultinggogo";
 
 export default function NewsPage() {
   return (
-    <>
+    <div className="lp lp-app">
       <Navbar />
-      <div className="container">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 16,
-            marginBottom: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: "16px 0 4px" }}>입시 뉴스</h1>
-            <p style={{ color: "var(--gray-600)", margin: 0 }}>
-              입시라운지 네이버 블로그의 최신 입시 정보를 모아 보세요.
-            </p>
+      <div className="lp-app-body">
+        <section className="lp-app-hero">
+          <p className="lp-auth-eyebrow">Admission news</p>
+          <h1 className="lp-auth-title">입시 뉴스<span style={{ color: "var(--lp-teal)" }}>.</span></h1>
+          <p className="lp-auth-sub">입시라운지 네이버 블로그의 최신 입시 정보를 모아 보세요.</p>
+          <div style={{ marginTop: 24 }}>
+            <a
+              href={BLOG_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="lp-btn lp-btn-primary"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", whiteSpace: "nowrap" }}
+            >
+              입시라운지 네이버 블로그 바로가기 →
+            </a>
           </div>
-          <a
-            href={BLOG_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-primary"
-            style={{
-              marginTop: 20,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              textDecoration: "none",
-              whiteSpace: "nowrap",
-            }}
-          >
-            입시라운지 네이버 블로그 바로가기 →
-          </a>
-        </div>
+        </section>
         <BlogNewsSection limit={20} compact={false} />
       </div>
       <Footer />
-    </>
+    </div>
   );
 }

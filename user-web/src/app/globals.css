@@ -572,40 +572,40 @@ select.lp-input { appearance: none; background:
 }
 
 /* ════════════════════════════════════════════════════════════════
-   Editorial 마이페이지 (.lp-mypage) — 기존 JSX/로직 불변, 비주얼만 스코프 적용
+   Editorial 마이페이지 (.lp-app) — 기존 JSX/로직 불변, 비주얼만 스코프 적용
    ════════════════════════════════════════════════════════════════ */
-.lp-mypage { background: var(--lp-cream); min-height: 100vh; }
-.lp-mypage-body { padding: 0 32px 96px; max-width: 1180px; margin: 0 auto; }
-.lp-mypage-hero { padding: 80px 0 56px; }
-.lp-mypage-hero .lp-auth-title { font-size: clamp(44px, 6vw, 84px); }
-.lp-mypage-hero .lp-auth-eyebrow { margin-bottom: 18px; }
+.lp-app { background: var(--lp-cream); min-height: 100vh; }
+.lp-app-body { padding: 0 32px 96px; max-width: 1180px; margin: 0 auto; }
+.lp-app-hero { padding: 80px 0 56px; }
+.lp-app-hero .lp-auth-title { font-size: clamp(44px, 6vw, 84px); }
+.lp-app-hero .lp-auth-eyebrow { margin-bottom: 18px; }
 
 /* 기존 .card 를 에디토리얼 플랫 카드로 (specificity 로 .card 의 그림자 무력화) */
-.lp-mypage .card {
+.lp-app .card {
   background: #fff;
   border: 1px solid rgba(11,31,63,0.1);
   border-radius: 14px;
   box-shadow: none;
   padding: 28px 30px;
 }
-.lp-mypage .card + .card { margin-top: 18px; }
-.lp-mypage h2, .lp-mypage h3 { color: var(--lp-navy); letter-spacing: -0.01em; }
-.lp-mypage .page-header h1 { color: var(--lp-navy); }
-.lp-mypage label { color: var(--lp-navy); }
-.lp-mypage .form-control { border-radius: 8px; border-color: rgba(11,31,63,0.2); }
-.lp-mypage .form-control:focus { border-color: var(--lp-teal); }
+.lp-app .card + .card { margin-top: 18px; }
+.lp-app h2, .lp-app h3 { color: var(--lp-navy); letter-spacing: -0.01em; }
+.lp-app .page-header h1 { color: var(--lp-navy); }
+.lp-app label { color: var(--lp-navy); }
+.lp-app .form-control { border-radius: 8px; border-color: rgba(11,31,63,0.2); }
+.lp-app .form-control:focus { border-color: var(--lp-teal); }
 
 /* 버튼: 파란 primary → 네이비, outline → 틸 보더 (시각만, 동작 동일) */
-.lp-mypage .btn-primary { background: var(--lp-navy); }
-.lp-mypage .btn-primary:hover { background: #08182f; }
-.lp-mypage .btn-outline { border-color: rgba(11,31,63,0.25); color: var(--lp-navy); }
-.lp-mypage .btn-outline:hover { background: rgba(11,31,63,0.04); }
+.lp-app .btn-primary { background: var(--lp-navy); }
+.lp-app .btn-primary:hover { background: #08182f; }
+.lp-app .btn-outline { border-color: rgba(11,31,63,0.25); color: var(--lp-navy); }
+.lp-app .btn-outline:hover { background: rgba(11,31,63,0.04); }
 
 /* 빠른 메뉴 그리드 항목 hover 등 가독성 */
-.lp-mypage a { color: inherit; }
-.lp-mypage .container { max-width: none; }
+.lp-app a { color: inherit; }
+.lp-app .container { max-width: none; }
 
 @media (max-width: 860px) {
-  .lp-mypage-body { padding: 0 18px 64px; }
-  .lp-mypage-hero { padding: 48px 0 32px; }
+  .lp-app-body { padding: 0 18px 64px; }
+  .lp-app-hero { padding: 48px 0 32px; }
 }
