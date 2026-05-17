@@ -20,12 +20,59 @@ graceful 비활성 — 에러는 발생해도 Sentry 전송하지 않을 뿐 앱
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 _INITIALIZED = False
+
+
+def _before_send(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any] | None:
+    """전송 전 필터. 무료 플랜(5k errors/월) 한도를 노이즈로 낭비하지 않도록,
+    '실제 서버 장애(5xx)'만 남기고 아래는 드롭한다:
+
+    - 예상된 클라이언트 오류: HTTPException status < 500 (401/403/404/422 등)
+    - 레이트리밋 초과(slowapi RateLimitExceeded) — 정상적인 차단이지 버그 아님
+    - .env / wp-login 등 봇·취약점 스캐너의 404 탐침
+
+    드롭해도 앱 동작·로그에는 영향 없음 (Sentry 전송만 생략).
+    """
+    exc_info = hint.get("exc_info")
+    if exc_info:
+        exc = exc_info[1]
+
+        # slowapi 레이트리밋 — 정상 방어 동작
+        try:
+            from slowapi.errors import RateLimitExceeded
+
+            if isinstance(exc, RateLimitExceeded):
+                return None
+        except Exception:
+            pass
+
+        # Starlette/FastAPI HTTPException 중 5xx 미만은 클라이언트 측 오류 → 드롭
+        try:
+            from starlette.exceptions import HTTPException as StarletteHTTPException
+
+            if isinstance(exc, StarletteHTTPException):
+                status = getattr(exc, "status_code", 500)
+                if status < 500:
+                    return None
+        except Exception:
+            pass
+
+    # 봇 스캐너 404 탐침 경로 드롭 (.env, wp-login, phpmyadmin 등)
+    req = (event.get("request") or {})
+    url = (req.get("url") or "")
+    if any(p in url for p in (
+        "/.env", "/wp-login", "/wp-admin", "/phpmyadmin",
+        "/.git", "/vendor/", "/.aws", "/config.json",
+    )):
+        return None
+
+    return event
 
 
 def init_sentry() -> bool:
@@ -55,6 +102,8 @@ def init_sentry() -> bool:
             traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
             # 민감 정보 자동 스크러빙 (이메일 등 PII) — Sentry 기본 + 명시
             send_default_pii=False,
+            # 무료 플랜 한도/알림 노이즈 절약: 예상된 4xx·레이트리밋·봇 스캔 드롭
+            before_send=_before_send,
             integrations=[
                 FastApiIntegration(),
                 StarletteIntegration(),

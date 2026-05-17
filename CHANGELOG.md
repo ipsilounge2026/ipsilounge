@@ -35,6 +35,22 @@
 
 ---
 
+## 2026-05-17
+
+### chore(sentry): 무료 플랜 대비 before_send 노이즈 필터 추가
+Sentry 트라이얼 종료 → 무료 Developer 플랜(5k errors/월) 전환 대비.
+실제 서버 장애(5xx)만 남기고 아래는 전송 드롭하여 한도·알림 노이즈 절약:
+
+- 예상된 클라이언트 오류: HTTPException status < 500 (401/403/404/422 등)
+- slowapi RateLimitExceeded — 정상 방어 동작이지 버그 아님
+- 봇·취약점 스캐너 404 탐침 경로(.env, wp-login, phpmyadmin, .git 등)
+
+- 파일: `app/services/sentry_service.py` 에 `_before_send` 훅 신설 + `sentry_sdk.init(before_send=...)` 연결
+- 검증: 404 HTTPException·.env 스캔 → 드롭 / 500 RuntimeError·정상 API 경로 → 유지 (단위 확인 완료)
+- 5/10 사고처럼 실제 5xx 장애 알림은 그대로 유지됨
+
+---
+
 ## 2026-05-10
 
 ### fix(backend): analysis_orders 자동 마이그레이션 누락 → Sentry ProgrammingError 해결
