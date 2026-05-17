@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { isLoggedIn, logout, getMemberType } from "@/lib/auth";
 import NoticeBanner from "@/components/NoticeBanner";
+import Logo from "@/components/Logo";
 
 function Arrow() {
   return (
@@ -12,9 +13,6 @@ function Arrow() {
       <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
     </svg>
   );
-}
-function Pin() {
-  return <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" /></svg>;
 }
 
 function NavbarInner() {
@@ -30,7 +28,7 @@ function NavbarInner() {
     <div className="lp">
       <header className="lp-header">
         <div className="lp-wrap lp-header-inner">
-          <Link href="/" className="lp-logo"><Pin />입시라운지</Link>
+          <Link href="/" className="lp-logo"><Logo size={26} />입시라운지</Link>
           <nav className="lp-nav">
             {loggedIn ? (
               <>
@@ -71,7 +69,7 @@ export default function Navbar() {
       <div className="lp">
         <header className="lp-header">
           <div className="lp-wrap lp-header-inner">
-            <span className="lp-logo"><Pin />입시라운지</span>
+            <span className="lp-logo"><Logo size={26} />입시라운지</span>
             <nav className="lp-nav" />
           </div>
         </header>

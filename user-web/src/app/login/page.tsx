@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Logo from "@/components/Logo";
+import Footer from "@/components/Footer";
 import { login } from "@/lib/api";
 
 function Arrow() {
@@ -11,9 +13,6 @@ function Arrow() {
       <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
     </svg>
   );
-}
-function Pin() {
-  return <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" /></svg>;
 }
 
 export default function LoginPage() {
@@ -61,7 +60,7 @@ export default function LoginPage() {
     <div className="lp lp-auth">
       <header className="lp-header">
         <div className="lp-wrap lp-header-inner">
-          <Link href="/" className="lp-logo"><Pin />입시라운지</Link>
+          <Link href="/" className="lp-logo"><Logo size={26} />입시라운지</Link>
           <nav className="lp-nav">
             <Link href="/news">입시 뉴스</Link>
             <Link href="/login">로그인</Link>
@@ -131,16 +130,7 @@ export default function LoginPage() {
         </div>
       </main>
 
-      <footer className="lp-footer">
-        <div className="lp-wrap lp-footer-inner">
-          <Link href="/" className="lp-logo" style={{ fontSize: 17 }}><Pin />입시라운지</Link>
-          <div className="lp-footer-links">
-            <Link href="/terms">이용약관</Link>
-            <Link href="/privacy">개인정보처리방침</Link>
-          </div>
-          <span className="lp-footer-copy">© 2026 입시라운지. All rights reserved.</span>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

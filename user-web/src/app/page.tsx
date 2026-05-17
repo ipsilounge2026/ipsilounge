@@ -6,6 +6,7 @@ import Link from "next/link";
 import { isLoggedIn, getMemberType } from "@/lib/auth";
 import { fetchBlogNews, type BlogNewsItem } from "@/lib/api";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 const BLOG_URL = "https://blog.naver.com/consultinggogo";
 
@@ -93,7 +94,8 @@ export default function LandingPage() {
           <p>전문가가 직접 분석한 학생부 경쟁력 리포트를 받아보세요.</p>
         </div>
         <div className="lp-hero-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" /></svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" />
         </div>
       </section>
 
@@ -161,19 +163,7 @@ export default function LandingPage() {
       )}
 
       {/* 푸터 */}
-      <footer className="lp-footer">
-        <div className="lp-wrap lp-footer-inner">
-          <Link href="/" className="lp-logo" style={{ fontSize: 17 }}>
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" /></svg>
-            입시라운지
-          </Link>
-          <div className="lp-footer-links">
-            <Link href="/terms">이용약관</Link>
-            <Link href="/privacy">개인정보처리방침</Link>
-          </div>
-          <span className="lp-footer-copy">© 2026 입시라운지. All rights reserved.</span>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

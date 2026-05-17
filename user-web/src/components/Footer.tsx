@@ -1,17 +1,21 @@
 import Link from "next/link";
+import Logo from "@/components/Logo";
 
 export default function Footer() {
   return (
-    <footer className="footer">
-      <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 8 }}>
-        <Link href="/terms" style={{ color: "#9ca3af", fontSize: 13, textDecoration: "none" }}>
-          이용약관
-        </Link>
-        <Link href="/privacy" style={{ color: "#9ca3af", fontSize: 13, textDecoration: "none" }}>
-          개인정보처리방침
-        </Link>
-      </div>
-      <p>&copy; 2026 입시라운지. All rights reserved.</p>
-    </footer>
+    <div className="lp">
+      <footer className="lp-footer">
+        <div className="lp-wrap lp-footer-inner">
+          <Link href="/" className="lp-logo" style={{ fontSize: 17 }}>
+            <Logo size={22} />입시라운지
+          </Link>
+          <div className="lp-footer-links">
+            <Link href="/terms">이용약관</Link>
+            <Link href="/privacy">개인정보처리방침</Link>
+          </div>
+          <span className="lp-footer-copy">© 2026 입시라운지. All rights reserved.</span>
+        </div>
+      </footer>
+    </div>
   );
 }
