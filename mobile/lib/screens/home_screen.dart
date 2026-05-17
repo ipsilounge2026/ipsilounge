@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../theme/app_palette.dart';
 import '../main.dart' show kEnableFirebase;
 import '../providers/auth_provider.dart';
 import '../providers/analysis_provider.dart';
@@ -13,6 +14,29 @@ import 'seminar_screen.dart';
 // Firebase import 는 compile 단계에서만 필요.
 // kEnableFirebase=false 이면 런타임에는 호출되지 않음.
 import 'package:firebase_messaging/firebase_messaging.dart';
+
+/// 에디토리얼 섹션 헤더 (§ 01 · Menu / 메뉴)
+Widget _sectionHead(String no, String en, String ko) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('§ $no  ·  $en',
+            style: const TextStyle(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: AppPalette.teal,
+                fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(ko,
+            style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppPalette.navy,
+                letterSpacing: -0.5)),
+        const SizedBox(height: 10),
+        Container(height: 1, color: AppPalette.line),
+        const SizedBox(height: 14),
+      ],
+    );
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -74,8 +98,9 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _selectedIndex,
         onTap: (i) => setState(() => _selectedIndex = i),
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF3B82F6),
-        unselectedItemColor: const Color(0xFF9CA3AF),
+        backgroundColor: Colors.white,
+        selectedItemColor: AppPalette.teal,
+        unselectedItemColor: AppPalette.muted,
         selectedLabelStyle:
             const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
@@ -103,57 +128,76 @@ class _HomeTab extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('입시라운지'),
+        titleSpacing: 16,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/icon/icon.png', width: 26, height: 26),
+            const SizedBox(width: 8),
+            const Text('입시라운지',
+                style: TextStyle(fontWeight: FontWeight.w800, color: AppPalette.navy)),
+          ],
+        ),
+        centerTitle: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
+            icon: const Icon(Icons.notifications_outlined, color: AppPalette.navy),
             onPressed: () => Navigator.pushNamed(context, '/notifications'),
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
         children: [
-          // 환영 카드
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // 환영 — 에디토리얼
+          const Text('§  Today',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontStyle: FontStyle.italic,
+                  color: AppPalette.teal,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          RichText(
+            text: TextSpan(
               children: [
-                Text(
-                  '안녕하세요, ${user?.name ?? ''}님',
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  '오늘도 입시 준비 화이팅!',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
+                const TextSpan(
+                    text: '안녕하세요,\n',
+                    style: TextStyle(
+                        color: AppPalette.navy,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1,
+                        height: 1.15)),
+                TextSpan(
+                    text: user?.name ?? '',
+                    style: const TextStyle(
+                        color: AppPalette.teal,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w700,
+                        fontStyle: FontStyle.italic,
+                        letterSpacing: -1)),
+                const TextSpan(
+                    text: '님.',
+                    style: TextStyle(
+                        color: AppPalette.navy,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1)),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          // 빠른 메뉴
-          const Text(
-            '메뉴',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
           const SizedBox(height: 12),
+          const Text('오늘도 입시 준비 화이팅!',
+              style: TextStyle(color: AppPalette.muted, fontSize: 14)),
+          const SizedBox(height: 32),
+          _sectionHead('01', 'Menu', '메뉴'),
           Row(
             children: [
               Expanded(
                 child: _MenuCard(
                   icon: Icons.description_outlined,
                   label: '학생부 라운지',
-                  color: const Color(0xFFEFF6FF),
-                  iconColor: const Color(0xFF3B82F6),
+                  english: 'Records',
                   onTap: () => onSwitchTab(1),
                 ),
               ),
@@ -162,8 +206,7 @@ class _HomeTab extends StatelessWidget {
                 child: _MenuCard(
                   icon: Icons.school_outlined,
                   label: '학종 라운지',
-                  color: const Color(0xFFF0FDF4),
-                  iconColor: const Color(0xFF22C55E),
+                  english: 'Match',
                   onTap: () => onSwitchTab(2),
                 ),
               ),
@@ -176,8 +219,7 @@ class _HomeTab extends StatelessWidget {
                 child: _MenuCard(
                   icon: Icons.calendar_month,
                   label: '상담 라운지',
-                  color: const Color(0xFFFFF7ED),
-                  iconColor: const Color(0xFFF97316),
+                  english: 'Counsel',
                   onTap: () => onSwitchTab(3),
                 ),
               ),
@@ -187,8 +229,7 @@ class _HomeTab extends StatelessWidget {
                 child: _MenuCard(
                   icon: Icons.note_alt_outlined,
                   label: '상담 관리',
-                  color: const Color(0xFFF5F3FF),
-                  iconColor: const Color(0xFF7C3AED),
+                  english: 'Manage',
                   onTap: () => Navigator.pushNamed(context, '/consultation/management'),
                 ),
               ),
@@ -202,8 +243,7 @@ class _HomeTab extends StatelessWidget {
                 child: _MenuCard(
                   icon: Icons.newspaper_outlined,
                   label: '입시 뉴스',
-                  color: const Color(0xFFECFEFF),
-                  iconColor: const Color(0xFF0891B2),
+                  english: 'News',
                   onTap: () => Navigator.pushNamed(context, '/news'),
                 ),
               ),
@@ -213,8 +253,7 @@ class _HomeTab extends StatelessWidget {
                 child: _MenuCard(
                   icon: Icons.info_outline,
                   label: '대입 정보',
-                  color: const Color(0xFFFEF3C7),
-                  iconColor: const Color(0xFFD97706),
+                  english: 'Info',
                   onTap: () => Navigator.pushNamed(context, '/admission-info'),
                 ),
               ),
@@ -229,8 +268,7 @@ class _HomeTab extends StatelessWidget {
                   child: _MenuCard(
                     icon: Icons.mic_outlined,
                     label: '설명회 예약',
-                    color: const Color(0xFFEDE9FE),
-                    iconColor: const Color(0xFF8B5CF6),
+                  english: 'Seminar',
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SeminarScreen())),
                   ),
                 ),
@@ -240,27 +278,23 @@ class _HomeTab extends StatelessWidget {
             ),
           ],
           // 알림: 메뉴 그리드에서 분리하여 별도 섹션으로 배치
-          const SizedBox(height: 24),
-          const Text(
-            '알림',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 32),
+          _sectionHead('02', 'Notifications', '알림'),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFFEF2F2),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFEE2E2)),
+              border: Border.all(color: AppPalette.line),
             ),
             child: ListTile(
               leading: Container(
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppPalette.cream,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(Icons.notifications_outlined, color: Color(0xFFEF4444)),
+                child: const Icon(Icons.notifications_outlined, color: AppPalette.teal),
               ),
               title: const Text(
                 '알림 센터',
@@ -274,22 +308,23 @@ class _HomeTab extends StatelessWidget {
               onTap: () => Navigator.pushNamed(context, '/notifications'),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 32),
           if (recent.isNotEmpty) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Stack(
               children: [
-                const Text(
-                  '최근 라운지 신청',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                TextButton(
-                  onPressed: () => onSwitchTab(1),
-                  child: const Text('전체보기'),
+                _sectionHead('03', 'Recent applications', '최근 라운지 신청'),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: TextButton(
+                    onPressed: () => onSwitchTab(1),
+                    child: const Text('전체보기 →',
+                        style: TextStyle(color: AppPalette.teal, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             ...recent.map((o) => _RecentOrderCard(
                   filename: o.schoolRecordFilename ?? '${o.serviceTypeLabel} 신청',
                   status: o.status,
@@ -305,15 +340,13 @@ class _HomeTab extends StatelessWidget {
 class _MenuCard extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color color;
-  final Color iconColor;
+  final String english;
   final VoidCallback onTap;
 
   const _MenuCard({
     required this.icon,
     required this.label,
-    required this.color,
-    required this.iconColor,
+    required this.english,
     required this.onTap,
   });
 
@@ -322,19 +355,42 @@ class _MenuCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        height: 156,
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppPalette.line),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: iconColor, size: 28),
-            const SizedBox(height: 8),
+            Icon(icon, color: AppPalette.teal, size: 28),
+            const Spacer(),
             Text(
-              label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              english,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                  color: AppPalette.muted,
+                  fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 3),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppPalette.navy),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(Icons.arrow_forward, size: 16, color: AppPalette.muted),
+              ],
             ),
           ],
         ),
