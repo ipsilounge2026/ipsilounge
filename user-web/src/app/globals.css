@@ -377,8 +377,12 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 700;
   text-decoration: none; transition: transform .12s, box-shadow .15s, background .15s;
 }
-.lp-btn-primary { background: var(--lp-navy); color: var(--lp-cream); }
+.lp-btn-primary { background: var(--lp-navy); color: #fff; }
 .lp-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(11,31,63,0.22); }
+/* .lp-nav a 명시도(0,1,1)가 .lp-btn-primary(0,1,0)를 덮어 글자가 네이비로 묻히던 문제 방지 */
+.lp-nav a.lp-btn-primary,
+.lp-nav a.lp-btn-primary:hover,
+.lp-nav a.lp-btn-primary svg { color: #fff; opacity: 1; }
 .lp-btn-ghost { background: transparent; color: var(--lp-navy); border: 1px solid rgba(11,31,63,0.25); }
 .lp-btn-ghost:hover { background: rgba(11,31,63,0.04); }
 .lp-btn-cream { background: var(--lp-cream); color: var(--lp-navy); }
