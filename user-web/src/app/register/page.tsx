@@ -285,27 +285,27 @@ export default function RegisterPage() {
 
                 <div className="lp-field">
                   <label>NAME<span className="ko">· 이름</span></label>
-                  <input type="text" className="lp-input" value={form.name}
+                  <input type="text" aria-label="이름" className="lp-input" value={form.name}
                     onChange={(e) => update("name", e.target.value)} placeholder="이름을 입력하세요" required />
                 </div>
                 <div className="lp-field">
                   <label>EMAIL<span className="ko">· 이메일</span></label>
-                  <input type="email" className="lp-input" value={form.email}
+                  <input type="email" aria-label="이메일" className="lp-input" value={form.email}
                     onChange={(e) => update("email", e.target.value)} placeholder="이메일을 입력하세요" required />
                 </div>
                 <div className="lp-field">
                   <label>PASSWORD<span className="ko">· 비밀번호</span></label>
-                  <input type="password" className="lp-input" value={form.password}
+                  <input type="password" aria-label="비밀번호" className="lp-input" value={form.password}
                     onChange={(e) => update("password", e.target.value)} placeholder="6자 이상" required />
                 </div>
                 <div className="lp-field">
                   <label>CONFIRM<span className="ko">· 비밀번호 확인</span></label>
-                  <input type="password" className="lp-input" value={form.passwordConfirm}
+                  <input type="password" aria-label="비밀번호 확인" className="lp-input" value={form.passwordConfirm}
                     onChange={(e) => update("passwordConfirm", e.target.value)} placeholder="비밀번호를 다시 입력하세요" required />
                 </div>
                 <div className="lp-field">
                   <label>PHONE<span className="ko">· 연락처</span></label>
-                  <input type="tel" className="lp-input" value={form.phone}
+                  <input type="tel" aria-label="연락처" className="lp-input" value={form.phone}
                     onChange={(e) => update("phone", e.target.value)} placeholder="010-0000-0000" required />
                 </div>
               </div>

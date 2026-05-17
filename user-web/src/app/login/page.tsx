@@ -97,14 +97,14 @@ export default function LoginPage() {
 
               <div className="lp-field">
                 <label htmlFor="login-email">EMAIL<span className="ko">· 이메일</span></label>
-                <input id="login-email" name="email" autoComplete="email" type="email" className="lp-input" value={email}
+                <input id="login-email" name="email" aria-label="이메일" autoComplete="email" type="email" className="lp-input" value={email}
                   onChange={(e) => setEmail(e.target.value)} placeholder="이메일을 입력하세요" required />
               </div>
 
               <div className="lp-field">
                 <label htmlFor="login-password">PASSWORD<span className="ko">· 비밀번호</span></label>
                 <Link href="/forgot-password" className="lp-field-link">비밀번호 찾기 →</Link>
-                <input id="login-password" name="password" autoComplete="current-password" type="password" className="lp-input" value={password}
+                <input id="login-password" name="password" aria-label="비밀번호" autoComplete="current-password" type="password" className="lp-input" value={password}
                   onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호를 입력하세요" required />
               </div>
 
