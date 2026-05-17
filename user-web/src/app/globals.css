@@ -600,9 +600,11 @@ select.lp-input { appearance: none; background:
 .lp-app .btn-primary:hover { background: #08182f; }
 .lp-app .btn-outline { border-color: rgba(11,31,63,0.25); color: var(--lp-navy); }
 .lp-app .btn-outline:hover { background: rgba(11,31,63,0.04); }
+/* 네이비 버튼 위 글자가 묻히지 않도록 흰색 고정 (specificity 0,2,0 > .lp-app a 0,1,1 아님 → 0,1,1 보다 높이려 a.클래스 사용) */
+.lp-app a.btn-primary, .lp-app a.btn-primary:hover,
+.lp-app a.lp-btn-primary, .lp-app a.lp-btn-primary:hover,
+.lp-app button.btn-primary { color: #fff !important; }
 
-/* 빠른 메뉴 그리드 항목 hover 등 가독성 */
-.lp-app a { color: inherit; }
 .lp-app .container { max-width: none; }
 
 @media (max-width: 860px) {
