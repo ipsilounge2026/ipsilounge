@@ -217,7 +217,7 @@ class _HomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.chat_bubble_outline,
+                  icon: Icons.forum_outlined,
                   label: '상담 라운지',
                   english: 'Counsel',
                   onTap: () => onSwitchTab(3),
@@ -227,7 +227,7 @@ class _HomeTab extends StatelessWidget {
               // 4번: 상담 관리 (이전 5번에서 이동)
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.assignment_outlined,
+                  icon: Icons.edit_document,
                   label: '상담 관리',
                   english: 'Manage',
                   onTap: () => Navigator.pushNamed(context, '/consultation/management'),
