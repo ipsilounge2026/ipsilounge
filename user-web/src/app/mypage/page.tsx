@@ -304,18 +304,20 @@ export default function MyPage() {
     }
   };
 
-  if (!user) return <><Navbar /><div className="container"><p>로딩 중...</p></div></>;
+  if (!user) return <div className="lp"><Navbar /><div className="lp-wrap" style={{ padding: "80px 0", color: "var(--lp-muted)" }}><p>로딩 중...</p></div></div>;
 
   const roleLabel = ROLE_LABELS[user.member_type] || user.member_type;
   const roleColor = ROLE_COLORS[user.member_type] || "#6B7280";
 
   return (
-    <>
+    <div className="lp lp-mypage">
       <Navbar />
-      <div className="container" style={{ maxWidth: 640 }}>
-        <div className="page-header">
-          <h1>마이페이지</h1>
-        </div>
+      <div className="lp-wrap lp-mypage-body">
+        <section className="lp-mypage-hero">
+          <p className="lp-auth-eyebrow">My account</p>
+          <h1 className="lp-auth-title">마이페이지<span style={{ color: "var(--lp-teal)" }}>.</span></h1>
+          <p className="lp-auth-sub">계정 정보와 연결된 가족, 활동 내역을 한 곳에서 확인하세요.</p>
+        </section>
 
         {message && (
           <div style={{ padding: "12px 16px", background: "#d4edda", borderRadius: 8, marginBottom: 16, fontSize: 14 }}>
@@ -1190,6 +1192,6 @@ export default function MyPage() {
         )}
       </div>
       <Footer />
-    </>
+    </div>
   );
 }
