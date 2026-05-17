@@ -47,14 +47,6 @@ const ROLE_LABELS: Record<string, string> = {
   counselor: "상담자",
 };
 
-const ROLE_COLORS: Record<string, string> = {
-  student: "#3B82F6",
-  parent: "#8B5CF6",
-  branch_manager: "#F59E0B",
-  admin: "#EF4444",
-  counselor: "#10B981",
-};
-
 const TIME_SLOT_LABELS: Record<string, string> = { morning: "오전", afternoon: "오후", evening: "저녁" };
 const STATUS_LABELS: Record<string, string> = { pending: "승인대기", modified: "수정대기", approved: "승인완료", cancelled: "취소" };
 const STATUS_COLORS: Record<string, string> = { pending: "#f59e0b", modified: "#8b5cf6", approved: "#10b981", cancelled: "#9ca3af" };
@@ -307,7 +299,6 @@ export default function MyPage() {
   if (!user) return <div className="lp"><Navbar /><div className="lp-wrap" style={{ padding: "80px 0", color: "var(--lp-muted)" }}><p>로딩 중...</p></div></div>;
 
   const roleLabel = ROLE_LABELS[user.member_type] || user.member_type;
-  const roleColor = ROLE_COLORS[user.member_type] || "#6B7280";
 
   return (
     <div className="lp lp-mypage">
@@ -329,14 +320,15 @@ export default function MyPage() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <h2 style={{ fontSize: 16, margin: 0 }}>회원 정보</h2>
+              <h2 style={{ fontSize: 20, margin: 0, fontWeight: 800, letterSpacing: "-0.02em" }}>회원 정보</h2>
               <span style={{
-                padding: "3px 10px",
-                borderRadius: 20,
+                padding: "4px 12px",
+                borderRadius: 999,
                 fontSize: 12,
-                fontWeight: 600,
-                color: "#fff",
-                backgroundColor: roleColor,
+                fontWeight: 700,
+                color: "var(--lp-teal)",
+                background: "#fff",
+                border: "1px solid var(--lp-teal)",
               }}>
                 {roleLabel}
               </span>
@@ -419,26 +411,26 @@ export default function MyPage() {
             <>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <div>
-                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>이름</div>
+                  <div style={{ color: "var(--lp-muted)", marginBottom: 6, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>이름</div>
                   <div>{user.name}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>이메일</div>
+                  <div style={{ color: "var(--lp-muted)", marginBottom: 6, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>이메일</div>
                   <div>{user.email}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>연락처</div>
+                  <div style={{ color: "var(--lp-muted)", marginBottom: 6, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>연락처</div>
                   <div>{user.phone || "-"}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>가입일</div>
+                  <div style={{ color: "var(--lp-muted)", marginBottom: 6, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>가입일</div>
                   <div>{new Date(user.created_at).toLocaleDateString("ko-KR")}</div>
                 </div>
 
                 {/* 지점 담당자: 담당 지점 */}
                 {memberType === "branch_manager" && (
                   <div style={{ gridColumn: "1 / -1" }}>
-                    <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>담당 지점</div>
+                    <div style={{ color: "var(--lp-muted)", marginBottom: 6, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>담당 지점</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{
                         padding: "3px 10px",
@@ -458,7 +450,7 @@ export default function MyPage() {
                 {/* 학생/학부모: 재원생 여부 + 재원 지점 */}
                 {memberType !== "branch_manager" && (
                   <div style={{ gridColumn: "1 / -1" }}>
-                    <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 4 }}>재원 여부</div>
+                    <div style={{ color: "var(--lp-muted)", marginBottom: 6, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>재원 여부</div>
                     {user.is_academy_student ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{
@@ -497,13 +489,13 @@ export default function MyPage() {
 
               {/* 담당자 정보 (학생/학부모만) */}
               {memberType !== "branch_manager" && (
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--gray-100)" }}>
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(11,31,63,0.1)" }}>
                   <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 6 }}>담당 상담자</div>
                   {isAssigned && myCounselor ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{
                         width: 32, height: 32, borderRadius: "50%",
-                        background: "#22C55E", display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "var(--lp-teal)", display: "flex", alignItems: "center", justifyContent: "center",
                         fontWeight: 700, color: "#fff", fontSize: 14,
                       }}>
                         {myCounselor.name.charAt(0)}
@@ -535,13 +527,13 @@ export default function MyPage() {
 
               {/* 담당 선배 정보 (학생/학부모만) */}
               {memberType !== "branch_manager" && (
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--gray-100)" }}>
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(11,31,63,0.1)" }}>
                   <div style={{ fontSize: 13, color: "var(--gray-500)", marginBottom: 6 }}>담당 선배</div>
                   {isSeniorAssigned && mySenior ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{
                         width: 32, height: 32, borderRadius: "50%",
-                        background: "#7C3AED", display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "var(--lp-navy)", display: "flex", alignItems: "center", justifyContent: "center",
                         fontWeight: 700, color: "#fff", fontSize: 14,
                       }}>
                         {mySenior.name.charAt(0)}
@@ -611,7 +603,7 @@ export default function MyPage() {
                                   key={r.id}
                                   style={{
                                     padding: "10px 12px",
-                                    border: "1px solid var(--gray-200)",
+                                    border: "1px solid rgba(11,31,63,0.14)",
                                     borderRadius: 8,
                                     background: "#fff",
                                   }}
@@ -738,7 +730,7 @@ export default function MyPage() {
                   const canModify = r.status !== "cancelled" && isBeforeDeadline(r.deadline_at);
                   return (
                   <div key={r.id} style={{
-                    padding: 14, borderRadius: 10, border: "1px solid var(--gray-200)",
+                    padding: 14, borderRadius: 10, border: "1px solid rgba(11,31,63,0.14)",
                     opacity: r.status === "cancelled" ? 0.5 : 1,
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -935,7 +927,7 @@ export default function MyPage() {
                         style={{
                           display: "flex", justifyContent: "space-between", alignItems: "center",
                           padding: "12px 14px", borderRadius: 10,
-                          border: "1px solid var(--gray-200)",
+                          border: "1px solid rgba(11,31,63,0.14)",
                         }}
                       >
                         <a href={href} style={{ flex: 1, textDecoration: "none", color: "var(--gray-700)" }}>
@@ -1006,7 +998,7 @@ export default function MyPage() {
                     style={{
                       display: "flex", alignItems: "center", gap: 8,
                       padding: "12px 14px", borderRadius: 10,
-                      border: "1px solid var(--gray-200)",
+                      border: "1px solid rgba(11,31,63,0.14)",
                       fontSize: 14, color: "var(--gray-700)",
                       textDecoration: "none", fontWeight: 500,
                     }}
@@ -1027,7 +1019,7 @@ export default function MyPage() {
                 notifications.slice(0, 10).map((n) => (
                   <div key={n.id} style={{
                     padding: "12px 0",
-                    borderBottom: "1px solid var(--gray-100)",
+                    borderBottom: "1px solid rgba(11,31,63,0.1)",
                     opacity: n.is_read ? 0.6 : 1,
                   }}>
                     <div style={{ fontSize: 14, fontWeight: n.is_read ? 400 : 600 }}>{n.title}</div>
