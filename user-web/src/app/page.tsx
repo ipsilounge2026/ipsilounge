@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { isLoggedIn, getMemberType, logout } from "@/lib/auth";
+import { isLoggedIn, getMemberType } from "@/lib/auth";
 import { fetchBlogNews, type BlogNewsItem } from "@/lib/api";
+import Navbar from "@/components/Navbar";
 
 const BLOG_URL = "https://blog.naver.com/consultinggogo";
 
@@ -79,31 +80,8 @@ export default function LandingPage() {
 
   return (
     <div className="lp">
-      {/* 헤더 */}
-      <header className="lp-header">
-        <div className="lp-wrap lp-header-inner">
-          <Link href="/" className="lp-logo">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" /></svg>
-            입시라운지
-          </Link>
-          <nav className="lp-nav">
-            <Link href="/news">입시 뉴스</Link>
-            {loggedIn ? (
-              <>
-                <span className="lp-divider" />
-                <Link href="/mypage" className="lp-nav-hide">마이페이지</Link>
-                <button onClick={logout} className="lp-btn lp-btn-ghost" style={{ cursor: "pointer", font: "inherit" }}>로그아웃</button>
-              </>
-            ) : (
-              <>
-                <Link href="/login">로그인</Link>
-                <span className="lp-divider" />
-                <Link href="/register" className="lp-btn lp-btn-primary">회원가입 <Arrow /></Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      {/* 헤더 — 공유 Navbar 사용 (로그인 시 전체 라운지 메뉴 일관 노출) */}
+      <Navbar />
 
       {/* 히어로 */}
       <section className="lp-hero">
