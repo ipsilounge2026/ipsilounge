@@ -371,6 +371,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .lp-nav { display: flex; align-items: center; gap: 28px; }
 .lp-nav a { font-size: 15px; font-weight: 500; color: var(--lp-navy); text-decoration: none; opacity: 0.85; transition: opacity .15s; }
 .lp-nav a:hover { opacity: 1; }
+.lp-nav a.active { opacity: 1; color: var(--lp-teal); font-weight: 700; border-bottom: 2px solid var(--lp-teal); padding-bottom: 2px; }
 .lp-nav .lp-divider { width: 1px; height: 14px; background: rgba(11,31,63,0.2); }
 .lp-btn {
   display: inline-flex; align-items: center; gap: 6px;
