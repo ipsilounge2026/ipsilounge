@@ -204,7 +204,7 @@ class _HomeTab extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.school_outlined,
+                  icon: Icons.adjust,
                   label: '학종 라운지',
                   english: 'Match',
                   onTap: () => onSwitchTab(2),
@@ -217,7 +217,7 @@ class _HomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.calendar_month,
+                  icon: Icons.chat_bubble_outline,
                   label: '상담 라운지',
                   english: 'Counsel',
                   onTap: () => onSwitchTab(3),
@@ -227,7 +227,7 @@ class _HomeTab extends StatelessWidget {
               // 4번: 상담 관리 (이전 5번에서 이동)
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.note_alt_outlined,
+                  icon: Icons.assignment_outlined,
                   label: '상담 관리',
                   english: 'Manage',
                   onTap: () => Navigator.pushNamed(context, '/consultation/management'),
@@ -251,7 +251,7 @@ class _HomeTab extends StatelessWidget {
               // 6번: 대입 정보 (이전 4번에서 이동)
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.info_outline,
+                  icon: Icons.menu_book_outlined,
                   label: '대입 정보',
                   english: 'Info',
                   onTap: () => Navigator.pushNamed(context, '/admission-info'),
