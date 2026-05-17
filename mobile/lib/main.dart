@@ -30,6 +30,7 @@ import 'screens/interview_questions_screen.dart';
 import 'screens/notices_screen.dart';
 import 'screens/senior_pre_survey_screen.dart';
 import 'screens/satisfaction_survey_screen.dart';
+import 'theme/app_palette.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -145,32 +146,33 @@ class IpsiLoungeApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF3B82F6),
-            primary: const Color(0xFF3B82F6),
+            seedColor: AppPalette.navy,
+            primary: AppPalette.navy,
+            secondary: AppPalette.teal,
           ),
           fontFamily: 'Pretendard',
           useMaterial3: true,
           appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.white,
-            foregroundColor: Color(0xFF111827),
+            backgroundColor: AppPalette.cream,
+            foregroundColor: AppPalette.navy,
             elevation: 0,
             centerTitle: true,
             titleTextStyle: TextStyle(
-              color: Color(0xFF111827),
+              color: AppPalette.navy,
               fontSize: 17,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          scaffoldBackgroundColor: const Color(0xFFF9FAFB),
+          scaffoldBackgroundColor: AppPalette.cream,
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
+              backgroundColor: AppPalette.navy,
               foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 48),
+              minimumSize: const Size(double.infinity, 52),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(6),
               ),
-              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
           inputDecorationTheme: InputDecorationTheme(
@@ -184,7 +186,7 @@ class IpsiLoungeApp extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 2),
+              borderSide: const BorderSide(color: AppPalette.teal, width: 2),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           ),

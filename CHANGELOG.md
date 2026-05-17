@@ -35,6 +35,23 @@
 
 ---
 
+## 2026-05-17 (2)
+
+### feat(mobile): 스플래시·로그인·회원가입 에디토리얼 디자인 적용
+웹과 동일한 에디토리얼 톤(네이비/틸/크림, 실제 핀 로고)을 Flutter 앱에 적용.
+
+- `lib/theme/app_palette.dart` 신설 (navy/teal/cream/beige/muted)
+- `main.dart` ThemeData: seed/primary 네이비, 보조 틸, scaffold·appbar 크림,
+  ElevatedButton 네이비, 입력 포커스 틸
+- splash: 크림 배경 + 상단 §vol·SEOUL + 실제 로고(assets/icon/icon.png) +
+  "입시라운지/Ipsi Lounge"(틸 이탤릭) + 도트 인디케이터
+- login: §Sign in + "로그인./Sign in." + EMAIL·이메일 밑줄형 필드 + 틸 링크
+- register: §Begin here + "계정 만들기" 대형 + `_buildLabel` 헬퍼를
+  EN·KO 이탤릭 에디토리얼 라벨로 일괄 교체 (전 필드 자동 반영)
+- 폼 로직·컨트롤러·검증·API·약관동의 흐름 전부 불변 (시각 위젯만 교체)
+- 호환성: withValues→withOpacity, 브래킷 밸런스 확인. flutter CLI 미설치로
+  로컬 analyze 미실행 — 앱 빌드 시 검증 필요.
+
 ## 2026-05-17
 
 ### chore(sentry): 무료 플랜 대비 before_send 노이즈 필터 추가

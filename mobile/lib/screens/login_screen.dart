@@ -2,6 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_palette.dart';
+
+/// 에디토리얼 밑줄형 입력 라벨 (EMAIL · 이메일)
+Widget _fieldLabel(String en, String ko) => Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: en,
+              style: const TextStyle(
+                color: AppPalette.teal,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+              ),
+            ),
+            TextSpan(
+              text: '  ·  $ko',
+              style: const TextStyle(
+                color: AppPalette.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+const _underlineDeco = InputDecoration(
+  isDense: true,
+  contentPadding: EdgeInsets.symmetric(vertical: 10),
+  border: UnderlineInputBorder(borderSide: BorderSide(color: AppPalette.lineStrong)),
+  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppPalette.lineStrong)),
+  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppPalette.teal, width: 2)),
+);
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -66,67 +103,72 @@ class _LoginScreenState extends State<LoginScreen> {
     final isLoading = context.watch<AuthProvider>().isLoading;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.cream,
+      appBar: AppBar(
+        backgroundColor: AppPalette.cream,
+        elevation: 0,
+        leading: const BackButton(color: AppPalette.navy),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 60),
               Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.school_rounded, color: Colors.white, size: 24),
-                  ),
-                  const SizedBox(width: 10),
+                  Image.asset('assets/icon/icon.png', width: 30, height: 30),
+                  const SizedBox(width: 8),
                   const Text(
                     '입시라운지',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppPalette.navy),
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 36),
+              const Text('§  Sign in',
+                  style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: AppPalette.teal, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 14),
               const Text(
-                '로그인',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+                '로그인.',
+                style: TextStyle(fontSize: 48, fontWeight: FontWeight.w800, color: AppPalette.navy, height: 1.05, letterSpacing: -2),
               ),
-              const SizedBox(height: 8),
               const Text(
-                '학생부 분석 및 상담 서비스를 이용하세요',
-                style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+                'Sign in.',
+                style: TextStyle(fontSize: 48, fontWeight: FontWeight.w700, color: AppPalette.teal, fontStyle: FontStyle.italic, height: 1.05, letterSpacing: -2),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+              const Text(
+                '학생부 분석 및 상담 서비스를 이용하세요.',
+                style: TextStyle(fontSize: 14, color: AppPalette.muted),
+              ),
+              const SizedBox(height: 36),
               Form(
                 key: _formKey,
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _fieldLabel('EMAIL', '이메일'),
                     TextFormField(
                       controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: '이메일',
-                        hintText: 'example@email.com',
-                      ),
+                      style: const TextStyle(fontSize: 16, color: AppPalette.navy),
+                      decoration: _underlineDeco.copyWith(hintText: '이메일을 입력하세요'),
                       validator: (v) =>
                           v?.isEmpty == true ? '이메일을 입력해주세요' : null,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
+                    _fieldLabel('PASSWORD', '비밀번호'),
                     TextFormField(
                       controller: _passwordCtrl,
                       obscureText: _obscure,
-                      decoration: InputDecoration(
-                        labelText: '비밀번호',
+                      style: const TextStyle(fontSize: 16, color: AppPalette.navy),
+                      decoration: _underlineDeco.copyWith(
+                        hintText: '비밀번호를 입력하세요',
                         suffixIcon: IconButton(
                           icon: Icon(
                               _obscure ? Icons.visibility_off : Icons.visibility,
-                              color: const Color(0xFF9CA3AF)),
+                              color: AppPalette.muted, size: 20),
                           onPressed: () => setState(() => _obscure = !_obscure),
                         ),
                       ),
@@ -181,7 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const Spacer(),
                         GestureDetector(
                           onTap: () => Navigator.pushNamed(context, '/forgot-password'),
-                          child: const Text('비밀번호 찾기', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
+                          child: const Text('비밀번호 찾기 →', style: TextStyle(fontSize: 13, color: AppPalette.teal, fontWeight: FontWeight.w700)),
                         ),
                       ],
                     ),
@@ -198,7 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2),
                               )
-                            : const Text('로그인'),
+                            : const Text('로그인  →'),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -207,16 +249,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         const Text(
                           '계정이 없으신가요?',
-                          style: TextStyle(color: Color(0xFF6B7280), fontSize: 14),
+                          style: TextStyle(color: AppPalette.muted, fontSize: 14),
                         ),
                         TextButton(
                           onPressed: () =>
                               Navigator.pushNamed(context, '/register'),
                           child: const Text(
-                            '회원가입',
+                            '회원가입 →',
                             style: TextStyle(
-                                color: Color(0xFF3B82F6),
-                                fontWeight: FontWeight.w600,
+                                color: AppPalette.teal,
+                                fontWeight: FontWeight.w800,
                                 fontSize: 14),
                           ),
                         ),

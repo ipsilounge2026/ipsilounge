@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_palette.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -29,50 +30,85 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF3B82F6),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
+      backgroundColor: AppPalette.cream,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              // 상단 에디토리얼 헤더
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: const [
+                  Text('§  vol. 04',
+                      style: TextStyle(
+                          color: AppPalette.muted,
+                          fontSize: 14,
+                          fontStyle: FontStyle.italic)),
+                  Text('2026 · SEOUL',
+                      style: TextStyle(
+                          color: AppPalette.muted,
+                          fontSize: 14,
+                          fontStyle: FontStyle.italic)),
+                ],
               ),
-              child: const Icon(
-                Icons.school_rounded,
-                size: 48,
-                color: Color(0xFF3B82F6),
+              const Spacer(),
+              // 로고
+              Image.asset('assets/icon/icon.png', width: 132, height: 132),
+              const SizedBox(height: 28),
+              const Text(
+                '입시라운지',
+                style: TextStyle(
+                  color: AppPalette.navy,
+                  fontSize: 44,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1.5,
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              '입시라운지',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.5,
+              const SizedBox(height: 6),
+              const Text(
+                'Ipsi Lounge',
+                style: TextStyle(
+                  color: AppPalette.teal,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w600,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '학생부 분석 & 상담 예약',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 15,
+              const SizedBox(height: 28),
+              Container(width: 48, height: 1.5, color: AppPalette.lineStrong),
+              const SizedBox(height: 24),
+              const Text(
+                '학생부 분석 & 상담 예약',
+                style: TextStyle(color: AppPalette.navy, fontSize: 16),
               ),
-            ),
-            const SizedBox(height: 60),
-            const CircularProgressIndicator(
-              color: Colors.white54,
-              strokeWidth: 2,
-            ),
-          ],
+              const Spacer(),
+              // 하단 페이지 도트
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _dot(true),
+                  const SizedBox(width: 8),
+                  _dot(false),
+                  const SizedBox(width: 8),
+                  _dot(false),
+                ],
+              ),
+              const SizedBox(height: 28),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _dot(bool active) => Container(
+        width: 7,
+        height: 7,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: active ? AppPalette.teal : AppPalette.teal.withOpacity(0.3),
+        ),
+      );
 }

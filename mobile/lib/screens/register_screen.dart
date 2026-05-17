@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../theme/app_palette.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -291,10 +292,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.cream,
       appBar: AppBar(
         title: const Text('회원가입'),
-        backgroundColor: Colors.white,
+        backgroundColor: AppPalette.cream,
+        foregroundColor: AppPalette.navy,
         elevation: 0,
       ),
       body: SafeArea(
@@ -305,12 +307,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text('§  Begin here',
+                    style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: AppPalette.teal, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
                 const Text('계정 만들기',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                const Text('정보를 입력하고 서비스를 시작하세요',
-                    style: TextStyle(fontSize: 14, color: Color(0xFF6B7280))),
-                const SizedBox(height: 24),
+                    style: TextStyle(fontSize: 40, fontWeight: FontWeight.w800, color: AppPalette.navy, letterSpacing: -1.5, height: 1.05)),
+                const SizedBox(height: 8),
+                const Text('정보를 입력하고 서비스를 시작하세요.',
+                    style: TextStyle(fontSize: 14, color: AppPalette.muted)),
+                const SizedBox(height: 28),
 
                 // 회원 유형 선택
                 _buildLabel('회원 유형'),
@@ -762,12 +767,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  static const _enMap = {
+    '회원 유형': 'MEMBER TYPE', '이름': 'NAME', '이메일': 'EMAIL',
+    '비밀번호': 'PASSWORD', '비밀번호 확인': 'CONFIRM', '연락처': 'PHONE',
+    '생년월일': 'DATE OF BIRTH', '자녀 이름': 'CHILD NAME',
+    '자녀 생년월일': 'CHILD BIRTH', '재학 학교': 'SCHOOL',
+    '자녀 재학 학교': 'SCHOOL', '학년': 'GRADE', '자녀 학년': 'GRADE',
+    '재원 지점': 'BRANCH', '담당 지점': 'BRANCH', '기본 정보': 'BASIC INFO',
+    '약관 동의': 'AGREEMENT',
+  };
+
   Widget _buildLabel(String text) {
+    final en = _enMap[text];
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF374151)),
+      padding: const EdgeInsets.only(bottom: 8, top: 2),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            if (en != null)
+              TextSpan(
+                text: '$en  ·  ',
+                style: const TextStyle(
+                  color: AppPalette.teal,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            TextSpan(
+              text: text,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppPalette.muted,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
