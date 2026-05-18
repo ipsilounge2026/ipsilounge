@@ -1295,9 +1295,11 @@ class _MypageScreenState extends State<MypageScreen> {
                   child: Text('아직 연결된 가족이 없습니다.', style: TextStyle(fontSize: 13, color: AppPalette.muted)),
                 );
               }
+              try {
               return Column(
                 children: links.map((lnk) {
-                  final m = (lnk['member'] as Map?) ?? {};
+                  final mv = lnk['member'];
+                  final m = mv is Map ? mv : const {};
                   final name = (m['name'] ?? '-').toString();
                   final email = (m['email'] ?? '').toString();
                   final linkId = (lnk['id'] ?? '').toString();
@@ -1335,6 +1337,13 @@ class _MypageScreenState extends State<MypageScreen> {
                   );
                 }).toList(),
               );
+              } catch (_) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('가족 연결 정보를 표시할 수 없습니다.',
+                      style: TextStyle(fontSize: 13, color: AppPalette.muted)),
+                );
+              }
             },
           ),
         ],
