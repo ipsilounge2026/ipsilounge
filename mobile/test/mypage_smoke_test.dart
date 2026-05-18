@@ -29,7 +29,9 @@ void main() {
       ),
     );
     // 한 프레임만 펌프 (네트워크 future 는 미완료 상태로 둠)
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 2));
     expect(tester.takeException(), isNull);
   });
 }

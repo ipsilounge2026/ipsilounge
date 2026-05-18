@@ -53,6 +53,34 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 빌드 예외 시 회색 블랭크 대신 실제 에러 메시지를 화면에 표시 (원인 진단용).
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: const Color(0xFFFFF1F2),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 20),
+              const Text('화면 표시 중 오류',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFB91C1C))),
+              const SizedBox(height: 12),
+              SelectableText(
+                details.exceptionAsString(),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF7F1D1D)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
   // Firebase 초기화 (설정된 경우만)
   if (kEnableFirebase) {
     try {
