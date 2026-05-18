@@ -979,6 +979,14 @@ class _MypageScreenState extends State<MypageScreen> {
               }
             },
           ),
+          const SizedBox(height: 4),
+
+          // 회원 탈퇴 (V1 §10-1 전면 철회) — 로그아웃 하단
+          _menuItem(
+            Icons.person_remove_outlined, '회원 탈퇴',
+            color: const Color(0xFFB91C1C),
+            onTap: _showWithdrawDialog,
+          ),
         ],
       ),
     );
@@ -1137,6 +1145,89 @@ class _MypageScreenState extends State<MypageScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// 회원 탈퇴 — 비밀번호 필수, 사유 선택. 성공 시 로그아웃 후 로그인 화면.
+  Future<void> _showWithdrawDialog() async {
+    final pwCtrl = TextEditingController();
+    final reasonCtrl = TextEditingController();
+    bool busy = false;
+    String? errText;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('회원 탈퇴',
+              style: TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.w800)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '탈퇴 시 선배·상담사에게 공유되던 기록이 즉시 비노출되고, 업로드한 학생부 파일·분석 리포트가 삭제됩니다. 되돌릴 수 없습니다.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.5),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: pwCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '비밀번호 (필수)'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: reasonCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(labelText: '탈퇴 사유 (선택)'),
+                ),
+                if (errText != null) ...[
+                  const SizedBox(height: 10),
+                  Text(errText!, style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: busy ? null : () => Navigator.pop(ctx),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (pwCtrl.text.trim().isEmpty) {
+                        setLocal(() => errText = '비밀번호를 입력해주세요');
+                        return;
+                      }
+                      setLocal(() {
+                        busy = true;
+                        errText = null;
+                      });
+                      try {
+                        await UserService.withdraw(pwCtrl.text.trim(),
+                            reason: reasonCtrl.text);
+                        if (!mounted) return;
+                        Navigator.pop(ctx);
+                        await context.read<AuthProvider>().logout();
+                        if (!mounted) return;
+                        Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+                      } catch (e) {
+                        setLocal(() {
+                          busy = false;
+                          errText = e.toString().replaceFirst('Exception: ', '');
+                        });
+                      }
+                    },
+              child: Text(busy ? '처리 중...' : '탈퇴하기',
+                  style: const TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
