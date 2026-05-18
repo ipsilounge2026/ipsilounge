@@ -5,6 +5,7 @@ import '../models/consultation.dart';
 import '../services/consultation_service.dart';
 import '../services/survey_service.dart';
 import '../services/user_service.dart';
+import '../services/family_service.dart';
 import 'analysis_list_screen.dart';
 import 'survey_screen.dart';
 import 'survey_report_screen.dart';
@@ -62,6 +63,9 @@ class _MypageScreenState extends State<MypageScreen> {
   // 설문 관련
   List<Map<String, dynamic>> _surveys = [];
 
+  // 연결된 학부모 (초기 1회 + 갱신 시만 재요청)
+  Future<List<Map<String, dynamic>>>? _familyFuture;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +80,7 @@ class _MypageScreenState extends State<MypageScreen> {
       _loadCounselor();
       _loadSenior();
       _loadSurveys();
+      _familyFuture = FamilyService.getLinks();
     } else {
       _counselorLoading = false;
       _seniorLoading = false;
@@ -630,6 +635,12 @@ class _MypageScreenState extends State<MypageScreen> {
           ),
           const SizedBox(height: 12),
 
+          // 연결된 학부모 (학생/학부모만)
+          if (!isBranchManager) ...[
+            _buildFamilyCard(),
+            const SizedBox(height: 12),
+          ],
+
           // 담당 상담자 (학생/학부모만)
           if (!isBranchManager) ...[
             Container(
@@ -1127,6 +1138,224 @@ class _MypageScreenState extends State<MypageScreen> {
         ),
       ],
     );
+  }
+
+  /// 연결된 학부모 카드 (기존 카드 스타일 유지). 코드 만들기/입력/해제.
+  /// 헤더 Row 미사용·버튼 Expanded 로 가로 오버플로 원천 차단, FutureBuilder
+  /// 전 상태 처리 + try/catch 로 어떤 응답에도 블랭크 없음.
+  Widget _buildFamilyCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('연결된 학부모', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          const Text(
+            '학부모님 계정과 연결하면 학부모님이 신청·결제 내역을 보실 수 있고, 학부모 관점 사전조사를 작성하실 수 있습니다.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _familyEnterCode,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF374151),
+                    side: const BorderSide(color: Color(0xFFE5E7EB)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  child: const Text('코드 입력', style: TextStyle(fontSize: 13)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _familyCreateCode,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3B82F6),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  child: const Text('코드 만들기', style: TextStyle(fontSize: 13)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _familyFuture,
+            builder: (ctx, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Text('불러오는 중...', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)));
+              }
+              if (snap.hasError) {
+                return const Text('가족 연결 정보를 불러오지 못했습니다.', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)));
+              }
+              final links = snap.data ?? const <Map<String, dynamic>>[];
+              if (links.isEmpty) {
+                return const Text('아직 연결된 가족이 없습니다.', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)));
+              }
+              try {
+                return Column(
+                  children: links.map((lnk) {
+                    final mv = lnk['member'];
+                    final m = mv is Map ? mv : const {};
+                    final name = (m['name'] ?? '-').toString();
+                    final email = (m['email'] ?? '').toString();
+                    final linkId = (lnk['id'] ?? '').toString();
+                    return Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: const Color(0xFFEFF6FF),
+                            child: Text(name.isNotEmpty ? name.substring(0, 1) : '?',
+                                style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.w700, fontSize: 13)),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                                Text(email, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => _familyRevoke(linkId, name),
+                            child: const Text('해제', style: TextStyle(fontSize: 12, color: Color(0xFFEF4444))),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                );
+              } catch (_) {
+                return const Text('가족 연결 정보를 표시할 수 없습니다.', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)));
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _familyCreateCode() async {
+    String? code;
+    String? err;
+    try {
+      final res = await FamilyService.createInvite();
+      code = (res['code'] ?? res['invite_code'] ?? res['inviteCode'] ?? '').toString();
+    } catch (e) {
+      err = e.toString().replaceFirst('Exception: ', '');
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('초대 코드'),
+        content: err != null
+            ? Text(err, style: const TextStyle(color: Color(0xFFB91C1C)))
+            : Column(mainAxisSize: MainAxisSize.min, children: [
+                const Text('아래 코드를 학부모님께 전달하세요.',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                const SizedBox(height: 12),
+                SelectableText(code == null || code.isEmpty ? '-' : code,
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: 2)),
+              ]),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('확인'))],
+      ),
+    );
+  }
+
+  Future<void> _familyEnterCode() async {
+    final ctrl = TextEditingController();
+    bool busy = false;
+    String? err;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('코드 입력'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: ctrl, decoration: const InputDecoration(labelText: '초대 코드')),
+            if (err != null) ...[
+              const SizedBox(height: 8),
+              Text(err!, style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13)),
+            ],
+          ]),
+          actions: [
+            TextButton(onPressed: busy ? null : () => Navigator.pop(ctx), child: const Text('취소')),
+            TextButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (ctrl.text.trim().isEmpty) {
+                        setLocal(() => err = '코드를 입력해주세요');
+                        return;
+                      }
+                      setLocal(() {
+                        busy = true;
+                        err = null;
+                      });
+                      try {
+                        await FamilyService.connectByCode(ctrl.text.trim());
+                        if (!mounted) return;
+                        Navigator.pop(ctx);
+                        setState(() => _familyFuture = FamilyService.getLinks());
+                      } catch (e) {
+                        setLocal(() {
+                          busy = false;
+                          err = e.toString().replaceFirst('Exception: ', '');
+                        });
+                      }
+                    },
+              child: Text(busy ? '연결 중...' : '연결'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _familyRevoke(String linkId, String name) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('연결 해제'),
+        content: Text('$name 님과의 연결을 해제하시겠습니까?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('해제', style: TextStyle(color: Color(0xFFEF4444)))),
+        ],
+      ),
+    );
+    if (ok == true) {
+      try {
+        await FamilyService.revokeLink(linkId);
+        if (mounted) setState(() => _familyFuture = FamilyService.getLinks());
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+        }
+      }
+    }
   }
 
   Widget _menuItem(IconData icon, String label, {Color? color, required VoidCallback onTap}) {
