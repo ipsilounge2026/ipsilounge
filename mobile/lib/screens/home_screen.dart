@@ -176,6 +176,7 @@ class _HomeTab extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                         fontStyle: FontStyle.italic,
                         letterSpacing: -1)),
+                const WidgetSpan(child: SizedBox(width: 8)),
                 const TextSpan(
                     text: '님.',
                     style: TextStyle(

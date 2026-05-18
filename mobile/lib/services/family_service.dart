@@ -16,4 +16,21 @@ class FamilyService {
         .map((item) => Map<String, dynamic>.from(item['member'] as Map))
         .toList();
   }
+
+  /// 초대 코드 생성
+  static Future<Map<String, dynamic>> createInvite() async {
+    final res = await ApiService.post('/family/invite', {});
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  /// 초대 코드로 연결
+  static Future<Map<String, dynamic>> connectByCode(String code) async {
+    final res = await ApiService.post('/family/connect', {'code': code});
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  /// 연결 해제
+  static Future<void> revokeLink(String linkId) async {
+    await ApiService.delete('/family/links/$linkId');
+  }
 }

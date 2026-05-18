@@ -58,4 +58,12 @@ class UserService {
     final items = res['items'] as List;
     return items.map((e) => Map<String, dynamic>.from(e)).toList();
   }
+
+  /// 회원 탈퇴 (V1 §10-1 전면 철회). 비밀번호 필수, 사유 선택.
+  static Future<void> withdraw(String password, {String? reason}) async {
+    await ApiService.post('/users/me/withdraw', {
+      'password': password,
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
 }

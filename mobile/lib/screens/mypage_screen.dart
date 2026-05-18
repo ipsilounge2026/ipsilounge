@@ -6,6 +6,7 @@ import '../models/consultation.dart';
 import '../services/consultation_service.dart';
 import '../services/survey_service.dart';
 import '../services/user_service.dart';
+import '../services/family_service.dart';
 import 'analysis_list_screen.dart';
 import 'survey_screen.dart';
 import 'survey_report_screen.dart';
@@ -40,6 +41,7 @@ class MypageScreen extends StatefulWidget {
 
 class _MypageScreenState extends State<MypageScreen> {
   bool _editing = false;
+  int _familyKey = 0; // 연결된 학부모 카드 리로드 트리거
   late TextEditingController _nameCtrl;
   late TextEditingController _phoneCtrl;
   String? _message;
@@ -398,9 +400,7 @@ class _MypageScreenState extends State<MypageScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-              ),
+              color: AppPalette.navy,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -630,6 +630,12 @@ class _MypageScreenState extends State<MypageScreen> {
             ),
           ),
           const SizedBox(height: 12),
+
+          // 연결된 학부모 (학생/학부모만) — 웹 FamilyLinkSection 대응
+          if (!isBranchManager) ...[
+            _buildFamilyCard(),
+            const SizedBox(height: 12),
+          ],
 
           // 담당 상담자 (학생/학부모만)
           if (!isBranchManager) ...[
@@ -969,7 +975,97 @@ class _MypageScreenState extends State<MypageScreen> {
               }
             },
           ),
+          const SizedBox(height: 4),
+
+          // 회원 탈퇴 (V1 §10-1 전면 철회) — 로그아웃 하단
+          _menuItem(
+            Icons.person_remove_outlined, '회원 탈퇴',
+            color: const Color(0xFFB91C1C),
+            onTap: _showWithdrawDialog,
+          ),
         ],
+      ),
+    );
+  }
+
+  /// 회원 탈퇴 다이얼로그 — 비밀번호 필수, 사유 선택. 성공 시 로그아웃 후 로그인 화면.
+  Future<void> _showWithdrawDialog() async {
+    final pwCtrl = TextEditingController();
+    final reasonCtrl = TextEditingController();
+    bool busy = false;
+    String? errText;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('회원 탈퇴', style: TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.w800)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '탈퇴 시 선배·상담사에게 공유되던 기록이 즉시 비노출되고, 업로드한 학생부 파일·분석 리포트가 삭제됩니다. 되돌릴 수 없습니다.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.5),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: pwCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '비밀번호 (필수)'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: reasonCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(labelText: '탈퇴 사유 (선택)'),
+                ),
+                if (errText != null) ...[
+                  const SizedBox(height: 10),
+                  Text(errText!, style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: busy ? null : () => Navigator.pop(ctx),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (pwCtrl.text.trim().isEmpty) {
+                        setLocal(() => errText = '비밀번호를 입력해주세요');
+                        return;
+                      }
+                      setLocal(() {
+                        busy = true;
+                        errText = null;
+                      });
+                      try {
+                        await UserService.withdraw(pwCtrl.text.trim(),
+                            reason: reasonCtrl.text);
+                        if (!mounted) return;
+                        Navigator.pop(ctx);
+                        await context.read<AuthProvider>().logout();
+                        if (!mounted) return;
+                        Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+                      } catch (e) {
+                        setLocal(() {
+                          busy = false;
+                          errText = e.toString().replaceFirst('Exception: ', '');
+                        });
+                      }
+                    },
+              child: Text(busy ? '처리 중...' : '탈퇴하기',
+                  style: const TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1128,6 +1224,214 @@ class _MypageScreenState extends State<MypageScreen> {
         ),
       ],
     );
+  }
+
+  /// 연결된 학부모 카드 (웹 FamilyLinkSection 대응) — 코드 만들기/입력/해제.
+  Widget _buildFamilyCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('연결된 학부모',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppPalette.navy, letterSpacing: -0.3)),
+              Row(children: [
+                OutlinedButton(
+                  onPressed: _showEnterCodeDialog,
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    side: const BorderSide(color: AppPalette.line),
+                    foregroundColor: AppPalette.navy,
+                  ),
+                  child: const Text('코드 입력', style: TextStyle(fontSize: 12)),
+                ),
+                const SizedBox(width: 6),
+                ElevatedButton(
+                  onPressed: _showCreateCodeDialog,
+                  style: ElevatedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: AppPalette.navy,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('코드 만들기', style: TextStyle(fontSize: 12)),
+                ),
+              ]),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '학부모님 계정과 연결하면 학부모님이 본인의 신청·결제 내역을 보실 수 있고, 학부모님 관점 사전조사를 작성하실 수 있습니다.',
+            style: TextStyle(fontSize: 12, color: AppPalette.muted, height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            key: ValueKey('family_$_familyKey'),
+            future: FamilyService.getLinks(),
+            builder: (ctx, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('불러오는 중...', style: TextStyle(fontSize: 13, color: AppPalette.muted)),
+                );
+              }
+              final links = snap.data ?? [];
+              if (links.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('아직 연결된 가족이 없습니다.', style: TextStyle(fontSize: 13, color: AppPalette.muted)),
+                );
+              }
+              return Column(
+                children: links.map((lnk) {
+                  final m = (lnk['member'] as Map?) ?? {};
+                  final name = (m['name'] ?? '-').toString();
+                  final email = (m['email'] ?? '').toString();
+                  final linkId = (lnk['id'] ?? '').toString();
+                  return Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppPalette.line),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: AppPalette.cream,
+                          child: Text(name.isNotEmpty ? name.substring(0, 1) : '?',
+                              style: const TextStyle(color: AppPalette.navy, fontWeight: FontWeight.w700, fontSize: 13)),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppPalette.navy)),
+                              Text(email, style: const TextStyle(fontSize: 12, color: AppPalette.muted)),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => _confirmRevokeFamily(linkId, name),
+                          child: const Text('해제', style: TextStyle(fontSize: 12, color: Color(0xFFB91C1C))),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCreateCodeDialog() async {
+    String? code;
+    String? err;
+    try {
+      final res = await FamilyService.createInvite();
+      code = (res['code'] ?? res['invite_code'] ?? '').toString();
+    } catch (e) {
+      err = e.toString().replaceFirst('Exception: ', '');
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('초대 코드'),
+        content: err != null
+            ? Text(err, style: const TextStyle(color: Color(0xFFB91C1C)))
+            : Column(mainAxisSize: MainAxisSize.min, children: [
+                const Text('아래 코드를 학부모님께 전달하세요.', style: TextStyle(fontSize: 13, color: AppPalette.muted)),
+                const SizedBox(height: 12),
+                SelectableText(code ?? '-',
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppPalette.navy, letterSpacing: 2)),
+              ]),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('확인'))],
+      ),
+    );
+  }
+
+  Future<void> _showEnterCodeDialog() async {
+    final ctrl = TextEditingController();
+    bool busy = false;
+    String? err;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('코드 입력'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: ctrl, decoration: const InputDecoration(labelText: '초대 코드')),
+            if (err != null) ...[
+              const SizedBox(height: 8),
+              Text(err!, style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13)),
+            ],
+          ]),
+          actions: [
+            TextButton(onPressed: busy ? null : () => Navigator.pop(ctx), child: const Text('취소')),
+            TextButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (ctrl.text.trim().isEmpty) {
+                        setLocal(() => err = '코드를 입력해주세요');
+                        return;
+                      }
+                      setLocal(() { busy = true; err = null; });
+                      try {
+                        await FamilyService.connectByCode(ctrl.text.trim());
+                        if (!mounted) return;
+                        Navigator.pop(ctx);
+                        setState(() => _familyKey++);
+                      } catch (e) {
+                        setLocal(() {
+                          busy = false;
+                          err = e.toString().replaceFirst('Exception: ', '');
+                        });
+                      }
+                    },
+              child: Text(busy ? '연결 중...' : '연결'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmRevokeFamily(String linkId, String name) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('연결 해제'),
+        content: Text('$name 님과의 연결을 해제하시겠습니까?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('해제', style: TextStyle(color: Color(0xFFB91C1C)))),
+        ],
+      ),
+    );
+    if (ok == true) {
+      try {
+        await FamilyService.revokeLink(linkId);
+        if (mounted) setState(() => _familyKey++);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+        }
+      }
+    }
   }
 
   Widget _menuItem(IconData icon, String label, {Color? color, required VoidCallback onTap}) {
