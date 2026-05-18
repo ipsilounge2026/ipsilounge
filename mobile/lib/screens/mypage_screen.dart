@@ -41,7 +41,7 @@ class MypageScreen extends StatefulWidget {
 
 class _MypageScreenState extends State<MypageScreen> {
   bool _editing = false;
-  int _familyKey = 0; // 연결된 학부모 카드 리로드 트리거
+  Future<List<Map<String, dynamic>>>? _familyFuture; // 연결된 학부모 (초기 1회 + 갱신 시만 재요청)
   late TextEditingController _nameCtrl;
   late TextEditingController _phoneCtrl;
   String? _message;
@@ -79,6 +79,7 @@ class _MypageScreenState extends State<MypageScreen> {
       _loadCounselor();
       _loadSenior();
       _loadSurveys();
+      _familyFuture = FamilyService.getLinks();
     } else {
       _counselorLoading = false;
       _seniorLoading = false;
@@ -1272,8 +1273,7 @@ class _MypageScreenState extends State<MypageScreen> {
           ),
           const SizedBox(height: 12),
           FutureBuilder<List<Map<String, dynamic>>>(
-            key: ValueKey('family_$_familyKey'),
-            future: FamilyService.getLinks(),
+            future: _familyFuture,
             builder: (ctx, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Padding(
@@ -1281,7 +1281,14 @@ class _MypageScreenState extends State<MypageScreen> {
                   child: Text('불러오는 중...', style: TextStyle(fontSize: 13, color: AppPalette.muted)),
                 );
               }
-              final links = snap.data ?? [];
+              if (snap.hasError) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('가족 연결 정보를 불러오지 못했습니다.',
+                      style: TextStyle(fontSize: 13, color: AppPalette.muted)),
+                );
+              }
+              final links = snap.data ?? const <Map<String, dynamic>>[];
               if (links.isEmpty) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
@@ -1393,7 +1400,7 @@ class _MypageScreenState extends State<MypageScreen> {
                         await FamilyService.connectByCode(ctrl.text.trim());
                         if (!mounted) return;
                         Navigator.pop(ctx);
-                        setState(() => _familyKey++);
+                        setState(() => _familyFuture = FamilyService.getLinks());
                       } catch (e) {
                         setLocal(() {
                           busy = false;
@@ -1424,7 +1431,7 @@ class _MypageScreenState extends State<MypageScreen> {
     if (ok == true) {
       try {
         await FamilyService.revokeLink(linkId);
-        if (mounted) setState(() => _familyKey++);
+        if (mounted) setState(() => _familyFuture = FamilyService.getLinks());
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
