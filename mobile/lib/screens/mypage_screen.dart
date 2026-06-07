@@ -474,7 +474,7 @@ class _MypageScreenState extends State<MypageScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('회원 정보', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                const Text('회원 정보', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppPalette.navy, letterSpacing: -0.3)),
                 const SizedBox(height: 16),
                 if (_editing) ...[
                   _buildLabel('이름'),
@@ -646,7 +646,7 @@ class _MypageScreenState extends State<MypageScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('담당 상담자', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  const Text('담당 상담자', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppPalette.navy, letterSpacing: -0.3)),
                   const SizedBox(height: 12),
                   if (_counselorLoading)
                     const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
@@ -698,7 +698,7 @@ class _MypageScreenState extends State<MypageScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('담당 선배', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  const Text('담당 선배', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppPalette.navy, letterSpacing: -0.3)),
                   const SizedBox(height: 12),
                   if (_seniorLoading)
                     const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
@@ -794,7 +794,7 @@ class _MypageScreenState extends State<MypageScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('사전 조사', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                        const Text('사전 조사', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppPalette.navy, letterSpacing: -0.3)),
                         GestureDetector(
                           onTap: () => Navigator.pushNamed(context, '/consultation'),
                           child: const Text('새 설문 →', style: TextStyle(fontSize: 13, color: Color(0xFF3B82F6))),
@@ -923,7 +923,7 @@ class _MypageScreenState extends State<MypageScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('빠른 메뉴', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  const Text('빠른 메뉴', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppPalette.navy, letterSpacing: -0.3)),
                   const SizedBox(height: 12),
                   GridView.count(
                     shrinkWrap: true,
@@ -1242,7 +1242,7 @@ class _MypageScreenState extends State<MypageScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('연결된 학부모', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const Text('연결된 학부모', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppPalette.navy, letterSpacing: -0.3)),
           const SizedBox(height: 8),
           const Text(
             '학부모님 계정과 연결하면 학부모님이 신청·결제 내역을 보실 수 있고, 학부모 관점 사전조사를 작성하실 수 있습니다.',
