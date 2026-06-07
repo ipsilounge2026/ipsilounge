@@ -633,13 +633,7 @@ class _MypageScreenState extends State<MypageScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
-
-          // 연결된 학부모 (학생/학부모만)
-          if (!isBranchManager) ...[
-            _buildFamilyCard(),
-            const SizedBox(height: 12),
-          ],
+          const SizedBox(height: 4),
 
           // 담당 상담자 (학생/학부모만)
           if (!isBranchManager) ...[
@@ -692,7 +686,7 @@ class _MypageScreenState extends State<MypageScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
 
             // 담당 선배
             Container(
@@ -780,6 +774,10 @@ class _MypageScreenState extends State<MypageScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+
+            // 연결된 학부모 (담당 상담자·선배 다음, 회원정보 묶음과 분리)
+            _buildFamilyCard(),
             const SizedBox(height: 12),
 
             // 사전 조사
