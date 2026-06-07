@@ -1033,14 +1033,14 @@ class _MypageScreenState extends State<MypageScreen> {
 
   Widget _buildLabel(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 6),
-    child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF374151))),
+    child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppPalette.muted, letterSpacing: 0.3)),
   );
 
   Widget _infoRow(String label, String value) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Text(label, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-      Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      Text(label, style: const TextStyle(fontSize: 12, color: AppPalette.muted, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
+      Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppPalette.navy)),
     ],
   );
 
@@ -1055,7 +1055,7 @@ class _MypageScreenState extends State<MypageScreen> {
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+          Text(label, style: const TextStyle(fontSize: 12, color: AppPalette.muted, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
@@ -1083,7 +1083,7 @@ class _MypageScreenState extends State<MypageScreen> {
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: const [
-          Text('재원 여부', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+          Text('재원 여부', style: TextStyle(fontSize: 12, color: AppPalette.muted, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
           Text('비재원생', style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF))),
         ],
       );
@@ -1094,7 +1094,7 @@ class _MypageScreenState extends State<MypageScreen> {
       children: [
         const Padding(
           padding: EdgeInsets.only(top: 4),
-          child: Text('재원 여부', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+          child: Text('재원 여부', style: TextStyle(fontSize: 12, color: AppPalette.muted, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
         ),
         Flexible(
           child: Wrap(
