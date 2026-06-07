@@ -6,6 +6,7 @@ import '../services/consultation_service.dart';
 import '../services/survey_service.dart';
 import '../services/user_service.dart';
 import '../services/family_service.dart';
+import '../theme/app_palette.dart';
 import 'analysis_list_screen.dart';
 import 'survey_screen.dart';
 import 'survey_report_screen.dart';
@@ -402,9 +403,7 @@ class _MypageScreenState extends State<MypageScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-              ),
+              color: AppPalette.navy,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
