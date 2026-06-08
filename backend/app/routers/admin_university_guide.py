@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import and_, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,7 @@ from app.schemas.university_guide import (
     UniversityGuideResponse,
     UniversityGuideUpdate,
 )
+from app.services.adiga_scraper_service import sync_all_universities
 from app.utils.dependencies import get_current_admin
 
 router = APIRouter(prefix="/api/admin/university-guide", tags=["관리자-대학모집요강"])
@@ -225,3 +227,47 @@ async def admin_mark_checked(
     guide.last_checked = datetime.utcnow()
     await db.commit()
     return {"message": "점검 완료로 표시되었습니다", "last_checked": guide.last_checked}
+
+
+class AdigaSyncRequest(BaseModel):
+    """대학어디가 자동 동기화 요청."""
+
+    year: int
+    limit: int | None = None  # 테스트용 (None=전체)
+    concurrency: int = 5  # 동시 요청 수
+
+
+@router.post("/sync-adiga")
+async def admin_sync_adiga(
+    data: AdigaSyncRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    대학어디가(adiga.kr) 에서 대학 목록 + 자료 URL 자동 수집.
+
+    자동으로 채워지는 6개 필드:
+    - 입학처 바로가기 (대학어디가 onclick fnOpenNewUrl 입시홈페이지)
+    - 대입전형시행계획 / 수시모집요강 / 정시모집요강 / 선행학습영향평가 (PDF 다운로드 URL)
+    - 입시결과(대교협) — 대학어디가 대학별 페이지 (탭으로 노출)
+
+    유지되는 수동 입력 필드:
+    - 학생부종합 가이드북 / 입시결과(자체발표)
+
+    소요 시간: 약 220개 대학 × 200~500ms ≈ 1~2분 (concurrency=5 기준).
+    """
+    _require_super_admin(admin)
+
+    if data.year < 2020 or data.year > 2030:
+        raise HTTPException(status_code=400, detail="year 는 2020~2030 사이여야 합니다")
+
+    if not (1 <= data.concurrency <= 20):
+        raise HTTPException(status_code=400, detail="concurrency 는 1~20 사이여야 합니다")
+
+    result = await sync_all_universities(
+        year=data.year,
+        db=db,
+        concurrency=data.concurrency,
+        limit=data.limit,
+    )
+    return result
