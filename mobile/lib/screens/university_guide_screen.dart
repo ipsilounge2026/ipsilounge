@@ -85,20 +85,31 @@ class _UniversityGuideScreenState extends State<UniversityGuideScreen> {
               children: [
                 Row(
                   children: [
-                    if (_availableYears.isNotEmpty)
-                      DropdownButton<int>(
-                        value: _year,
-                        items: _availableYears
-                            .map((y) => DropdownMenuItem<int>(value: y, child: Text('$y학년도')))
-                            .toList(),
-                        onChanged: (v) {
-                          setState(() => _year = v);
-                          _load();
-                        },
-                      ),
+                    _availableYears.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              '학년도 없음',
+                              style: TextStyle(color: AppPalette.muted, fontSize: 13),
+                            ),
+                          )
+                        : DropdownButton<int>(
+                            value: _year,
+                            items: _availableYears
+                                .map((y) => DropdownMenuItem<int>(value: y, child: Text('$y학년도')))
+                                .toList(),
+                            onChanged: (v) {
+                              setState(() => _year = v);
+                              _load();
+                            },
+                          ),
                     const Spacer(),
                     Text(
-                      '${_items.length}건',
+                      '입시정보: ${_items.length}건',
                       style: const TextStyle(color: AppPalette.muted, fontSize: 13),
                     ),
                   ],

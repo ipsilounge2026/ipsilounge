@@ -99,10 +99,10 @@ export default function UniversityGuidePage() {
     <div className="dashboard">
       <Sidebar />
       <main className="main-content">
-        <div style={{ padding: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ padding: 24, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>대학모집요강 관리</h1>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => setShowBulkCopy(true)} className="btn-secondary">
                 학년도 일괄 복사
               </button>
@@ -113,7 +113,7 @@ export default function UniversityGuidePage() {
           </div>
 
           {/* 필터 */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
             <select
               value={year ?? ""}
               onChange={(e) => setYear(Number(e.target.value))}
@@ -132,12 +132,12 @@ export default function UniversityGuidePage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && load()}
-              style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, minWidth: 200 }}
+              style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, minWidth: 160, flex: "1 1 200px" }}
             />
             <button onClick={load} className="btn-secondary">
               검색
             </button>
-            <span style={{ marginLeft: "auto", fontSize: 13, color: "#6b7280", alignSelf: "center" }}>
+            <span style={{ fontSize: 13, color: "#6b7280", marginLeft: "auto" }}>
               총 {items.length}건
             </span>
           </div>
@@ -231,8 +231,8 @@ function GuideCard({ guide, onEdit, onDelete }: { guide: Guide; onEdit: () => vo
         opacity: guide.is_active ? 1 : 0.5,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
           <span style={{ fontSize: 16, fontWeight: 700 }}>{guide.university}</span>
           {!guide.is_active && (
             <span style={{ marginLeft: 8, fontSize: 11, color: "#ef4444" }}>(비활성)</span>
@@ -261,7 +261,7 @@ function GuideCard({ guide, onEdit, onDelete }: { guide: Guide; onEdit: () => vo
           </button>
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, fontSize: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 6, fontSize: 12 }}>
         {URL_FIELDS.map((f) => (
           <div key={f.key as string} style={{ color: guide[f.key] ? "#10b981" : "#9ca3af" }}>
             {guide[f.key] ? "✓" : "✗"} {f.label}
