@@ -66,8 +66,9 @@ export default function UniversityGuidePage() {
       if (year === null && res.available_years && res.available_years.length > 0) {
         setYear(res.available_years[0]);
       }
-    } catch (e: any) {
-      alert("목록을 불러오지 못했습니다: " + (e?.message || e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert("목록을 불러오지 못했습니다: " + msg);
     } finally {
       setLoading(false);
     }
@@ -90,34 +91,37 @@ export default function UniversityGuidePage() {
     try {
       await deleteUniversityGuide(g.id);
       await load();
-    } catch (e: any) {
-      alert("삭제 실패: " + (e?.message || e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert("삭제 실패: " + msg);
     }
   };
 
   return (
-    <div className="dashboard">
+    <div className="admin-layout">
       <Sidebar />
-      <main className="main-content">
-        <div style={{ padding: 24, minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>대학모집요강 관리</h1>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button onClick={() => setShowBulkCopy(true)} className="btn-secondary">
-                학년도 일괄 복사
-              </button>
-              <button onClick={() => setShowCreate(true)} className="btn-primary">
-                + 새 대학 추가
-              </button>
-            </div>
+      <main className="admin-main">
+        <div className="page-header">
+          <h1 className="page-title">대학모집요강 관리</h1>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-outline" onClick={() => setShowBulkCopy(true)}>
+              학년도 일괄 복사
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              + 새 대학 추가
+            </button>
           </div>
+        </div>
 
-          {/* 필터 */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        {/* 필터 */}
+        <div className="card" style={{ padding: 16, marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
+          <div>
+            <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>학년도</label>
             <select
+              className="form-control"
               value={year ?? ""}
               onChange={(e) => setYear(Number(e.target.value))}
-              style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 }}
+              style={{ minWidth: 130 }}
             >
               {availableYears.length === 0 && <option value="">학년도 없음</option>}
               {availableYears.map((y) => (
@@ -126,40 +130,42 @@ export default function UniversityGuidePage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div style={{ flex: "1 1 200px" }}>
+            <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>대학명</label>
             <input
-              type="text"
+              className="form-control"
               placeholder="대학명 검색"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && load()}
-              style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, minWidth: 160, flex: "1 1 200px" }}
             />
-            <button onClick={load} className="btn-secondary">
-              검색
-            </button>
-            <span style={{ fontSize: 13, color: "#6b7280", marginLeft: "auto" }}>
-              총 {items.length}건
-            </span>
           </div>
-
-          {/* 목록 */}
-          {loading ? (
-            <p>로딩 중...</p>
-          ) : items.length === 0 ? (
-            <p style={{ color: "#9ca3af" }}>등록된 대학모집요강이 없습니다.</p>
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {items.map((g) => (
-                <GuideCard
-                  key={g.id}
-                  guide={g}
-                  onEdit={() => setEditing(g)}
-                  onDelete={() => handleDelete(g)}
-                />
-              ))}
-            </div>
-          )}
+          <button className="btn btn-primary" onClick={load}>
+            검색
+          </button>
+          <span style={{ marginLeft: "auto", fontSize: 13, color: "#6b7280" }}>총 {items.length}건</span>
         </div>
+
+        {/* 목록 */}
+        {loading ? (
+          <p>로딩 중...</p>
+        ) : items.length === 0 ? (
+          <div className="card" style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>
+            등록된 대학모집요강이 없습니다.
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            {items.map((g) => (
+              <GuideCard
+                key={g.id}
+                guide={g}
+                onEdit={() => setEditing(g)}
+                onDelete={() => handleDelete(g)}
+              />
+            ))}
+          </div>
+        )}
 
         {/* 새 대학 추가 모달 */}
         {showCreate && year !== null && (
@@ -172,8 +178,9 @@ export default function UniversityGuidePage() {
                 await createUniversityGuide(data);
                 setShowCreate(false);
                 await load();
-              } catch (e: any) {
-                alert("생성 실패: " + (e?.message || e));
+              } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                alert("생성 실패: " + msg);
               }
             }}
           />
@@ -190,8 +197,9 @@ export default function UniversityGuidePage() {
                 await updateUniversityGuide(editing.id, data);
                 setEditing(null);
                 await load();
-              } catch (e: any) {
-                alert("수정 실패: " + (e?.message || e));
+              } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                alert("수정 실패: " + msg);
               }
             }}
           />
@@ -208,8 +216,9 @@ export default function UniversityGuidePage() {
                 alert(`복사 완료: ${res.created}건 생성, ${res.skipped}건 건너뜀`);
                 setShowBulkCopy(false);
                 await load();
-              } catch (e: any) {
-                alert("일괄 복사 실패: " + (e?.message || e));
+              } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                alert("일괄 복사 실패: " + msg);
               }
             }}
           />
@@ -222,16 +231,8 @@ export default function UniversityGuidePage() {
 function GuideCard({ guide, onEdit, onDelete }: { guide: Guide; onEdit: () => void; onDelete: () => void }) {
   const filledCount = URL_FIELDS.filter((f) => guide[f.key]).length;
   return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid #e5e7eb",
-        borderRadius: 8,
-        padding: 16,
-        opacity: guide.is_active ? 1 : 0.5,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+    <div className="card" style={{ padding: 16, opacity: guide.is_active ? 1 : 0.5 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <div style={{ minWidth: 0 }}>
           <span style={{ fontSize: 16, fontWeight: 700 }}>{guide.university}</span>
           {!guide.is_active && (
@@ -242,21 +243,10 @@ function GuideCard({ guide, onEdit, onDelete }: { guide: Guide; onEdit: () => vo
           </span>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={onEdit} className="btn-secondary" style={{ padding: "4px 12px", fontSize: 13 }}>
+          <button className="btn btn-sm btn-outline" onClick={onEdit}>
             수정
           </button>
-          <button
-            onClick={onDelete}
-            style={{
-              padding: "4px 12px",
-              fontSize: 13,
-              background: "#fef2f2",
-              color: "#dc2626",
-              border: "1px solid #fecaca",
-              borderRadius: 6,
-              cursor: "pointer",
-            }}
-          >
+          <button className="btn btn-sm btn-danger" onClick={onDelete}>
             삭제
           </button>
         </div>
@@ -281,9 +271,9 @@ function GuideFormModal({
   initial: Guide | null;
   year: number;
   onClose: () => void;
-  onSubmit: (data: Record<string, any>) => void | Promise<void>;
+  onSubmit: (data: Record<string, unknown>) => void | Promise<void>;
 }) {
-  const [form, setForm] = useState<Record<string, any>>(() => ({
+  const [form, setForm] = useState<Record<string, unknown>>(() => ({
     university: initial?.university || "",
     university_code: initial?.university_code || "",
     year: initial?.year ?? year,
@@ -299,17 +289,17 @@ function GuideFormModal({
     adiga_prior_learning_eval_url: initial?.adiga_prior_learning_eval_url || "",
   }));
 
-  const set = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
+  const set = (k: string, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
   const handleSubmit = () => {
-    if (!form.university.trim()) {
+    if (!String(form.university || "").trim()) {
       alert("대학명을 입력하세요");
       return;
     }
-    // 빈 문자열은 null 로 전송 (UNIQUE/검색 일관성)
-    const payload: Record<string, any> = { ...form };
+    const payload: Record<string, unknown> = { ...form };
     Object.keys(payload).forEach((k) => {
-      if (typeof payload[k] === "string" && payload[k].trim() === "") {
+      const v = payload[k];
+      if (typeof v === "string" && v.trim() === "") {
         payload[k] = null;
       }
     });
@@ -317,72 +307,57 @@ function GuideFormModal({
   };
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: "#fff", borderRadius: 8, padding: 24, width: 720, maxHeight: "90vh", overflowY: "auto" }}
-      >
-        <h2 style={{ fontSize: 18, fontWeight: 700, marginTop: 0 }}>
-          {initial ? `${initial.university} 수정` : "대학 추가"}
-        </h2>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ padding: 24, maxWidth: 720, width: "90vw", maxHeight: "90vh", overflowY: "auto" }}>
+        <h2>{initial ? `${initial.university} 수정` : "대학 추가"}</h2>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
           <div>
             <label style={{ fontSize: 12, color: "#6b7280" }}>대학명 *</label>
             <input
+              className="form-control"
               type="text"
-              value={form.university}
+              value={String(form.university || "")}
               onChange={(e) => set("university", e.target.value)}
-              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #d1d5db" }}
             />
           </div>
           <div>
             <label style={{ fontSize: 12, color: "#6b7280" }}>학년도</label>
             <input
+              className="form-control"
               type="number"
-              value={form.year}
+              value={Number(form.year || 0)}
               onChange={(e) => set("year", Number(e.target.value))}
-              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #d1d5db" }}
             />
           </div>
           <div>
             <label style={{ fontSize: 12, color: "#6b7280" }}>정렬 순서</label>
             <input
+              className="form-control"
               type="number"
-              value={form.sort_order}
+              value={Number(form.sort_order || 0)}
               onChange={(e) => set("sort_order", Number(e.target.value))}
-              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #d1d5db" }}
             />
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
           <label style={{ fontSize: 13 }}>
             <input
               type="checkbox"
-              checked={form.is_active}
+              checked={Boolean(form.is_active)}
               onChange={(e) => set("is_active", e.target.checked)}
               style={{ marginRight: 6 }}
             />
             활성 (사용자에게 노출)
           </label>
           <input
+            className="form-control"
             type="text"
             placeholder="대학 코드 (선택)"
-            value={form.university_code}
+            value={String(form.university_code || "")}
             onChange={(e) => set("university_code", e.target.value)}
-            style={{ padding: 8, borderRadius: 6, border: "1px solid #d1d5db", flex: 1 }}
+            style={{ flex: 1, minWidth: 200 }}
           />
         </div>
 
@@ -410,22 +385,22 @@ function GuideFormModal({
                   </span>
                 </label>
                 <input
+                  className="form-control"
                   type="url"
                   placeholder="https://..."
-                  value={form[f.key as string] || ""}
+                  value={String(form[f.key as string] || "")}
                   onChange={(e) => set(f.key as string, e.target.value)}
-                  style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13 }}
                 />
               </div>
             ))}
           </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button onClick={onClose} className="btn-secondary">
+        <div className="modal-actions">
+          <button className="btn btn-outline" onClick={onClose}>
             취소
           </button>
-          <button onClick={handleSubmit} className="btn-primary">
+          <button className="btn btn-primary" onClick={handleSubmit}>
             저장
           </button>
         </div>
@@ -449,23 +424,9 @@ function BulkCopyModal({
   const [copyUrls, setCopyUrls] = useState(false);
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: "#fff", borderRadius: 8, padding: 24, width: 480 }}
-      >
-        <h2 style={{ fontSize: 18, fontWeight: 700, marginTop: 0 }}>학년도 일괄 복사</h2>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ padding: 24, maxWidth: 480 }}>
+        <h2>학년도 일괄 복사</h2>
         <p style={{ fontSize: 13, color: "#6b7280" }}>
           기존 학년도의 대학 목록을 새 학년도로 복사합니다. 대상 학년도에 이미 존재하는 대학은 건너뜁니다.
         </p>
@@ -474,10 +435,11 @@ function BulkCopyModal({
           <div>
             <label style={{ fontSize: 12, color: "#6b7280" }}>원본 학년도</label>
             <select
+              className="form-control"
               value={fromYear}
               onChange={(e) => setFromYear(Number(e.target.value))}
-              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #d1d5db" }}
             >
+              {availableYears.length === 0 && <option value="">데이터 없음</option>}
               {availableYears.map((y) => (
                 <option key={y} value={y}>
                   {y}학년도
@@ -488,10 +450,10 @@ function BulkCopyModal({
           <div>
             <label style={{ fontSize: 12, color: "#6b7280" }}>대상 학년도</label>
             <input
+              className="form-control"
               type="number"
               value={toYear}
               onChange={(e) => setToYear(Number(e.target.value))}
-              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #d1d5db" }}
             />
           </div>
         </div>
@@ -506,11 +468,15 @@ function BulkCopyModal({
           URL 까지 복사 (체크 안 하면 대학명·코드·순서만 복사)
         </label>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
-          <button onClick={onClose} className="btn-secondary">
+        <div className="modal-actions">
+          <button className="btn btn-outline" onClick={onClose}>
             취소
           </button>
-          <button onClick={() => onSubmit({ from_year: fromYear, to_year: toYear, copy_urls: copyUrls })} className="btn-primary">
+          <button
+            className="btn btn-primary"
+            disabled={availableYears.length === 0}
+            onClick={() => onSubmit({ from_year: fromYear, to_year: toYear, copy_urls: copyUrls })}
+          >
             복사 실행
           </button>
         </div>
