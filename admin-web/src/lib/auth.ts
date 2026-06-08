@@ -45,6 +45,7 @@ const MENU_ROUTES: Record<string, string> = {
   admins: "/admins",
   seminar: "/seminar",
   notice: "/notice",
+  university_guide: "/university-guide",
   assignments: "/assignments",
   settings: "/settings",
 };

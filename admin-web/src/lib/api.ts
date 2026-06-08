@@ -801,3 +801,35 @@ export async function getSatisfactionTrends(params?: { months?: number; survey_t
   if (params?.survey_type) qs.set("survey_type", params.survey_type);
   return request(`/api/admin/satisfaction-surveys/trends?${qs}`);
 }
+
+// --- 대학모집요강 ---
+export async function listUniversityGuides(params?: { year?: number; search?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.year !== undefined) qs.set("year", String(params.year));
+  if (params?.search) qs.set("search", params.search);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request(`/api/admin/university-guide/${suffix}`);
+}
+
+export async function createUniversityGuide(data: Record<string, any>) {
+  return request("/api/admin/university-guide/", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateUniversityGuide(id: string, data: Record<string, any>) {
+  return request(`/api/admin/university-guide/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export async function deleteUniversityGuide(id: string) {
+  return request(`/api/admin/university-guide/${id}`, { method: "DELETE" });
+}
+
+export async function bulkCopyUniversityGuides(data: { from_year: number; to_year: number; copy_urls?: boolean }) {
+  return request("/api/admin/university-guide/bulk-copy", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function markUniversityGuideChecked(id: string) {
+  return request(`/api/admin/university-guide/${id}/mark-checked`, { method: "POST" });
+}
