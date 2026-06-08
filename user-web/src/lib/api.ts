@@ -603,3 +603,38 @@ export type BlogNewsResponse = {
 export async function fetchBlogNews(limit = 20): Promise<BlogNewsResponse> {
   return request(`/api/blog-news?limit=${limit}`);
 }
+
+// --- 대학모집요강 ---
+export type UniversityGuideItem = {
+  id: string;
+  university: string;
+  university_code: string | null;
+  year: number;
+  official_admission_url: string | null;
+  official_jonghap_guidebook_url: string | null;
+  official_result_url: string | null;
+  adiga_admission_plan_url: string | null;
+  adiga_susi_guide_url: string | null;
+  adiga_jeongsi_guide_url: string | null;
+  adiga_result_url: string | null;
+  adiga_prior_learning_eval_url: string | null;
+  is_active: boolean;
+  sort_order: number;
+  last_checked: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+
+export type UniversityGuideResponse = {
+  items: UniversityGuideItem[];
+  total: number;
+  available_years: number[];
+};
+
+export async function fetchUniversityGuides(params?: { year?: number; search?: string }): Promise<UniversityGuideResponse> {
+  const qs = new URLSearchParams();
+  if (params?.year !== undefined) qs.set("year", String(params.year));
+  if (params?.search) qs.set("search", params.search);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request(`/api/university-guide/${suffix}`);
+}
