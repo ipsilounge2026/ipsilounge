@@ -239,13 +239,13 @@ class _HomeTab extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              // 5번: 입시 뉴스 (신규 — 네이버 블로그 RSS 연동)
+              // 5번: 입시 라운지 (입시뉴스 + 대학모집요강 묶음)
               Expanded(
                 child: _MenuCard(
-                  icon: Icons.newspaper_outlined,
-                  label: '입시 뉴스',
-                  english: 'News',
-                  onTap: () => Navigator.pushNamed(context, '/news'),
+                  icon: Icons.menu_book_outlined,
+                  label: '입시 라운지',
+                  english: 'Ipsi',
+                  onTap: () => Navigator.pushNamed(context, '/ipsi-lounge'),
                 ),
               ),
               const SizedBox(width: 12),

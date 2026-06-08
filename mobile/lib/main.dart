@@ -22,6 +22,8 @@ import 'screens/consultation_management_screen.dart';
 import 'screens/admission_info_screen.dart';
 import 'screens/admission_cases_screen.dart';
 import 'screens/blog_news_screen.dart';
+import 'screens/ipsi_lounge_hub_screen.dart';
+import 'screens/university_guide_screen.dart';
 import 'screens/mypage_screen.dart';
 import 'screens/notification_screen.dart';
 import 'screens/payment_screen.dart';
@@ -235,6 +237,8 @@ class IpsiLoungeApp extends StatelessWidget {
           '/admission-info': (context) => const AdmissionInfoScreen(),
           '/admission-cases': (context) => const AdmissionCasesScreen(),
           '/news': (context) => const BlogNewsScreen(),
+          '/ipsi-lounge': (context) => const IpsiLoungeHubScreen(),
+          '/university-guide': (context) => const UniversityGuideScreen(),
           '/mypage': (context) => const MypageScreen(),
           '/notifications': (context) => const NotificationScreen(),
           '/payment': (context) => const PaymentScreen(),
