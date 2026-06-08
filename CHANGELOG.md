@@ -5,6 +5,44 @@
 
 ---
 
+## 2026-06-08
+
+### feat(university-guide): 대학모집요강 안내 페이지 신규 — 웹·앱·관리자
+대학별 입시 자료(모집요강·시행계획·입시결과·가이드북 등) 외부 URL을 한 곳에 모아 제공하는 카드 그리드. 파일을 호스팅하지 않고 외부 URL만 매핑하여 저작권·유지보수 부담 최소화. 비로그인 접근 가능.
+
+**자료 출처 정책:**
+- 공시 의무 자료(시행계획·수시/정시 모집요강·선행평가·대교협 입시결과) → 대학어디가 (adiga.go.kr)
+- 대학 고유 자료(입학처 메인·학종 가이드북·자체 입시결과) → 대학 입학처
+- 입시결과는 대교협·자체발표 값이 다르므로 양쪽 모두 제공
+
+**백엔드**:
+- `app/models/university_guide.py` `UniversityGuide` 모델 (UNIQUE university+year, 8개 URL 필드)
+- `app/schemas/university_guide.py` Pydantic 스키마 (학년도 일괄 복사 요청 포함)
+- `app/routers/university_guide.py` `GET /api/university-guide/` 비로그인 접근 (학년도/검색 필터, available_years 동봉)
+- `app/routers/admin_university_guide.py` 관리자 CRUD + `/bulk-copy` (학년도 간 대학명/URL 복사) + `/mark-checked`
+
+**관리자 웹**:
+- `src/app/university-guide/page.tsx` 학년도별 카드 목록·검색·CRUD·일괄 복사 모달
+- 카드: 8개 URL 입력 상태 시각화 (✓/✗) + 비활성 토글
+- Sidebar 메뉴 `university_guide` 추가 (super_admin 또는 admins 권한)
+
+**사용자 웹**:
+- `src/app/university-guide/page.tsx` 카드 그리드 (학년도 드롭다운 + 대학 검색)
+- 카드: 좌측 대학명+입학처 / 우측 주요 버튼 4개 / 하단 부가 3개, URL 없는 버튼은 비활성
+- Navbar: "입시라운지" 드롭다운 신규 (입시뉴스 + 대학모집요강 묶음). 기존 단독 "입시 뉴스" 메뉴는 드롭다운 하위로 이동
+- 비로그인 접근 가능
+
+**모바일 앱**:
+- `lib/services/university_guide_service.dart` 서비스 + 모델
+- `lib/screens/university_guide_screen.dart` 대학모집요강 화면 (url_launcher externalApplication 모드로 외부 출처 오픈)
+- `lib/screens/ipsi_lounge_hub_screen.dart` 입시라운지 허브 (입시뉴스/대학모집요강 2개 카드)
+- 홈 그리드 5번 자리: "입시 뉴스" → "입시 라운지" 묶음으로 변경
+- `/ipsi-lounge` / `/university-guide` 라우트 신규 등록
+
+**1차 범위**: 단순 카드 + 학년도/검색 + 비로그인 접근. 즐겨찾기·자동 URL 점검 Cron 은 2차로 분리.
+
+---
+
 ## 2026-05-14
 
 ### feat(blog-news): 입시 뉴스 (네이버 블로그 RSS) 연동 — 웹·앱·백엔드 신규 카테고리
