@@ -24,6 +24,7 @@ from app.routers import (
     admin_payments,
     admin_seminar,
     admin_senior_consultation,
+    admin_university_guide,
     admin_users,
     admission_cases,
     analysis,
@@ -41,6 +42,7 @@ from app.routers import (
     senior_notes,
     senior_pre_survey,
     universities,
+    university_guide,
     user_consultation_sharing,
     users,
 )
@@ -119,6 +121,8 @@ app.include_router(senior_pre_survey.router)
 app.include_router(universities.router)
 app.include_router(user_consultation_sharing.router)
 app.include_router(blog_news.router)
+app.include_router(university_guide.router)
+app.include_router(admin_university_guide.router)
 
 # DEV_MODE 전용 라우터 (운영에서는 마운트되지 않음)
 # spec: ipsilounge/docs/test-environment-spec.md §4
