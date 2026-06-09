@@ -758,9 +758,15 @@ function SenSyncModal({
             <li>대학어디가에는 그 시점에 자료가 없는데 SEN 에는 발표 직후 등록됨</li>
             <li>학년도 관계없이 시행계획은 SEN 출처를 사용</li>
           </ul>
+          <strong style={{ display: "block", marginTop: 8, color: "#B45309" }}>📌 신규 학년도 운영 흐름:</strong>
+          <ol style={{ margin: "6px 0 0 18px", padding: 0, color: "#374151" }}>
+            <li><strong>학년도 일괄 복사</strong>로 이전 학년도 대학 목록을 새 학년도로 복사 (URL 비워둠)</li>
+            <li>본 <strong>SEN 시행계획 자동 수집</strong>으로 시행계획 URL 채우기</li>
+            <li>(선택) 학년도 발표 후 대학어디가 자동 수집으로 나머지 URL 채우기</li>
+          </ol>
           <strong style={{ display: "block", marginTop: 8 }}>주의사항:</strong>
           <ul style={{ margin: "6px 0 0 18px", padding: 0, color: "#6b7280" }}>
-            <li>먼저 대학어디가 자동 수집을 실행해 대학 목록을 채워야 매칭됩니다</li>
+            <li>대학 목록(row)이 먼저 있어야 매칭됩니다. 없으면 위 운영 흐름의 1번 먼저 실행</li>
             <li>매칭 안 된 대학은 SEN 에만 있고 대학어디가에는 없는 캠퍼스/대학원</li>
           </ul>
         </div>
