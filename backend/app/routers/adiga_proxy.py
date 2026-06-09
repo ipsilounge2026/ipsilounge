@@ -143,19 +143,25 @@ async def proxy_adiga_result(
     year: int = Query(..., description="학년도"),
 ):
     """
-    대학어디가 입시결과 페이지(POST 전용)에 우리가 대신 POST 호출 → 결과 HTML 그대로 전달.
+    대학어디가 입시결과 페이지(POST 전용) 진입.
 
-    1) 입시결과 View 페이지 GET → CSRF 토큰 + 세션 쿠키
-    2) Popup 페이지 POST → 결과 HTML
-    3) HTML 안의 상대 경로(form action, img src 등)를 절대 경로로 보정 후 응답
+    백엔드에서 POST를 직접 호출하면 대학어디가가 세션/추가 검증으로 404 반환.
+    → 가장 확실한 방법: 사용자 브라우저가 직접 POST 하도록 자동 submit form 제공.
+
+    흐름:
+    1) 우리 백엔드가 대학어디가에서 최신 CSRF 토큰 받기
+    2) auto-submit form HTML 응답 (action=adiga POST URL, hidden inputs 포함)
+    3) 사용자 브라우저가 페이지 받자마자 form 자동 제출
+    4) 사용자는 대학어디가 도메인에서 입시결과 페이지 봄
     """
+    from html import escape
+
     async with httpx.AsyncClient(
         timeout=30.0,
         follow_redirects=True,
         headers={"User-Agent": USER_AGENT},
     ) as client:
         try:
-            # 1) View 페이지에서 CSRF + 세션
             view_res = await client.get(
                 f"{RESULT_VIEW_URL}?menuId={RESULT_MENU_ID}"
             )
@@ -164,46 +170,50 @@ async def proxy_adiga_result(
             if not csrf_m:
                 raise HTTPException(status_code=502, detail="CSRF 토큰을 찾지 못했습니다")
             csrf_token = csrf_m.group(1)
-
-            # 2) POST 호출 → 결과 HTML
-            popup_res = await client.post(
-                RESULT_POPUP_URL,
-                data={
-                    "_csrf": csrf_token,
-                    "menuId": RESULT_MENU_ID,
-                    "unvCd": unvCd,
-                    "compUnvCd": "",
-                    "searchSyr": str(year),
-                    "searchConstIndex": "0",
-                    "searchUnvComp": "0",
-                },
-                headers={
-                    "Referer": f"{RESULT_VIEW_URL}?menuId={RESULT_MENU_ID}",
-                },
-            )
-            popup_res.raise_for_status()
         except httpx.HTTPError as e:
-            logger.error(f"adiga result proxy: 상위 요청 실패 — {e}")
+            logger.error(f"adiga result proxy: CSRF 요청 실패 — {e}")
             raise HTTPException(status_code=502, detail="대학어디가 응답 실패")
 
-    # 3) HTML 안의 상대 경로를 절대 경로로 (이미지·CSS·JS 가 정상 로드되도록)
-    html_text = popup_res.text
-    # /static/, /uct/, /ucp/, /cmm/ 등 절대 경로(이미 슬래시로 시작)는 대학어디가 도메인 prefix
-    # 상대 경로(./, 또는 그냥 폴더명) 시도는 거의 없음 → 절대 경로만 처리
-    html_text = re.sub(
-        r'(href|src|action)="(/[^"]*)"',
-        lambda m: f'{m.group(1)}="{ADIGA_BASE}{m.group(2)}"',
-        html_text,
+    # 사용자 브라우저가 자동 POST 제출하는 HTML 응답
+    fields = {
+        "_csrf": csrf_token,
+        "menuId": RESULT_MENU_ID,
+        "pagination.currentPage": "1",
+        "pagination.cntPerPage": "15",
+        "unvCd": unvCd,
+        "compUnvCd": "",
+        "searchSyr": str(year),
+        "searchConstIndex": "0",
+        "searchUnvComp": "0",
+        "searchUnvNm": "",
+        "unvSeCd": "10",
+    }
+    inputs_html = "\n".join(
+        f'<input type="hidden" name="{escape(k)}" value="{escape(v)}" />'
+        for k, v in fields.items()
     )
-    # <head> 안에 <base> 태그 추가 (남은 상대 경로 안전망)
-    base_tag = f'<base href="{ADIGA_BASE}/" />'
-    if "<head>" in html_text:
-        html_text = html_text.replace("<head>", f"<head>{base_tag}", 1)
-    else:
-        html_text = base_tag + html_text
+    html_doc = f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>대학어디가 입시결과로 이동 중…</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 60vh; color: #6B7B98; }}
+  </style>
+</head>
+<body>
+  <form id="f" method="POST" action="{RESULT_POPUP_URL}">
+    {inputs_html}
+  </form>
+  <div>입시결과 페이지로 이동 중입니다…</div>
+  <script>document.getElementById('f').submit();</script>
+</body>
+</html>"""
 
     return Response(
-        content=html_text,
+        content=html_doc,
         media_type="text/html; charset=utf-8",
-        headers={"Cache-Control": "public, max-age=600"},  # 10분 캐시
+        headers={"Cache-Control": "no-store"},
     )
