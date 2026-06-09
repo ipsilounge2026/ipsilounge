@@ -120,8 +120,10 @@ async def proxy_adiga_file(
     media_type = "application/pdf" if "pdf" in upstream_ct.lower() or filename.lower().endswith(".pdf") else upstream_ct
 
     # 표준 Content-Disposition (RFC 5987)
+    # HTTP 헤더는 latin-1만 가능 → filename="" 은 ASCII fallback 만, 한국어는 filename*= 에 인코딩.
+    ascii_fallback = f"{year}_{unvCd}_{kind}.pdf"
     cd_header = (
-        f'attachment; filename="{filename.replace(chr(34), "")}"; '
+        f'attachment; filename="{ascii_fallback}"; '
         f"filename*=UTF-8''{quote(filename)}"
     )
 
