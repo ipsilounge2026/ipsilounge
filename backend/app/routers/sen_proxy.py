@@ -79,16 +79,48 @@ async def proxy_sen_admission_plan(
   <title>시행계획 다운로드 중…</title>
   <style>
     body {{ font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
-            display: flex; align-items: center; justify-content: center;
-            min-height: 60vh; color: #6B7B98; }}
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 60vh; color: #6B7B98; padding: 20px; text-align: center; }}
+    h1 {{ font-size: 18px; color: #0B1F3F; margin: 0 0 8px; }}
+    p {{ margin: 4px 0; font-size: 14px; }}
+    .actions {{ margin-top: 24px; display: flex; gap: 12px; }}
+    .btn {{ padding: 10px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px;
+            font-family: inherit; font-weight: 600; }}
+    .btn-primary {{ background: #0B1F3F; color: #fff; }}
+    .btn-outline {{ background: #fff; color: #0B1F3F; border: 1px solid #0B1F3F; }}
+    #pre {{ display: block; }}
+    #post {{ display: none; }}
   </style>
 </head>
 <body>
   <form id="f" method="POST" action="{SEN_DOWNLOAD_URL}">
     {inputs_html}
   </form>
-  <div>시행계획 PDF 다운로드 중입니다…</div>
-  <script>document.getElementById('f').submit();</script>
+
+  <div id="pre">
+    <h1>시행계획 PDF 다운로드 중…</h1>
+    <p>잠시만 기다려주세요.</p>
+  </div>
+
+  <div id="post">
+    <h1>✅ 다운로드가 시작되었습니다</h1>
+    <p>브라우저의 다운로드 폴더를 확인하세요.</p>
+    <p style="font-size: 12px; color: #9CA3AF;">이 탭은 닫으셔도 됩니다.</p>
+    <div class="actions">
+      <button class="btn btn-outline" onclick="history.back()">이전 페이지로</button>
+      <button class="btn btn-primary" onclick="window.close()">탭 닫기</button>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('f').submit();
+    // POST 가 완료되어도 form submit 으로는 navigation 이 안 일어남(다운로드만 트리거).
+    // 1.5초 후 메시지 갱신해서 사용자가 다음 행동 결정 가능하게.
+    setTimeout(function() {{
+      document.getElementById('pre').style.display = 'none';
+      document.getElementById('post').style.display = 'block';
+    }}, 1500);
+  </script>
 </body>
 </html>"""
 
