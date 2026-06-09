@@ -11,6 +11,7 @@ import {
   deleteUniversityGuide,
   bulkCopyUniversityGuides,
   syncAdiga,
+  syncSen,
 } from "@/lib/api";
 
 interface Guide {
@@ -55,6 +56,7 @@ export default function UniversityGuidePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showBulkCopy, setShowBulkCopy] = useState(false);
   const [showAdigaSync, setShowAdigaSync] = useState(false);
+  const [showSenSync, setShowSenSync] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,8 +108,11 @@ export default function UniversityGuidePage() {
         <div className="page-header">
           <h1 className="page-title">대학모집요강 관리</h1>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button className="btn btn-outline" onClick={() => setShowAdigaSync(true)} title="대학어디가에서 220개 대학의 6개 자료 URL을 자동 수집">
+            <button className="btn btn-outline" onClick={() => setShowAdigaSync(true)} title="대학어디가에서 220개 대학의 자료 URL을 자동 수집">
               🔄 대학어디가 자동 수집
+            </button>
+            <button className="btn btn-outline" onClick={() => setShowSenSync(true)} title="서울진로진학정보센터에서 학년도별 시행계획 자료를 자동 수집">
+              🔄 SEN 시행계획 자동 수집
             </button>
             <button className="btn btn-outline" onClick={() => setShowBulkCopy(true)}>
               학년도 일괄 복사
@@ -217,6 +222,18 @@ export default function UniversityGuidePage() {
             onClose={() => setShowAdigaSync(false)}
             onComplete={async () => {
               setShowAdigaSync(false);
+              await load();
+            }}
+          />
+        )}
+
+        {/* 서울진로진학정보센터 시행계획 자동 수집 모달 */}
+        {showSenSync && (
+          <SenSyncModal
+            defaultYear={year ?? new Date().getFullYear() + 1}
+            onClose={() => setShowSenSync(false)}
+            onComplete={async () => {
+              setShowSenSync(false);
               await load();
             }}
           />
@@ -672,6 +689,144 @@ function AdigaSyncModal({
               </button>
               <button className="btn btn-primary" onClick={handleRun} disabled={loading}>
                 {loading ? "동기화 중..." : "동기화 실행"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SenSyncModal({
+  defaultYear,
+  onClose,
+  onComplete,
+}: {
+  defaultYear: number;
+  onClose: () => void;
+  onComplete: () => void | Promise<void>;
+}) {
+  const [year, setYear] = useState<number>(defaultYear);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{
+    total_fetched: number;
+    matched: number;
+    updated: number;
+    unmatched_count?: number;
+    unmatched_samples?: string[];
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRun = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await syncSen({ year });
+      setResult(res);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClose = async () => {
+    if (loading) return;
+    if (result) {
+      await onComplete();
+    } else {
+      onClose();
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={loading ? undefined : handleClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ padding: 24, maxWidth: 560 }}>
+        <h2>🔄 서울진로진학정보센터 시행계획 자동 수집</h2>
+
+        <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>
+          서울진로진학정보센터(jinhak.sen.go.kr)에서 학년도별 시행계획 자료를 수집해 각 대학의 카드에 매칭합니다.
+        </p>
+
+        <div style={{ background: "#F3F4F6", borderRadius: 6, padding: 12, fontSize: 12, color: "#374151", marginBottom: 16 }}>
+          <strong>왜 SEN 출처를 쓰나?</strong>
+          <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
+            <li>시행계획은 발표 1년 반 전에 공개됨 (예: 2028학년도는 4월말 발표)</li>
+            <li>대학어디가에는 그 시점에 자료가 없는데 SEN 에는 발표 직후 등록됨</li>
+            <li>학년도 관계없이 시행계획은 SEN 출처를 사용</li>
+          </ul>
+          <strong style={{ display: "block", marginTop: 8 }}>주의사항:</strong>
+          <ul style={{ margin: "6px 0 0 18px", padding: 0, color: "#6b7280" }}>
+            <li>먼저 대학어디가 자동 수집을 실행해 대학 목록을 채워야 매칭됩니다</li>
+            <li>매칭 안 된 대학은 SEN 에만 있고 대학어디가에는 없는 캠퍼스/대학원</li>
+          </ul>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, color: "#6b7280" }}>학년도</label>
+          <input
+            type="number"
+            className="form-control"
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            min={2020}
+            max={2030}
+            disabled={loading}
+            style={{ maxWidth: 200 }}
+          />
+        </div>
+
+        {loading && (
+          <div style={{ padding: 16, background: "#EFF6FF", borderRadius: 6, fontSize: 13, color: "#1E40AF", marginBottom: 16 }}>
+            ⏳ 동기화 중... (페이지네이션 처리에 30초~1분 소요)
+          </div>
+        )}
+
+        {error && (
+          <div style={{ padding: 12, background: "#FEF2F2", borderRadius: 6, fontSize: 13, color: "#B91C1C", marginBottom: 16 }}>
+            ❌ 실패: {error}
+          </div>
+        )}
+
+        {result && (
+          <div style={{ padding: 12, background: "#ECFDF5", borderRadius: 6, fontSize: 13, color: "#065F46", marginBottom: 16 }}>
+            ✅ 동기화 완료!
+            <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
+              <li>SEN 에서 수집: {result.total_fetched}건</li>
+              <li>우리 DB 매칭: {result.matched}건</li>
+              <li>시행계획 URL 갱신: {result.updated}건</li>
+              {(result.unmatched_count ?? 0) > 0 && (
+                <li style={{ color: "#B45309" }}>매칭 실패: {result.unmatched_count}건 (SEN 에만 있는 캠퍼스/대학원)</li>
+              )}
+            </ul>
+            {result.unmatched_samples && result.unmatched_samples.length > 0 && (
+              <details style={{ marginTop: 8 }}>
+                <summary style={{ cursor: "pointer", fontSize: 12 }}>매칭 실패 샘플 보기</summary>
+                <ul style={{ margin: "6px 0 0 18px", padding: 0, fontSize: 11, color: "#7C2D12" }}>
+                  {result.unmatched_samples.slice(0, 15).map((u, i) => (
+                    <li key={i}>{u}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        )}
+
+        <div className="modal-actions">
+          {result ? (
+            <button className="btn btn-primary" onClick={handleClose}>
+              닫기 (목록 새로고침)
+            </button>
+          ) : (
+            <>
+              <button className="btn btn-outline" onClick={handleClose} disabled={loading}>
+                취소
+              </button>
+              <button className="btn btn-primary" onClick={handleRun} disabled={loading}>
+                {loading ? "수집 중..." : "동기화 실행"}
               </button>
             </>
           )}

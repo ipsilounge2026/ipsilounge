@@ -19,6 +19,7 @@ from app.schemas.university_guide import (
     UniversityGuideUpdate,
 )
 from app.services.adiga_scraper_service import sync_all_universities
+from app.services.sen_scraper_service import sync_admission_plans as sen_sync_admission_plans
 from app.utils.dependencies import get_current_admin
 
 router = APIRouter(prefix="/api/admin/university-guide", tags=["관리자-대학모집요강"])
@@ -270,4 +271,40 @@ async def admin_sync_adiga(
         concurrency=data.concurrency,
         limit=data.limit,
     )
+    return result
+
+
+class SenSyncRequest(BaseModel):
+    """서울진로진학정보센터(SEN) 시행계획 자동 동기화 요청."""
+
+    year: int
+
+
+@router.post("/sync-sen")
+async def admin_sync_sen(
+    data: SenSyncRequest,
+    admin: Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    서울진로진학정보센터(jinhak.sen.go.kr) 에서 학년도별 시행계획 자료를 수집.
+
+    - 대학어디가에는 발표 1년 반 전 자료가 없는데(예: 2028학년도 4월말 발표)
+      SEN 에는 발표 직후 등록되어 있음.
+    - 학년도 관계없이 시행계획은 SEN 에서 수집.
+
+    동작:
+    - SEN 학년도 페이지 페이지네이션으로 form data 수집 (대학별 5개 hidden input)
+    - 우리 university_guides 의 같은 학년도 row 에 매칭
+    - 매칭 시 sen_plan_meta JSONB 에 form data 저장 + adiga_admission_plan_url 을
+      우리 SEN 프록시 URL 로 갱신 (사용자 카드의 "대입전형시행계획" 버튼이 호출)
+
+    사용자가 카드 버튼 클릭 시 우리 sen_proxy 라우터가 auto-submit form HTML 응답.
+    """
+    _require_super_admin(admin)
+
+    if data.year < 2020 or data.year > 2030:
+        raise HTTPException(status_code=400, detail="year 는 2020~2030 사이여야 합니다")
+
+    result = await sen_sync_admission_plans(year=data.year, db=db)
     return result

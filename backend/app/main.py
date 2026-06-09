@@ -41,6 +41,7 @@ from app.routers import (
     satisfaction_survey,
     schools,
     seminar,
+    sen_proxy,
     senior_notes,
     senior_pre_survey,
     universities,
@@ -127,6 +128,7 @@ app.include_router(university_guide.router)
 app.include_router(admin_university_guide.router)
 app.include_router(adiga_proxy.router)
 app.include_router(admin_adiga_import.router)
+app.include_router(sen_proxy.router)
 
 # DEV_MODE 전용 라우터 (운영에서는 마운트되지 않음)
 # spec: ipsilounge/docs/test-environment-spec.md §4
@@ -359,6 +361,19 @@ async def startup():
                             f"ALTER TABLE consultation_notes ADD COLUMN {col} {ddl}"
                         ))
                         logger.info(f"consultation_notes.{col} 컬럼 추가")
+
+            # university_guides 마이그레이션: sen_plan_meta JSONB 컬럼 추가
+            # (2026-06-09: 서울진로진학정보센터 시행계획 form data 보관용)
+            try:
+                ug_cols = [c["name"] for c in inspector.get_columns("university_guides")]
+                if "sen_plan_meta" not in ug_cols:
+                    connection.execute(text(
+                        "ALTER TABLE university_guides ADD COLUMN sen_plan_meta JSONB"
+                    ))
+                    logger.info("university_guides.sen_plan_meta 컬럼 추가")
+            except Exception as _e:
+                # 신규 환경: 테이블 자체가 없을 수 있음 (create_all 직후 inspector 캐시 문제)
+                logger.debug(f"university_guides sen_plan_meta 마이그레이션 스킵: {_e}")
 
         # DEV_MODE(SQLite) 에서는 매번 create_all 로 최신 스키마가 보장되므로
         # PostgreSQL 전용 ALTER TABLE 마이그레이션을 건너뛴다.

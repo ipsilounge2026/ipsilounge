@@ -841,6 +841,13 @@ export async function syncAdiga(data: { year: number; limit?: number | null; con
   });
 }
 
+export async function syncSen(data: { year: number }) {
+  return request("/api/admin/university-guide/sync-sen", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 // --- 대학어디가 입결 import ---
 export async function getAdigaResultsSummary() {
   return request("/api/admin/adiga-results/summary");

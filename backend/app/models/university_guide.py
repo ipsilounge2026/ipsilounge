@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -37,11 +37,19 @@ class UniversityGuide(Base):
     official_result_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # 대학어디가 출처 (5개)
+    # 주의: adiga_admission_plan_url 은 서울진로진학정보센터(SEN) 프록시 URL 로 채워짐 (사용자 카드 호환).
+    # 대학어디가에서는 시행계획 자료 더 이상 수집하지 않음 (1년 반 전 발표 자료가 없기 때문).
     adiga_admission_plan_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     adiga_susi_guide_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     adiga_jeongsi_guide_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     adiga_result_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     adiga_prior_learning_eval_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # 서울진로진학정보센터(SEN) 시행계획 form data
+    # SEN 은 POST 다운로드만 가능 + 외부 자동 다운로드 차단 → form data 를 보관해
+    # 우리 sen_proxy 라우터가 auto-submit form HTML 로 사용자에게 응답.
+    # 구조: {"fields": {"orgfilename":..., "sysfilename":..., "sysfilepath":..., "pdsid":..., "seqno":...}, "sen_university":"가야대학교"}
+    sen_plan_meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # 메타
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

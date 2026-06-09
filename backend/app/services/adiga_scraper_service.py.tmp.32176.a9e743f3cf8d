@@ -194,9 +194,8 @@ async def fetch_university_detail(
     res.raise_for_status()
     raw_html = html.unescape(res.text)
 
-    # 시행계획(adiga_admission_plan_url) 은 대학어디가에서 수집하지 않음 (SEN 우선).
-    # 기존 값 유지하기 위해 결과 dict 에 포함하지 않음.
     result: dict[str, str | None] = {
+        "adiga_admission_plan_url": None,
         "adiga_susi_guide_url": None,
         "adiga_jeongsi_guide_url": None,
         "adiga_prior_learning_eval_url": None,
@@ -261,8 +260,8 @@ async def sync_all_universities(
 
     semaphore = asyncio.Semaphore(concurrency)
     errors: list[str] = []
-    # adiga_admission_plan_url 은 자동 수집에서 제외 (SEN 으로 옮김).
     AUTOMATED_FIELDS = (
+        "adiga_admission_plan_url",
         "adiga_susi_guide_url",
         "adiga_jeongsi_guide_url",
         "adiga_prior_learning_eval_url",
