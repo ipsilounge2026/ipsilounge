@@ -57,6 +57,12 @@ nginx/ssl/
 !analyzer/.claude/settings.json
 analyzer/.claude/settings.local.json
 
+# 프로젝트 루트 .claude/settings.json 만 공유 (deny 규칙 등)
+# .claude/settings.local.json (개인 allow 누적) 은 그대로 ignore
+!.claude/
+.claude/*
+!.claude/settings.json
+
 # OS
 .DS_Store
 Thumbs.db

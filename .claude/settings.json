@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(C:/Users/orbik/Dropbox/AI Project/Claude/내신 계산식 정리/**)",
+      "Write(C:/Users/orbik/Dropbox/AI Project/Claude/내신 계산식 정리/**)",
+      "Edit(C:/Users/orbik/Dropbox/AI Project/Claude/내신 계산식 정리/**)",
+
+      "Read(C:/Users/orbik/Dropbox/AI Project/Claude/대입전형정리/**)",
+      "Write(C:/Users/orbik/Dropbox/AI Project/Claude/대입전형정리/**)",
+      "Edit(C:/Users/orbik/Dropbox/AI Project/Claude/대입전형정리/**)",
+
+      "Read(C:/Users/orbik/Dropbox/AI Project/Claude/대학어디가입결수집/**)",
+      "Write(C:/Users/orbik/Dropbox/AI Project/Claude/대학어디가입결수집/**)",
+      "Edit(C:/Users/orbik/Dropbox/AI Project/Claude/대학어디가입결수집/**)",
+
+      "Read(C:/Users/orbik/Dropbox/AI Project/Claude/등급컷 자동수집/**)",
+      "Write(C:/Users/orbik/Dropbox/AI Project/Claude/등급컷 자동수집/**)",
+      "Edit(C:/Users/orbik/Dropbox/AI Project/Claude/등급컷 자동수집/**)",
+
+      "Read(C:/Users/orbik/Dropbox/AI Project/Claude/블로그포스팅/**)",
+      "Write(C:/Users/orbik/Dropbox/AI Project/Claude/블로그포스팅/**)",
+      "Edit(C:/Users/orbik/Dropbox/AI Project/Claude/블로그포스팅/**)",
+
+      "Read(C:/Users/orbik/Dropbox/AI Project/Claude/순공랩어플/**)",
+      "Write(C:/Users/orbik/Dropbox/AI Project/Claude/순공랩어플/**)",
+      "Edit(C:/Users/orbik/Dropbox/AI Project/Claude/순공랩어플/**)",
+
+      "Read(C:/Users/orbik/Dropbox/AI Project/Claude/이미지엑셀표만들기/**)",
+      "Write(C:/Users/orbik/Dropbox/AI Project/Claude/이미지엑셀표만들기/**)",
+      "Edit(C:/Users/orbik/Dropbox/AI Project/Claude/이미지엑셀표만들기/**)",
+
+      "Read(C:/Users/orbik/Dropbox/AI Project/Claude/주식분석/**)",
+      "Write(C:/Users/orbik/Dropbox/AI Project/Claude/주식분석/**)",
+      "Edit(C:/Users/orbik/Dropbox/AI Project/Claude/주식분석/**)",
+
+      "Read(C:/Users/orbik/Dropbox/AI Project/Claude/학교정보수집/**)",
+      "Write(C:/Users/orbik/Dropbox/AI Project/Claude/학교정보수집/**)",
+      "Edit(C:/Users/orbik/Dropbox/AI Project/Claude/학교정보수집/**)"
+    ]
+  }
+}
