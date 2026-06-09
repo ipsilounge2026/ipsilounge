@@ -36,3 +36,7 @@ PyMuPDF==1.25.0
 # Sentry 에러 모니터링 (2026-04-21 추가)
 # SENTRY_DSN 환경변수 미설정 시 graceful 비활성. FastAPI integration 자동 적용.
 sentry-sdk[fastapi]==2.20.0
+
+# 대학어디가 입결 Excel 업로드·파싱 (2026-06-09 추가)
+# 관리자 페이지에서 학년도별 입결 자료 import 시 사용. 24,000행+ 처리.
+openpyxl==3.1.5
