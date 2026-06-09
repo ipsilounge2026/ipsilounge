@@ -36,17 +36,25 @@ DETAIL_URL = f"{ADIGA_BASE}/ucp/uvt/uni/univDetail.do"
 FILEDOWN_URL = f"{ADIGA_BASE}/cmm/com/file/fileDown.do"
 MENU_ID = "PCUVTINF2000"
 
+# 우리 백엔드 공개 URL (사용자가 카드 클릭 시 가는 도메인)
+# 사용자 환경에 따라 .env 의 PUBLIC_API_BASE 로 오버라이드 가능
+import os as _os
+
+PUBLIC_API_BASE = _os.environ.get("PUBLIC_API_BASE", "https://api.ipsilounge.co.kr")
+PROXY_FILE_URL = f"{PUBLIC_API_BASE}/api/university-guide/adiga/file"
+PROXY_RESULT_URL = f"{PUBLIC_API_BASE}/api/university-guide/adiga/result-redirect"
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
-# 자료 이름 → UniversityGuide 모델 필드 매핑
+# 자료 이름 → (UniversityGuide 모델 필드, 우리 프록시 kind)
 FILE_FIELD_MAP = {
-    "대학입학전형시행계획": "adiga_admission_plan_url",
-    "수시모집요강": "adiga_susi_guide_url",
-    "정시모집요강": "adiga_jeongsi_guide_url",
-    "선행학습영향평가": "adiga_prior_learning_eval_url",
+    "대학입학전형시행계획": ("adiga_admission_plan_url", "plan"),
+    "수시모집요강": ("adiga_susi_guide_url", "susi"),
+    "정시모집요강": ("adiga_jeongsi_guide_url", "jeongsi"),
+    "선행학습영향평가": ("adiga_prior_learning_eval_url", "prior"),
 }
 
 # 정규식
@@ -88,15 +96,24 @@ def _clean_url(raw: str) -> str:
     return "http://" + url
 
 
-def build_pdf_url(file_id: str, unv_cd: str, year: int) -> str:
+def build_pdf_url(file_id: str, unv_cd: str, year: int, kind: str, university: str = "") -> str:
+    """우리 프록시 URL 생성 (정상 파일명 + 정상 확장자 응답 보장)."""
+    from urllib.parse import quote as _q
+
     return (
-        f"{FILEDOWN_URL}?fileId={file_id}&fileSn=1&menuId={MENU_ID}"
-        f"&downLogYn=Y&unvCd={unv_cd}&searchSyr={year}"
+        f"{PROXY_FILE_URL}?fileId={file_id}&unvCd={unv_cd}&year={year}&kind={kind}"
+        f"&university={_q(university)}"
     )
 
 
 def build_university_page_url(unv_cd: str, year: int) -> str:
+    """대학별 대학어디가 메인 페이지 (입학처 등 일반 정보용)."""
     return f"{DETAIL_URL}?menuId={MENU_ID}&unvCd={unv_cd}&searchSyr={year}"
+
+
+def build_result_redirect_url(unv_cd: str, year: int) -> str:
+    """입시결과(대교협) 페이지 — 우리 프록시 통한 POST redirect."""
+    return f"{PROXY_RESULT_URL}?unvCd={unv_cd}&year={year}"
 
 
 async def fetch_university_list(year: int) -> list[dict]:
@@ -164,11 +181,12 @@ async def fetch_university_list(year: int) -> list[dict]:
 
 
 async def fetch_university_detail(
-    client: httpx.AsyncClient, unv_cd: str, year: int
+    client: httpx.AsyncClient, unv_cd: str, year: int, university: str = ""
 ) -> dict:
     """
     대학별 페이지에서 자료 fileId + 입학처 URL 추출.
     AsyncClient 를 외부에서 주입받아 세션·연결 재사용.
+    university: 파일명에 사용할 대학명 (선택).
     """
     detail_url = build_university_page_url(unv_cd, year)
     res = await client.get(detail_url)
@@ -180,20 +198,22 @@ async def fetch_university_detail(
         "adiga_susi_guide_url": None,
         "adiga_jeongsi_guide_url": None,
         "adiga_prior_learning_eval_url": None,
-        "adiga_result_url": detail_url,  # 입시결과 탭은 대학별 페이지로
+        # 입시결과 탭은 POST 프록시 → 우리 백엔드 redirect URL
+        "adiga_result_url": build_result_redirect_url(unv_cd, year),
         "official_admission_url": None,
     }
 
-    # 1. fileId 들 추출 → 자료 종류별 PDF URL 생성
+    # 1. fileId 들 추출 → 자료 종류별 우리 프록시 PDF URL 생성
     for m in RE_FILE_LINK.finditer(raw_html):
         file_id = m.group(1)
-        # HTML 태그 제거 + 모든 공백 제거 → "대학입학전형시행계획"
         label_raw = m.group(2)
         label = RE_HTML_TAG.sub("", label_raw)
         label = RE_WHITESPACE.sub("", label).strip()
-        field = FILE_FIELD_MAP.get(label)
-        if field and not result.get(field):
-            result[field] = build_pdf_url(file_id, unv_cd, year)
+        mapping = FILE_FIELD_MAP.get(label)
+        if mapping:
+            field, kind = mapping
+            if not result.get(field):
+                result[field] = build_pdf_url(file_id, unv_cd, year, kind, university)
 
     # 2. 입학처(입시홈페이지) URL 추출 — fnOpenNewUrl 중 "입시홈페이지" 텍스트
     for m in RE_OPEN_NEW_URL.finditer(raw_html):
@@ -257,7 +277,9 @@ async def sync_all_universities(
         async def fetch_with_sem(unv: dict) -> tuple[dict, dict | None]:
             async with semaphore:
                 try:
-                    detail = await fetch_university_detail(client, unv["unv_cd"], year)
+                    detail = await fetch_university_detail(
+                        client, unv["unv_cd"], year, university=unv["name"]
+                    )
                     return unv, detail
                 except Exception as e:
                     err = f"{unv['name']}({unv['unv_cd']}): {e}"

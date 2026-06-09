@@ -10,6 +10,7 @@ from app.config import settings
 from app.database import Base, async_session, engine
 from app.models.admin import Admin
 from app.routers import (
+    adiga_proxy,
     admin_admins,
     admin_admission_cases,
     admin_analysis,
@@ -123,6 +124,7 @@ app.include_router(user_consultation_sharing.router)
 app.include_router(blog_news.router)
 app.include_router(university_guide.router)
 app.include_router(admin_university_guide.router)
+app.include_router(adiga_proxy.router)
 
 # DEV_MODE 전용 라우터 (운영에서는 마운트되지 않음)
 # spec: ipsilounge/docs/test-environment-spec.md §4
