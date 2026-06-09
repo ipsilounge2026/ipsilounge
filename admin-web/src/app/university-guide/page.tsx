@@ -10,6 +10,7 @@ import {
   updateUniversityGuide,
   deleteUniversityGuide,
   bulkCopyUniversityGuides,
+  syncAdiga,
 } from "@/lib/api";
 
 interface Guide {
@@ -53,6 +54,7 @@ export default function UniversityGuidePage() {
   const [editing, setEditing] = useState<Guide | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showBulkCopy, setShowBulkCopy] = useState(false);
+  const [showAdigaSync, setShowAdigaSync] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,7 +105,10 @@ export default function UniversityGuidePage() {
       <main className="admin-main">
         <div className="page-header">
           <h1 className="page-title">대학모집요강 관리</h1>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn btn-outline" onClick={() => setShowAdigaSync(true)} title="대학어디가에서 220개 대학의 6개 자료 URL을 자동 수집">
+              🔄 대학어디가 자동 수집
+            </button>
             <button className="btn btn-outline" onClick={() => setShowBulkCopy(true)}>
               학년도 일괄 복사
             </button>
@@ -201,6 +206,18 @@ export default function UniversityGuidePage() {
                 const msg = e instanceof Error ? e.message : String(e);
                 alert("수정 실패: " + msg);
               }
+            }}
+          />
+        )}
+
+        {/* 대학어디가 자동 수집 모달 */}
+        {showAdigaSync && (
+          <AdigaSyncModal
+            defaultYear={year ?? new Date().getFullYear() + 1}
+            onClose={() => setShowAdigaSync(false)}
+            onComplete={async () => {
+              setShowAdigaSync(false);
+              await load();
             }}
           />
         )}
@@ -479,6 +496,185 @@ function BulkCopyModal({
           >
             복사 실행
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdigaSyncModal({
+  defaultYear,
+  onClose,
+  onComplete,
+}: {
+  defaultYear: number;
+  onClose: () => void;
+  onComplete: () => void | Promise<void>;
+}) {
+  const [year, setYear] = useState<number>(defaultYear);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{
+    total: number;
+    created: number;
+    updated: number;
+    error_count: number;
+    errors: string[];
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRun = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await syncAdiga({ year, concurrency: 5 });
+      setResult(res);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClose = async () => {
+    if (loading) return;
+    if (result) {
+      await onComplete();
+    } else {
+      onClose();
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={loading ? undefined : handleClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ padding: 24, maxWidth: 560 }}>
+        <h2>🔄 대학어디가 자동 수집</h2>
+
+        <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>
+          대학어디가(adiga.kr)에서 220개 대학의 자료 URL을 자동으로 수집합니다.
+        </p>
+
+        <div
+          style={{
+            background: "#F3F4F6",
+            borderRadius: 6,
+            padding: 12,
+            fontSize: 12,
+            color: "#374151",
+            marginBottom: 16,
+          }}
+        >
+          <strong>자동 채워지는 6개 필드:</strong>
+          <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
+            <li>입학처 바로가기 / 입시결과(대교협)</li>
+            <li>대입전형시행계획 / 수시모집요강 / 정시모집요강 / 선행학습영향평가</li>
+          </ul>
+          <strong style={{ display: "block", marginTop: 8 }}>유지되는 수동 입력 필드:</strong>
+          <ul style={{ margin: "6px 0 0 18px", padding: 0, color: "#6b7280" }}>
+            <li>학생부종합 가이드북 / 입시결과(자체발표)</li>
+          </ul>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, color: "#6b7280" }}>학년도</label>
+          <input
+            type="number"
+            className="form-control"
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            min={2020}
+            max={2030}
+            disabled={loading}
+            style={{ maxWidth: 200 }}
+          />
+          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+            ※ 정시 모집요강은 9월 발표 후 제공됩니다. 발표 후 다시 실행하면 자동으로 추가됩니다.
+          </div>
+        </div>
+
+        {loading && (
+          <div
+            style={{
+              padding: 16,
+              background: "#EFF6FF",
+              borderRadius: 6,
+              fontSize: 13,
+              color: "#1E40AF",
+              marginBottom: 16,
+            }}
+          >
+            ⏳ 동기화 중... (220개 대학 처리에 약 1~2분 소요)
+            <br />
+            <span style={{ color: "#6b7280", fontSize: 12 }}>
+              모달을 닫지 말고 잠시 기다려주세요.
+            </span>
+          </div>
+        )}
+
+        {error && (
+          <div
+            style={{
+              padding: 12,
+              background: "#FEF2F2",
+              borderRadius: 6,
+              fontSize: 13,
+              color: "#B91C1C",
+              marginBottom: 16,
+            }}
+          >
+            ❌ 실패: {error}
+          </div>
+        )}
+
+        {result && (
+          <div
+            style={{
+              padding: 12,
+              background: "#ECFDF5",
+              borderRadius: 6,
+              fontSize: 13,
+              color: "#065F46",
+              marginBottom: 16,
+            }}
+          >
+            ✅ 동기화 완료!
+            <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
+              <li>총 {result.total}개 대학 처리</li>
+              <li>신규 생성: {result.created}건</li>
+              <li>갱신: {result.updated}건</li>
+              {result.error_count > 0 && (
+                <li style={{ color: "#B91C1C" }}>실패: {result.error_count}건</li>
+              )}
+            </ul>
+            {result.errors.length > 0 && (
+              <details style={{ marginTop: 8 }}>
+                <summary style={{ cursor: "pointer", fontSize: 12 }}>실패 상세 보기</summary>
+                <ul style={{ margin: "6px 0 0 18px", padding: 0, fontSize: 11, color: "#7F1D1D" }}>
+                  {result.errors.slice(0, 10).map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        )}
+
+        <div className="modal-actions">
+          {result ? (
+            <button className="btn btn-primary" onClick={handleClose}>
+              닫기 (목록 새로고침)
+            </button>
+          ) : (
+            <>
+              <button className="btn btn-outline" onClick={handleClose} disabled={loading}>
+                취소
+              </button>
+              <button className="btn btn-primary" onClick={handleRun} disabled={loading}>
+                {loading ? "동기화 중..." : "동기화 실행"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

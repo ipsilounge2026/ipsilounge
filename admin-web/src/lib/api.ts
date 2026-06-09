@@ -833,3 +833,10 @@ export async function bulkCopyUniversityGuides(data: { from_year: number; to_yea
 export async function markUniversityGuideChecked(id: string) {
   return request(`/api/admin/university-guide/${id}/mark-checked`, { method: "POST" });
 }
+
+export async function syncAdiga(data: { year: number; limit?: number | null; concurrency?: number }) {
+  return request("/api/admin/university-guide/sync-adiga", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
