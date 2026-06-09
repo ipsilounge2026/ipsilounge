@@ -840,3 +840,30 @@ export async function syncAdiga(data: { year: number; limit?: number | null; con
     body: JSON.stringify(data),
   });
 }
+
+// --- 대학어디가 입결 import ---
+export async function getAdigaResultsSummary() {
+  return request("/api/admin/adiga-results/summary");
+}
+
+export async function uploadAdigaResults(file: File, year?: number) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const qs = year !== undefined ? `?year=${year}` : "";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+  const res = await fetch(`${API_URL}/api/admin/adiga-results/upload${qs}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteAdigaResultsYear(year: number) {
+  return request(`/api/admin/adiga-results/year/${year}`, { method: "DELETE" });
+}

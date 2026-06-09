@@ -46,6 +46,7 @@ const MENU_ROUTES: Record<string, string> = {
   seminar: "/seminar",
   notice: "/notice",
   university_guide: "/university-guide",
+  adiga_results: "/adiga-results",
   assignments: "/assignments",
   settings: "/settings",
 };

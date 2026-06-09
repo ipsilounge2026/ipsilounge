@@ -11,6 +11,7 @@ from app.database import Base, async_session, engine
 from app.models.admin import Admin
 from app.routers import (
     adiga_proxy,
+    admin_adiga_import,
     admin_admins,
     admin_admission_cases,
     admin_analysis,
@@ -125,6 +126,7 @@ app.include_router(blog_news.router)
 app.include_router(university_guide.router)
 app.include_router(admin_university_guide.router)
 app.include_router(adiga_proxy.router)
+app.include_router(admin_adiga_import.router)
 
 # DEV_MODE 전용 라우터 (운영에서는 마운트되지 않음)
 # spec: ipsilounge/docs/test-environment-spec.md §4
@@ -140,6 +142,7 @@ async def startup():
     """서버 시작 시 DB 테이블 생성 + 관리자 초기 계정 생성"""
     # 모든 모델 import (테이블 생성을 위해)
     from app.models import (  # noqa: F401
+        adiga_admission_result,
         admission_case,
         admission_data,
         analysis_order,

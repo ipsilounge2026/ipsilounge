@@ -92,6 +92,10 @@ analyzer/**/__pycache__/
 analyzer/data/students/*.py
 !analyzer/data/students/_template.py
 !analyzer/data/students/의대샘플.py
+
+# 대학어디가 입결 자동 수집 Excel (매년 갱신, 용량 큼)
+# README 만 git 추적, 실제 Excel 파일은 ignore
+backend/data/admission_results/*.xlsx
 !analyzer/data/students/__init__.py
 
 # 웹 업로드 파일 (민감 정보) — 통합 이식 전부터 누락되어 있던 이슈 보강
