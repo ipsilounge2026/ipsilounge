@@ -40,8 +40,8 @@ const URL_FIELDS: Array<{ key: keyof Guide; label: string; source: "대학어디
   { key: "adiga_susi_guide_url", label: "수시모집요강", source: "대학어디가" },
   { key: "official_jonghap_guidebook_url", label: "학생부종합 가이드북", source: "대학 입학처" },
   { key: "adiga_jeongsi_guide_url", label: "정시모집요강", source: "대학어디가" },
-  { key: "adiga_result_url", label: "입시결과 (대교협)", source: "대학어디가" },
-  { key: "official_result_url", label: "입시결과 (자체발표)", source: "대학 입학처" },
+  { key: "adiga_result_url", label: "전년도 입시결과 (대교협)", source: "대학어디가" },
+  { key: "official_result_url", label: "전년도 입시결과 (자체발표)", source: "대학 입학처" },
   { key: "adiga_prior_learning_eval_url", label: "선행학습영향평가", source: "대학어디가" },
 ];
 
@@ -584,12 +584,12 @@ function AdigaSyncModal({
         >
           <strong>자동 채워지는 6개 필드:</strong>
           <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
-            <li>입학처 바로가기 / 입시결과(대교협)</li>
+            <li>입학처 바로가기 / 전년도 입시결과(대교협)</li>
             <li>대입전형시행계획 / 수시모집요강 / 정시모집요강 / 선행학습영향평가</li>
           </ul>
           <strong style={{ display: "block", marginTop: 8 }}>유지되는 수동 입력 필드:</strong>
           <ul style={{ margin: "6px 0 0 18px", padding: 0, color: "#6b7280" }}>
-            <li>학생부종합 가이드북 / 입시결과(자체발표)</li>
+            <li>학생부종합 가이드북 / 전년도 입시결과(자체발표)</li>
           </ul>
         </div>
 

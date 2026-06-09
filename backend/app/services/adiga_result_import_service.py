@@ -283,6 +283,7 @@ async def import_to_db(
     )
     return {
         "year": year,
+        "display_year": year + 1,  # 사용자 페이지의 어느 학년도에 표시되는지 (입결 연도 + 1)
         "deleted": deleted,
         "inserted": inserted,
         "total": inserted,

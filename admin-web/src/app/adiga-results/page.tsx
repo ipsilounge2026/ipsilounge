@@ -24,6 +24,7 @@ export default function AdigaResultsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
     year: number;
+    display_year?: number;
     deleted: number;
     inserted: number;
     source_file: string;
@@ -107,29 +108,34 @@ export default function AdigaResultsPage() {
           <div style={{ background: "#F3F4F6", borderRadius: 6, padding: 12, fontSize: 13, marginBottom: 16, color: "#374151" }}>
             <strong>자동 수집 프로그램이 만든 Excel을 업로드하세요.</strong>
             <ul style={{ margin: "6px 0 0 18px", padding: 0, fontSize: 12 }}>
-              <li>파일명 권장: <code>adiga_입결_2027.xlsx</code> (학년도 자동 추출)</li>
+              <li>파일명 권장: <code>adiga_입결_2026.xlsx</code> (실제 입결 연도)</li>
               <li>시트명: <code>전년도입결</code> (또는 첫 번째 시트)</li>
-              <li>업로드 시 해당 학년도 기존 데이터를 모두 새 데이터로 교체합니다</li>
+              <li>업로드 시 해당 입결 연도 기존 데이터를 모두 새 데이터로 교체합니다</li>
               <li>업로드된 파일은 <code>backend/data/admission_results/</code> 에 영구 보관됩니다 (백업·복원용)</li>
             </ul>
+            <div style={{ marginTop: 10, padding: 10, background: "#FEF3C7", borderRadius: 4, fontSize: 11, color: "#92400E" }}>
+              <strong>📌 학년도 의미:</strong> 여기서 입력하는 학년도는 <strong>실제 입결이 발생한 연도</strong> 입니다.
+              예: 2026학년도 입결은 <code>2026</code> 으로 저장됩니다.<br/>
+              사용자 페이지에서는 자동으로 한 학년도 위(2027학년도 페이지)에 &quot;전년도 입시결과&quot;로 표시됩니다.
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
             <div>
               <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>
-                학년도 강제 지정 (선택)
+                입결 연도 (선택)
               </label>
               <input
                 type="number"
                 className="form-control"
-                placeholder="예: 2027"
+                placeholder="예: 2026"
                 value={yearOverride}
                 onChange={(e) => setYearOverride(e.target.value)}
                 disabled={uploading}
                 style={{ maxWidth: 160 }}
               />
               <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
-                파일명에서 학년도가 추출되면 비워두세요
+                파일명이 <code>adiga_입결_2026.xlsx</code> 형식이면 자동 추출됩니다
               </div>
             </div>
             <div style={{ flex: "1 1 300px" }}>
@@ -168,7 +174,8 @@ export default function AdigaResultsPage() {
             <div style={{ marginTop: 16, padding: 12, background: "#ECFDF5", borderRadius: 6, fontSize: 13, color: "#065F46" }}>
               ✅ 업로드 완료!
               <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
-                <li>학년도: <strong>{uploadResult.year}</strong></li>
+                <li>입결 연도: <strong>{uploadResult.year}학년도</strong></li>
+                <li>사용자 페이지 표시: <strong>{uploadResult.display_year ?? uploadResult.year + 1}학년도 페이지</strong> (전년도 입시결과)</li>
                 <li>기존 데이터 삭제: {uploadResult.deleted.toLocaleString()}건</li>
                 <li>신규 INSERT: {uploadResult.inserted.toLocaleString()}건</li>
                 <li>영구 보관 경로: <code>{uploadResult.saved_path}</code></li>
@@ -192,7 +199,8 @@ export default function AdigaResultsPage() {
             <table className="table" style={{ width: "100%" }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: "left" }}>학년도</th>
+                  <th style={{ textAlign: "left" }}>입결 연도</th>
+                  <th style={{ textAlign: "left" }}>표시 페이지</th>
                   <th style={{ textAlign: "right" }}>데이터 행 수</th>
                   <th style={{ textAlign: "left" }}>최근 import 시각</th>
                   <th style={{ textAlign: "left" }}>소스 파일</th>
@@ -202,7 +210,8 @@ export default function AdigaResultsPage() {
               <tbody>
                 {items.map((item) => (
                   <tr key={item.year}>
-                    <td><strong>{item.year}학년도</strong></td>
+                    <td><strong>{item.year}학년도 입결</strong></td>
+                    <td style={{ fontSize: 12, color: "#6b7280" }}>{item.year + 1}학년도 페이지</td>
                     <td style={{ textAlign: "right" }}>{item.count.toLocaleString()}건</td>
                     <td style={{ fontSize: 12, color: "#6b7280" }}>
                       {item.last_imported ? new Date(item.last_imported).toLocaleString("ko-KR") : "-"}

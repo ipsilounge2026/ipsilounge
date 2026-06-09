@@ -20,8 +20,8 @@ const BUTTON_SPECS: ButtonSpec[] = [
   { key: "official_jonghap_guidebook_url", label: "학생부종합가이드북", source: "official", group: "primary" },
   { key: "adiga_jeongsi_guide_url", label: "정시모집요강", source: "adiga", group: "primary" },
   // 하단
-  { key: "adiga_result_url", label: "입시결과(대교협)", source: "adiga", group: "secondary" },
-  { key: "official_result_url", label: "입시결과(자체발표)", source: "official", group: "secondary" },
+  { key: "adiga_result_url", label: "전년도 입시결과(대교협)", source: "adiga", group: "secondary" },
+  { key: "official_result_url", label: "전년도 입시결과(자체발표)", source: "official", group: "secondary" },
   { key: "adiga_prior_learning_eval_url", label: "선행학습영향평가", source: "adiga", group: "secondary" },
 ];
 

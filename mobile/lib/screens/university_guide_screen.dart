@@ -190,8 +190,8 @@ class _GuideCard extends StatelessWidget {
       _BtnSpec('정시모집요강', guide.adigaJeongsiGuideUrl),
     ];
     final secondary = <_BtnSpec>[
-      _BtnSpec('입시결과(대교협)', guide.adigaResultUrl, icon: Icons.bar_chart),
-      _BtnSpec('입시결과(자체발표)', guide.officialResultUrl, icon: Icons.bar_chart),
+      _BtnSpec('전년도 입시결과(대교협)', guide.adigaResultUrl, icon: Icons.bar_chart),
+      _BtnSpec('전년도 입시결과(자체발표)', guide.officialResultUrl, icon: Icons.bar_chart),
       _BtnSpec('선행학습영향평가', guide.adigaPriorLearningEvalUrl, icon: Icons.flag_outlined),
     ];
 
