@@ -638,3 +638,54 @@ export async function fetchUniversityGuides(params?: { year?: number; search?: s
   const suffix = qs.toString() ? `?${qs}` : "";
   return request(`/api/university-guide/${suffix}`);
 }
+
+// --- 입결 조회 (전년도 입시결과) ---
+export type AdmissionResultItem = {
+  id: string;
+  university: string;
+  university_code: string;
+  year: number;
+  admission_category: string | null;
+  admission_name: string | null;
+  recruitment_type: string | null;
+  major: string;
+  recruit_count: number | null;
+  competition_rate: number | null;
+  additional_count: number | null;
+  gpa_score_50: number | null;
+  gpa_score_70: number | null;
+  gpa_grade_50: number | null;
+  gpa_grade_70: number | null;
+  conv_score_50: number | null;
+  conv_score_70: number | null;
+  percentile_50: Record<string, number | null> | null;
+  percentile_70: Record<string, number | null> | null;
+  note: string | null;
+};
+
+export type AdmissionResultResponse = {
+  university: string | null;
+  university_code: string;
+  display_year: number;
+  data_year: number;
+  total: number;
+  items: AdmissionResultItem[];
+  available_recruitment_types: string[];
+  available_categories: string[];
+};
+
+export async function fetchAdmissionResult(params: {
+  university_code: string;
+  display_year: number;
+  recruitment_type?: string;
+  admission_category?: string;
+  search?: string;
+}): Promise<AdmissionResultResponse> {
+  const qs = new URLSearchParams();
+  qs.set("university_code", params.university_code);
+  qs.set("display_year", String(params.display_year));
+  if (params.recruitment_type) qs.set("recruitment_type", params.recruitment_type);
+  if (params.admission_category) qs.set("admission_category", params.admission_category);
+  if (params.search) qs.set("search", params.search);
+  return request(`/api/university-guide/result/?${qs}`);
+}

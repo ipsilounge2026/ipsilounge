@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { fetchUniversityGuides, UniversityGuideItem } from "@/lib/api";
@@ -125,9 +126,20 @@ export default function UniversityGuidePage() {
 }
 
 function GuideCard({ guide }: { guide: UniversityGuideItem }) {
+  const router = useRouter();
   const open = (url: string | null | undefined) => {
     if (!url) return;
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  // adiga_result_url (전년도 입시결과(대교협)) 클릭은 우리 자체 입결 페이지로 이동.
+  // university_code 있을 때만 사용 가능.
+  const handleSecondaryClick = (key: string, url: string | null) => {
+    if (key === "adiga_result_url" && guide.university_code) {
+      router.push(`/university-guide/result/${guide.university_code}/${guide.year}`);
+      return;
+    }
+    open(url);
   };
 
   const primary = BUTTON_SPECS.filter((b) => b.group === "primary");
@@ -201,12 +213,15 @@ function GuideCard({ guide }: { guide: UniversityGuideItem }) {
       <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #F3F4F6", display: "flex", gap: 16, flexWrap: "wrap" }}>
         {secondary.map((b) => {
           const url = guide[b.key] as string | null;
-          const disabled = !url;
+          // adiga_result_url (전년도 입시결과(대교협)) 은 우리 자체 페이지로 이동하므로
+          // 외부 URL 없어도 university_code 만 있으면 활성화.
+          const isInternal = b.key === "adiga_result_url" && !!guide.university_code;
+          const disabled = !url && !isInternal;
           const icon = b.key === "adiga_result_url" || b.key === "official_result_url" ? "📊" : "🎯";
           return (
             <button
               key={b.key as string}
-              onClick={() => open(url)}
+              onClick={() => handleSecondaryClick(b.key as string, url)}
               disabled={disabled}
               style={{
                 background: "none",

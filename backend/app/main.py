@@ -29,6 +29,7 @@ from app.routers import (
     admin_university_guide,
     admin_users,
     admission_cases,
+    admission_result,
     analysis,
     auth,
     blog_news,
@@ -129,6 +130,7 @@ app.include_router(admin_university_guide.router)
 app.include_router(adiga_proxy.router)
 app.include_router(admin_adiga_import.router)
 app.include_router(sen_proxy.router)
+app.include_router(admission_result.router)
 
 # DEV_MODE 전용 라우터 (운영에서는 마운트되지 않음)
 # spec: ipsilounge/docs/test-environment-spec.md §4
