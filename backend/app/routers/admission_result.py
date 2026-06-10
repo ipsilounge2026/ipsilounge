@@ -160,3 +160,63 @@ async def get_available_data_years(
         "data_years": data_years,
         "display_years": display_years,
     }
+
+
+@router.get("/timeline")
+async def get_admission_timeline(
+    university_code: str = Query(..., description="대학 코드"),
+    major: str = Query(..., description="학과/모집단위"),
+    recruitment_type: str | None = Query(None, description="수시 / 정시"),
+    admission_category: str | None = Query(None, description="전형유형"),
+    admission_name: str | None = Query(None, description="전형명 (선택, 정확 매칭)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    같은 학과·전형의 여러 학년도 추이 (그래프용).
+
+    매칭 키: university_code + major (+ recruitment_type + admission_category + admission_name).
+    매칭이 너무 엄격하면 데이터가 적게 나오므로 admission_name 은 선택.
+    """
+    conditions = [
+        AdigaAdmissionResult.university_code == university_code,
+        AdigaAdmissionResult.major == major,
+    ]
+    if recruitment_type:
+        conditions.append(AdigaAdmissionResult.recruitment_type == recruitment_type)
+    if admission_category:
+        conditions.append(AdigaAdmissionResult.admission_category == admission_category)
+    if admission_name:
+        conditions.append(AdigaAdmissionResult.admission_name == admission_name)
+
+    res = await db.execute(
+        select(AdigaAdmissionResult)
+        .where(and_(*conditions))
+        .order_by(AdigaAdmissionResult.year.asc())
+    )
+    items = res.scalars().all()
+
+    points = []
+    for it in items:
+        avg50 = (it.percentile_50 or {}).get("average_percentile") if it.percentile_50 else None
+        avg70 = (it.percentile_70 or {}).get("average_percentile") if it.percentile_70 else None
+        points.append({
+            "data_year": it.year,
+            "display_year": it.year + 1,
+            "admission_name": it.admission_name,
+            "recruit_count": it.recruit_count,
+            "competition_rate": it.competition_rate,
+            "additional_count": it.additional_count,
+            "gpa_grade_50": it.gpa_grade_50,
+            "gpa_grade_70": it.gpa_grade_70,
+            "avg_percentile_50": avg50,
+            "avg_percentile_70": avg70,
+        })
+
+    return {
+        "university_code": university_code,
+        "major": major,
+        "recruitment_type": recruitment_type,
+        "admission_category": admission_category,
+        "total": len(points),
+        "points": points,
+    }

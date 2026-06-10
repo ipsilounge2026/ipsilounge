@@ -689,3 +689,41 @@ export async function fetchAdmissionResult(params: {
   if (params.search) qs.set("search", params.search);
   return request(`/api/university-guide/result/?${qs}`);
 }
+
+export type AdmissionTimelinePoint = {
+  data_year: number;
+  display_year: number;
+  admission_name: string | null;
+  recruit_count: number | null;
+  competition_rate: number | null;
+  additional_count: number | null;
+  gpa_grade_50: number | null;
+  gpa_grade_70: number | null;
+  avg_percentile_50: number | null;
+  avg_percentile_70: number | null;
+};
+
+export type AdmissionTimelineResponse = {
+  university_code: string;
+  major: string;
+  recruitment_type: string | null;
+  admission_category: string | null;
+  total: number;
+  points: AdmissionTimelinePoint[];
+};
+
+export async function fetchAdmissionTimeline(params: {
+  university_code: string;
+  major: string;
+  recruitment_type?: string;
+  admission_category?: string;
+  admission_name?: string;
+}): Promise<AdmissionTimelineResponse> {
+  const qs = new URLSearchParams();
+  qs.set("university_code", params.university_code);
+  qs.set("major", params.major);
+  if (params.recruitment_type) qs.set("recruitment_type", params.recruitment_type);
+  if (params.admission_category) qs.set("admission_category", params.admission_category);
+  if (params.admission_name) qs.set("admission_name", params.admission_name);
+  return request(`/api/university-guide/result/timeline?${qs}`);
+}
