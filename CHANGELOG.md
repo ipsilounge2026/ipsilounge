@@ -5,6 +5,20 @@
 
 ---
 
+## 2026-06-10
+
+### fix(adiga-import): 입결 Excel 형식 검증 + 백업 덮어쓰기 방지
+- **원인**: 수집 프로그램이 새로 내보낸 Excel 의 컬럼 구조가 표준 형식(시트 '전년도입결', 5번째 컬럼 '구분')과 달라(시트 3분할 + 구분/모집단위 순서 변경 또는 원시 182~412컬럼) 컬럼이 밀리면서 학과명이 `recruitment_type`(VARCHAR(10)) 에 들어가 `StringDataRightTruncationError` 발생
+- `adiga_result_import_service.py`: `_validate_headers()` 추가 — 앞 9개 컬럼 헤더가 표준 형식과 다르면 import 전에 명확한 한국어 에러 (어느 컬럼이 어떻게 다른지 명시)
+- `admin_adiga_import.py`: 영구 백업 저장을 DB import **성공 이후**로 이동 — 실패한 파일이 정상 백업을 덮어쓰던 문제 수정 (이번 사고로 서버의 2025·2026 백업 파일이 잘못된 형식 파일로 교체됨 — DB 데이터는 롤백으로 무사)
+
+### fix(admission-result): 정시 상세 표시 + 전형유형 dropdown 탭별 세분화
+- 정시 row 에서 백분위 없어도 GPA·환산점수·비고 있으면 상세 버튼 표시 + 상세에 모두 노출
+- 전형유형 dropdown 을 admission_category → admission_name 기반으로 변경 (탭별 옵션, 예: 학생부교과(특성화고교) / 수능(농어촌))
+- 백엔드 응답에 `available_admission_names_by_type` 추가, 탭 변경 시 필터 리셋
+
+---
+
 ## 2026-06-08
 
 ### feat(university-guide): 대학모집요강 안내 페이지 신규 — 웹·앱·관리자

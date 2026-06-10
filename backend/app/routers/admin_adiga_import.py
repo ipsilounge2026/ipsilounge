@@ -2,9 +2,9 @@
 
 흐름:
 1. 관리자가 Excel 업로드 (multipart/form-data)
-2. 백엔드가 임시 디렉토리에서 파싱
-3. 검증 통과 시 backend/data/admission_results/ 에 영구 저장 (백업·복원용)
-4. DB import (해당 학년도 삭제 후 새로 INSERT)
+2. 백엔드가 임시 디렉토리에서 파싱 + 컬럼 구조 검증 (표준 형식 아니면 400)
+3. DB import (해당 학년도 삭제 후 새로 INSERT)
+4. import 성공 시에만 backend/data/admission_results/ 에 영구 저장 (백업·복원용)
 5. 결과 응답 (학년도, 삭제·신규 건수, 학년도별 요약)
 """
 
@@ -96,19 +96,18 @@ async def admin_upload(
                 detail="학년도를 결정할 수 없습니다. 파일명을 'adiga_입결_YYYY.xlsx' 형식으로 하거나 year 파라미터를 지정하세요.",
             )
 
-        # 3. 영구 저장 폴더 보장 + 파일 저장
-        PERSIST_DIR.mkdir(parents=True, exist_ok=True)
-        dest_path = PERSIST_DIR / f"adiga_입결_{effective_year}.xlsx"
-        # 같은 학년도 파일이 이미 있으면 덮어쓰기
-        shutil.copyfile(tmp_path, dest_path)
-        logger.info(f"adiga import: 영구 보관 → {dest_path}")
-
-        # 4. DB import
+        # 3. DB import (실패 시 기존 백업 파일을 건드리지 않도록 영구 저장보다 먼저 수행)
         try:
             result = await import_to_db(db, parsed, override_year=effective_year)
         except Exception as e:
             logger.error(f"adiga import DB 실패: {e}")
             raise HTTPException(status_code=500, detail=f"DB import 실패: {e}")
+
+        # 4. import 성공 후에만 영구 저장 (백업·복원용 — 실패한 파일로 덮어쓰기 방지)
+        PERSIST_DIR.mkdir(parents=True, exist_ok=True)
+        dest_path = PERSIST_DIR / f"adiga_입결_{effective_year}.xlsx"
+        shutil.copyfile(tmp_path, dest_path)
+        logger.info(f"adiga import: 영구 보관 → {dest_path}")
 
         # 5. 학년도별 요약 함께 반환
         summary = await get_year_summary(db)

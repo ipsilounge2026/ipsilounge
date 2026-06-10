@@ -67,6 +67,36 @@ PERCENTILE_KEY_MAP = {
 # 파일명에서 학년도 추출: "adiga_입결_2027.xlsx" → 2027
 RE_YEAR_FROM_FILENAME = re.compile(r"(\d{4})\.xlsx?$", re.IGNORECASE)
 
+# 표준 형식 헤더 (앞 9개 컬럼, 공백 제거 후 비교)
+EXPECTED_HEADERS = ["대학명", "대학코드", "전형유형", "전형명", "구분", "모집단위", "모집인원", "경쟁률", "충원인원"]
+
+
+def _validate_headers(headers: list, sheetnames: list[str]) -> None:
+    """컬럼 구조가 표준 형식인지 검증. 다르면 명확한 메시지로 ValueError.
+
+    형식이 다른 파일을 그대로 import 하면 컬럼이 밀려서
+    학과명이 '구분'(VARCHAR(10)) 컬럼에 들어가는 등 DB 에러가 난다.
+    """
+    norm = [
+        str(h).replace(" ", "").strip() if h is not None else ""
+        for h in headers[: len(EXPECTED_HEADERS)]
+    ]
+    mismatches = [
+        f"{i + 1}번째 컬럼: 기대 '{exp}' / 실제 '{norm[i] if i < len(norm) and norm[i] else '(없음)'}'"
+        for i, exp in enumerate(EXPECTED_HEADERS)
+        if i >= len(norm) or norm[i] != exp
+    ]
+    if mismatches:
+        raise ValueError(
+            "Excel 컬럼 구조가 표준 형식과 다릅니다. "
+            f"(시트: {sheetnames}) "
+            "표준 형식: 시트명 '전년도입결' 1개, 컬럼 순서 = "
+            + " → ".join(EXPECTED_HEADERS)
+            + " → 학생부 환산점수/등급/백분위... (총 37컬럼). "
+            "불일치: " + " / ".join(mismatches[:5])
+            + " — 수집 프로그램에서 표준 형식으로 다시 내보낸 파일을 업로드하세요."
+        )
+
 
 def extract_year_from_filename(filename: str) -> int | None:
     """파일명에서 학년도 추출."""
@@ -172,6 +202,9 @@ def parse_excel(file_path: str | Path) -> dict:
 
     rows_iter = sheet.iter_rows(values_only=True)
     headers = list(next(rows_iter, ()))
+
+    # 컬럼 구조 검증 — 형식이 다르면 여기서 즉시 명확한 에러
+    _validate_headers(headers, wb.sheetnames)
 
     parsed: list[dict] = []
     for row in rows_iter:
