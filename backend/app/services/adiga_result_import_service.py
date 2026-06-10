@@ -505,6 +505,17 @@ def _parse_unified_sheet(sheet, sheet_name: str, year: int | None, filename: str
             out[key] = _first_value(row, idxs, conv)
         return out
 
+    def _pct_text_note(row: tuple, colmap: dict[str, list[int]]) -> str | None:
+        """백분위 컬럼에 숫자 대신 텍스트('미제출 사유: 3명이하 미산출' 등)가 있으면 반환."""
+        for idxs in colmap.values():
+            for idx in idxs:
+                v = row[idx] if idx < len(row) else None
+                if isinstance(v, str):
+                    s = v.strip()
+                    if s and s != "-" and _to_float(s) is None:
+                        return s
+        return None
+
     def _read_clean(row: tuple, idxs: list[int], note_parts: list[str]) -> float | None:
         """정확 일치 컬럼 읽기. 숫자가 아니면 텍스트를 note 로 보존."""
         val = _first_value(row, idxs, _to_float)
@@ -591,6 +602,14 @@ def _parse_unified_sheet(sheet, sheet_name: str, year: int | None, filename: str
             if s and s != "-":
                 note_parts.append(s)
 
+        # 백분위 컬럼의 텍스트(미제출 사유 등) 보존
+        pct50_dict = _build_pct(row, pct50)
+        pct70_dict = _build_pct(row, pct70)
+        if pct50 and not any(v is not None for v in pct50_dict.values()):
+            t = _pct_text_note(row, pct50)
+            if t:
+                note_parts.append(t)
+
         # note 중복 제거 (순서 보존)
         seen: set[str] = set()
         notes = [n for n in note_parts if not (n in seen or seen.add(n))]
@@ -607,8 +626,8 @@ def _parse_unified_sheet(sheet, sheet_name: str, year: int | None, filename: str
             "competition_rate": _first_value(row, core["competition_rate"], _to_rate),
             "additional_count": _first_value(row, core["additional_count"], _to_int),
             **values,
-            "percentile_50": _build_pct(row, pct50),
-            "percentile_70": _build_pct(row, pct70),
+            "percentile_50": pct50_dict,
+            "percentile_70": pct70_dict,
             "note": " | ".join(notes) if notes else None,
             "source_file": filename,
         }
