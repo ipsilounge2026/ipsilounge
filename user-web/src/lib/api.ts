@@ -672,6 +672,7 @@ export type AdmissionResultResponse = {
   items: AdmissionResultItem[];
   available_recruitment_types: string[];
   available_categories: string[];
+  available_admission_names_by_type?: Record<string, string[]>;
 };
 
 export async function fetchAdmissionResult(params: {
@@ -679,6 +680,7 @@ export async function fetchAdmissionResult(params: {
   display_year: number;
   recruitment_type?: string;
   admission_category?: string;
+  admission_name?: string;
   search?: string;
 }): Promise<AdmissionResultResponse> {
   const qs = new URLSearchParams();
@@ -686,6 +688,7 @@ export async function fetchAdmissionResult(params: {
   qs.set("display_year", String(params.display_year));
   if (params.recruitment_type) qs.set("recruitment_type", params.recruitment_type);
   if (params.admission_category) qs.set("admission_category", params.admission_category);
+  if (params.admission_name) qs.set("admission_name", params.admission_name);
   if (params.search) qs.set("search", params.search);
   return request(`/api/university-guide/result/?${qs}`);
 }

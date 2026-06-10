@@ -54,6 +54,7 @@ async def get_admission_result(
     display_year: int = Query(..., description="사용자가 보는 학년도 (예: 2027). 실제 입결 조회는 display_year - 1"),
     recruitment_type: str | None = Query(None, description="수시 / 정시"),
     admission_category: str | None = Query(None, description="전형유형: 종합/교과/논술/수능 등"),
+    admission_name: str | None = Query(None, description="전형명 (예: 학생부교과(특성화고교)) 정확 매칭"),
     search: str | None = Query(None, description="학과명 부분 검색"),
     db: AsyncSession = Depends(get_db),
 ):
@@ -86,6 +87,8 @@ async def get_admission_result(
         conditions.append(AdigaAdmissionResult.recruitment_type == recruitment_type)
     if admission_category:
         conditions.append(AdigaAdmissionResult.admission_category == admission_category)
+    if admission_name:
+        conditions.append(AdigaAdmissionResult.admission_name == admission_name)
     if search:
         conditions.append(AdigaAdmissionResult.major.ilike(f"%{search}%"))
 
@@ -111,11 +114,13 @@ async def get_admission_result(
     data_res = await db.execute(data_q)
     items = data_res.scalars().all()
 
-    # 필터용 메타: 이 대학·학년도에 있는 카테고리·구분 종류
+    # 필터용 메타: 이 대학·학년도에 있는 구분·전형유형·전형명 종류
+    # admission_name 은 recruitment_type 별로 그룹화해서 반환 (탭별 dropdown 옵션용)
     meta_q = await db.execute(
         select(
             AdigaAdmissionResult.recruitment_type,
             AdigaAdmissionResult.admission_category,
+            AdigaAdmissionResult.admission_name,
         )
         .where(
             and_(
@@ -129,6 +134,17 @@ async def get_admission_result(
     available_recruitment_types = sorted({r[0] for r in meta_rows if r[0]})
     available_categories = sorted({r[1] for r in meta_rows if r[1]})
 
+    # recruitment_type → 정렬된 admission_name 목록
+    names_by_type: dict[str, list[str]] = {}
+    for rt, _cat, name in meta_rows:
+        if not rt or not name:
+            continue
+        names_by_type.setdefault(rt, [])
+        if name not in names_by_type[rt]:
+            names_by_type[rt].append(name)
+    for rt in names_by_type:
+        names_by_type[rt].sort()
+
     return {
         "university": university_name,
         "university_code": university_code,
@@ -138,6 +154,7 @@ async def get_admission_result(
         "items": [_to_response(it) for it in items],
         "available_recruitment_types": available_recruitment_types,
         "available_categories": available_categories,
+        "available_admission_names_by_type": names_by_type,
     }
 
 

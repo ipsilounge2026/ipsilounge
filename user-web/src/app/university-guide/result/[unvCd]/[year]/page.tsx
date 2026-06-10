@@ -38,7 +38,8 @@ export default function AdmissionResultPage() {
   const [error, setError] = useState<string | null>(null);
   // 기본 탭: "수시" (전체 탭 제거)
   const [recruitmentTab, setRecruitmentTab] = useState<string>("수시");
-  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  // 전형명(admission_name) 기반 필터 — 탭 변경 시 리셋
+  const [admissionNameFilter, setAdmissionNameFilter] = useState<string>("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [openedRow, setOpenedRow] = useState<string | null>(null);
@@ -57,7 +58,7 @@ export default function AdmissionResultPage() {
         university_code: unvCd,
         display_year: displayYear,
         recruitment_type: recruitmentTab || undefined,
-        admission_category: categoryFilter || undefined,
+        admission_name: admissionNameFilter || undefined,
         search: search || undefined,
       });
       setData(res);
@@ -67,7 +68,7 @@ export default function AdmissionResultPage() {
     } finally {
       setLoading(false);
     }
-  }, [unvCd, displayYear, recruitmentTab, categoryFilter, search]);
+  }, [unvCd, displayYear, recruitmentTab, admissionNameFilter, search]);
 
   useEffect(() => {
     load();
@@ -117,6 +118,20 @@ export default function AdmissionResultPage() {
 
   // 현재 탭이 정시 계열인지
   const isJeongsiTab = isJeongsiType(recruitmentTab);
+
+  // 현재 탭에서 선택 가능한 전형명 (admission_name) 목록
+  const admissionNameOptions = useMemo(() => {
+    if (!data?.available_admission_names_by_type) return [] as string[];
+    return data.available_admission_names_by_type[recruitmentTab] || [];
+  }, [data, recruitmentTab]);
+
+  // 탭 변경 핸들러 — 전형명 필터 리셋
+  const handleTabChange = useCallback((t: string) => {
+    setRecruitmentTab(t);
+    setAdmissionNameFilter("");
+    setOpenedRow(null);
+    setOpenedTimeline(null);
+  }, []);
 
   return (
     <>
@@ -174,7 +189,7 @@ export default function AdmissionResultPage() {
             {/* 수시/정시 탭 (전체 제거) */}
             <div style={{ display: "flex", gap: 8, marginBottom: 16, borderBottom: "2px solid #E5E7EB" }}>
               {tabs.map((t) => (
-                <TabButton key={t} active={recruitmentTab === t} onClick={() => setRecruitmentTab(t)}>
+                <TabButton key={t} active={recruitmentTab === t} onClick={() => handleTabChange(t)}>
                   {t}
                 </TabButton>
               ))}
@@ -191,20 +206,21 @@ export default function AdmissionResultPage() {
               }}
             >
               <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
+                value={admissionNameFilter}
+                onChange={(e) => setAdmissionNameFilter(e.target.value)}
                 style={{
                   padding: "8px 12px",
                   borderRadius: 8,
                   border: "1px solid #d1d5db",
                   fontSize: 14,
                   background: "#fff",
+                  maxWidth: 320,
                 }}
               >
                 <option value="">전형유형 전체</option>
-                {data.available_categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+                {admissionNameOptions.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
                   </option>
                 ))}
               </select>
@@ -428,10 +444,18 @@ function Row({
     ? <><span style={{ fontWeight: 600 }}>{item.gpa_grade_70}</span><span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 2 }}>등급</span></>
     : "-";
 
-  // 상세 버튼: 정시는 백분위, 수시는 환산점수/비고
+  // 상세 버튼: 정시는 백분위 + 환산점수/GPA/비고, 수시는 환산점수/비고
+  const hasExtraJeongsiDetail =
+    item.conv_score_50 != null ||
+    item.conv_score_70 != null ||
+    item.gpa_score_50 != null ||
+    item.gpa_score_70 != null ||
+    item.gpa_grade_50 != null ||
+    item.gpa_grade_70 != null ||
+    !!item.note;
   const showDetailButton = isJeongsi
-    ? hasPercentile
-    : (item.gpa_score_50 != null || item.gpa_score_70 != null || !!item.note);
+    ? hasPercentile || hasExtraJeongsiDetail
+    : (item.gpa_score_50 != null || item.gpa_score_70 != null || item.conv_score_50 != null || item.conv_score_70 != null || !!item.note);
 
   return (
     <>
@@ -521,6 +545,55 @@ function Row({
               <>
                 <PercentileDetail label="50%" data={item.percentile_50} />
                 <PercentileDetail label="70%" data={item.percentile_70} />
+                {hasExtraJeongsiDetail && (
+                  <div style={{ display: "flex", gap: 24, fontSize: 12, flexWrap: "wrap", marginTop: hasPercentile ? 8 : 0 }}>
+                    {item.gpa_grade_50 != null && (
+                      <div>
+                        <span style={{ color: "#6B7B98" }}>50% 등급: </span>
+                        <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.gpa_grade_50}</span>
+                      </div>
+                    )}
+                    {item.gpa_grade_70 != null && (
+                      <div>
+                        <span style={{ color: "#6B7B98" }}>70% 등급: </span>
+                        <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.gpa_grade_70}</span>
+                      </div>
+                    )}
+                    {item.gpa_score_50 != null && (
+                      <div>
+                        <span style={{ color: "#6B7B98" }}>50% 학생부 환산점수: </span>
+                        <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.gpa_score_50}</span>
+                      </div>
+                    )}
+                    {item.gpa_score_70 != null && (
+                      <div>
+                        <span style={{ color: "#6B7B98" }}>70% 학생부 환산점수: </span>
+                        <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.gpa_score_70}</span>
+                      </div>
+                    )}
+                    {item.conv_score_50 != null && (
+                      <div>
+                        <span style={{ color: "#6B7B98" }}>50% 환산점수: </span>
+                        <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.conv_score_50}</span>
+                      </div>
+                    )}
+                    {item.conv_score_70 != null && (
+                      <div>
+                        <span style={{ color: "#6B7B98" }}>70% 환산점수: </span>
+                        <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.conv_score_70}</span>
+                      </div>
+                    )}
+                    {item.note && (
+                      <div>
+                        <span style={{ color: "#6B7B98" }}>비고: </span>
+                        <span style={{ color: "#0B1F3F" }}>{item.note}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!hasPercentile && !hasExtraJeongsiDetail && (
+                  <div style={{ fontSize: 12, color: "#9CA3AF" }}>표시할 상세 데이터가 없습니다.</div>
+                )}
               </>
             ) : (
               <div style={{ display: "flex", gap: 24, fontSize: 12, flexWrap: "wrap" }}>
