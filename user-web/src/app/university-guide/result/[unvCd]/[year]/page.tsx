@@ -205,8 +205,14 @@ export default function AdmissionResultPage() {
                       <th style={thRight()}>모집</th>
                       <th style={thRight()}>경쟁률</th>
                       <th style={thRight()}>충원</th>
-                      <th style={thRight()}>50% 등급</th>
-                      <th style={thRight()}>70% 등급</th>
+                      <th style={thRight()}>
+                        50%
+                        <div style={{ fontSize: 10, fontWeight: 400, color: "#9CA3AF" }}>수시: 등급 / 정시: 백분위</div>
+                      </th>
+                      <th style={thRight()}>
+                        70%
+                        <div style={{ fontSize: 10, fontWeight: 400, color: "#9CA3AF" }}>수시: 등급 / 정시: 백분위</div>
+                      </th>
                       <th style={th()}>상세</th>
                     </tr>
                   </thead>
@@ -293,9 +299,32 @@ function Row({
   onToggle: () => void;
   fmt: (v: number | null | undefined, suffix?: string) => string;
 }) {
+  const isJeongsi = item.recruitment_type === "정시";
+  const avg50 = item.percentile_50?.average_percentile;
+  const avg70 = item.percentile_70?.average_percentile;
   const hasPercentile =
     (item.percentile_50 && Object.values(item.percentile_50).some((v) => v !== null && v !== undefined)) ||
     (item.percentile_70 && Object.values(item.percentile_70).some((v) => v !== null && v !== undefined));
+
+  // 수시: 등급, 정시: 평균 백분위
+  const cell50 = isJeongsi
+    ? avg50 != null
+      ? <><span style={{ fontWeight: 600 }}>{avg50}</span><span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 2 }}>%</span></>
+      : "-"
+    : item.gpa_grade_50 != null
+    ? <><span style={{ fontWeight: 600 }}>{item.gpa_grade_50}</span><span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 2 }}>등급</span></>
+    : "-";
+  const cell70 = isJeongsi
+    ? avg70 != null
+      ? <><span style={{ fontWeight: 600 }}>{avg70}</span><span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 2 }}>%</span></>
+      : "-"
+    : item.gpa_grade_70 != null
+    ? <><span style={{ fontWeight: 600 }}>{item.gpa_grade_70}</span><span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 2 }}>등급</span></>
+    : "-";
+
+  // 정시는 항상 [상세] 버튼 (과목별 백분위), 수시는 노트나 환산점수 있을 때만
+  const showDetailButton = isJeongsi ? hasPercentile : (item.gpa_score_50 != null || item.gpa_score_70 != null);
+
   return (
     <>
       <tr style={{ borderTop: "1px solid #F3F4F6" }}>
@@ -310,10 +339,10 @@ function Row({
         <td style={tdRight()}>{fmt(item.recruit_count)}</td>
         <td style={tdRight()}>{fmt(item.competition_rate)}</td>
         <td style={tdRight()}>{fmt(item.additional_count)}</td>
-        <td style={tdRight()}>{fmt(item.gpa_grade_50)}</td>
-        <td style={tdRight()}>{fmt(item.gpa_grade_70)}</td>
+        <td style={tdRight()}>{cell50}</td>
+        <td style={tdRight()}>{cell70}</td>
         <td style={tdCenter()}>
-          {hasPercentile ? (
+          {showDetailButton ? (
             <button
               onClick={onToggle}
               style={{
@@ -326,7 +355,7 @@ function Row({
                 color: "#374151",
               }}
             >
-              {opened ? "닫기" : "백분위"}
+              {opened ? "닫기" : "상세"}
             </button>
           ) : item.note ? (
             <span style={{ fontSize: 11, color: "#9CA3AF" }}>{item.note}</span>
@@ -335,11 +364,48 @@ function Row({
           )}
         </td>
       </tr>
-      {opened && hasPercentile && (
+      {opened && (
         <tr style={{ background: "#FAFAFA" }}>
           <td colSpan={9} style={{ padding: "12px 16px" }}>
-            <PercentileDetail label="50%" data={item.percentile_50} />
-            <PercentileDetail label="70%" data={item.percentile_70} />
+            {isJeongsi ? (
+              <>
+                <PercentileDetail label="50%" data={item.percentile_50} />
+                <PercentileDetail label="70%" data={item.percentile_70} />
+              </>
+            ) : (
+              <div style={{ display: "flex", gap: 24, fontSize: 12 }}>
+                {item.gpa_score_50 != null && (
+                  <div>
+                    <span style={{ color: "#6B7B98" }}>50% 환산점수: </span>
+                    <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.gpa_score_50}</span>
+                  </div>
+                )}
+                {item.gpa_score_70 != null && (
+                  <div>
+                    <span style={{ color: "#6B7B98" }}>70% 환산점수: </span>
+                    <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.gpa_score_70}</span>
+                  </div>
+                )}
+                {item.conv_score_50 != null && (
+                  <div>
+                    <span style={{ color: "#6B7B98" }}>50% 환산: </span>
+                    <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.conv_score_50}</span>
+                  </div>
+                )}
+                {item.conv_score_70 != null && (
+                  <div>
+                    <span style={{ color: "#6B7B98" }}>70% 환산: </span>
+                    <span style={{ color: "#0B1F3F", fontWeight: 600 }}>{item.conv_score_70}</span>
+                  </div>
+                )}
+                {item.note && (
+                  <div>
+                    <span style={{ color: "#6B7B98" }}>비고: </span>
+                    <span style={{ color: "#0B1F3F" }}>{item.note}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </td>
         </tr>
       )}
