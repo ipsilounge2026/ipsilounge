@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   CartesianGrid,
@@ -22,21 +22,31 @@ import {
   AdmissionTimelinePoint,
 } from "@/lib/api";
 
+const isJeongsiType = (rt: string | null | undefined): boolean =>
+  !!rt && rt.includes("정시");
+
+type SortMode = "major" | "category";
+
 export default function AdmissionResultPage() {
   const router = useRouter();
   const params = useParams();
   const unvCd = String(params.unvCd || "");
   const displayYear = Number(params.year || 0);
-  const [openedTimeline, setOpenedTimeline] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AdmissionResultResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [recruitmentTab, setRecruitmentTab] = useState<string>(""); // "" = 전체
+  // 기본 탭: "수시" (전체 탭 제거)
+  const [recruitmentTab, setRecruitmentTab] = useState<string>("수시");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [openedRow, setOpenedRow] = useState<string | null>(null);
+  const [openedTimeline, setOpenedTimeline] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("major");
+
+  // timeline 클라이언트 캐시 (학과+전형 키별)
+  const timelineCache = useRef<Map<string, AdmissionTimelinePoint[]>>(new Map());
 
   const load = useCallback(async () => {
     if (!unvCd || !displayYear) return;
@@ -63,15 +73,50 @@ export default function AdmissionResultPage() {
     load();
   }, [load]);
 
+  // 정렬 적용
+  const sortedItems = useMemo(() => {
+    if (!data) return [];
+    const items = [...data.items];
+    if (sortMode === "category") {
+      items.sort((a, b) => {
+        const c = (a.admission_category || "").localeCompare(b.admission_category || "");
+        if (c !== 0) return c;
+        const n = (a.admission_name || "").localeCompare(b.admission_name || "");
+        if (n !== 0) return n;
+        return (a.major || "").localeCompare(b.major || "");
+      });
+    } else {
+      items.sort((a, b) => {
+        const m = (a.major || "").localeCompare(b.major || "");
+        if (m !== 0) return m;
+        const c = (a.admission_category || "").localeCompare(b.admission_category || "");
+        if (c !== 0) return c;
+        return (a.admission_name || "").localeCompare(b.admission_name || "");
+      });
+    }
+    return items;
+  }, [data, sortMode]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setSearch(searchInput.trim());
   };
 
-  const fmt = (v: number | null | undefined, suffix = "") => {
+  const fmt = (v: number | null | undefined) => {
     if (v === null || v === undefined) return "-";
-    return `${v}${suffix}`;
+    return String(v);
   };
+
+  // 탭 옵션: 수시 + 정시 종류들 (전체 탭 제거)
+  const tabs = useMemo(() => {
+    if (!data) return ["수시"];
+    return data.available_recruitment_types.length > 0
+      ? data.available_recruitment_types
+      : ["수시"];
+  }, [data]);
+
+  // 현재 탭이 정시 계열인지
+  const isJeongsiTab = isJeongsiType(recruitmentTab);
 
   return (
     <>
@@ -126,19 +171,16 @@ export default function AdmissionResultPage() {
         {/* 데이터 있음 */}
         {data && data.total > 0 && (
           <>
-            {/* 수시/정시 탭 */}
+            {/* 수시/정시 탭 (전체 제거) */}
             <div style={{ display: "flex", gap: 8, marginBottom: 16, borderBottom: "2px solid #E5E7EB" }}>
-              <TabButton active={recruitmentTab === ""} onClick={() => setRecruitmentTab("")}>
-                전체
-              </TabButton>
-              {data.available_recruitment_types.map((t) => (
+              {tabs.map((t) => (
                 <TabButton key={t} active={recruitmentTab === t} onClick={() => setRecruitmentTab(t)}>
                   {t}
                 </TabButton>
               ))}
             </div>
 
-            {/* 필터 */}
+            {/* 필터 + 정렬 */}
             <div
               style={{
                 display: "flex",
@@ -167,7 +209,7 @@ export default function AdmissionResultPage() {
                 ))}
               </select>
 
-              <form onSubmit={handleSearch} style={{ display: "flex", gap: 8, flex: "1 1 240px" }}>
+              <form onSubmit={handleSearch} style={{ display: "flex", gap: 8, flex: "1 1 220px" }}>
                 <input
                   type="text"
                   placeholder="학과명 검색"
@@ -198,8 +240,18 @@ export default function AdmissionResultPage() {
                 </button>
               </form>
 
+              {/* 정렬 옵션 */}
+              <div style={{ display: "flex", gap: 4, padding: 2, background: "#F3F4F6", borderRadius: 8 }}>
+                <SortButton active={sortMode === "major"} onClick={() => setSortMode("major")}>
+                  학과 순
+                </SortButton>
+                <SortButton active={sortMode === "category"} onClick={() => setSortMode("category")}>
+                  전형 순
+                </SortButton>
+              </div>
+
               <span style={{ color: "#6B7B98", fontSize: 13 }}>
-                총 <strong style={{ color: "#0B1F3F" }}>{data.total}건</strong>
+                총 <strong style={{ color: "#0B1F3F" }}>{sortedItems.length}건</strong>
               </span>
             </div>
 
@@ -222,20 +274,14 @@ export default function AdmissionResultPage() {
                       <th style={thRight()}>모집</th>
                       <th style={thRight()}>경쟁률</th>
                       <th style={thRight()}>충원</th>
-                      <th style={thRight()}>
-                        50%
-                        <div style={{ fontSize: 10, fontWeight: 400, color: "#9CA3AF" }}>수시: 등급 / 정시: 백분위</div>
-                      </th>
-                      <th style={thRight()}>
-                        70%
-                        <div style={{ fontSize: 10, fontWeight: 400, color: "#9CA3AF" }}>수시: 등급 / 정시: 백분위</div>
-                      </th>
+                      <th style={thRight()}>{isJeongsiTab ? "50% 평균 백분위" : "50% 등급"}</th>
+                      <th style={thRight()}>{isJeongsiTab ? "70% 평균 백분위" : "70% 등급"}</th>
                       <th style={th()}>상세</th>
-                      <th style={th()}>추이</th>
+                      <th style={th()}>추이<br/>그래프</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.items.map((it) => (
+                    {sortedItems.map((it) => (
                       <Row
                         key={it.id}
                         item={it}
@@ -245,6 +291,7 @@ export default function AdmissionResultPage() {
                         onToggle={() => setOpenedRow(openedRow === it.id ? null : it.id)}
                         onToggleTimeline={() => setOpenedTimeline(openedTimeline === it.id ? null : it.id)}
                         fmt={fmt}
+                        timelineCache={timelineCache.current}
                       />
                     ))}
                   </tbody>
@@ -309,6 +356,36 @@ function TabButton({
   );
 }
 
+function SortButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? "#fff" : "transparent",
+        border: "none",
+        padding: "6px 10px",
+        fontSize: 12,
+        fontWeight: active ? 700 : 500,
+        color: active ? "#0B1F3F" : "#6B7B98",
+        borderRadius: 6,
+        cursor: "pointer",
+        fontFamily: "inherit",
+        boxShadow: active ? "0 1px 2px rgba(0,0,0,0.04)" : "none",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function Row({
   item,
   unvCd,
@@ -317,6 +394,7 @@ function Row({
   onToggle,
   onToggleTimeline,
   fmt,
+  timelineCache,
 }: {
   item: AdmissionResultItem;
   unvCd: string;
@@ -324,16 +402,17 @@ function Row({
   timelineOpened: boolean;
   onToggle: () => void;
   onToggleTimeline: () => void;
-  fmt: (v: number | null | undefined, suffix?: string) => string;
+  fmt: (v: number | null | undefined) => string;
+  timelineCache: Map<string, AdmissionTimelinePoint[]>;
 }) {
-  const isJeongsi = item.recruitment_type === "정시";
+  const isJeongsi = isJeongsiType(item.recruitment_type);
   const avg50 = item.percentile_50?.average_percentile;
   const avg70 = item.percentile_70?.average_percentile;
   const hasPercentile =
     (item.percentile_50 && Object.values(item.percentile_50).some((v) => v !== null && v !== undefined)) ||
     (item.percentile_70 && Object.values(item.percentile_70).some((v) => v !== null && v !== undefined));
 
-  // 수시: 등급, 정시: 평균 백분위
+  // 셀 표시: 수시 = 등급, 정시 = 평균 백분위
   const cell50 = isJeongsi
     ? avg50 != null
       ? <><span style={{ fontWeight: 600 }}>{avg50}</span><span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 2 }}>%</span></>
@@ -349,8 +428,10 @@ function Row({
     ? <><span style={{ fontWeight: 600 }}>{item.gpa_grade_70}</span><span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 2 }}>등급</span></>
     : "-";
 
-  // 정시는 항상 [상세] 버튼 (과목별 백분위), 수시는 노트나 환산점수 있을 때만
-  const showDetailButton = isJeongsi ? hasPercentile : (item.gpa_score_50 != null || item.gpa_score_70 != null);
+  // 상세 버튼: 정시는 백분위, 수시는 환산점수/비고
+  const showDetailButton = isJeongsi
+    ? hasPercentile
+    : (item.gpa_score_50 != null || item.gpa_score_70 != null || !!item.note);
 
   return (
     <>
@@ -397,13 +478,24 @@ function Row({
               background: "none",
               border: "1px solid #D1D5DB",
               borderRadius: 4,
-              padding: "2px 8px",
+              padding: "4px 8px",
               fontSize: 11,
+              lineHeight: 1.2,
               cursor: "pointer",
               color: "#374151",
+              fontFamily: "inherit",
+              minWidth: 56,
             }}
           >
-            {timelineOpened ? "닫기" : "📈 추이"}
+            {timelineOpened ? (
+              "닫기"
+            ) : (
+              <>
+                추이
+                <br />
+                그래프
+              </>
+            )}
           </button>
         </td>
       </tr>
@@ -415,7 +507,9 @@ function Row({
               major={item.major}
               recruitmentType={item.recruitment_type || undefined}
               admissionCategory={item.admission_category || undefined}
+              admissionName={item.admission_name || undefined}
               isJeongsi={isJeongsi}
+              cache={timelineCache}
             />
           </td>
         </tr>
@@ -429,7 +523,7 @@ function Row({
                 <PercentileDetail label="70%" data={item.percentile_70} />
               </>
             ) : (
-              <div style={{ display: "flex", gap: 24, fontSize: 12 }}>
+              <div style={{ display: "flex", gap: 24, fontSize: 12, flexWrap: "wrap" }}>
                 {item.gpa_score_50 != null && (
                   <div>
                     <span style={{ color: "#6B7B98" }}>50% 환산점수: </span>
@@ -539,19 +633,31 @@ function TimelineChart({
   major,
   recruitmentType,
   admissionCategory,
+  admissionName,
   isJeongsi,
+  cache,
 }: {
   universityCode: string;
   major: string;
   recruitmentType?: string;
   admissionCategory?: string;
+  admissionName?: string;
   isJeongsi: boolean;
+  cache: Map<string, AdmissionTimelinePoint[]>;
 }) {
-  const [points, setPoints] = useState<AdmissionTimelinePoint[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `${universityCode}|${major}|${recruitmentType || ""}|${admissionCategory || ""}|${admissionName || ""}`;
+  const [points, setPoints] = useState<AdmissionTimelinePoint[] | null>(
+    cache.get(cacheKey) || null
+  );
+  const [loading, setLoading] = useState(!cache.has(cacheKey));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (cache.has(cacheKey)) {
+      setPoints(cache.get(cacheKey)!);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -562,8 +668,12 @@ function TimelineChart({
           major,
           recruitment_type: recruitmentType,
           admission_category: admissionCategory,
+          admission_name: admissionName,
         });
-        if (!cancelled) setPoints(res.points);
+        if (!cancelled) {
+          cache.set(cacheKey, res.points);
+          setPoints(res.points);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -573,41 +683,45 @@ function TimelineChart({
     return () => {
       cancelled = true;
     };
-  }, [universityCode, major, recruitmentType, admissionCategory]);
+  }, [cacheKey, universityCode, major, recruitmentType, admissionCategory, admissionName, cache]);
 
   if (loading) return <div style={{ fontSize: 12, color: "#6B7B98" }}>추이 데이터 로딩 중...</div>;
   if (error) return <div style={{ fontSize: 12, color: "#B91C1C" }}>로드 실패: {error}</div>;
-  if (!points || points.length === 0) return <div style={{ fontSize: 12, color: "#6B7B98" }}>추이 데이터가 없습니다.</div>;
+  if (!points || points.length === 0) return <div style={{ fontSize: 12, color: "#6B7B98" }}>해당 학과·전형의 다른 학년도 데이터가 없습니다.</div>;
 
-  // 같은 학과·전형의 여러 학년도. 같은 학년도에 여러 전형명이 매칭되면 합산/평균 처리는 안 함 — 그대로 표시.
-  // 단순 시각화: 학년도(data_year) 기준 정렬, X축 학년도, Y축 경쟁률 + 등급/백분위
-  const chartData = points.map((p) => ({
+  // 최근 3개년만 (data_year 기준 정렬 후 마지막 3개)
+  const sortedPoints = [...points].sort((a, b) => a.data_year - b.data_year);
+  const recentPoints = sortedPoints.slice(-3);
+
+  const chartData = recentPoints.map((p) => ({
     year: `${p.data_year}학년도`,
     경쟁률: p.competition_rate,
     [isJeongsi ? "50% 백분위" : "50% 등급"]: isJeongsi ? p.avg_percentile_50 : p.gpa_grade_50,
     [isJeongsi ? "70% 백분위" : "70% 등급"]: isJeongsi ? p.avg_percentile_70 : p.gpa_grade_70,
-    모집인원: p.recruit_count,
-    충원: p.additional_count,
   }));
 
-  if (points.length < 2) {
+  if (recentPoints.length < 2) {
     return (
       <div>
         <div style={{ marginBottom: 8, padding: 8, background: "#FEF3C7", borderRadius: 4, fontSize: 12, color: "#92400E" }}>
-          📊 추이 비교는 2학년도 이상 데이터가 있어야 의미가 있어요. 현재 {points.length}학년도 데이터만 있습니다.
+          📊 추이 비교는 2학년도 이상 데이터가 있어야 의미가 있어요. 현재 {recentPoints.length}학년도 데이터만 있습니다.
         </div>
-        <SinglePointTable points={points} isJeongsi={isJeongsi} />
+        <SinglePointTable points={recentPoints} isJeongsi={isJeongsi} />
       </div>
     );
   }
 
-  // 등급/백분위 Y축 (등급은 낮을수록, 백분위는 높을수록 좋음)
   const scoreReversed = !isJeongsi;
+  const dataLabel = recentPoints.length === sortedPoints.length
+    ? `${recentPoints.length}학년도 데이터`
+    : `최근 ${recentPoints.length}학년도 데이터 (전체 ${sortedPoints.length}학년도 중)`;
 
   return (
     <div>
       <div style={{ marginBottom: 6, fontSize: 12, color: "#6B7B98" }}>
-        <strong style={{ color: "#0B1F3F" }}>{major}</strong> — {recruitmentType || "전체"} / {admissionCategory || "전형 전체"} ({points.length}학년도 데이터)
+        <strong style={{ color: "#0B1F3F" }}>{major}</strong> — {recruitmentType || "전체"} / {admissionCategory || "전형 전체"}
+        {admissionName && <> / {admissionName}</>}
+        <span style={{ marginLeft: 8 }}>({dataLabel})</span>
       </div>
 
       {/* 경쟁률 차트 */}
@@ -678,8 +792,8 @@ function SinglePointTable({
           <th style={{ textAlign: "right", padding: 4 }}>모집</th>
           <th style={{ textAlign: "right", padding: 4 }}>경쟁률</th>
           <th style={{ textAlign: "right", padding: 4 }}>충원</th>
-          <th style={{ textAlign: "right", padding: 4 }}>{isJeongsi ? "50% 백분위" : "50% 등급"}</th>
-          <th style={{ textAlign: "right", padding: 4 }}>{isJeongsi ? "70% 백분위" : "70% 등급"}</th>
+          <th style={{ textAlign: "right", padding: 4 }}>{isJeongsi ? "50% 평균 백분위" : "50% 등급"}</th>
+          <th style={{ textAlign: "right", padding: 4 }}>{isJeongsi ? "70% 평균 백분위" : "70% 등급"}</th>
         </tr>
       </thead>
       <tbody>
