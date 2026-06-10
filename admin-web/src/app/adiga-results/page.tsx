@@ -25,6 +25,7 @@ export default function AdigaResultsPage() {
   const [uploadResult, setUploadResult] = useState<{
     year: number;
     display_year?: number;
+    mode?: string;
     deleted: number;
     inserted: number;
     source_file: string;
@@ -32,6 +33,7 @@ export default function AdigaResultsPage() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [yearOverride, setYearOverride] = useState<string>("");
+  const [importMode, setImportMode] = useState<"full" | "partial">("full");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -65,7 +67,7 @@ export default function AdigaResultsPage() {
     setUploadResult(null);
     try {
       const yearNum = yearOverride.trim() ? Number(yearOverride.trim()) : undefined;
-      const res = await uploadAdigaResults(file, yearNum);
+      const res = await uploadAdigaResults(file, yearNum, importMode);
       setUploadResult(res);
       await load();
       if (fileInputRef.current) {
@@ -113,13 +115,54 @@ export default function AdigaResultsPage() {
                 지원 형식 (자동 감지): ① 시트 <code>전년도입결</code> 1개 (표준 37컬럼) ②{" "}
                 <code>입결_종합</code>/<code>입결_교과</code>/<code>입결_수능</code> 3시트 (정규화·원시 모두 가능)
               </li>
-              <li>업로드 시 해당 입결 연도 기존 데이터를 모두 새 데이터로 교체합니다</li>
+              <li>교체 방식: <strong>전체 교체</strong>(해당 연도 전부 새로) / <strong>부분 교체</strong>(파일에 포함된 대학만 교체, 나머지 유지)</li>
               <li>업로드된 파일은 import 성공 시 <code>backend/data/admission_results/</code> 에 영구 보관됩니다 (백업·복원용)</li>
             </ul>
             <div style={{ marginTop: 10, padding: 10, background: "#FEF3C7", borderRadius: 4, fontSize: 11, color: "#92400E" }}>
               <strong>📌 학년도 의미:</strong> 여기서 입력하는 학년도는 <strong>실제 입결이 발생한 연도</strong> 입니다.
               예: 2026학년도 입결은 <code>2026</code> 으로 저장됩니다.<br/>
               사용자 페이지에서는 자동으로 한 학년도 위(2027학년도 페이지)에 &quot;전년도 입시결과&quot;로 표시됩니다.
+            </div>
+          </div>
+
+          {/* 교체 방식 선택 */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 6 }}>
+              교체 방식
+            </label>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="importMode"
+                  checked={importMode === "full"}
+                  onChange={() => setImportMode("full")}
+                  disabled={uploading}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  <strong>전체 교체</strong>
+                  <span style={{ display: "block", fontSize: 11, color: "#9ca3af" }}>
+                    해당 연도 기존 데이터를 전부 지우고 파일 내용으로 교체 (파일이 그 연도의 전체 데이터일 때)
+                  </span>
+                </span>
+              </label>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="importMode"
+                  checked={importMode === "partial"}
+                  onChange={() => setImportMode("partial")}
+                  disabled={uploading}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  <strong>부분 교체 (대학 단위)</strong>
+                  <span style={{ display: "block", fontSize: 11, color: "#9ca3af" }}>
+                    파일에 포함된 대학만 교체하고, 파일에 없는 대학의 기존 데이터는 유지 (일부 대학만 수정해 올릴 때)
+                  </span>
+                </span>
+              </label>
             </div>
           </div>
 
@@ -179,6 +222,7 @@ export default function AdigaResultsPage() {
               <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
                 <li>입결 연도: <strong>{uploadResult.year}학년도</strong></li>
                 <li>사용자 페이지 표시: <strong>{uploadResult.display_year ?? uploadResult.year + 1}학년도 페이지</strong> (전년도 입시결과)</li>
+                <li>교체 방식: <strong>{uploadResult.mode === "partial" ? "부분 교체 (파일 포함 대학만)" : "전체 교체"}</strong></li>
                 <li>기존 데이터 삭제: {uploadResult.deleted.toLocaleString()}건</li>
                 <li>신규 INSERT: {uploadResult.inserted.toLocaleString()}건</li>
                 <li>영구 보관 경로: <code>{uploadResult.saved_path}</code></li>

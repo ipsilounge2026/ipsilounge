@@ -59,14 +59,18 @@ async def admin_summary(
 async def admin_upload(
     file: UploadFile = File(..., description="대학어디가 입결 Excel"),
     year: int | None = Query(None, description="학년도 강제 지정 (파일명에서 추출 안 되면)"),
+    mode: str = Query("full", description="full=해당 학년도 전체 교체 / partial=파일에 포함된 대학만 교체"),
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    대학어디가 입결 Excel 업로드 → 검증 → 영구 저장 → DB import.
+    대학어디가 입결 Excel 업로드 → 검증 → DB import → 영구 저장.
 
-    재업로드 시 해당 학년도 데이터 전체 교체 (FULL replace).
+    - mode=full: 해당 학년도 데이터 전체 교체
+    - mode=partial: 파일에 포함된 대학만 교체 (없는 대학 기존 데이터 유지)
     """
+    if mode not in ("full", "partial"):
+        raise HTTPException(status_code=400, detail="mode 는 full 또는 partial 이어야 합니다")
     _require_super_admin(admin)
 
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
@@ -98,14 +102,16 @@ async def admin_upload(
 
         # 3. DB import (실패 시 기존 백업 파일을 건드리지 않도록 영구 저장보다 먼저 수행)
         try:
-            result = await import_to_db(db, parsed, override_year=effective_year)
+            result = await import_to_db(db, parsed, override_year=effective_year, mode=mode)
         except Exception as e:
             logger.error(f"adiga import DB 실패: {e}")
             raise HTTPException(status_code=500, detail=f"DB import 실패: {e}")
 
         # 4. import 성공 후에만 영구 저장 (백업·복원용 — 실패한 파일로 덮어쓰기 방지)
+        #    부분 교체 파일은 전체 백업을 덮어쓰지 않도록 _partial 접미사로 저장
         PERSIST_DIR.mkdir(parents=True, exist_ok=True)
-        dest_path = PERSIST_DIR / f"adiga_입결_{effective_year}.xlsx"
+        suffix = "_partial" if mode == "partial" else ""
+        dest_path = PERSIST_DIR / f"adiga_입결_{effective_year}{suffix}.xlsx"
         shutil.copyfile(tmp_path, dest_path)
         logger.info(f"adiga import: 영구 보관 → {dest_path}")
 
@@ -114,6 +120,8 @@ async def admin_upload(
 
         return {
             "year": result["year"],
+            "display_year": result["display_year"],
+            "mode": result["mode"],
             "deleted": result["deleted"],
             "inserted": result["inserted"],
             "source_file": result["filename"],

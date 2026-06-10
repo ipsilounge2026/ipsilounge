@@ -618,19 +618,24 @@ async def import_to_db(
     *,
     override_year: int | None = None,
     chunk_size: int = 500,
+    mode: str = "full",
 ) -> dict:
     """
     parse_excel 결과를 DB에 import.
 
     - override_year 가 주어지면 모든 row 의 year 를 그 값으로 강제 설정 (파일명 학년도 불일치 대응)
-    - 기존 학년도 데이터 모두 삭제 후 새로 INSERT
+    - mode="full": 해당 학년도 데이터 전체 삭제 후 새로 INSERT
+    - mode="partial": 파일에 포함된 대학(university_code)의 해당 학년도 데이터만 삭제 후 INSERT
+      → 파일에 없는 대학의 기존 데이터는 유지 (일부 대학만 수정해 올리는 워크플로용)
     - chunk_size 단위로 batch insert (대용량 24,000행 대응)
 
-    Returns: {"year": int, "deleted": int, "inserted": int, "total": int}
+    Returns: {"year": int, "deleted": int, "inserted": int, "total": int, "mode": str}
     """
     rows = parsed["rows"]
     if not rows:
         raise ValueError("Excel 에 유효한 행이 없습니다")
+    if mode not in ("full", "partial"):
+        raise ValueError(f"지원하지 않는 import mode: {mode} (full/partial)")
 
     # 학년도 확정
     year = override_year or parsed.get("year")
@@ -638,9 +643,18 @@ async def import_to_db(
         raise ValueError("학년도를 결정할 수 없습니다 (파일명 또는 override_year 필요)")
 
     # 기존 row 삭제
-    del_result = await db.execute(
-        delete(AdigaAdmissionResult).where(AdigaAdmissionResult.year == year)
-    )
+    if mode == "partial":
+        codes = sorted({r["university_code"] for r in rows if r["university_code"]})
+        del_result = await db.execute(
+            delete(AdigaAdmissionResult).where(
+                AdigaAdmissionResult.year == year,
+                AdigaAdmissionResult.university_code.in_(codes),
+            )
+        )
+    else:
+        del_result = await db.execute(
+            delete(AdigaAdmissionResult).where(AdigaAdmissionResult.year == year)
+        )
     deleted = del_result.rowcount or 0
 
     # 새 row INSERT (chunk 단위)
@@ -665,11 +679,12 @@ async def import_to_db(
     await db.commit()
 
     logger.info(
-        f"adiga import(year={year}): deleted={deleted}, inserted={inserted}"
+        f"adiga import(year={year}, mode={mode}): deleted={deleted}, inserted={inserted}"
     )
     return {
         "year": year,
         "display_year": year + 1,  # 사용자 페이지의 어느 학년도에 표시되는지 (입결 연도 + 1)
+        "mode": mode,
         "deleted": deleted,
         "inserted": inserted,
         "total": inserted,

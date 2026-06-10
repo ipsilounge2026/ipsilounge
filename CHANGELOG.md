@@ -14,6 +14,13 @@
 - 실제 파일 검증: 2025 원시(29,248행) 서울대/연세대 수치 일치, 2026 정규화(948행) 백분위·환산점수 일치, 2024 표준(45,380행) 회귀 통과
 - `adiga_result_import_service.py` 재구성, 사용자 페이지 백분위 라벨에 탐구1/탐구2 generic 키 추가, 관리자 업로드 안내문 갱신
 
+### feat(adiga-import): 교체 방식 선택 (전체 / 부분)
+새 수집 파일이 일부 대학만 담는 경우(예: 2026 신규 파일 948행 vs 기존 43,628행) 전체 교체 시 데이터 유실 위험 → 업로드 시 교체 방식 선택 추가.
+- `import_to_db(mode="full"|"partial")`: partial 은 파일에 포함된 대학(university_code)의 해당 연도 데이터만 삭제 후 INSERT, 나머지 대학 유지
+- 업로드 API `?mode=` 파라미터 + 관리자 업로드 화면 라디오 버튼 (전체 교체 / 부분 교체) + 결과에 교체 방식 표시
+- 부분 교체 파일은 `adiga_입결_{year}_partial.xlsx` 로 별도 보관 (전체 백업 덮어쓰기 방지)
+- SQLite 기반 동작 검증 (partial: 포함 대학만 교체·미포함 대학 유지 / full: 전체 교체)
+
 ### fix(adiga-import): 입결 Excel 형식 검증 + 백업 덮어쓰기 방지
 - **원인**: 수집 프로그램이 새로 내보낸 Excel 의 컬럼 구조가 표준 형식(시트 '전년도입결', 5번째 컬럼 '구분')과 달라(시트 3분할 + 구분/모집단위 순서 변경 또는 원시 182~412컬럼) 컬럼이 밀리면서 학과명이 `recruitment_type`(VARCHAR(10)) 에 들어가 `StringDataRightTruncationError` 발생
 - `adiga_result_import_service.py`: `_validate_headers()` 추가 — 앞 9개 컬럼 헤더가 표준 형식과 다르면 import 전에 명확한 한국어 에러 (어느 컬럼이 어떻게 다른지 명시)

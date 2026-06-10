@@ -853,10 +853,13 @@ export async function getAdigaResultsSummary() {
   return request("/api/admin/adiga-results/summary");
 }
 
-export async function uploadAdigaResults(file: File, year?: number) {
+export async function uploadAdigaResults(file: File, year?: number, mode: "full" | "partial" = "full") {
   const fd = new FormData();
   fd.append("file", file);
-  const qs = year !== undefined ? `?year=${year}` : "";
+  const params = new URLSearchParams();
+  if (year !== undefined) params.set("year", String(year));
+  params.set("mode", mode);
+  const qs = `?${params}`;
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
   const res = await fetch(`${API_URL}/api/admin/adiga-results/upload${qs}`, {
