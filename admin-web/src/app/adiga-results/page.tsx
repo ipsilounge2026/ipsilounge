@@ -109,9 +109,12 @@ export default function AdigaResultsPage() {
             <strong>자동 수집 프로그램이 만든 Excel을 업로드하세요.</strong>
             <ul style={{ margin: "6px 0 0 18px", padding: 0, fontSize: 12 }}>
               <li>파일명 권장: <code>adiga_입결_2026.xlsx</code> (실제 입결 연도)</li>
-              <li>시트명: <code>전년도입결</code> (또는 첫 번째 시트)</li>
+              <li>
+                지원 형식 (자동 감지): ① 시트 <code>전년도입결</code> 1개 (표준 37컬럼) ②{" "}
+                <code>입결_종합</code>/<code>입결_교과</code>/<code>입결_수능</code> 3시트 (정규화·원시 모두 가능)
+              </li>
               <li>업로드 시 해당 입결 연도 기존 데이터를 모두 새 데이터로 교체합니다</li>
-              <li>업로드된 파일은 <code>backend/data/admission_results/</code> 에 영구 보관됩니다 (백업·복원용)</li>
+              <li>업로드된 파일은 import 성공 시 <code>backend/data/admission_results/</code> 에 영구 보관됩니다 (백업·복원용)</li>
             </ul>
             <div style={{ marginTop: 10, padding: 10, background: "#FEF3C7", borderRadius: 4, fontSize: 11, color: "#92400E" }}>
               <strong>📌 학년도 의미:</strong> 여기서 입력하는 학년도는 <strong>실제 입결이 발생한 연도</strong> 입니다.

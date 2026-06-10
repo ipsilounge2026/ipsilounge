@@ -647,6 +647,8 @@ function PercentileDetail({
   const KEY_LABELS: Record<string, string> = {
     korean: "국어",
     math: "수학",
+    investigation1: "탐구1",
+    investigation2: "탐구2",
     investigation1_social: "탐구1 사탐",
     investigation1_science: "탐구1 과탐",
     investigation1_vocational: "탐구1 직탐",
