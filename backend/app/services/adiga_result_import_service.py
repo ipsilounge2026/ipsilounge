@@ -112,6 +112,23 @@ NEW_PCT_SUFFIX_MAP = {
     "평균": "average_percentile",
 }
 
+# ── 형식 4: 수시/정시 2시트 (최종 정리 형식) ─────────────────────────
+# 수시: 대학명/대학코드/전형유형/전형명/모집단위/모집인원/경쟁률/충원/50% 등급/70% 등급/50% 환산점수/70% 환산점수/비고
+# 정시: 대학명/대학코드/전형명/군/모집단위/모집인원/경쟁률/충원/50% 평균 백분위/.../50% 환산점수/.../비고
+
+SIMPLE_SHEET_NAMES = ("수시", "정시")
+
+# '50% 국어' 등 (공백 제거 후 '50%' prefix 뒤 suffix) → JSON 키
+SIMPLE_PCT_SUFFIX_MAP = {
+    "국어": "korean",
+    "수학": "math",
+    "탐구1": "investigation1",
+    "탐구2": "investigation2",
+    "영어등급": "english_grade",
+    "한국사등급": "korean_history_grade",
+    "평균백분위": "average_percentile",
+}
+
 # 원시 형식 수능 백분위: '... 50% ... 과목별 백분위 ... 국' 식 헤더의 끝글자 → JSON 키
 RAW_PCT_SUFFIX_MAP = {
     "국": "korean",
@@ -325,7 +342,7 @@ def _normalize_recruitment_type(v: Any, admission_name: str | None, sheet_name: 
         return "수시"
     if name.startswith("정시"):
         return "정시"
-    if "수능" in sheet_name:
+    if "수능" in sheet_name or "정시" in sheet_name:
         return "정시"
     return "수시"
 
@@ -635,6 +652,125 @@ def _parse_unified_sheet(sheet, sheet_name: str, year: int | None, filename: str
     return parsed
 
 
+def _category_from_name(name: str | None) -> str:
+    """정시 시트(전형유형 컬럼 없음)에서 전형명으로 전형유형 유추. 기본 '수능'."""
+    if name:
+        for token in ("교과", "종합", "논술", "실기"):
+            if token in name:
+                return token
+    return "수능"
+
+
+def _parse_simple_sheet(sheet, sheet_name: str, year: int | None, filename: str) -> list[dict]:
+    """수시/정시 2시트 형식 파싱.
+
+    수시: 대학명/대학코드/전형유형/전형명/모집단위/모집인원/경쟁률/충원
+          /50% 등급/70% 등급/50% 환산점수/70% 환산점수/비고
+    정시: 대학명/대학코드/전형명/군/모집단위/모집인원/경쟁률/충원
+          /50%·70% 평균 백분위/과목별 백분위/영어·한국사 등급/환산점수/비고
+    """
+    rows_iter = sheet.iter_rows(values_only=True)
+    headers = list(next(rows_iter, ()))
+    headers_norm = [_norm_header(h) for h in headers]
+    col = {h: i for i, h in enumerate(headers_norm) if h}
+
+    required = ["대학명", "대학코드", "전형명", "모집단위"]
+    missing = [h for h in required if h not in col]
+    if missing:
+        raise ValueError(
+            f"시트 '{sheet_name}' 에 필수 컬럼이 없습니다: {', '.join(missing)} "
+            f"(발견된 헤더 앞부분: {[h for h in headers[:8]]})"
+        )
+
+    # 백분위 컬럼 매핑: '50%국어' / '70%평균백분위' 등
+    pct50_map: dict[str, int] = {}
+    pct70_map: dict[str, int] = {}
+    for h, i in col.items():
+        for prefix, target in (("50%", pct50_map), ("70%", pct70_map)):
+            if h.startswith(prefix):
+                key = SIMPLE_PCT_SUFFIX_MAP.get(h[len(prefix):])
+                if key and key not in target:
+                    target[key] = i
+
+    def cell(row: tuple, header: str):
+        idx = col.get(header)
+        return row[idx] if idx is not None and idx < len(row) else None
+
+    def numeric_or_note(row: tuple, header: str, notes: list[str]) -> float | None:
+        v = cell(row, header)
+        f = _to_float(v)
+        if f is None and isinstance(v, str) and v.strip() and v.strip() != "-":
+            notes.append(v.strip())
+        return f
+
+    parsed: list[dict] = []
+    for row in rows_iter:
+        if row is None:
+            continue
+        univ = _to_str(cell(row, "대학명"))
+        if not univ:
+            continue
+
+        raw_name = _to_str(cell(row, "전형명"))
+        rt_raw = cell(row, "군") if "군" in col else None
+        recruitment_type = _normalize_recruitment_type(rt_raw, raw_name, sheet_name)
+        is_jeongsi_row = recruitment_type.startswith("정시")
+
+        if "전형유형" in col:
+            category = _to_str(cell(row, "전형유형"))
+        else:
+            category = _category_from_name(raw_name) if is_jeongsi_row else None
+
+        note_parts: list[str] = []
+        grade50 = numeric_or_note(row, "50%등급", note_parts)
+        grade70 = numeric_or_note(row, "70%등급", note_parts)
+        score50 = numeric_or_note(row, "50%환산점수", note_parts)
+        score70 = numeric_or_note(row, "70%환산점수", note_parts)
+
+        pct50 = {
+            key: (_to_int(cell_v) if "grade" in key else _to_float(cell_v))
+            for key, idx in pct50_map.items()
+            for cell_v in [row[idx] if idx < len(row) else None]
+        }
+        pct70 = {
+            key: (_to_int(cell_v) if "grade" in key else _to_float(cell_v))
+            for key, idx in pct70_map.items()
+            for cell_v in [row[idx] if idx < len(row) else None]
+        }
+
+        bigo = _to_str(cell(row, "비고"))
+        if bigo and bigo != "-":
+            note_parts.append(bigo)
+        seen: set[str] = set()
+        notes = [n for n in note_parts if not (n in seen or seen.add(n))]
+
+        item = {
+            "university": univ,
+            "university_code": _to_str(cell(row, "대학코드")) or "",
+            "year": year or 0,
+            "admission_category": category,
+            "admission_name": _strip_period_prefix(raw_name),
+            "recruitment_type": recruitment_type,
+            "major": _to_str(cell(row, "모집단위")) or "",
+            "recruit_count": _to_int(cell(row, "모집인원")),
+            "competition_rate": _to_rate(cell(row, "경쟁률")),
+            "additional_count": _to_int(cell(row, "충원")) if "충원" in col else _to_int(cell(row, "충원인원")),
+            # 환산점수: 수시 행 → 학생부 환산(gpa_score), 정시 행 → 수능 환산(conv_score)
+            "gpa_score_50": None if is_jeongsi_row else score50,
+            "gpa_score_70": None if is_jeongsi_row else score70,
+            "gpa_grade_50": grade50,
+            "gpa_grade_70": grade70,
+            "conv_score_50": score50 if is_jeongsi_row else None,
+            "conv_score_70": score70 if is_jeongsi_row else None,
+            "percentile_50": pct50,
+            "percentile_70": pct70,
+            "note": " | ".join(notes) if notes else None,
+            "source_file": filename,
+        }
+        parsed.append(item)
+    return parsed
+
+
 def parse_excel(file_path: str | Path) -> dict:
     """
     Excel 파일을 읽어 (year, rows) 반환. 형식 자동 감지.
@@ -643,7 +779,7 @@ def parse_excel(file_path: str | Path) -> dict:
         {
             "year": int | None,
             "filename": str,
-            "format": "legacy" | "unified",
+            "format": "legacy" | "unified" | "simple",
             "headers": list[str],
             "rows": [{...}],  # AdigaAdmissionResult kwargs
             "total_rows": int,
@@ -665,16 +801,9 @@ def parse_excel(file_path: str | Path) -> dict:
         _validate_headers(headers, wb.sheetnames)
         parsed = _parse_legacy_rows(headers, rows_iter, year, filename)
         fmt = "legacy"
-    else:
+    elif any(sn.startswith(UNIFIED_SHEET_PREFIX) for sn in wb.sheetnames):
         # 형식 2/3: 입결_* 3시트
         unified_sheets = [sn for sn in wb.sheetnames if sn.startswith(UNIFIED_SHEET_PREFIX)]
-        if not unified_sheets:
-            wb.close()
-            raise ValueError(
-                f"지원하지 않는 Excel 형식입니다 (시트: {wb.sheetnames}). "
-                "시트명 '전년도입결' (표준 37컬럼) 또는 "
-                "'입결_종합/입결_교과/입결_수능' 3시트 형식만 업로드할 수 있습니다."
-            )
         parsed = []
         headers = []
         for sn in unified_sheets:
@@ -685,6 +814,27 @@ def parse_excel(file_path: str | Path) -> dict:
                 first_sheet = wb[unified_sheets[0]]
                 headers = list(next(first_sheet.iter_rows(values_only=True), ()))
         fmt = "unified"
+    elif any(sn in SIMPLE_SHEET_NAMES for sn in wb.sheetnames):
+        # 형식 4: 수시/정시 2시트 (최종 정리 형식)
+        simple_sheets = [sn for sn in wb.sheetnames if sn in SIMPLE_SHEET_NAMES]
+        parsed = []
+        headers = []
+        for sn in simple_sheets:
+            sheet_rows = _parse_simple_sheet(wb[sn], sn, year, filename)
+            logger.info(f"adiga parse[{filename}] 시트 '{sn}': {len(sheet_rows)}행")
+            parsed.extend(sheet_rows)
+            if not headers:
+                first_sheet = wb[simple_sheets[0]]
+                headers = list(next(first_sheet.iter_rows(values_only=True), ()))
+        fmt = "simple"
+    else:
+        wb.close()
+        raise ValueError(
+            f"지원하지 않는 Excel 형식입니다 (시트: {wb.sheetnames}). "
+            "지원 형식: ① 시트 '전년도입결' (표준 37컬럼) "
+            "② '입결_종합/입결_교과/입결_수능' 3시트 "
+            "③ '수시/정시' 2시트."
+        )
 
     wb.close()
 
