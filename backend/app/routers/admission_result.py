@@ -275,13 +275,19 @@ async def get_admission_timeline(
         if _norm_text(it.major) == target_major:
             by_year.setdefault(it.year, []).append(it)
 
-    # 연도별로 전형명 정규화 매칭 → 후보 1행 fallback
+    # 연도별로 전형명 정규화 매칭 → 제한적 fallback
     target_name = _norm_name(admission_name)  # 빈 전형명('')도 매칭 대상
     items: list[AdigaAdmissionResult] = []
     for yr in sorted(by_year.keys()):
         rows = by_year[yr]
         exact = [r for r in rows if _norm_name(r.admission_name) == target_name]
-        pool = exact if exact else (rows if len(rows) == 1 else [])
+        pool = exact
+        if not pool and len(rows) == 1:
+            # 그 해 후보가 유일하고, 그 행의 전형명이 비어 있거나(구 데이터)
+            # 요청 전형명이 비어 있을 때만 연결 — 다른 전형명이 잡히는 오매칭 방지
+            only = rows[0]
+            if not _norm_name(only.admission_name) or not target_name:
+                pool = [only]
         if pool:
             items.append(max(pool, key=_data_richness))
 
