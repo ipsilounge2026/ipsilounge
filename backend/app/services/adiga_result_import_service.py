@@ -698,6 +698,12 @@ def parse_excel(file_path: str | Path) -> dict:
     }
 
 
+# 자료 출처
+SOURCE_KCUE = "대교협"      # 대학어디가(대교협) 공시 자료
+SOURCE_OFFICIAL = "자체발표"  # 대학 입학처 자체발표 자료
+VALID_SOURCES = (SOURCE_KCUE, SOURCE_OFFICIAL)
+
+
 async def import_to_db(
     db: AsyncSession,
     parsed: dict,
@@ -705,41 +711,50 @@ async def import_to_db(
     override_year: int | None = None,
     chunk_size: int = 500,
     mode: str = "full",
+    source: str = SOURCE_KCUE,
 ) -> dict:
     """
     parse_excel 결과를 DB에 import.
 
     - override_year 가 주어지면 모든 row 의 year 를 그 값으로 강제 설정 (파일명 학년도 불일치 대응)
-    - mode="full": 해당 학년도 데이터 전체 삭제 후 새로 INSERT
-    - mode="partial": 파일에 포함된 대학(university_code)의 해당 학년도 데이터만 삭제 후 INSERT
+    - source="대교협"|"자체발표": 자료 출처. 교체는 같은 출처끼리만 — 대교협 업로드가
+      자체발표 데이터를 지우지 않는다 (반대도 동일)
+    - mode="full": 해당 학년도·출처 데이터 전체 삭제 후 새로 INSERT
+    - mode="partial": 파일에 포함된 대학(university_code)의 해당 학년도·출처 데이터만 삭제 후 INSERT
       → 파일에 없는 대학의 기존 데이터는 유지 (일부 대학만 수정해 올리는 워크플로용)
     - chunk_size 단위로 batch insert (대용량 24,000행 대응)
 
-    Returns: {"year": int, "deleted": int, "inserted": int, "total": int, "mode": str}
+    Returns: {"year": int, "deleted": int, "inserted": int, "total": int, "mode": str, "source": str}
     """
     rows = parsed["rows"]
     if not rows:
         raise ValueError("Excel 에 유효한 행이 없습니다")
     if mode not in ("full", "partial"):
         raise ValueError(f"지원하지 않는 import mode: {mode} (full/partial)")
+    if source not in VALID_SOURCES:
+        raise ValueError(f"지원하지 않는 source: {source} ({'/'.join(VALID_SOURCES)})")
 
     # 학년도 확정
     year = override_year or parsed.get("year")
     if not year:
         raise ValueError("학년도를 결정할 수 없습니다 (파일명 또는 override_year 필요)")
 
-    # 기존 row 삭제
+    # 기존 row 삭제 (같은 출처만)
+    base_conditions = [
+        AdigaAdmissionResult.year == year,
+        AdigaAdmissionResult.source == source,
+    ]
     if mode == "partial":
         codes = sorted({r["university_code"] for r in rows if r["university_code"]})
         del_result = await db.execute(
             delete(AdigaAdmissionResult).where(
-                AdigaAdmissionResult.year == year,
+                *base_conditions,
                 AdigaAdmissionResult.university_code.in_(codes),
             )
         )
     else:
         del_result = await db.execute(
-            delete(AdigaAdmissionResult).where(AdigaAdmissionResult.year == year)
+            delete(AdigaAdmissionResult).where(*base_conditions)
         )
     deleted = del_result.rowcount or 0
 
@@ -748,6 +763,7 @@ async def import_to_db(
     chunk: list[AdigaAdmissionResult] = []
     for item in rows:
         item["year"] = year  # override
+        item["source"] = source
         # university_code 가 비어 있으면 무효
         if not item["university_code"]:
             continue
@@ -765,12 +781,13 @@ async def import_to_db(
     await db.commit()
 
     logger.info(
-        f"adiga import(year={year}, mode={mode}): deleted={deleted}, inserted={inserted}"
+        f"adiga import(year={year}, mode={mode}, source={source}): deleted={deleted}, inserted={inserted}"
     )
     return {
         "year": year,
         "display_year": year + 1,  # 사용자 페이지의 어느 학년도에 표시되는지 (입결 연도 + 1)
         "mode": mode,
+        "source": source,
         "deleted": deleted,
         "inserted": inserted,
         "total": inserted,
@@ -779,25 +796,27 @@ async def import_to_db(
 
 
 async def get_year_summary(db: AsyncSession) -> list[dict]:
-    """현재 DB 에 들어있는 학년도별 요약 (학년도별 행 수 + 가장 최근 import 파일)."""
+    """현재 DB 에 들어있는 학년도·출처별 요약 (행 수 + 가장 최근 import 파일)."""
     from sqlalchemy import func
 
     result = await db.execute(
         select(
             AdigaAdmissionResult.year,
+            AdigaAdmissionResult.source,
             func.count(AdigaAdmissionResult.id).label("count"),
             func.max(AdigaAdmissionResult.created_at).label("last_imported"),
             func.max(AdigaAdmissionResult.source_file).label("source_file"),
         )
-        .group_by(AdigaAdmissionResult.year)
-        .order_by(AdigaAdmissionResult.year.desc())
+        .group_by(AdigaAdmissionResult.year, AdigaAdmissionResult.source)
+        .order_by(AdigaAdmissionResult.year.desc(), AdigaAdmissionResult.source.asc())
     )
     return [
         {
             "year": row[0],
-            "count": row[1],
-            "last_imported": row[2].isoformat() if row[2] else None,
-            "source_file": row[3],
+            "source": row[1],
+            "count": row[2],
+            "last_imported": row[3].isoformat() if row[3] else None,
+            "source_file": row[4],
         }
         for row in result.all()
     ]

@@ -668,6 +668,7 @@ export type AdmissionResultResponse = {
   university_code: string;
   display_year: number;
   data_year: number;
+  source?: string;
   total: number;
   items: AdmissionResultItem[];
   available_recruitment_types: string[];
@@ -682,6 +683,7 @@ export async function fetchAdmissionResult(params: {
   admission_category?: string;
   admission_name?: string;
   search?: string;
+  source?: string;
 }): Promise<AdmissionResultResponse> {
   const qs = new URLSearchParams();
   qs.set("university_code", params.university_code);
@@ -690,6 +692,7 @@ export async function fetchAdmissionResult(params: {
   if (params.admission_category) qs.set("admission_category", params.admission_category);
   if (params.admission_name) qs.set("admission_name", params.admission_name);
   if (params.search) qs.set("search", params.search);
+  if (params.source) qs.set("source", params.source);
   return request(`/api/university-guide/result/?${qs}`);
 }
 
@@ -721,6 +724,7 @@ export async function fetchAdmissionTimeline(params: {
   recruitment_type?: string;
   admission_category?: string;
   admission_name?: string;
+  source?: string;
 }): Promise<AdmissionTimelineResponse> {
   const qs = new URLSearchParams();
   qs.set("university_code", params.university_code);
@@ -728,5 +732,6 @@ export async function fetchAdmissionTimeline(params: {
   if (params.recruitment_type) qs.set("recruitment_type", params.recruitment_type);
   if (params.admission_category) qs.set("admission_category", params.admission_category);
   if (params.admission_name) qs.set("admission_name", params.admission_name);
+  if (params.source) qs.set("source", params.source);
   return request(`/api/university-guide/result/timeline?${qs}`);
 }

@@ -377,6 +377,19 @@ async def startup():
                 # 신규 환경: 테이블 자체가 없을 수 있음 (create_all 직후 inspector 캐시 문제)
                 logger.debug(f"university_guides sen_plan_meta 마이그레이션 스킵: {_e}")
 
+            # adiga_admission_results 마이그레이션: source 컬럼 추가
+            # (2026-06-11: 대교협/자체발표 자료 출처 구분 — 기존 데이터는 모두 대교협 수집분)
+            try:
+                ar_cols = [c["name"] for c in inspector.get_columns("adiga_admission_results")]
+                if "source" not in ar_cols:
+                    connection.execute(text(
+                        "ALTER TABLE adiga_admission_results "
+                        "ADD COLUMN source VARCHAR(10) NOT NULL DEFAULT '대교협'"
+                    ))
+                    logger.info("adiga_admission_results.source 컬럼 추가")
+            except Exception as _e:
+                logger.debug(f"adiga_admission_results source 마이그레이션 스킵: {_e}")
+
         # DEV_MODE(SQLite) 에서는 매번 create_all 로 최신 스키마가 보장되므로
         # PostgreSQL 전용 ALTER TABLE 마이그레이션을 건너뛴다.
         # (운영 PostgreSQL 에서는 종전과 동일하게 마이그레이션 수행)

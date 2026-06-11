@@ -853,12 +853,18 @@ export async function getAdigaResultsSummary() {
   return request("/api/admin/adiga-results/summary");
 }
 
-export async function uploadAdigaResults(file: File, year?: number, mode: "full" | "partial" = "full") {
+export async function uploadAdigaResults(
+  file: File,
+  year?: number,
+  mode: "full" | "partial" = "full",
+  source: "대교협" | "자체발표" = "대교협"
+) {
   const fd = new FormData();
   fd.append("file", file);
   const params = new URLSearchParams();
   if (year !== undefined) params.set("year", String(year));
   params.set("mode", mode);
+  params.set("source", source);
   const qs = `?${params}`;
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
@@ -874,6 +880,7 @@ export async function uploadAdigaResults(file: File, year?: number, mode: "full"
   return res.json();
 }
 
-export async function deleteAdigaResultsYear(year: number) {
-  return request(`/api/admin/adiga-results/year/${year}`, { method: "DELETE" });
+export async function deleteAdigaResultsYear(year: number, source?: "대교협" | "자체발표") {
+  const qs = source ? `?source=${encodeURIComponent(source)}` : "";
+  return request(`/api/admin/adiga-results/year/${year}${qs}`, { method: "DELETE" });
 }

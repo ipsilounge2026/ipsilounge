@@ -23,12 +23,16 @@ from app.models.university_guide import UniversityGuide
 router = APIRouter(prefix="/api/university-guide/result", tags=["입결 조회"])
 
 
+VALID_SOURCES = ("대교협", "자체발표")
+
+
 def _to_response(item: AdigaAdmissionResult) -> dict[str, Any]:
     return {
         "id": str(item.id),
         "university": item.university,
         "university_code": item.university_code,
         "year": item.year,
+        "source": item.source,
         "admission_category": item.admission_category,
         "admission_name": item.admission_name,
         "recruitment_type": item.recruitment_type,
@@ -56,6 +60,7 @@ async def get_admission_result(
     admission_category: str | None = Query(None, description="전형유형: 종합/교과/논술/수능 등"),
     admission_name: str | None = Query(None, description="전형명 (예: 학생부교과(특성화고교)) 정확 매칭"),
     search: str | None = Query(None, description="학과명 부분 검색"),
+    source: str = Query("대교협", description="자료 출처: 대교협 / 자체발표"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -63,7 +68,10 @@ async def get_admission_result(
 
     예: 2027학년도 페이지에서 서울대 입결 → display_year=2027, university_code=0000019
         → 내부적으로 year=2026 인 데이터를 조회.
+    source 로 대교협(대학어디가 공시) / 자체발표(대학 입학처 발표) 자료를 구분 조회.
     """
+    if source not in VALID_SOURCES:
+        source = "대교협"
     data_year = display_year - 1
 
     # 1) 우리 university_guides 에서 해당 대학명 조회 (헤더 표시용)
@@ -78,10 +86,11 @@ async def get_admission_result(
     guide = ug_res.scalar_one_or_none()
     university_name = guide.university if guide else None
 
-    # 2) 입결 데이터 조회 (year = data_year)
+    # 2) 입결 데이터 조회 (year = data_year, 출처 일치)
     conditions = [
         AdigaAdmissionResult.university_code == university_code,
         AdigaAdmissionResult.year == data_year,
+        AdigaAdmissionResult.source == source,
     ]
     if recruitment_type:
         conditions.append(AdigaAdmissionResult.recruitment_type == recruitment_type)
@@ -126,6 +135,7 @@ async def get_admission_result(
             and_(
                 AdigaAdmissionResult.university_code == university_code,
                 AdigaAdmissionResult.year == data_year,
+                AdigaAdmissionResult.source == source,
             )
         )
         .distinct()
@@ -150,6 +160,7 @@ async def get_admission_result(
         "university_code": university_code,
         "display_year": display_year,
         "data_year": data_year,
+        "source": source,
         "total": total,
         "items": [_to_response(it) for it in items],
         "available_recruitment_types": available_recruitment_types,
@@ -161,12 +172,18 @@ async def get_admission_result(
 @router.get("/available-years")
 async def get_available_data_years(
     university_code: str = Query(..., description="대학 코드"),
+    source: str = Query("대교협", description="자료 출처: 대교협 / 자체발표"),
     db: AsyncSession = Depends(get_db),
 ):
     """대학별로 우리 DB 에 있는 입결 데이터의 연도 목록 (display_year 기준 반환)."""
+    if source not in VALID_SOURCES:
+        source = "대교협"
     res = await db.execute(
         select(AdigaAdmissionResult.year)
-        .where(AdigaAdmissionResult.university_code == university_code)
+        .where(
+            AdigaAdmissionResult.university_code == university_code,
+            AdigaAdmissionResult.source == source,
+        )
         .distinct()
         .order_by(AdigaAdmissionResult.year.desc())
     )
@@ -186,17 +203,22 @@ async def get_admission_timeline(
     recruitment_type: str | None = Query(None, description="수시 / 정시"),
     admission_category: str | None = Query(None, description="전형유형"),
     admission_name: str | None = Query(None, description="전형명 (선택, 정확 매칭)"),
+    source: str = Query("대교협", description="자료 출처: 대교협 / 자체발표"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     같은 학과·전형의 여러 학년도 추이 (그래프용).
 
-    매칭 키: university_code + major (+ recruitment_type + admission_category + admission_name).
+    매칭 키: university_code + major + source (+ recruitment_type + admission_category + admission_name).
     매칭이 너무 엄격하면 데이터가 적게 나오므로 admission_name 은 선택.
+    같은 출처(source)끼리만 비교 — 대교협/자체발표 값이 섞이지 않도록.
     """
+    if source not in VALID_SOURCES:
+        source = "대교협"
     conditions = [
         AdigaAdmissionResult.university_code == university_code,
         AdigaAdmissionResult.major == major,
+        AdigaAdmissionResult.source == source,
     ]
     if recruitment_type:
         conditions.append(AdigaAdmissionResult.recruitment_type == recruitment_type)

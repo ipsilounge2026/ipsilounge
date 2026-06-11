@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   CartesianGrid,
   Legend,
@@ -28,10 +28,22 @@ const isJeongsiType = (rt: string | null | undefined): boolean =>
 type SortMode = "major" | "category";
 
 export default function AdmissionResultPage() {
+  // useSearchParams 는 Suspense boundary 필요 (Next.js 정적 빌드)
+  return (
+    <Suspense fallback={null}>
+      <AdmissionResultContent />
+    </Suspense>
+  );
+}
+
+function AdmissionResultContent() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const unvCd = String(params.unvCd || "");
   const displayYear = Number(params.year || 0);
+  // 자료 출처: ?source=자체발표 일 때만 자체발표, 그 외 대교협
+  const source = searchParams.get("source") === "자체발표" ? "자체발표" : "대교협";
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AdmissionResultResponse | null>(null);
@@ -60,6 +72,7 @@ export default function AdmissionResultPage() {
         recruitment_type: recruitmentTab || undefined,
         admission_name: admissionNameFilter || undefined,
         search: search || undefined,
+        source,
       });
       setData(res);
     } catch (e) {
@@ -68,7 +81,7 @@ export default function AdmissionResultPage() {
     } finally {
       setLoading(false);
     }
-  }, [unvCd, displayYear, recruitmentTab, admissionNameFilter, search]);
+  }, [unvCd, displayYear, recruitmentTab, admissionNameFilter, search, source]);
 
   useEffect(() => {
     load();
@@ -158,6 +171,20 @@ export default function AdmissionResultPage() {
           </h1>
           <p style={{ color: "#6B7B98", fontSize: 14, margin: 0 }}>
             {displayYear}학년도 전년도 입시결과
+            <span
+              style={{
+                marginLeft: 8,
+                display: "inline-block",
+                padding: "2px 8px",
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 700,
+                background: source === "자체발표" ? "#EDE9FE" : "#DBEAFE",
+                color: source === "자체발표" ? "#6D28D9" : "#1D4ED8",
+              }}
+            >
+              {source}
+            </span>
             {data?.data_year && (
               <span style={{ marginLeft: 8, fontSize: 12, color: "#9CA3AF" }}>
                 (실제 입결 연도: {data.data_year}학년도)
@@ -178,7 +205,7 @@ export default function AdmissionResultPage() {
               color: "#6B7B98",
             }}
           >
-            <p style={{ fontSize: 16, marginBottom: 8 }}>📋 이 대학의 {data.data_year}학년도 입결 데이터가 아직 준비되지 않았습니다.</p>
+            <p style={{ fontSize: 16, marginBottom: 8 }}>📋 이 대학의 {data.data_year}학년도 {source} 입결 데이터가 아직 준비되지 않았습니다.</p>
             <p style={{ fontSize: 13, color: "#9CA3AF" }}>관리자에서 입결 데이터를 업로드하면 자동으로 표시됩니다.</p>
           </div>
         )}
@@ -302,6 +329,7 @@ export default function AdmissionResultPage() {
                         key={it.id}
                         item={it}
                         unvCd={unvCd}
+                        source={source}
                         opened={openedRow === it.id}
                         timelineOpened={openedTimeline === it.id}
                         onToggle={() => setOpenedRow(openedRow === it.id ? null : it.id)}
@@ -316,7 +344,7 @@ export default function AdmissionResultPage() {
             </div>
 
             <p style={{ fontSize: 12, color: "#9CA3AF", marginTop: 12, textAlign: "right" }}>
-              💡 데이터 출처: 대학어디가 입결 자료
+              💡 데이터 출처: {source === "자체발표" ? "대학 입학처 자체발표 자료" : "대학어디가(대교협) 공시 자료"}
             </p>
           </>
         )}
@@ -405,6 +433,7 @@ function SortButton({
 function Row({
   item,
   unvCd,
+  source,
   opened,
   timelineOpened,
   onToggle,
@@ -414,6 +443,7 @@ function Row({
 }: {
   item: AdmissionResultItem;
   unvCd: string;
+  source: string;
   opened: boolean;
   timelineOpened: boolean;
   onToggle: () => void;
@@ -529,6 +559,7 @@ function Row({
             <TimelineChart
               universityCode={unvCd}
               major={item.major}
+              source={source}
               recruitmentType={item.recruitment_type || undefined}
               admissionCategory={item.admission_category || undefined}
               admissionName={item.admission_name || undefined}
@@ -706,6 +737,7 @@ function tdRight(): React.CSSProperties {
 function TimelineChart({
   universityCode,
   major,
+  source,
   recruitmentType,
   admissionCategory,
   admissionName,
@@ -714,13 +746,14 @@ function TimelineChart({
 }: {
   universityCode: string;
   major: string;
+  source: string;
   recruitmentType?: string;
   admissionCategory?: string;
   admissionName?: string;
   isJeongsi: boolean;
   cache: Map<string, AdmissionTimelinePoint[]>;
 }) {
-  const cacheKey = `${universityCode}|${major}|${recruitmentType || ""}|${admissionCategory || ""}|${admissionName || ""}`;
+  const cacheKey = `${universityCode}|${source}|${major}|${recruitmentType || ""}|${admissionCategory || ""}|${admissionName || ""}`;
   const [points, setPoints] = useState<AdmissionTimelinePoint[] | null>(
     cache.get(cacheKey) || null
   );
@@ -744,6 +777,7 @@ function TimelineChart({
           recruitment_type: recruitmentType,
           admission_category: admissionCategory,
           admission_name: admissionName,
+          source,
         });
         if (!cancelled) {
           cache.set(cacheKey, res.points);
@@ -758,7 +792,7 @@ function TimelineChart({
     return () => {
       cancelled = true;
     };
-  }, [cacheKey, universityCode, major, recruitmentType, admissionCategory, admissionName, cache]);
+  }, [cacheKey, universityCode, major, recruitmentType, admissionCategory, admissionName, source, cache]);
 
   if (loading) return <div style={{ fontSize: 12, color: "#6B7B98" }}>추이 데이터 로딩 중...</div>;
   if (error) return <div style={{ fontSize: 12, color: "#B91C1C" }}>로드 실패: {error}</div>;

@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.admin import Admin
 from app.services.adiga_result_import_service import (
+    SOURCE_KCUE,
+    VALID_SOURCES,
     extract_year_from_filename,
     get_year_summary,
     import_to_db,
@@ -57,20 +59,24 @@ async def admin_summary(
 
 @router.post("/upload")
 async def admin_upload(
-    file: UploadFile = File(..., description="대학어디가 입결 Excel"),
+    file: UploadFile = File(..., description="입결 Excel"),
     year: int | None = Query(None, description="학년도 강제 지정 (파일명에서 추출 안 되면)"),
     mode: str = Query("full", description="full=해당 학년도 전체 교체 / partial=파일에 포함된 대학만 교체"),
+    source: str = Query(SOURCE_KCUE, description="자료 출처: 대교협 / 자체발표"),
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    대학어디가 입결 Excel 업로드 → 검증 → DB import → 영구 저장.
+    입결 Excel 업로드 → 검증 → DB import → 영구 저장.
 
-    - mode=full: 해당 학년도 데이터 전체 교체
+    - source=대교협|자체발표: 자료 출처. 교체는 같은 출처끼리만 수행
+    - mode=full: 해당 학년도·출처 데이터 전체 교체
     - mode=partial: 파일에 포함된 대학만 교체 (없는 대학 기존 데이터 유지)
     """
     if mode not in ("full", "partial"):
         raise HTTPException(status_code=400, detail="mode 는 full 또는 partial 이어야 합니다")
+    if source not in VALID_SOURCES:
+        raise HTTPException(status_code=400, detail=f"source 는 {'/'.join(VALID_SOURCES)} 중 하나여야 합니다")
     _require_super_admin(admin)
 
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
@@ -102,16 +108,17 @@ async def admin_upload(
 
         # 3. DB import (실패 시 기존 백업 파일을 건드리지 않도록 영구 저장보다 먼저 수행)
         try:
-            result = await import_to_db(db, parsed, override_year=effective_year, mode=mode)
+            result = await import_to_db(db, parsed, override_year=effective_year, mode=mode, source=source)
         except Exception as e:
             logger.error(f"adiga import DB 실패: {e}")
             raise HTTPException(status_code=500, detail=f"DB import 실패: {e}")
 
         # 4. import 성공 후에만 영구 저장 (백업·복원용 — 실패한 파일로 덮어쓰기 방지)
-        #    부분 교체 파일은 전체 백업을 덮어쓰지 않도록 _partial 접미사로 저장
+        #    출처별·부분 교체별로 파일명을 분리해 서로 덮어쓰지 않게 저장
         PERSIST_DIR.mkdir(parents=True, exist_ok=True)
+        prefix = "adiga" if source == SOURCE_KCUE else "자체발표"
         suffix = "_partial" if mode == "partial" else ""
-        dest_path = PERSIST_DIR / f"adiga_입결_{effective_year}{suffix}.xlsx"
+        dest_path = PERSIST_DIR / f"{prefix}_입결_{effective_year}{suffix}.xlsx"
         shutil.copyfile(tmp_path, dest_path)
         logger.info(f"adiga import: 영구 보관 → {dest_path}")
 
@@ -122,6 +129,7 @@ async def admin_upload(
             "year": result["year"],
             "display_year": result["display_year"],
             "mode": result["mode"],
+            "source": result["source"],
             "deleted": result["deleted"],
             "inserted": result["inserted"],
             "source_file": result["filename"],
@@ -139,20 +147,25 @@ async def admin_upload(
 @router.delete("/year/{year}")
 async def admin_delete_year(
     year: int,
+    source: str | None = Query(None, description="자료 출처 (지정 시 해당 출처만 삭제)"),
     admin: Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """특정 학년도 데이터 전체 삭제 (영구 저장 파일은 보존)."""
+    """특정 학년도 데이터 삭제 (영구 저장 파일은 보존). source 지정 시 해당 출처만."""
     _require_super_admin(admin)
+
+    if source is not None and source not in VALID_SOURCES:
+        raise HTTPException(status_code=400, detail=f"source 는 {'/'.join(VALID_SOURCES)} 중 하나여야 합니다")
 
     from sqlalchemy import delete as sa_delete
 
     from app.models.adiga_admission_result import AdigaAdmissionResult
 
-    result = await db.execute(
-        sa_delete(AdigaAdmissionResult).where(AdigaAdmissionResult.year == year)
-    )
+    conditions = [AdigaAdmissionResult.year == year]
+    if source:
+        conditions.append(AdigaAdmissionResult.source == source)
+    result = await db.execute(sa_delete(AdigaAdmissionResult).where(*conditions))
     deleted = result.rowcount or 0
     await db.commit()
 
-    return {"year": year, "deleted": deleted}
+    return {"year": year, "source": source, "deleted": deleted}

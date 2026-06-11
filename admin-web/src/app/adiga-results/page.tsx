@@ -10,8 +10,11 @@ import {
   deleteAdigaResultsYear,
 } from "@/lib/api";
 
+type DataSource = "대교협" | "자체발표";
+
 interface YearSummary {
   year: number;
+  source: DataSource;
   count: number;
   last_imported: string | null;
   source_file: string | null;
@@ -26,6 +29,7 @@ export default function AdigaResultsPage() {
     year: number;
     display_year?: number;
     mode?: string;
+    source?: string;
     deleted: number;
     inserted: number;
     source_file: string;
@@ -34,6 +38,7 @@ export default function AdigaResultsPage() {
   const [error, setError] = useState<string | null>(null);
   const [yearOverride, setYearOverride] = useState<string>("");
   const [importMode, setImportMode] = useState<"full" | "partial">("full");
+  const [dataSource, setDataSource] = useState<DataSource>("대교협");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -67,7 +72,7 @@ export default function AdigaResultsPage() {
     setUploadResult(null);
     try {
       const yearNum = yearOverride.trim() ? Number(yearOverride.trim()) : undefined;
-      const res = await uploadAdigaResults(file, yearNum, importMode);
+      const res = await uploadAdigaResults(file, yearNum, importMode, dataSource);
       setUploadResult(res);
       await load();
       if (fileInputRef.current) {
@@ -81,12 +86,13 @@ export default function AdigaResultsPage() {
     }
   };
 
-  const handleDelete = async (year: number) => {
-    if (!confirm(`${year}학년도 입결 데이터 ${items.find((i) => i.year === year)?.count.toLocaleString()}건을 삭제하시겠습니까?\n영구 저장된 Excel 파일은 보존됩니다.`)) {
+  const handleDelete = async (year: number, source: DataSource) => {
+    const target = items.find((i) => i.year === year && i.source === source);
+    if (!confirm(`${year}학년도 [${source}] 입결 데이터 ${target?.count.toLocaleString()}건을 삭제하시겠습니까?\n같은 학년도의 다른 출처 데이터는 유지되며, 영구 저장된 Excel 파일은 보존됩니다.`)) {
       return;
     }
     try {
-      await deleteAdigaResultsYear(year);
+      await deleteAdigaResultsYear(year, source);
       await load();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -115,13 +121,58 @@ export default function AdigaResultsPage() {
                 지원 형식 (자동 감지): ① 시트 <code>전년도입결</code> 1개 (표준 37컬럼) ②{" "}
                 <code>입결_종합</code>/<code>입결_교과</code>/<code>입결_수능</code> 3시트 (정규화·원시 모두 가능)
               </li>
-              <li>교체 방식: <strong>전체 교체</strong>(해당 연도 전부 새로) / <strong>부분 교체</strong>(파일에 포함된 대학만 교체, 나머지 유지)</li>
+              <li>
+                자료 출처: <strong>대교협</strong>(대학어디가 공시) / <strong>자체발표</strong>(대학 입학처 발표) —
+                같은 학년도라도 출처별로 별도 보관되며, 교체도 같은 출처끼리만 수행됩니다
+              </li>
+              <li>교체 방식: <strong>전체 교체</strong>(해당 연도·출처 전부 새로) / <strong>부분 교체</strong>(파일에 포함된 대학만 교체, 나머지 유지)</li>
               <li>업로드된 파일은 import 성공 시 <code>backend/data/admission_results/</code> 에 영구 보관됩니다 (백업·복원용)</li>
             </ul>
             <div style={{ marginTop: 10, padding: 10, background: "#FEF3C7", borderRadius: 4, fontSize: 11, color: "#92400E" }}>
               <strong>📌 학년도 의미:</strong> 여기서 입력하는 학년도는 <strong>실제 입결이 발생한 연도</strong> 입니다.
               예: 2026학년도 입결은 <code>2026</code> 으로 저장됩니다.<br/>
               사용자 페이지에서는 자동으로 한 학년도 위(2027학년도 페이지)에 &quot;전년도 입시결과&quot;로 표시됩니다.
+            </div>
+          </div>
+
+          {/* 자료 출처 선택 */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 6 }}>
+              자료 출처
+            </label>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="dataSource"
+                  checked={dataSource === "대교협"}
+                  onChange={() => setDataSource("대교협")}
+                  disabled={uploading}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  <strong>대교협 (대학어디가 공시)</strong>
+                  <span style={{ display: "block", fontSize: 11, color: "#9ca3af" }}>
+                    사용자 페이지 &quot;전년도 입시결과(대교협)&quot; 버튼에 표시
+                  </span>
+                </span>
+              </label>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="dataSource"
+                  checked={dataSource === "자체발표"}
+                  onChange={() => setDataSource("자체발표")}
+                  disabled={uploading}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  <strong>자체발표 (대학 입학처 발표)</strong>
+                  <span style={{ display: "block", fontSize: 11, color: "#9ca3af" }}>
+                    사용자 페이지 &quot;전년도 입시결과(자체발표)&quot; 버튼에 표시
+                  </span>
+                </span>
+              </label>
             </div>
           </div>
 
@@ -221,7 +272,8 @@ export default function AdigaResultsPage() {
               ✅ 업로드 완료!
               <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
                 <li>입결 연도: <strong>{uploadResult.year}학년도</strong></li>
-                <li>사용자 페이지 표시: <strong>{uploadResult.display_year ?? uploadResult.year + 1}학년도 페이지</strong> (전년도 입시결과)</li>
+                <li>자료 출처: <strong>{uploadResult.source ?? "대교협"}</strong></li>
+                <li>사용자 페이지 표시: <strong>{uploadResult.display_year ?? uploadResult.year + 1}학년도 페이지</strong> (전년도 입시결과({uploadResult.source ?? "대교협"}))</li>
                 <li>교체 방식: <strong>{uploadResult.mode === "partial" ? "부분 교체 (파일 포함 대학만)" : "전체 교체"}</strong></li>
                 <li>기존 데이터 삭제: {uploadResult.deleted.toLocaleString()}건</li>
                 <li>신규 INSERT: {uploadResult.inserted.toLocaleString()}건</li>
@@ -247,6 +299,7 @@ export default function AdigaResultsPage() {
               <thead>
                 <tr>
                   <th style={{ textAlign: "left" }}>입결 연도</th>
+                  <th style={{ textAlign: "left" }}>출처</th>
                   <th style={{ textAlign: "left" }}>표시 페이지</th>
                   <th style={{ textAlign: "right" }}>데이터 행 수</th>
                   <th style={{ textAlign: "left" }}>최근 import 시각</th>
@@ -256,8 +309,23 @@ export default function AdigaResultsPage() {
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.year}>
+                  <tr key={`${item.year}-${item.source}`}>
                     <td><strong>{item.year}학년도 입결</strong></td>
+                    <td>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          background: item.source === "자체발표" ? "#EDE9FE" : "#DBEAFE",
+                          color: item.source === "자체발표" ? "#6D28D9" : "#1D4ED8",
+                        }}
+                      >
+                        {item.source || "대교협"}
+                      </span>
+                    </td>
                     <td style={{ fontSize: 12, color: "#6b7280" }}>{item.year + 1}학년도 페이지</td>
                     <td style={{ textAlign: "right" }}>{item.count.toLocaleString()}건</td>
                     <td style={{ fontSize: 12, color: "#6b7280" }}>
@@ -267,7 +335,7 @@ export default function AdigaResultsPage() {
                     <td style={{ textAlign: "center" }}>
                       <button
                         className="btn btn-sm btn-danger"
-                        onClick={() => handleDelete(item.year)}
+                        onClick={() => handleDelete(item.year, item.source || "대교협")}
                       >
                         삭제
                       </button>

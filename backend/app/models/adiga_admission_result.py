@@ -36,6 +36,10 @@ class AdigaAdmissionResult(Base):
     university: Mapped[str] = mapped_column(String(100), nullable=False, index=True)  # 대학명
     university_code: Mapped[str] = mapped_column(String(10), nullable=False, index=True)  # 대학코드 7자리
     year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)  # 학년도
+    # 자료 출처: 대교협(대학어디가 공시) / 자체발표(대학 입학처 발표) — 같은 전형도 값이 다를 수 있어 분리 보관
+    source: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="대교협", server_default="대교협", index=True
+    )
     admission_category: Mapped[str | None] = mapped_column(String(30), nullable=True)  # 전형유형: 종합/교과/논술/수능
     admission_name: Mapped[str | None] = mapped_column(String(300), nullable=True)  # 전형명
     recruitment_type: Mapped[str | None] = mapped_column(String(10), nullable=True)  # 구분: 수시/정시

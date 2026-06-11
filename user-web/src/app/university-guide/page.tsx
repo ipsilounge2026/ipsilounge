@@ -132,11 +132,17 @@ function GuideCard({ guide }: { guide: UniversityGuideItem }) {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // adiga_result_url (전년도 입시결과(대교협)) 클릭은 우리 자체 입결 페이지로 이동.
-  // university_code 있을 때만 사용 가능.
+  // 전년도 입시결과 클릭은 우리 자체 입결 페이지로 이동 (university_code 있을 때만).
+  // 대교협(adiga_result_url) → 기본(대교협), 자체발표(official_result_url) → ?source=자체발표
   const handleSecondaryClick = (key: string, url: string | null) => {
     if (key === "adiga_result_url" && guide.university_code) {
       router.push(`/university-guide/result/${guide.university_code}/${guide.year}`);
+      return;
+    }
+    if (key === "official_result_url" && guide.university_code) {
+      router.push(
+        `/university-guide/result/${guide.university_code}/${guide.year}?source=${encodeURIComponent("자체발표")}`
+      );
       return;
     }
     open(url);
@@ -213,9 +219,10 @@ function GuideCard({ guide }: { guide: UniversityGuideItem }) {
       <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #F3F4F6", display: "flex", gap: 16, flexWrap: "wrap" }}>
         {secondary.map((b) => {
           const url = guide[b.key] as string | null;
-          // adiga_result_url (전년도 입시결과(대교협)) 은 우리 자체 페이지로 이동하므로
+          // 전년도 입시결과(대교협·자체발표)는 우리 자체 페이지로 이동하므로
           // 외부 URL 없어도 university_code 만 있으면 활성화.
-          const isInternal = b.key === "adiga_result_url" && !!guide.university_code;
+          const isInternal =
+            (b.key === "adiga_result_url" || b.key === "official_result_url") && !!guide.university_code;
           const disabled = !url && !isInternal;
           const icon = b.key === "adiga_result_url" || b.key === "official_result_url" ? "📊" : "🎯";
           return (
