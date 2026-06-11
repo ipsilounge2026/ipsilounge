@@ -247,7 +247,15 @@ export default function UniversityGuidePage() {
             onSubmit={async (data) => {
               try {
                 const res = await bulkCopyUniversityGuides(data);
-                alert(`복사 완료: ${res.created}건 생성, ${res.skipped}건 건너뜀`);
+                let msg = `복사 완료: ${res.created}건 생성, ${res.skipped}건 건너뜀`;
+                if (data.copy_urls) {
+                  msg +=
+                    "\n\n⚠️ 수동 갱신 필요: 서울시립대학교 학종 가이드북 URL 은 연도가 포함되어 있습니다." +
+                    "\n새 학년도에서 서울시립대학교[본교] → [수정] → 학생부종합 가이드북 URL 의" +
+                    "\n연도 부분을 변경하세요 (예: .../guidebook/2025.do → 2026.do)." +
+                    "\n변경 후 브라우저에서 열리는지 확인하고 저장하면 됩니다.";
+                }
+                alert(msg);
                 setShowBulkCopy(false);
                 await load();
               } catch (e: unknown) {
@@ -501,6 +509,35 @@ function BulkCopyModal({
           />
           URL 까지 복사 (체크 안 하면 대학명·코드·순서만 복사)
         </label>
+
+        {copyUrls && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 12,
+              background: "#FEF3C7",
+              borderRadius: 6,
+              fontSize: 12,
+              color: "#92400E",
+              lineHeight: 1.6,
+            }}
+          >
+            <strong>⚠️ 복사 후 수동 갱신 필요: 서울시립대학교 학종 가이드북</strong>
+            <br />
+            서울시립대만 URL에 연도가 포함되어 있어 매년 갱신해야 합니다.
+            <br />
+            <strong>갱신 방법:</strong> 새 학년도에서 서울시립대학교[본교] 검색 → [수정] →
+            학생부종합 가이드북 URL 의 연도 부분 변경
+            <br />
+            (예: <code>.../guidebook/2025.do</code> → <code>.../guidebook/2026.do</code>)
+            후 브라우저에서 열리는지 확인하고 저장
+            <br />
+            <span style={{ color: "#B45309" }}>
+              참고: 중앙대·경희대·건국대·인천대는 암호화 토큰 URL 이라 사이트 개편 시 끊길 수
+              있으니 연 1회 클릭 점검 권장
+            </span>
+          </div>
+        )}
 
         <div className="modal-actions">
           <button className="btn btn-outline" onClick={onClose}>
