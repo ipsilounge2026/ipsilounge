@@ -10,6 +10,7 @@
 - year 매칭 시 자동으로 -1 처리
 """
 
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -21,6 +22,38 @@ from app.models.adiga_admission_result import AdigaAdmissionResult
 from app.models.university_guide import UniversityGuide
 
 router = APIRouter(prefix="/api/university-guide/result", tags=["입결 조회"])
+
+# ── 추이 매칭용 정규화 ──────────────────────────────────────────────
+# 연도별 수집 파일의 표기 차이를 흡수: 공백/가운뎃점 변형/로마숫자/전형유형 wrapper
+# 예: '학생부교과(지역균형전형)'(2026) ↔ '지역균형전형'(2024·2025)
+#     '공간디자인・소비자학과' ↔ '공간디자인·소비자학과'
+_DOT_MAP = dict.fromkeys(map(ord, "・•‧∙"), ord("·"))
+_ROMAN_MAP = str.maketrans({"Ⅰ": "1", "Ⅱ": "2", "Ⅲ": "3", "Ⅳ": "4", "Ⅴ": "5"})
+RE_NAME_WRAPPER = re.compile(
+    r"^(학생부교과|학생부종합|학생부위주전형|수능위주전형|수능|교과|종합|논술|실기)\((.+)\)$"
+)
+
+
+def _norm_text(s: str | None) -> str:
+    return re.sub(r"\s+", "", s or "").translate(_DOT_MAP)
+
+
+def _norm_name(s: str | None) -> str:
+    t = _norm_text(s).translate(_ROMAN_MAP)
+    m = RE_NAME_WRAPPER.match(t)
+    return m.group(2) if m else t
+
+
+def _data_richness(it: AdigaAdmissionResult) -> int:
+    """같은 해 후보가 여럿일 때 데이터가 많은 행 우선."""
+    score = 0
+    for v in (it.recruit_count, it.competition_rate, it.additional_count,
+              it.gpa_grade_50, it.gpa_grade_70, it.conv_score_50, it.conv_score_70):
+        if v is not None:
+            score += 1
+    if it.percentile_50 and any(v is not None for v in it.percentile_50.values()):
+        score += 2
+    return score
 
 
 VALID_SOURCES = ("대교협", "자체발표")
@@ -210,29 +243,47 @@ async def get_admission_timeline(
     같은 학과·전형의 여러 학년도 추이 (그래프용).
 
     매칭 키: university_code + major + source (+ recruitment_type + admission_category + admission_name).
-    매칭이 너무 엄격하면 데이터가 적게 나오므로 admission_name 은 선택.
     같은 출처(source)끼리만 비교 — 대교협/자체발표 값이 섞이지 않도록.
+
+    연도별 수집 파일의 표기 차이를 흡수하기 위해 학과명·전형명은 정규화 비교:
+    - 공백·가운뎃점 변형·로마숫자 통일, '학생부교과(...)' 식 wrapper 제거
+    - 전형명이 정규화로도 안 맞는 해는, 그 해 후보(같은 학과·구분·유형)가
+      정확히 1행일 때만 그 행을 사용 (구 데이터에 전형명이 비어 있는 케이스 대응)
     """
     if source not in VALID_SOURCES:
         source = "대교협"
     conditions = [
         AdigaAdmissionResult.university_code == university_code,
-        AdigaAdmissionResult.major == major,
         AdigaAdmissionResult.source == source,
     ]
     if recruitment_type:
         conditions.append(AdigaAdmissionResult.recruitment_type == recruitment_type)
     if admission_category:
         conditions.append(AdigaAdmissionResult.admission_category == admission_category)
-    if admission_name:
-        conditions.append(AdigaAdmissionResult.admission_name == admission_name)
 
     res = await db.execute(
         select(AdigaAdmissionResult)
         .where(and_(*conditions))
         .order_by(AdigaAdmissionResult.year.asc())
     )
-    items = res.scalars().all()
+    all_items = res.scalars().all()
+
+    # 학과명 정규화 일치 행만 + 연도별 그룹
+    target_major = _norm_text(major)
+    by_year: dict[int, list[AdigaAdmissionResult]] = {}
+    for it in all_items:
+        if _norm_text(it.major) == target_major:
+            by_year.setdefault(it.year, []).append(it)
+
+    # 연도별로 전형명 정규화 매칭 → 후보 1행 fallback
+    target_name = _norm_name(admission_name)  # 빈 전형명('')도 매칭 대상
+    items: list[AdigaAdmissionResult] = []
+    for yr in sorted(by_year.keys()):
+        rows = by_year[yr]
+        exact = [r for r in rows if _norm_name(r.admission_name) == target_name]
+        pool = exact if exact else (rows if len(rows) == 1 else [])
+        if pool:
+            items.append(max(pool, key=_data_richness))
 
     points = []
     for it in items:
