@@ -116,10 +116,14 @@ export default function AdigaResultsPage() {
           <div style={{ background: "#F3F4F6", borderRadius: 6, padding: 12, fontSize: 13, marginBottom: 16, color: "#374151" }}>
             <strong>자동 수집 프로그램이 만든 Excel을 업로드하세요.</strong>
             <ul style={{ margin: "6px 0 0 18px", padding: 0, fontSize: 12 }}>
-              <li>파일명 권장: <code>adiga_입결_2026.xlsx</code> (실제 입결 연도)</li>
+              <li>
+                파일명 권장 (끝의 4자리 = 실제 입결 연도): 대교협 <code>adiga_입결_2026.xlsx</code> /
+                자체발표 <code>자체발표_입결_2026.xlsx</code>
+              </li>
               <li>
                 지원 형식 (자동 감지): ① 시트 <code>전년도입결</code> 1개 (표준 37컬럼) ②{" "}
-                <code>입결_종합</code>/<code>입결_교과</code>/<code>입결_수능</code> 3시트 (정규화·원시 모두 가능)
+                <code>입결_종합</code>/<code>입결_교과</code>/<code>입결_수능</code> 3시트 ③{" "}
+                <code>수시</code>/<code>정시</code> 2시트 (최종 정리 형식)
               </li>
               <li>
                 자료 출처: <strong>대교협</strong>(대학어디가 공시) / <strong>자체발표</strong>(대학 입학처 발표) —
@@ -232,7 +236,8 @@ export default function AdigaResultsPage() {
                 style={{ maxWidth: 160 }}
               />
               <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
-                파일명이 <code>adiga_입결_2026.xlsx</code> 형식이면 자동 추출됩니다
+                파일명이 <code>adiga_입결_2026.xlsx</code> / <code>자체발표_입결_2026.xlsx</code>{" "}
+                처럼 4자리 연도로 끝나면 자동 추출됩니다
               </div>
             </div>
             <div style={{ flex: "1 1 300px" }}>
