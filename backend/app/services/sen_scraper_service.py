@@ -137,6 +137,45 @@ def _normalize_name(name: str) -> str:
     return s.strip().lower()
 
 
+# SEN 표기 → 우리 대학명 (교명 통합 등 특수 케이스)
+SEN_NAME_ALIASES = {
+    "강원대학교강릉원주캠퍼스": "국립강릉원주대학교",
+}
+
+# '대학교' 뒤에 붙는 캠퍼스 토큰: '건국대학교글로컬캠퍼스' → '글로컬', '강원대학교 강릉원주캠퍼스' → '강릉원주'
+RE_CAMPUS_WORD = re.compile(r"대학교?\s*([가-힣A-Za-z0-9]+?)\s*캠퍼스")
+
+
+def _split_name(name: str) -> tuple[str, str]:
+    """대학명 → (base 키, 캠퍼스 토큰).
+
+    예: '한양대학교(ERICA)[분교]' → ('한양대학교', 'erica분교')
+        '고려대학교세종캠퍼스'    → ('고려대학교', '세종')
+        '국립창원대학교[본교]'    → ('창원대학교', '본교')
+    """
+    raw = name.strip()
+    campus_parts: list[str] = []
+    campus_parts += re.findall(r"\(([^)]+)\)", raw)
+    campus_parts += re.findall(r"\[([^\]]+)\]", raw)
+    rest = re.sub(r"\([^)]*\)|\[[^\]]*\]", "", raw)
+    m = RE_CAMPUS_WORD.search(rest)
+    if m:
+        campus_parts.append(m.group(1))
+        # '대학교' 는 남기고 캠퍼스 토큰+'캠퍼스' 만 제거
+        rest = rest[: m.start(1)] + rest[m.end():]
+    base = re.sub(r"\s+", "", rest).strip().lower()
+    base = re.sub(r"^국립", "", base)
+    campus = re.sub(r"\s+", "", "".join(campus_parts)).lower()
+    return base, campus
+
+
+def _campus_match(sen_campus: str, guide_campus: str) -> bool:
+    """캠퍼스 토큰 매칭: 'erica' ↔ 'erica분교', '세종' ↔ '세종분교'."""
+    if not sen_campus or not guide_campus:
+        return False
+    return sen_campus in guide_campus or guide_campus in sen_campus
+
+
 def build_sen_proxy_url(university: str, year: int) -> str:
     """우리 SEN 프록시 URL (사용자 카드의 시행계획 버튼이 호출)."""
     from urllib.parse import quote
@@ -150,10 +189,12 @@ async def sync_admission_plans(
     """
     학년도별 시행계획 자료를 수집해 university_guides 테이블에 반영.
 
-    동작:
-    - SEN 에서 row 수집
-    - 각 row 의 university 명을 우리 university_guides 와 매칭 (정규화 후 부분 일치)
-    - 매칭된 row 의 sen_plan_meta JSONB 채움 + adiga_admission_plan_url 을 우리 프록시 URL 로 갱신
+    매칭 (캠퍼스 인식 2단계):
+    1. 캠퍼스 표기가 있는 SEN row (예: '한양대학교(ERICA)', '고려대학교 세종캠퍼스')
+       → 캠퍼스 토큰이 일치하는 guide 만 갱신
+    2. base SEN row (예: '가톨릭대학교')
+       → 같은 base 의 guide 중 1단계에서 매칭 안 된 캠퍼스 전부 갱신
+       (시행계획은 대학 전체 문서이므로 모든 캠퍼스에 동일 적용)
 
     Returns: {"total_fetched", "matched", "updated", "unmatched_samples"}
     """
@@ -168,40 +209,91 @@ async def sync_admission_plans(
         select(UniversityGuide).where(UniversityGuide.year == year)
     )
     guides = res.scalars().all()
-    guide_index: dict[str, UniversityGuide] = {}
+    guides_by_base: dict[str, list[UniversityGuide]] = {}
     for g in guides:
-        guide_index[_normalize_name(g.university)] = g
+        base, _campus = _split_name(g.university)
+        guides_by_base.setdefault(base, []).append(g)
 
     matched = 0
     updated = 0
     unmatched: list[str] = []
+    updated_ids: set = set()
 
-    for row in sen_rows:
-        key = _normalize_name(row["university"])
-        guide = guide_index.get(key)
-        if guide is None:
-            # 부분 일치 fallback
-            for ig_key, ig_guide in guide_index.items():
-                if key and (ig_key.startswith(key) or key.startswith(ig_key)):
-                    guide = ig_guide
-                    break
-
-        if guide is None:
-            unmatched.append(row["university"])
-            continue
-
-        matched += 1
-        # SEN form data 저장
-        meta = {
+    def _apply(guide: UniversityGuide, row: dict) -> None:
+        nonlocal updated
+        guide.sen_plan_meta = {
             "fields": row["fields"],
             "sen_university": row["university"],
         }
-        # JSONB 컬럼 (모델에서 sen_plan_meta 추가됨)
-        # 모델에 없으면 동적 setattr 으로도 무관 (마이그레이션 시 추가)
-        guide.sen_plan_meta = meta
-        # adiga_admission_plan_url 을 우리 SEN 프록시 URL 로 교체
         guide.adiga_admission_plan_url = build_sen_proxy_url(guide.university, year)
-        updated += 1
+        if guide.id not in updated_ids:
+            updated_ids.add(guide.id)
+            updated += 1
+
+    # 교명 alias 적용 + 캠퍼스/base 분리
+    parsed_rows = []
+    for row in sen_rows:
+        raw = row["university"]
+        alias_key = re.sub(r"\s+", "", raw).lower()
+        effective = SEN_NAME_ALIASES.get(alias_key, raw)
+        base, campus = _split_name(effective)
+        parsed_rows.append((base, campus, row))
+
+    # 1단계: 캠퍼스 표기 있는 row → 캠퍼스 일치 guide 만
+    campus_orphans: list[tuple[str, dict]] = []  # base 는 있는데 캠퍼스가 안 맞는 row
+    for base, campus, row in parsed_rows:
+        if not campus:
+            continue
+        cands = guides_by_base.get(base, [])
+        hits = [g for g in cands if _campus_match(campus, _split_name(g.university)[1])]
+        if hits:
+            matched += 1
+            for g in hits:
+                _apply(g, row)
+        elif cands:
+            campus_orphans.append((base, row))
+        else:
+            unmatched.append(row["university"])
+
+    # 2단계: base row → 같은 base 의 미갱신 guide 전부
+    for base, campus, row in parsed_rows:
+        if campus:
+            continue
+        cands = [g for g in guides_by_base.get(base, []) if g.id not in updated_ids]
+        if cands:
+            matched += 1
+            for g in cands:
+                _apply(g, row)
+        elif base not in guides_by_base:
+            unmatched.append(row["university"])
+        # base 의 모든 캠퍼스가 이미 갱신됨 → 정상 (중복 row)
+
+    # 3단계: 캠퍼스가 안 맞았던 row → base row 도 없었다면 미갱신 guide 에 best-effort 적용
+    # (예: SEN '단국대학교죽전캠퍼스'/'단국대학교천안캠퍼스' 만 있고 우리는 [본교]/[제2캠퍼스] 표기)
+    orphans_by_base: dict[str, list[dict]] = {}
+    for base, row in campus_orphans:
+        orphans_by_base.setdefault(base, []).append(row)
+
+    def _campus_order(g: UniversityGuide) -> str:
+        # 본교 → 제2 → 제3 순 정렬 키 (SEN 도 본교 캠퍼스를 먼저 나열하는 관례)
+        c = _split_name(g.university)[1]
+        return "0" if "본교" in c else c
+
+    for base, rows in orphans_by_base.items():
+        cands = sorted(
+            (g for g in guides_by_base.get(base, []) if g.id not in updated_ids),
+            key=_campus_order,
+        )
+        if not cands:
+            continue  # 이미 다른 row 로 갱신됨 — 정상
+        matched += 1
+        if len(rows) == len(cands):
+            # 캠퍼스 수와 파일 수가 같으면 순서대로 1:1 배정
+            for g, row in zip(cands, rows, strict=False):
+                _apply(g, row)
+        else:
+            for g in cands:
+                _apply(g, rows[0])
 
     await db.commit()
 
