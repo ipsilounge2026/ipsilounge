@@ -1,25 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import {
   fetchAdmissionResult,
-  fetchAdmissionTimeline,
   AdmissionResultItem,
   AdmissionResultResponse,
-  AdmissionTimelinePoint,
 } from "@/lib/api";
 
 const isJeongsiType = (rt: string | null | undefined): boolean =>
@@ -55,11 +43,7 @@ function AdmissionResultContent() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [openedRow, setOpenedRow] = useState<string | null>(null);
-  const [openedTimeline, setOpenedTimeline] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("major");
-
-  // timeline 클라이언트 캐시 (학과+전형 키별)
-  const timelineCache = useRef<Map<string, AdmissionTimelinePoint[]>>(new Map());
 
   const load = useCallback(async () => {
     if (!unvCd || !displayYear) return;
@@ -143,7 +127,6 @@ function AdmissionResultContent() {
     setRecruitmentTab(t);
     setAdmissionNameFilter("");
     setOpenedRow(null);
-    setOpenedTimeline(null);
   }, []);
 
   return (
@@ -320,7 +303,6 @@ function AdmissionResultContent() {
                       <th style={thRight()}>{isJeongsiTab ? "50% 평균 백분위" : "50% 등급"}</th>
                       <th style={thRight()}>{isJeongsiTab ? "70% 평균 백분위" : "70% 등급"}</th>
                       <th style={th()}>상세</th>
-                      <th style={th()}>추이<br/>그래프</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -328,14 +310,9 @@ function AdmissionResultContent() {
                       <Row
                         key={it.id}
                         item={it}
-                        unvCd={unvCd}
-                        source={source}
                         opened={openedRow === it.id}
-                        timelineOpened={openedTimeline === it.id}
                         onToggle={() => setOpenedRow(openedRow === it.id ? null : it.id)}
-                        onToggleTimeline={() => setOpenedTimeline(openedTimeline === it.id ? null : it.id)}
                         fmt={fmt}
-                        timelineCache={timelineCache.current}
                       />
                     ))}
                   </tbody>
@@ -432,24 +409,14 @@ function SortButton({
 
 function Row({
   item,
-  unvCd,
-  source,
   opened,
-  timelineOpened,
   onToggle,
-  onToggleTimeline,
   fmt,
-  timelineCache,
 }: {
   item: AdmissionResultItem;
-  unvCd: string;
-  source: string;
   opened: boolean;
-  timelineOpened: boolean;
   onToggle: () => void;
-  onToggleTimeline: () => void;
   fmt: (v: number | null | undefined) => string;
-  timelineCache: Map<string, AdmissionTimelinePoint[]>;
 }) {
   const isJeongsi = isJeongsiType(item.recruitment_type);
   const avg50 = item.percentile_50?.average_percentile;
@@ -525,53 +492,10 @@ function Row({
             "-"
           )}
         </td>
-        <td style={tdCenter()}>
-          <button
-            onClick={onToggleTimeline}
-            style={{
-              background: "none",
-              border: "1px solid #D1D5DB",
-              borderRadius: 4,
-              padding: "4px 8px",
-              fontSize: 11,
-              lineHeight: 1.2,
-              cursor: "pointer",
-              color: "#374151",
-              fontFamily: "inherit",
-              minWidth: 56,
-            }}
-          >
-            {timelineOpened ? (
-              "닫기"
-            ) : (
-              <>
-                추이
-                <br />
-                그래프
-              </>
-            )}
-          </button>
-        </td>
       </tr>
-      {timelineOpened && (
-        <tr style={{ background: "#F0F9FF" }}>
-          <td colSpan={10} style={{ padding: "12px 16px" }}>
-            <TimelineChart
-              universityCode={unvCd}
-              major={item.major}
-              source={source}
-              recruitmentType={item.recruitment_type || undefined}
-              admissionCategory={item.admission_category || undefined}
-              admissionName={item.admission_name || undefined}
-              isJeongsi={isJeongsi}
-              cache={timelineCache}
-            />
-          </td>
-        </tr>
-      )}
       {opened && (
         <tr style={{ background: "#FAFAFA" }}>
-          <td colSpan={10} style={{ padding: "12px 16px" }}>
+          <td colSpan={9} style={{ padding: "12px 16px" }}>
             {isJeongsi ? (
               <>
                 <PercentileDetail label="50%" data={item.percentile_50} />
@@ -732,195 +656,4 @@ function tdLeft(): React.CSSProperties {
 }
 function tdRight(): React.CSSProperties {
   return { ...tdCenter(), textAlign: "right" };
-}
-
-function TimelineChart({
-  universityCode,
-  major,
-  source,
-  recruitmentType,
-  admissionCategory,
-  admissionName,
-  isJeongsi,
-  cache,
-}: {
-  universityCode: string;
-  major: string;
-  source: string;
-  recruitmentType?: string;
-  admissionCategory?: string;
-  admissionName?: string;
-  isJeongsi: boolean;
-  cache: Map<string, AdmissionTimelinePoint[]>;
-}) {
-  const cacheKey = `${universityCode}|${source}|${major}|${recruitmentType || ""}|${admissionCategory || ""}|${admissionName || ""}`;
-  const [points, setPoints] = useState<AdmissionTimelinePoint[] | null>(
-    cache.get(cacheKey) || null
-  );
-  const [loading, setLoading] = useState(!cache.has(cacheKey));
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (cache.has(cacheKey)) {
-      setPoints(cache.get(cacheKey)!);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetchAdmissionTimeline({
-          university_code: universityCode,
-          major,
-          recruitment_type: recruitmentType,
-          admission_category: admissionCategory,
-          admission_name: admissionName,
-          source,
-        });
-        if (!cancelled) {
-          cache.set(cacheKey, res.points);
-          setPoints(res.points);
-        }
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [cacheKey, universityCode, major, recruitmentType, admissionCategory, admissionName, source, cache]);
-
-  if (loading) return <div style={{ fontSize: 12, color: "#6B7B98" }}>추이 데이터 로딩 중...</div>;
-  if (error) return <div style={{ fontSize: 12, color: "#B91C1C" }}>로드 실패: {error}</div>;
-  if (!points || points.length === 0) return <div style={{ fontSize: 12, color: "#6B7B98" }}>해당 학과·전형의 다른 학년도 데이터가 없습니다.</div>;
-
-  // 최근 3개년만 (data_year 기준 정렬 후 마지막 3개)
-  const sortedPoints = [...points].sort((a, b) => a.data_year - b.data_year);
-  const recentPoints = sortedPoints.slice(-3);
-
-  const chartData = recentPoints.map((p) => ({
-    year: `${p.data_year}학년도`,
-    경쟁률: p.competition_rate,
-    [isJeongsi ? "50% 백분위" : "50% 등급"]: isJeongsi ? p.avg_percentile_50 : p.gpa_grade_50,
-    [isJeongsi ? "70% 백분위" : "70% 등급"]: isJeongsi ? p.avg_percentile_70 : p.gpa_grade_70,
-  }));
-
-  if (recentPoints.length < 2) {
-    return (
-      <div>
-        <div style={{ marginBottom: 8, padding: 8, background: "#FEF3C7", borderRadius: 4, fontSize: 12, color: "#92400E" }}>
-          📊 추이 비교는 2학년도 이상 데이터가 있어야 의미가 있어요. 현재 {recentPoints.length}학년도 데이터만 있습니다.
-        </div>
-        <SinglePointTable points={recentPoints} isJeongsi={isJeongsi} />
-      </div>
-    );
-  }
-
-  const scoreReversed = !isJeongsi;
-  const dataLabel = recentPoints.length === sortedPoints.length
-    ? `${recentPoints.length}학년도 데이터`
-    : `최근 ${recentPoints.length}학년도 데이터 (전체 ${sortedPoints.length}학년도 중)`;
-
-  return (
-    <div>
-      <div style={{ marginBottom: 6, fontSize: 12, color: "#6B7B98" }}>
-        <strong style={{ color: "#0B1F3F" }}>{major}</strong> — {recruitmentType || "전체"} / {admissionCategory || "전형 전체"}
-        {admissionName && <> / {admissionName}</>}
-        <span style={{ marginLeft: 8 }}>({dataLabel})</span>
-      </div>
-
-      {/* 경쟁률 차트 */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }}>경쟁률 추이</div>
-        <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-            <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Line type="monotone" dataKey="경쟁률" stroke="#1A8F8B" strokeWidth={2} dot={{ r: 4 }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* 등급/백분위 차트 */}
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }}>
-          {isJeongsi ? "평균 백분위 추이 (높을수록 우수)" : "등급 추이 (낮을수록 우수)"}
-        </div>
-        <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-            <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-            <YAxis
-              tick={{ fontSize: 11 }}
-              reversed={scoreReversed}
-              domain={isJeongsi ? [0, 100] : [1, 9]}
-            />
-            <Tooltip />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Line
-              type="monotone"
-              dataKey={isJeongsi ? "50% 백분위" : "50% 등급"}
-              stroke="#0B1F3F"
-              strokeWidth={2}
-              dot={{ r: 4 }}
-            />
-            <Line
-              type="monotone"
-              dataKey={isJeongsi ? "70% 백분위" : "70% 등급"}
-              stroke="#6B7B98"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={{ r: 4 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-function SinglePointTable({
-  points,
-  isJeongsi,
-}: {
-  points: AdmissionTimelinePoint[];
-  isJeongsi: boolean;
-}) {
-  return (
-    <table style={{ fontSize: 12, width: "100%", marginTop: 4 }}>
-      <thead>
-        <tr style={{ color: "#6B7B98" }}>
-          <th style={{ textAlign: "left", padding: 4 }}>학년도</th>
-          <th style={{ textAlign: "right", padding: 4 }}>모집</th>
-          <th style={{ textAlign: "right", padding: 4 }}>경쟁률</th>
-          <th style={{ textAlign: "right", padding: 4 }}>충원</th>
-          <th style={{ textAlign: "right", padding: 4 }}>{isJeongsi ? "50% 평균 백분위" : "50% 등급"}</th>
-          <th style={{ textAlign: "right", padding: 4 }}>{isJeongsi ? "70% 평균 백분위" : "70% 등급"}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {points.map((p) => (
-          <tr key={p.data_year} style={{ borderTop: "1px solid #E5E7EB" }}>
-            <td style={{ padding: 4 }}>{p.data_year}학년도</td>
-            <td style={{ textAlign: "right", padding: 4 }}>{p.recruit_count ?? "-"}</td>
-            <td style={{ textAlign: "right", padding: 4 }}>{p.competition_rate ?? "-"}</td>
-            <td style={{ textAlign: "right", padding: 4 }}>{p.additional_count ?? "-"}</td>
-            <td style={{ textAlign: "right", padding: 4 }}>
-              {(isJeongsi ? p.avg_percentile_50 : p.gpa_grade_50) ?? "-"}
-            </td>
-            <td style={{ textAlign: "right", padding: 4 }}>
-              {(isJeongsi ? p.avg_percentile_70 : p.gpa_grade_70) ?? "-"}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
 }
