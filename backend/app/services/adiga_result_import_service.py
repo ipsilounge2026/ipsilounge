@@ -358,6 +358,18 @@ def _strip_period_prefix(name: str | None) -> str | None:
     return name
 
 
+RE_ANGLE_OPEN = re.compile(r"^[<＜«]\s*")
+RE_ANGLE_CLOSE = re.compile(r"\s*[>＞»]$")
+
+
+def _clean_admission_name(name: str | None) -> str | None:
+    """자체발표 페이지 제목 표기 잔재 제거: '< 가톨릭지도자추천전형 >' → '가톨릭지도자추천전형'."""
+    if not name:
+        return name
+    s = RE_ANGLE_CLOSE.sub("", RE_ANGLE_OPEN.sub("", name.strip())).strip()
+    return s or name
+
+
 def _collect_core_candidates(headers_norm: list[str]) -> dict[str, list[int]]:
     """기본 필드별 후보 컬럼 인덱스 수집 (우선순위 순). 원시 형식의 표기 변형 흡수."""
     cand: dict[str, list[int]] = {
@@ -578,7 +590,7 @@ def _parse_unified_sheet(sheet, sheet_name: str, year: int | None, filename: str
         raw_name = _first_value(row, core["admission_name"], _to_str)
         rt_raw = _first_value(row, core["recruitment_type"], _to_str) if core["recruitment_type"] else None
         recruitment_type = _normalize_recruitment_type(rt_raw, raw_name, sheet_name)
-        admission_name = _strip_period_prefix(raw_name)
+        admission_name = _clean_admission_name(_strip_period_prefix(raw_name))
 
         is_jeongsi_row = recruitment_type.startswith("정시") or (
             recruitment_type not in ("수시",) and is_suneung_sheet
@@ -749,7 +761,7 @@ def _parse_simple_sheet(sheet, sheet_name: str, year: int | None, filename: str)
             "university_code": _to_str(cell(row, "대학코드")) or "",
             "year": year or 0,
             "admission_category": category,
-            "admission_name": _strip_period_prefix(raw_name),
+            "admission_name": _clean_admission_name(_strip_period_prefix(raw_name)),
             "recruitment_type": recruitment_type,
             "major": _to_str(cell(row, "모집단위")) or "",
             "recruit_count": _to_int(cell(row, "모집인원")),

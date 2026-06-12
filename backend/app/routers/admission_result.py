@@ -40,6 +40,8 @@ def _norm_text(s: str | None) -> str:
 
 def _norm_name(s: str | None) -> str:
     t = _norm_text(s).translate(_ROMAN_MAP)
+    # 자체발표 표기 잔재 '<전형명>' 제거
+    t = t.strip("<>＜＞«»")
     m = RE_NAME_WRAPPER.match(t)
     return m.group(2) if m else t
 
